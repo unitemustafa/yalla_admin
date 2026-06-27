@@ -2,9 +2,8 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useCallback, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import {
-  ArrowLeft,
   BarChart3,
   Eye,
   EyeOff,
@@ -28,7 +27,7 @@ import {
 } from "@/features/auth/login-splash";
 import { useAuth } from "@/features/auth/auth-provider";
 import type { LoginDashboardSnapshot } from "@/features/dashboard/static-data";
-import { isSafeNextPath } from "@/lib/auth";
+import { AUTH_STORAGE_KEYS, isSafeNextPath } from "@/lib/auth";
 
 const productImages = [
   "https://bucket.ammenu.com/yalla-market/items/1778576027822-i19a0pn483.webp",
@@ -52,6 +51,7 @@ function LoginPageContent({
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const stats = [
     { label: "طلبات اليوم", value: String(snapshot.todayOrders), icon: PackageCheck },
     { label: "فروع نشطة", value: String(snapshot.activeBranches), icon: Store },
@@ -61,6 +61,35 @@ function LoginPageContent({
   const finishSplash = useCallback(() => {
     markLoginSplashSeen();
     setShowSplash(false);
+  }, []);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    let shouldShow = searchParams.get("session") === "expired";
+
+    try {
+      const expiresAt = Number(
+        localStorage.getItem(
+          AUTH_STORAGE_KEYS.temporarySessionExpiresAt,
+        ),
+      );
+      shouldShow =
+        shouldShow ||
+        localStorage.getItem(AUTH_STORAGE_KEYS.sessionExpiredNotice) ===
+          "true" ||
+        (Number.isFinite(expiresAt) && expiresAt > 0 && expiresAt <= Date.now());
+      localStorage.removeItem(AUTH_STORAGE_KEYS.sessionExpiredNotice);
+      if (expiresAt <= Date.now()) {
+        localStorage.removeItem(
+          AUTH_STORAGE_KEYS.temporarySessionExpiresAt,
+        );
+      }
+    } catch {
+      // The login screen remains usable when browser storage is unavailable.
+    }
+
+    const timer = window.setTimeout(() => setSessionExpired(shouldShow), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -95,6 +124,37 @@ function LoginPageContent({
   return (
     <main className="relative h-dvh overflow-hidden bg-background text-foreground">
       {showSplash ? <LoginSplash onDone={finishSplash} /> : null}
+      {sessionExpired ? (
+        <div className="fixed inset-0 z-[90] grid place-items-center bg-black/55 px-5 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="session-expired-title"
+            className="w-full max-w-md rounded-lg border border-border bg-card p-6 text-center text-card-foreground shadow-2xl"
+          >
+            <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <LockKeyhole className="size-7" />
+            </span>
+            <h2
+              id="session-expired-title"
+              className="mt-4 text-2xl font-extrabold"
+            >
+              انتهت الجلسة
+            </h2>
+            <p className="mt-3 leading-7 text-muted-foreground">
+              سجّل الدخول من جديد للمتابعة. فعّل «افتكرني» للاحتفاظ
+              بتسجيل الدخول لمدة 30 يومًا حتى بعد غلق التاب.
+            </p>
+            <button
+              type="button"
+              className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-bold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20"
+              onClick={() => setSessionExpired(false)}
+            >
+              تسجيل الدخول
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="absolute left-4 top-4 z-20">
         <ThemeToggle />
@@ -217,9 +277,9 @@ function LoginPageContent({
                   <input
                     name="email"
                     type="email"
-                    defaultValue="dashboard@admin.com"
+                    placeholder="البريد الإلكتروني"
                     required
-                    className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+                    className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:font-bold placeholder:text-muted-foreground"
                     autoComplete="email"
                   />
                 </span>
@@ -232,9 +292,9 @@ function LoginPageContent({
                   <input
                     name="password"
                     type={passwordVisible ? "text" : "password"}
-                    placeholder="Demo password"
+                    placeholder="كلمة المرور"
                     required
-                    className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+                    className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:font-bold placeholder:text-muted-foreground"
                     autoComplete="current-password"
                   />
                   <button
@@ -258,7 +318,7 @@ function LoginPageContent({
               </label>
 
               <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
-                <label className="flex cursor-pointer items-center gap-2">
+                <label className="flex cursor-pointer items-center gap-2 font-bold">
                   <input
                     name="remember"
                     type="checkbox"
@@ -290,10 +350,9 @@ function LoginPageContent({
               <button
                 type="submit"
                 disabled={pending}
-                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-base font-bold text-primary-foreground shadow-lg shadow-primary/20 transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-70"
+                className="inline-flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-bold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {pending ? "جاري الدخول..." : "دخول"}
-                <ArrowLeft className="size-5" />
               </button>
             </form>
           </div>

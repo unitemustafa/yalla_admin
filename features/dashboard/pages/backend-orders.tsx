@@ -59,6 +59,10 @@ type BackendOrder = {
     phone?: string | null;
   } | null;
   payment_method?: string | null;
+  delivery_type?: "fixed_area" | "manual_quote" | string | null;
+  delivery_price_status?: "fixed" | "pending_quote" | string | null;
+  custom_delivery_area?: string | null;
+  delivery_label?: string | null;
   discount?: string | null;
   description?: string | null;
   status: BackendOrderStatus;
@@ -123,6 +127,24 @@ function statusTone(status: BackendOrderStatus): "blue" | "green" | "red" | "sec
   return "secondary";
 }
 
+function deliveryTypeLabel(order: BackendOrder) {
+  return order.delivery_type === "manual_quote" ? "دليفري" : "توصيل";
+}
+
+function deliveryTypeTone(order: BackendOrder): "blue" | "green" | "secondary" {
+  if (order.delivery_type === "manual_quote") return "blue";
+  if (order.delivery_price_status === "fixed") return "green";
+  return "secondary";
+}
+
+function deliveryFeeLabel(order: BackendOrder) {
+  if (order.delivery_label?.trim()) return order.delivery_label;
+  if (order.delivery_type === "manual_quote" && order.delivery_price_status === "pending_quote") {
+    return "دليفري";
+  }
+  return money(order.delivery_price);
+}
+
 function draftLineId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
@@ -162,6 +184,7 @@ export function BackendOrdersPage() {
   const [orders, setOrders] = useState<BackendOrder[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | BackendOrderStatus>("all");
+  const [deliveryType, setDeliveryType] = useState<"all" | "fixed_area" | "manual_quote">("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -192,6 +215,7 @@ export function BackendOrdersPage() {
     const normalized = query.trim().toLowerCase();
     return orders.filter((order) => {
       const matchesStatus = status === "all" || order.status === status;
+      const matchesDeliveryType = deliveryType === "all" || order.delivery_type === deliveryType;
       const matchesQuery =
         !normalized ||
         [
@@ -204,12 +228,13 @@ export function BackendOrdersPage() {
           .join(" ")
           .toLowerCase()
           .includes(normalized);
-      return matchesStatus && matchesQuery;
+      return matchesStatus && matchesDeliveryType && matchesQuery;
     });
-  }, [orders, query, status]);
+  }, [orders, query, status, deliveryType]);
 
   const readyCount = orders.filter((order) => order.status === "ready").length;
   const deliveredCount = orders.filter((order) => order.status === "delivered").length;
+  const manualQuoteCount = orders.filter((order) => order.delivery_type === "manual_quote").length;
 
   return (
     <div className="px-6 py-8">
@@ -234,14 +259,15 @@ export function BackendOrdersPage() {
         }
       />
 
-      <div className="mt-6 grid gap-3 md:grid-cols-3">
+      <div className="mt-6 grid gap-3 md:grid-cols-4">
         <Metric title="إجمالي الطلبات" value={orders.length} />
         <Metric title="جاهزة للإسناد" value={readyCount} />
         <Metric title="تم التسليم" value={deliveredCount} />
+        <Metric title="دليفري" value={manualQuoteCount} />
       </div>
 
       <Card className="mt-6 overflow-hidden">
-        <div className="grid gap-3 border-b p-4 md:grid-cols-[minmax(0,1fr)_220px]">
+        <div className="grid gap-3 border-b p-4 md:grid-cols-[minmax(0,1fr)_220px_180px]">
           <label className="relative">
             <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -262,6 +288,15 @@ export function BackendOrdersPage() {
                 {label}
               </option>
             ))}
+          </select>
+          <select
+            value={deliveryType}
+            onChange={(event) => setDeliveryType(event.target.value as "all" | "fixed_area" | "manual_quote")}
+            className="h-9 rounded-md border bg-input px-3 text-sm"
+          >
+            <option value="all">كل أنواع التوصيل</option>
+            <option value="fixed_area">توصيل</option>
+            <option value="manual_quote">دليفري</option>
           </select>
         </div>
 
@@ -284,6 +319,7 @@ export function BackendOrdersPage() {
                   <th className="px-4 py-3 text-start">العميل</th>
                   <th className="px-4 py-3 text-start">السوق</th>
                   <th className="px-4 py-3 text-start">الحالة</th>
+                  <th className="px-4 py-3 text-start">التوصيل</th>
                   <th className="px-4 py-3 text-start">الإجمالي</th>
                   <th className="px-4 py-3 text-start">التاريخ</th>
                   <th className="px-4 py-3 text-start" />
@@ -304,6 +340,9 @@ export function BackendOrdersPage() {
                     <td className="px-4 py-4">{order.market?.name ?? "-"}</td>
                     <td className="px-4 py-4">
                       <Badge tone={statusTone(order.status)}>{statusLabels[order.status]}</Badge>
+                    </td>
+                    <td className="px-4 py-4">
+                      <Badge tone={deliveryTypeTone(order)}>{deliveryTypeLabel(order)}</Badge>
                     </td>
                     <td className="px-4 py-4">{money(order.total_price)}</td>
                     <td className="px-4 py-4">{dateTime(order.created_at)}</td>
@@ -653,6 +692,8 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
   const [order, setOrder] = useState<BackendOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingStatus, setSavingStatus] = useState(false);
+  const [savingQuote, setSavingQuote] = useState(false);
+  const [quoteDraft, setQuoteDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   async function loadOrder() {
@@ -662,7 +703,9 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
       const response = await apiFetch(`orders/admin/${encodeURIComponent(orderId)}/`);
       const data = await apiResponseData(response);
       if (!response.ok) throw new Error(apiError(data, "تعذر تحميل تفاصيل الطلب."));
-      setOrder(data as BackendOrder);
+      const nextOrder = data as BackendOrder;
+      setOrder(nextOrder);
+      setQuoteDraft(String(nextOrder.delivery_price ?? ""));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر تحميل تفاصيل الطلب.");
     } finally {
@@ -690,6 +733,31 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
       });
     } finally {
       setSavingStatus(false);
+    }
+  }
+
+  async function updateDeliveryQuote() {
+    if (!order || !quoteDraft.trim()) return;
+    setSavingQuote(true);
+    try {
+      const response = await apiFetch(`orders/admin/${order.id}/delivery-quote/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ delivery_price: Number(quoteDraft || 0) }),
+      });
+      const data = await apiResponseData(response);
+      if (!response.ok) throw new Error(apiError(data, "تعذر تثبيت سعر الدليفري."));
+      const nextOrder = data as BackendOrder;
+      setOrder(nextOrder);
+      setQuoteDraft(String(nextOrder.delivery_price ?? ""));
+      showSnackbar({ message: "تم تثبيت سعر الدليفري.", tone: "success" });
+    } catch (reason) {
+      showSnackbar({
+        message: reason instanceof Error ? reason.message : "تعذر تثبيت سعر الدليفري.",
+        tone: "danger",
+      });
+    } finally {
+      setSavingQuote(false);
     }
   }
 
@@ -782,6 +850,10 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
             <SummaryRow label="الهاتف" value={order.customer?.phone ?? "-"} />
             <SummaryRow label="السوق" value={order.market?.name ?? "-"} />
             <SummaryRow label="العنوان" value={order.delivery_address?.name ?? "-"} />
+            <SummaryRow label="نوع التوصيل" value={deliveryTypeLabel(order)} />
+            {order.custom_delivery_area ? (
+              <SummaryRow label="منطقة الدليفري" value={order.custom_delivery_area} />
+            ) : null}
             <SummaryRow
               label="المندوب"
               value={
@@ -795,11 +867,28 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
           <Card className="p-5 text-sm">
             <div className="mb-3 font-semibold">ملخص مالي</div>
             <SummaryRow label="المنتجات" value={money(order.subtotal_price)} />
-            <SummaryRow label="التوصيل" value={money(order.delivery_price)} />
+            <SummaryRow label="التوصيل" value={deliveryFeeLabel(order)} />
             <SummaryRow label="الخصم" value={money(order.discount)} />
             <div className="mt-3 border-t pt-3">
               <SummaryRow label="الإجمالي" value={money(order.total_price)} strong />
             </div>
+            {order.delivery_type === "manual_quote" && order.delivery_price_status === "pending_quote" ? (
+              <div className="mt-4 grid gap-2 border-t pt-4">
+                <Field label="سعر الدليفري بعد التواصل">
+                  <Input
+                    min={0}
+                    step="0.01"
+                    type="number"
+                    value={quoteDraft}
+                    onChange={(event) => setQuoteDraft(event.target.value)}
+                  />
+                </Field>
+                <Button type="button" disabled={savingQuote || !quoteDraft.trim()} onClick={() => void updateDeliveryQuote()}>
+                  {savingQuote ? <Loader2 className="size-4 animate-spin" /> : null}
+                  تثبيت السعر
+                </Button>
+              </div>
+            ) : null}
           </Card>
         </div>
       </div>

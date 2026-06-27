@@ -13,6 +13,7 @@ import { Cookies } from "react-cookie";
 
 import {
   AUTH_COOKIE_NAMES,
+  AUTH_STORAGE_KEYS,
   type AuthSession,
   type AuthTokens,
   type AuthUser,
@@ -25,6 +26,7 @@ const API_BASE_URL = (
 ).replace(/\/+$/, "");
 const REFRESH_BUFFER_MS = 60_000;
 const REMEMBER_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+const TEMPORARY_MAX_AGE_SECONDS = 60 * 60 * 8;
 const cookies = new Cookies();
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
@@ -45,11 +47,26 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 let refreshPromise: Promise<AuthTokens> | null = null;
 
 function cookieOptions(remember: boolean) {
+  let maxAge = REMEMBER_MAX_AGE_SECONDS;
+  if (!remember) {
+    try {
+      const expiresAt = Number(
+        localStorage.getItem(AUTH_STORAGE_KEYS.temporarySessionExpiresAt),
+      );
+      maxAge =
+        Number.isFinite(expiresAt) && expiresAt > Date.now()
+          ? Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000))
+          : TEMPORARY_MAX_AGE_SECONDS;
+    } catch {
+      maxAge = TEMPORARY_MAX_AGE_SECONDS;
+    }
+  }
+
   return {
     path: "/",
     sameSite: "lax" as const,
     secure: typeof window !== "undefined" && window.location.protocol === "https:",
-    ...(remember ? { maxAge: REMEMBER_MAX_AGE_SECONDS } : {}),
+    maxAge,
   };
 }
 
@@ -65,6 +82,64 @@ function readRemember() {
   return cookies.get(AUTH_COOKIE_NAMES.remember, { doNotParse: true }) === "true";
 }
 
+function hasTemporaryTabSession() {
+  try {
+    return (
+      sessionStorage.getItem(AUTH_STORAGE_KEYS.temporarySessionActive) ===
+      "true"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function temporarySessionExpiresAt() {
+  try {
+    const value = Number(
+      localStorage.getItem(AUTH_STORAGE_KEYS.temporarySessionExpiresAt),
+    );
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistSessionLifetime(remember: boolean) {
+  try {
+    localStorage.removeItem(AUTH_STORAGE_KEYS.sessionExpiredNotice);
+    if (remember) {
+      sessionStorage.removeItem(AUTH_STORAGE_KEYS.temporarySessionActive);
+      localStorage.removeItem(AUTH_STORAGE_KEYS.temporarySessionExpiresAt);
+      return;
+    }
+
+    sessionStorage.setItem(
+      AUTH_STORAGE_KEYS.temporarySessionActive,
+      "true",
+    );
+    localStorage.setItem(
+      AUTH_STORAGE_KEYS.temporarySessionExpiresAt,
+      String(Date.now() + TEMPORARY_MAX_AGE_SECONDS * 1000),
+    );
+  } catch {
+    // Cookies still enforce the maximum lifetime if storage is unavailable.
+  }
+}
+
+function clearSessionLifetime(announceExpired: boolean) {
+  try {
+    sessionStorage.removeItem(AUTH_STORAGE_KEYS.temporarySessionActive);
+    localStorage.removeItem(AUTH_STORAGE_KEYS.temporarySessionExpiresAt);
+    if (announceExpired) {
+      localStorage.setItem(AUTH_STORAGE_KEYS.sessionExpiredNotice, "true");
+    } else {
+      localStorage.removeItem(AUTH_STORAGE_KEYS.sessionExpiredNotice);
+    }
+  } catch {
+    // Storage failures must not block logout or session cleanup.
+  }
+}
+
 function readUser(): AuthUser | null {
   const value = cookies.get(AUTH_COOKIE_NAMES.user);
   return value && typeof value === "object" ? (value as AuthUser) : null;
@@ -77,6 +152,7 @@ function persistTokens(tokens: AuthTokens, remember = readRemember()) {
 }
 
 function persistSession(session: AuthSession, remember: boolean) {
+  persistSessionLifetime(remember);
   const options = cookieOptions(remember);
   persistTokens(session, remember);
   cookies.set(AUTH_COOKIE_NAMES.user, session.user, options);
@@ -171,12 +247,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionExpiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const clearSession = useCallback(() => {
+  const clearSession = useCallback((announceExpired = false) => {
+    if (sessionExpiryTimer.current) {
+      clearTimeout(sessionExpiryTimer.current);
+      sessionExpiryTimer.current = null;
+    }
+    clearSessionLifetime(announceExpired);
     clearSessionCookies();
     setUser(null);
     setStatus("unauthenticated");
   }, []);
+
+  const scheduleSessionExpiry = useCallback(
+    (remember: boolean) => {
+      if (sessionExpiryTimer.current) {
+        clearTimeout(sessionExpiryTimer.current);
+        sessionExpiryTimer.current = null;
+      }
+      if (remember) return;
+
+      const expiresAt = temporarySessionExpiresAt();
+      if (expiresAt === null) return;
+      if (expiresAt <= Date.now()) {
+        clearSession(true);
+        return;
+      }
+
+      sessionExpiryTimer.current = setTimeout(
+        () => clearSession(true),
+        expiresAt - Date.now(),
+      );
+    },
+    [clearSession],
+  );
 
   const scheduleRefresh = useCallback(
     function schedule(accessToken: string) {
@@ -191,7 +296,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshTimer.current = setTimeout(() => {
         void refreshTokens()
           .then((tokens) => schedule(tokens.accessToken))
-          .catch(clearSession);
+          .catch(() => clearSession(true));
       }, delay);
     },
     [clearSession],
@@ -208,14 +313,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const refreshToken = cookies.get(AUTH_COOKIE_NAMES.refreshToken, {
         doNotParse: true,
       }) as string | undefined;
+      const remember = readRemember();
 
       if (!active) return;
       if (!savedUser || savedUser.role !== "admin" || !refreshToken) {
         clearSession();
         return;
       }
+      if (!remember && !hasTemporaryTabSession()) {
+        clearSession(true);
+        return;
+      }
+      const temporaryExpiresAt = temporarySessionExpiresAt();
+      if (
+        !remember &&
+        temporaryExpiresAt !== null &&
+        temporaryExpiresAt <= Date.now()
+      ) {
+        clearSession(true);
+        return;
+      }
 
       setUser(savedUser);
+      scheduleSessionExpiry(remember);
       if (isAccessTokenUsable(accessToken)) {
         setStatus("authenticated");
         scheduleRefresh(accessToken!);
@@ -228,15 +348,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setStatus("authenticated");
         scheduleRefresh(tokens.accessToken);
       } catch {
-        if (active) clearSession();
+        if (active) clearSession(true);
       }
     });
 
     return () => {
       active = false;
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
+      if (sessionExpiryTimer.current) clearTimeout(sessionExpiryTimer.current);
     };
-  }, [clearSession, scheduleRefresh]);
+  }, [clearSession, scheduleRefresh, scheduleSessionExpiry]);
 
   const login = useCallback(
     async (input: { email: string; password: string; remember: boolean }) => {
@@ -271,9 +392,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       persistSession(session, input.remember);
       setUser(session.user);
       setStatus("authenticated");
+      scheduleSessionExpiry(input.remember);
       scheduleRefresh(session.accessToken);
     },
-    [scheduleRefresh],
+    [scheduleRefresh, scheduleSessionExpiry],
   );
 
   const logout = useCallback(async () => {
@@ -322,7 +444,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           accessToken = (await refreshTokens()).accessToken;
           scheduleRefresh(accessToken);
         } catch (error) {
-          clearSession();
+          clearSession(true);
           throw error;
         }
       }
@@ -336,7 +458,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         response = await request(accessToken);
         return response;
       } catch (error) {
-        clearSession();
+        clearSession(true);
         throw error;
       }
     },

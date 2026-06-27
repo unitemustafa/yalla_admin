@@ -5,6 +5,12 @@ export const AUTH_COOKIE_NAMES = {
   remember: "yalla_remember",
 } as const;
 
+export const AUTH_STORAGE_KEYS = {
+  temporarySessionActive: "yalla_temporary_session_active",
+  temporarySessionExpiresAt: "yalla_temporary_session_expires_at",
+  sessionExpiredNotice: "yalla_session_expired_notice",
+} as const;
+
 export type AuthUser = {
   id: string;
   first_name: string;
