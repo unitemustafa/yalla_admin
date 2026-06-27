@@ -21,7 +21,7 @@ import {
 } from "@/lib/auth";
 
 const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api"
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1"
 ).replace(/\/+$/, "");
 const REFRESH_BUFFER_MS = 60_000;
 const REMEMBER_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;

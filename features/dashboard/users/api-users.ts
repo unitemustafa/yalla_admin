@@ -18,6 +18,14 @@ export type BackendDashboardUser = {
   is_superuser?: boolean | null;
   created_at?: string | null;
   updated_at?: string | null;
+  courier_profile?: {
+    vehicle_type?: string | null;
+    plate_number?: string | null;
+    delivery_area?: string | number | null;
+    delivery_area_name?: string | null;
+    max_active_orders?: number | null;
+    is_available?: boolean | null;
+  } | null;
 };
 
 const defaultAvatar = "/default-user-avatar.svg";
