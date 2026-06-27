@@ -1,5 +1,5 @@
-import { CreateOrderPage } from "@/features/dashboard/pages/orders-and-offers";
+import { BackendCreateOrderPage } from "@/features/dashboard/pages/backend-orders";
 
 export default function CreateOrderRoute() {
-  return <CreateOrderPage />;
+  return <BackendCreateOrderPage />;
 }

@@ -1,5 +1,5 @@
-import { OrdersPage } from "@/features/dashboard/pages/orders-and-offers";
+import { BackendOrdersPage } from "@/features/dashboard/pages/backend-orders";
 
 export default function OrdersRoute() {
-  return <OrdersPage />;
+  return <BackendOrdersPage />;
 }

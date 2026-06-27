@@ -1,7 +1,4 @@
-import { notFound } from "next/navigation";
-
-import { OrderDetailPage } from "@/features/dashboard/pages/order-detail";
-import { dashboardOrders } from "@/features/dashboard/static-data";
+import { BackendOrderDetailPage } from "@/features/dashboard/pages/backend-orders";
 
 export default async function OrderDetailRoute({
   params,
@@ -9,13 +6,5 @@ export default async function OrderDetailRoute({
   params: Promise<{ orderId: string }>;
 }) {
   const { orderId } = await params;
-  const order = dashboardOrders.find(
-    (currentOrder) => currentOrder.number === orderId,
-  );
-
-  if (!order) {
-    notFound();
-  }
-
-  return <OrderDetailPage order={order} />;
+  return <BackendOrderDetailPage orderId={orderId} />;
 }
