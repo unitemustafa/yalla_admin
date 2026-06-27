@@ -12,6 +12,7 @@ export type PageKey =
   | "order-detail"
   | "offers"
   | "create-offer"
+  | "cities"
   | "delivery-zone"
   | "couriers"
   | "customers"

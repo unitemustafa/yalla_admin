@@ -57,8 +57,8 @@ import {
 } from "../primitives";
 import { cn } from "@/lib/utils";
 import { useSnackbar } from "../snackbar";
+import { useServiceCities } from "../cities-api";
 import { dashboardUsers, type DashboardUser } from "../users/default-dashboard-users";
-import { deliveryZones } from "../reference-data";
 import {
   dashboardOrders,
   type DashboardOrder,
@@ -4158,6 +4158,7 @@ function ScheduleTimeField({
 
 export function CreateOfferPage() {
   const { showSnackbar } = useSnackbar();
+  const { cities: serviceCities, loading: citiesLoading } = useServiceCities({ activeOnly: true });
   const [editingOfferId, setEditingOfferId] = useState("");
   const editingOffer = initialOffers.find((offer) => offer.id === editingOfferId);
   const formMode = editingOffer ? "edit" : "create";
@@ -4827,26 +4828,31 @@ export function CreateOfferPage() {
 
               {offerVisibilityMode === "regions" ? (
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {deliveryZones.map((zone) => {
-                    const selected = offerRegionSlugs.includes(zone.id);
+                  {serviceCities.map((city) => {
+                    const selected = offerRegionSlugs.includes(city.slug);
 
                     return (
                       <button
-                        key={zone.id}
+                        key={city.id}
                         type="button"
                         aria-pressed={selected}
-                        onClick={() => toggleOfferRegion(zone.id)}
+                        onClick={() => toggleOfferRegion(city.slug)}
                         className={cn(
                           "flex min-h-11 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-start text-sm font-bold transition hover:border-primary/50 hover:bg-accent/50",
                           selected &&
                             "border-primary bg-primary/10 text-primary ring-1 ring-primary/20",
                         )}
                       >
-                        <span className="truncate">{zone.name}</span>
+                        <span className="truncate">{city.name_ar || city.name}</span>
                         {selected ? <CheckCircle2 className="size-4 shrink-0" /> : null}
                       </button>
                     );
                   })}
+                  {!citiesLoading && serviceCities.length === 0 ? (
+                    <p className="sm:col-span-2 lg:col-span-3 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                      لا توجد مدن نشطة. أضف مدينة من قسم المدن أولًا.
+                    </p>
+                  ) : null}
                 </div>
               ) : (
                 <p className="rounded-md border border-dashed bg-muted/20 px-3 py-3 text-sm font-medium text-muted-foreground">

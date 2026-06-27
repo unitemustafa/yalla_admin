@@ -375,9 +375,9 @@ export function readDashboardCustomization(): DashboardCustomization {
         ? parsed.font
         : defaultDashboardCustomization.font,
       brandName:
-        typeof parsed.brandName === "string" ? parsed.brandName.trim() : "",
+        typeof parsed.brandName === "string" ? parsed.brandName : "",
       branchName:
-        typeof parsed.branchName === "string" ? parsed.branchName.trim() : "",
+        typeof parsed.branchName === "string" ? parsed.branchName : "",
       logoDataUrl:
         typeof parsed.logoDataUrl === "string" ? parsed.logoDataUrl : "",
       customColors: normalizeDashboardCustomColors(parsed.customColors),

@@ -13,7 +13,7 @@ function isSnapshot(value: unknown): value is LoginDashboardSnapshot {
   const snapshot = value as Record<string, unknown>;
   return [
     "todayOrders",
-    "activeBranches",
+    "availableCities",
     "deliveryZones",
     "completedPercent",
     "averagePreparationMinutes",

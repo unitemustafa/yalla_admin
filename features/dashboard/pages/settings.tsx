@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Check,
+  ChevronDown,
   ImagePlus,
   Paintbrush,
   Palette,
@@ -11,6 +12,7 @@ import {
   Type,
 } from "lucide-react";
 
+import { useAuth } from "@/features/auth/auth-provider";
 import {
   dashboardCustomPaletteVariables,
   dashboardFonts,
@@ -19,37 +21,69 @@ import {
   type DashboardCustomColors,
   useDashboardCustomization,
 } from "@/features/dashboard/customization";
+import {
+  clearDashboardLogo,
+  loadDashboardSettings,
+  resetDashboardSettings,
+  saveDashboardSettings,
+  uploadDashboardLogo,
+} from "@/features/dashboard/dashboard-settings-api";
 import { DashboardImage } from "@/features/dashboard/dashboard-image";
 import { logoSrc } from "@/features/dashboard/data";
 import { useDashboardI18n } from "@/features/dashboard/i18n";
 import { Button, Card, Input, PageTitle } from "@/features/dashboard/primitives";
 import { useSnackbar } from "@/features/dashboard/snackbar";
-import { uploadDashboardImage } from "@/features/dashboard/upload-dashboard-image";
 import { cn } from "@/lib/utils";
 
 function SettingBlock({
   icon,
   title,
   children,
+  collapsible = false,
+  defaultOpen = true,
 }: {
   icon: React.ReactNode;
   title: string;
   children: React.ReactNode;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const contentVisible = !collapsible || open;
+
   return (
     <Card className="p-5">
-      <div className="mb-4 flex items-center gap-2 text-base font-bold">
+      <button
+        aria-expanded={contentVisible}
+        className={cn(
+          "flex w-full items-center gap-2 text-start text-base font-bold",
+          contentVisible && "mb-4",
+          !collapsible && "pointer-events-none",
+        )}
+        disabled={!collapsible}
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
         <span className="flex size-9 items-center justify-center rounded-md bg-primary/10 text-primary">
           {icon}
         </span>
-        {title}
-      </div>
-      {children}
+        <span className="flex-1">{title}</span>
+        {collapsible ? (
+          <ChevronDown
+            className={cn(
+              "size-4 text-muted-foreground transition-transform",
+              open && "rotate-180",
+            )}
+          />
+        ) : null}
+      </button>
+      {contentVisible ? children : null}
     </Card>
   );
 }
 
 export function SettingsPage() {
+  const { apiFetch } = useAuth();
   const { t } = useDashboardI18n();
   const { showSnackbar } = useSnackbar();
   const { customization, setCustomization, resetCustomization } =
@@ -57,6 +91,8 @@ export function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   const brandName = customization.brandName || t("brand.name");
   const branchName = customization.branchName || t("branch.default");
@@ -67,14 +103,61 @@ export function SettingsPage() {
       : (dashboardPalettes.find((palette) => palette.id === customization.palette)
           ?.swatches ?? dashboardPalettes[0].swatches);
 
-  function updateCustomization(
+  useEffect(() => {
+    let active = true;
+
+    void loadDashboardSettings(apiFetch)
+      .then((serverCustomization) => {
+        if (!active) return;
+        setCustomization(serverCustomization);
+        setStatus("تم تحميل إعدادات اللوحة من الخادم.");
+      })
+      .catch(() => {
+        if (!active) return;
+        setStatus("تعذر تحميل إعدادات اللوحة من الخادم.");
+        showSnackbar({
+          message: "تعذر تحميل إعدادات اللوحة من الخادم.",
+          tone: "danger",
+        });
+      })
+      .finally(() => {
+        if (active) setIsLoadingSettings(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [apiFetch, setCustomization, showSnackbar]);
+
+  async function updateCustomization(
     next: Partial<DashboardCustomization>,
     notify = true,
+    persist = true,
   ) {
-    setCustomization({ ...customization, ...next });
+    const nextCustomization = { ...customization, ...next };
+    setCustomization(nextCustomization);
     setStatus("تم تطبيق الإعدادات.");
     if (notify) {
       showSnackbar({ message: "تم تطبيق الإعدادات." });
+    }
+
+    if (!persist) return;
+
+    setIsSavingSettings(true);
+    try {
+      const savedCustomization = await saveDashboardSettings(
+        apiFetch,
+        nextCustomization,
+      );
+      setCustomization(savedCustomization);
+    } catch {
+      setStatus("تعذر حفظ إعدادات اللوحة على الخادم.");
+      showSnackbar({
+        message: "تعذر حفظ إعدادات اللوحة على الخادم.",
+        tone: "danger",
+      });
+    } finally {
+      setIsSavingSettings(false);
     }
   }
 
@@ -88,8 +171,10 @@ export function SettingsPage() {
     setIsUploadingLogo(true);
 
     try {
-      const uploadedLogoUrl = await uploadDashboardImage(file);
-      updateCustomization({ logoDataUrl: uploadedLogoUrl });
+      const savedCustomization = await uploadDashboardLogo(apiFetch, file);
+      setCustomization(savedCustomization);
+      setStatus("تم تحديث اللوجو.");
+      showSnackbar({ message: "تم تحديث اللوجو." });
     } catch {
       setStatus("تعذر رفع اللوجو الآن.");
       showSnackbar({ message: "تعذر رفع اللوجو.", tone: "danger" });
@@ -99,17 +184,45 @@ export function SettingsPage() {
     }
   }
 
-  function handleReset() {
+  async function handleClearLogo() {
+    setIsUploadingLogo(true);
+    try {
+      const savedCustomization = await clearDashboardLogo(apiFetch);
+      setCustomization(savedCustomization);
+      setStatus("تم حذف اللوجو المخصص.");
+      showSnackbar({ message: "تم حذف اللوجو المخصص." });
+    } catch {
+      setStatus("تعذر حذف اللوجو المخصص.");
+      showSnackbar({ message: "تعذر حذف اللوجو المخصص.", tone: "danger" });
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  }
+
+  async function handleReset() {
+    setIsSavingSettings(true);
+    try {
+      const serverCustomization = await resetDashboardSettings(apiFetch);
     resetCustomization();
+      setCustomization(serverCustomization);
     setStatus("تم الرجوع للشكل الافتراضي.");
     showSnackbar({ message: "تم الرجوع للشكل الافتراضي." });
+    } catch {
+      setStatus("تعذر الرجوع للإعدادات الافتراضية.");
+      showSnackbar({
+        message: "تعذر الرجوع للإعدادات الافتراضية.",
+        tone: "danger",
+      });
+    } finally {
+      setIsSavingSettings(false);
+    }
   }
 
   function updateCustomColor(
     colorKey: keyof DashboardCustomColors,
     value: string,
   ) {
-    updateCustomization(
+    void updateCustomization(
       {
         palette: "custom",
         customColors: {
@@ -127,7 +240,12 @@ export function SettingsPage() {
         title="الإعدادات"
         description="تخصيص ألوان اللوحة، الخط، وبيانات البراند الظاهرة في القائمة."
         actions={
-          <Button onClick={handleReset} type="button" variant="outline">
+          <Button
+            disabled={isLoadingSettings || isSavingSettings}
+            onClick={() => void handleReset()}
+            type="button"
+            variant="outline"
+          >
             <RotateCcw className="size-4" />
             رجوع للافتراضي
           </Button>
@@ -175,7 +293,11 @@ export function SettingsPage() {
         </Card>
 
         <div className="space-y-4">
-          <SettingBlock icon={<Paintbrush className="size-4" />} title="ألوان اللوحة">
+          <SettingBlock
+            collapsible
+            icon={<Paintbrush className="size-4" />}
+            title="ألوان اللوحة"
+          >
             <div className="grid gap-3 md:grid-cols-2">
               {dashboardPalettes.map((palette) => {
                 const selected = palette.id === customization.palette;
@@ -188,7 +310,7 @@ export function SettingsPage() {
                       "flex min-h-20 items-center justify-between gap-3 rounded-lg border bg-background p-4 text-start transition-colors hover:bg-accent",
                       selected && "border-primary bg-primary/10 text-primary",
                     )}
-                    onClick={() => updateCustomization({ palette: palette.id })}
+                    onClick={() => void updateCustomization({ palette: palette.id })}
                     type="button"
                   >
                     <span className="font-semibold">{palette.name}</span>
@@ -212,7 +334,7 @@ export function SettingsPage() {
                   customization.palette === "custom" &&
                     "border-primary bg-primary/10 text-primary",
                 )}
-                onClick={() => updateCustomization({ palette: "custom" })}
+                onClick={() => void updateCustomization({ palette: "custom" })}
                 type="button"
               >
                 <span className="font-semibold">مخصص</span>
@@ -308,7 +430,7 @@ export function SettingsPage() {
                       "flex h-12 items-center justify-center gap-2 rounded-lg border px-3 font-semibold transition-colors hover:bg-accent",
                       selected && "border-primary bg-primary/10 text-primary",
                     )}
-                    onClick={() => updateCustomization({ font: font.id })}
+                    onClick={() => void updateCustomization({ font: font.id })}
                     style={{ fontFamily: font.cssValue }}
                     type="button"
                   >
@@ -326,7 +448,7 @@ export function SettingsPage() {
                 اسم البراند
                 <Input
                   onChange={(event) =>
-                    updateCustomization({ brandName: event.target.value }, false)
+                    void updateCustomization({ brandName: event.target.value }, false)
                   }
                   onBlur={() => showSnackbar({ message: "تم تحديث اسم البراند." })}
                   placeholder={t("brand.name")}
@@ -338,7 +460,7 @@ export function SettingsPage() {
                 الاسم الظاهر تحت اللوجو
                 <Input
                   onChange={(event) =>
-                    updateCustomization({ branchName: event.target.value }, false)
+                    void updateCustomization({ branchName: event.target.value }, false)
                   }
                   onBlur={() =>
                     showSnackbar({ message: "تم تحديث الاسم الظاهر تحت اللوجو." })
@@ -367,7 +489,8 @@ export function SettingsPage() {
                 </Button>
                 {customization.logoDataUrl ? (
                   <Button
-                    onClick={() => updateCustomization({ logoDataUrl: "" })}
+                    disabled={isUploadingLogo}
+                    onClick={() => void handleClearLogo()}
                     type="button"
                     variant="ghost"
                   >

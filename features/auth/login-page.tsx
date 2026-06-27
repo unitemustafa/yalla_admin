@@ -2,17 +2,23 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  type FormEvent,
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import {
   BarChart3,
   Eye,
   EyeOff,
   LockKeyhole,
   Mail,
+  MapPin,
   MessageCircle,
   PackageCheck,
   ShieldCheck,
-  Store,
   Truck,
 } from "lucide-react";
 
@@ -38,6 +44,24 @@ const productImages = [
 
 const supportWhatsAppUrl = "https://web.whatsapp.com/send?phone=201016487371";
 
+function stripWhitespace(value: string) {
+  return value.replace(/\s/g, "");
+}
+
+function preventWhitespaceInput(event: KeyboardEvent<HTMLInputElement>) {
+  if (/\s/.test(event.key)) {
+    event.preventDefault();
+  }
+}
+
+function cleanWhitespaceInput(event: FormEvent<HTMLInputElement>) {
+  const input = event.currentTarget;
+  const nextValue = stripWhitespace(input.value);
+  if (input.value !== nextValue) {
+    input.value = nextValue;
+  }
+}
+
 function LoginPageContent({
   snapshot,
 }: {
@@ -54,7 +78,7 @@ function LoginPageContent({
   const [sessionExpired, setSessionExpired] = useState(false);
   const stats = [
     { label: "طلبات اليوم", value: String(snapshot.todayOrders), icon: PackageCheck },
-    { label: "فروع نشطة", value: String(snapshot.activeBranches), icon: Store },
+    { label: "مدن متاحة", value: String(snapshot.availableCities), icon: MapPin },
     { label: "مناطق توصيل", value: String(snapshot.deliveryZones), icon: Truck },
   ];
 
@@ -100,8 +124,8 @@ function LoginPageContent({
     const formData = new FormData(event.currentTarget);
     try {
       await login({
-        email: String(formData.get("email") ?? ""),
-        password: String(formData.get("password") ?? ""),
+        email: stripWhitespace(String(formData.get("email") ?? "")),
+        password: stripWhitespace(String(formData.get("password") ?? "")),
         remember: formData.get("remember") === "on",
       });
     } catch (caughtError) {
@@ -279,8 +303,11 @@ function LoginPageContent({
                     type="email"
                     placeholder="البريد الإلكتروني"
                     required
-                    className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:font-bold placeholder:text-muted-foreground"
+                    dir="ltr"
+                    className="h-full min-w-0 flex-1 bg-transparent text-right text-base outline-none placeholder:text-sm placeholder:font-bold placeholder:text-muted-foreground"
                     autoComplete="email"
+                    onKeyDown={preventWhitespaceInput}
+                    onInput={cleanWhitespaceInput}
                   />
                 </span>
               </label>
@@ -294,8 +321,10 @@ function LoginPageContent({
                     type={passwordVisible ? "text" : "password"}
                     placeholder="كلمة المرور"
                     required
-                    className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:font-bold placeholder:text-muted-foreground"
+                    className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-sm placeholder:font-bold placeholder:text-muted-foreground"
                     autoComplete="current-password"
+                    onKeyDown={preventWhitespaceInput}
+                    onInput={cleanWhitespaceInput}
                   />
                   <button
                     type="button"
@@ -309,9 +338,9 @@ function LoginPageContent({
                     }
                   >
                     {passwordVisible ? (
-                      <EyeOff className="size-5" />
-                    ) : (
                       <Eye className="size-5" />
+                    ) : (
+                      <EyeOff className="size-5" />
                     )}
                   </button>
                 </span>

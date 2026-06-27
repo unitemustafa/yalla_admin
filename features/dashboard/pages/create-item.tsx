@@ -44,7 +44,8 @@ import {
   type BackendRecord,
 } from "../admin-api";
 import { AppSelect, Button, Input, Switch } from "../primitives";
-import { deliveryCityOptions, deliveryZones } from "../reference-data";
+import { deliveryZones } from "../reference-data";
+import { useServiceCities } from "../cities-api";
 import { cn } from "@/lib/utils";
 
 type Language = "ar" | "en";
@@ -2458,7 +2459,11 @@ function ProductLocationDialog({
   selectedShop: string;
   t: (typeof copy)[Language];
 }) {
-  const regionOptions = [t.allRegions, ...deliveryCityOptions];
+  const { cities: serviceCities } = useServiceCities({ activeOnly: true });
+  const regionOptions = [
+    t.allRegions,
+    ...serviceCities.map((city) => city.name_ar || city.name),
+  ];
   const filteredLocationShops =
     selectedRegion === t.allRegions
       ? productLocationShops

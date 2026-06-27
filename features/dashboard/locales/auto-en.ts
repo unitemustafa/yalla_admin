@@ -20,7 +20,7 @@ export const autoTextEn: Record<string, string> = {
   "للتجريب: استخدم البريد الموجود، والباسورد التجريبي المضبوط في البيئة. زر الدخول يفتح لوحة التحكم مباشرة.":
     "For testing: use the prefilled email and configured demo password. The sign-in button opens the dashboard directly.",
   "طلبات اليوم": "Today's orders",
-  "فروع نشطة": "Active branches",
+  "مدن متاحة": "Available cities",
   "مناطق توصيل": "Delivery zones",
 
   "بحث": "Search",

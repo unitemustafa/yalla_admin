@@ -2,6 +2,7 @@ import {
   BadgeCheck,
   LayoutDashboard,
   MessageCircle,
+  MapPinned,
   ShoppingBag,
   ShoppingCart,
   Tag,
@@ -54,6 +55,12 @@ export const navGroups: NavGroup[] = [
           { label: "كل العروض", href: "/offers", page: "offers" },
           { label: "إنشاء عرض", href: "/offers/create", page: "create-offer" },
         ],
+      },
+      {
+        label: "المدن",
+        icon: MapPinned,
+        href: "/cities",
+        page: "cities",
       },
     ],
   },
@@ -130,6 +137,7 @@ export const breadcrumbByPage: Record<PageKey, BreadcrumbItem[]> = {
     { label: "العروض", href: "/offers" },
     { label: "إنشاء عرض" },
   ],
+  cities: [dashboardCrumb, { label: "المدن" }],
   "delivery-zone": [
     dashboardCrumb,
     { label: "مناطق التوصيل" },
@@ -164,6 +172,7 @@ export function pageFromPathname(pathname: string): PageKey {
   if (pathname.startsWith("/orders/view")) return "order-detail";
   if (pathname === "/offers") return "offers";
   if (pathname === "/offers/create") return "create-offer";
+  if (pathname === "/cities") return "cities";
   if (pathname === "/delivery-zone") return "delivery-zone";
   if (pathname === "/delivery/couriers") return "couriers";
   if (pathname === "/customers" || pathname.startsWith("/customers/")) return "customers";

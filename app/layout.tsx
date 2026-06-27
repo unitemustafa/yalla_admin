@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Alexandria, Cairo, Tajawal } from "next/font/google";
 import { AppProviders } from "@/features/auth/providers";
 import "./globals.css";
+import "leaflet/dist/leaflet.css";
 
 export const metadata: Metadata = {
   title: "Yalla Admin",

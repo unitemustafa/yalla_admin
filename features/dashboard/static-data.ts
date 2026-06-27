@@ -1,4 +1,4 @@
-import { branchOptions, deliveryZones } from "./reference-data";
+import { deliveryZones } from "./reference-data";
 
 export type DashboardOrder = {
   index: string;
@@ -78,7 +78,7 @@ export const dashboardOrders: DashboardOrder[] = [
 
 export const loginDashboardSnapshot = {
   todayOrders: dashboardOrders.length,
-  activeBranches: branchOptions.length,
+  availableCities: deliveryZones.length,
   deliveryZones: deliveryZones.length,
   completedPercent: Math.round(
     (dashboardOrders.filter((order) => order.status === "مكتمل").length /

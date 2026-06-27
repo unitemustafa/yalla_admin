@@ -40,6 +40,7 @@ type AuthContextValue = {
     remember: boolean;
   }) => Promise<void>;
   logout: () => Promise<void>;
+  reloadUser: () => Promise<AuthUser>;
   apiFetch: (path: string, init?: RequestInit) => Promise<Response>;
 };
 
@@ -157,6 +158,10 @@ function persistSession(session: AuthSession, remember: boolean) {
   persistTokens(session, remember);
   cookies.set(AUTH_COOKIE_NAMES.user, session.user, options);
   cookies.set(AUTH_COOKIE_NAMES.remember, String(remember), options);
+}
+
+function persistUser(user: AuthUser) {
+  cookies.set(AUTH_COOKIE_NAMES.user, user, cookieOptions(readRemember()));
 }
 
 function clearSessionCookies() {
@@ -465,9 +470,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [clearSession, scheduleRefresh],
   );
 
+  const reloadUser = useCallback(async () => {
+    const response = await apiFetch("auth/me/");
+    const data = await responseData(response);
+
+    if (!response.ok || !data || typeof data !== "object") {
+      throw new Error(
+        localizedAuthError(data, "تعذر تحديث بيانات الحساب من الخادم."),
+      );
+    }
+
+    const nextUser = data as AuthUser;
+    persistUser(nextUser);
+    setUser(nextUser);
+    return nextUser;
+  }, [apiFetch]);
+
   const value = useMemo(
-    () => ({ status, user, login, logout, apiFetch }),
-    [apiFetch, login, logout, status, user],
+    () => ({ status, user, login, logout, reloadUser, apiFetch }),
+    [apiFetch, login, logout, reloadUser, status, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

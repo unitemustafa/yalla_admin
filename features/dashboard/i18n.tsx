@@ -29,6 +29,7 @@ const pageKeys: Record<PageKey, TranslationKey> = {
   "order-detail": "page.orderDetail",
   offers: "page.offers",
   "create-offer": "page.createOffer",
+  cities: "page.cities",
   "delivery-zone": "page.deliveryZone",
   couriers: "page.couriers",
   customers: "page.customers",
