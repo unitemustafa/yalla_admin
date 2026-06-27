@@ -15,6 +15,8 @@ export type DashboardUser = {
   lastOrder: string;
   status: string;
   notes: string;
+  hasPassword?: boolean;
+  isLocal?: boolean;
 };
 
 export const dashboardUsers: DashboardUser[] = [

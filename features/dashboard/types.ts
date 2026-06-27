@@ -15,6 +15,7 @@ export type PageKey =
   | "delivery-zone"
   | "couriers"
   | "customers"
+  | "memberships"
   | "account"
   | "settings"
   | "notifications";

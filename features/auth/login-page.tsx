@@ -10,6 +10,7 @@ import {
   EyeOff,
   LockKeyhole,
   Mail,
+  MessageCircle,
   PackageCheck,
   ShieldCheck,
   Store,
@@ -30,10 +31,13 @@ import type { LoginDashboardSnapshot } from "@/features/dashboard/static-data";
 import { isSafeNextPath } from "@/lib/auth";
 
 const productImages = [
-  "https://bucket.ammenu.com/yalla-market/categoriesthumbnails/1775090694513-5coutf286d4.webp",
-  "https://bucket.ammenu.com/yalla-market/categoriesthumbnails/1776777321164-qaj9r6n4xei.webp",
+  "https://bucket.ammenu.com/yalla-market/items/1778576027822-i19a0pn483.webp",
+  "https://bucket.ammenu.com/yalla-market/items/1778575947135-br72ie6ml76.webp",
   "https://bucket.ammenu.com/yalla-market/items/1778544634562-e47zuvmo7jt.webp",
+  "https://bucket.ammenu.com/yalla-market/items/1778544524971-c0nqlzwbv1m.webp",
 ];
+
+const supportWhatsAppUrl = "https://web.whatsapp.com/send?phone=201016487371";
 
 function LoginPageContent({
   snapshot,
@@ -155,41 +159,18 @@ function LoginPageContent({
                 <BarChart3 className="size-9 shrink-0 text-amber-200" />
               </div>
 
-              <div className="grid grid-cols-[1fr_0.7fr] gap-4">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between rounded-md bg-white/15 px-4 py-3">
-                    <span className="text-sm text-white/75">طلبات مكتملة</span>
-                    <span className="text-lg font-bold">
-                      {snapshot.completedPercent}%
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md bg-white/15 px-4 py-3">
-                    <span className="text-sm text-white/75">متوسط التجهيز</span>
-                    <span className="text-lg font-bold">
-                      {snapshot.averagePreparationMinutes} د
-                    </span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-white/15">
-                    <div
-                      className="h-full rounded-full bg-amber-300"
-                      style={{ width: `${snapshot.completedPercent}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className="grid grid-cols-4 gap-3">
                   {productImages.map((src, index) => (
                     <Image
                       key={src}
-                      alt=""
+                      alt={`منتج من يلا ماركت ${index + 1}`}
                       src={src}
-                      width={140}
-                      height={140}
-                      sizes="(min-width: 1024px) 140px, 33vw"
-                      className={[
-                        "h-full min-h-24 rounded-lg border border-white/20 object-cover",
-                        index === 0 ? "col-span-2 aspect-[2/1]" : "aspect-square",
-                      ].join(" ")}
+                      width={240}
+                      height={170}
+                      quality={95}
+                      sizes="(min-width: 1280px) 180px, 22vw"
+                      className="aspect-[4/3] w-full rounded-lg border border-white/20 bg-white object-cover shadow-lg shadow-black/10"
                     />
                   ))}
                 </div>
@@ -276,14 +257,26 @@ function LoginPageContent({
                 </span>
               </label>
 
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
-                <input
-                  name="remember"
-                  type="checkbox"
-                  className="size-4 rounded border-border accent-primary"
-                />
-                تذكّر تسجيل الدخول على هذا الجهاز
-              </label>
+              <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    name="remember"
+                    type="checkbox"
+                    defaultChecked
+                    className="size-4 rounded border-border accent-primary"
+                  />
+                  افتكرني
+                </label>
+                <a
+                  href={supportWhatsAppUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex shrink-0 items-center gap-1.5 font-semibold text-primary transition hover:text-primary/80"
+                >
+                  <MessageCircle className="size-4" />
+                  الدعم الفني
+                </a>
+              </div>
 
               {error ? (
                 <div

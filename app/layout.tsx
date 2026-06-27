@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Alexandria, Cairo, Tajawal } from "next/font/google";
 import { AppProviders } from "@/features/auth/providers";
 import "./globals.css";
 
@@ -18,7 +19,8 @@ const themeScript = `
     var root = document.documentElement;
     var fonts = {
       cairo: "var(--font-cairo), Cairo, Tajawal, sans-serif",
-      tajawal: "Tajawal, var(--font-cairo), Cairo, sans-serif",
+      tajawal: "var(--font-tajawal), Tajawal, var(--font-cairo), Cairo, sans-serif",
+      alexandria: "var(--font-alexandria), Alexandria, var(--font-cairo), Cairo, sans-serif",
       system: "system-ui, -apple-system, BlinkMacSystemFont, \\"Segoe UI\\", sans-serif"
     };
     var palettes = {
@@ -226,6 +228,25 @@ const themeScript = `
 })();
 `;
 
+const cairo = Cairo({
+  subsets: ["arabic", "latin"],
+  display: "swap",
+  variable: "--font-cairo",
+});
+
+const tajawal = Tajawal({
+  subsets: ["arabic", "latin"],
+  weight: ["400", "500", "700", "800", "900"],
+  display: "swap",
+  variable: "--font-tajawal",
+});
+
+const alexandria = Alexandria({
+  subsets: ["arabic", "latin"],
+  display: "swap",
+  variable: "--font-alexandria",
+});
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -236,7 +257,7 @@ export default function RootLayout({
       lang="ar-EG-u-nu-latn"
       dir="rtl"
       suppressHydrationWarning
-      className="antialiased font-sans"
+      className={`${cairo.variable} ${tajawal.variable} ${alexandria.variable} antialiased font-sans`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />

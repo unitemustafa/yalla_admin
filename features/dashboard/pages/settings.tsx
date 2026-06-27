@@ -296,7 +296,7 @@ export function SettingsPage() {
           </SettingBlock>
 
           <SettingBlock icon={<Type className="size-4" />} title="الخط">
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {dashboardFonts.map((font) => {
                 const selected = font.id === customization.font;
 

@@ -1,4 +1,5 @@
 import {
+  BadgeCheck,
   LayoutDashboard,
   MessageCircle,
   ShoppingBag,
@@ -73,6 +74,12 @@ export const navGroups: NavGroup[] = [
       },
       { label: "المستخدمين", icon: Users, href: "/customers", page: "customers" },
       {
+        label: "العضويات",
+        icon: BadgeCheck,
+        page: "memberships",
+        soon: true,
+      },
+      {
         label: "الشات",
         icon: MessageCircle,
         soon: true,
@@ -129,6 +136,7 @@ export const breadcrumbByPage: Record<PageKey, BreadcrumbItem[]> = {
   ],
   couriers: [dashboardCrumb, { label: "التوصيل" }, { label: "المندوبين" }],
   customers: [dashboardCrumb, { label: "المستخدمين" }],
+  memberships: [dashboardCrumb, { label: "العضويات" }],
   account: [dashboardCrumb, { label: "Account" }],
   settings: [dashboardCrumb, { label: "الإعدادات" }],
   notifications: [dashboardCrumb, { label: "Notifications" }],

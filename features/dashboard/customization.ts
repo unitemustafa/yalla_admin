@@ -8,7 +8,7 @@ export type DashboardPaletteId =
   | "indigo"
   | "rose"
   | "custom";
-export type DashboardFontId = "cairo" | "tajawal" | "system";
+export type DashboardFontId = "cairo" | "tajawal" | "alexandria" | "system";
 
 type ThemeMode = "light" | "dark";
 
@@ -208,7 +208,13 @@ export const dashboardFonts: Array<{
   {
     id: "tajawal",
     name: "Tajawal",
-    cssValue: "Tajawal, var(--font-cairo), Cairo, sans-serif",
+    cssValue: "var(--font-tajawal), Tajawal, var(--font-cairo), Cairo, sans-serif",
+  },
+  {
+    id: "alexandria",
+    name: "Alexandria",
+    cssValue:
+      "var(--font-alexandria), Alexandria, var(--font-cairo), Cairo, sans-serif",
   },
   {
     id: "system",

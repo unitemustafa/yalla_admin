@@ -1,19 +1,31 @@
+"use client";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
+  AlertCircle,
   ArrowRight,
   CalendarClock,
   Eye,
   Mail,
   MapPin,
   Phone,
+  RefreshCcw,
   ShoppingCart,
 } from "lucide-react";
 
+import { useAuth } from "@/features/auth/auth-provider";
+import type { DashboardOrder } from "@/features/dashboard/static-data";
+import {
+  apiResponseData,
+  dashboardUserFromBackend,
+  firstApiError,
+  isBackendDashboardUser,
+} from "../users/api-users";
 import type { DashboardUser } from "../users/default-dashboard-users";
 import { DashboardImage } from "../dashboard-image";
-import { Badge, Card, PageTitle } from "../primitives";
-import type { DashboardOrder } from "@/features/dashboard/static-data";
+import { Badge, Button, Card, PageTitle } from "../primitives";
 
 const currency = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -24,6 +36,153 @@ function formatCurrency(value: number) {
   return `${currency.format(value)} EGP`;
 }
 
+function unavailableOrderCount(user: DashboardUser) {
+  return user.orders > 0 ? user.orders.toLocaleString("en-US") : "غير متاح";
+}
+
+export function UserDetailApiPage({ userId }: { userId: string }) {
+  const { apiFetch } = useAuth();
+  const [user, setUser] = useState<DashboardUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadUser = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await apiFetch(`auth/users/${encodeURIComponent(userId)}/`);
+      const data = await apiResponseData(response);
+
+      if (!response.ok) {
+        throw new Error(
+          firstApiError(data) ?? "تعذر تحميل بيانات المستخدم من الباك.",
+        );
+      }
+
+      if (!isBackendDashboardUser(data)) {
+        throw new Error("استجابة بيانات المستخدم من الباك غير مكتملة.");
+      }
+
+      if (data.role !== "client") {
+        throw new Error("هذا الحساب ليس من عملاء تطبيق يلا ماركت.");
+      }
+
+      setUser(dashboardUserFromBackend(data));
+    } catch (loadError) {
+      setUser(null);
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "تعذر تحميل بيانات المستخدم من الباك.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [apiFetch, userId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadUser();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [loadUser]);
+
+  if (loading) {
+    return <UserDetailLoadingState />;
+  }
+
+  if (error || !user) {
+    return (
+      <UserDetailErrorState
+        message={error ?? "لم يتم العثور على المستخدم."}
+        onRetry={() => void loadUser()}
+      />
+    );
+  }
+
+  return <UserDetailPage user={user} orders={[]} />;
+}
+
+function UserDetailLoadingState() {
+  return (
+    <div className="space-y-6 px-6 py-10">
+      <div className="h-10 w-64 animate-pulse rounded-md bg-muted" />
+      <Card className="overflow-hidden shadow">
+        <div className="flex items-center gap-4 border-b p-6">
+          <div className="size-20 animate-pulse rounded-2xl bg-muted" />
+          <div className="grid flex-1 gap-3">
+            <div className="h-7 w-56 animate-pulse rounded-md bg-muted" />
+            <div className="h-4 w-32 animate-pulse rounded-md bg-muted/70" />
+          </div>
+        </div>
+        <div className="grid gap-0 md:grid-cols-3">
+          {Array.from({ length: 3 }, (_, index) => (
+            <div key={index} className="min-h-24 border-b p-6 md:border-b-0 md:border-e">
+              <div className="h-4 w-24 animate-pulse rounded-md bg-muted" />
+              <div className="mt-3 h-5 w-40 animate-pulse rounded-md bg-muted/70" />
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function UserDetailErrorState({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="space-y-6 px-6 py-10">
+      <PageTitle
+        title="بيانات المستخدم"
+        description="تعذر فتح ملف المستخدم من الباك"
+        size="compact"
+        actions={
+          <Link
+            href="/customers"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            <ArrowRight className="size-4" />
+            رجوع للمستخدمين
+          </Link>
+        }
+      />
+
+      <Card className="border-destructive/30 bg-destructive/10 p-5 shadow-none">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex gap-3">
+            <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-destructive/15 text-destructive">
+              <AlertCircle className="size-4" />
+            </div>
+            <div>
+              <div className="font-semibold text-foreground">
+                تعذر تحميل بيانات المستخدم
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">{message}</p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onRetry}
+            className="self-start sm:self-center"
+          >
+            <RefreshCcw className="size-4" />
+            إعادة المحاولة
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 export function UserDetailPage({
   user,
   orders,
@@ -31,14 +190,20 @@ export function UserDetailPage({
   user: DashboardUser;
   orders: DashboardOrder[];
 }) {
+  const hasOrderData = orders.length > 0;
   const totalSpent = orders.reduce((sum, order) => sum + order.total, 0);
-  const lastOrder = orders[0]?.number ?? "لا يوجد";
+  const orderCount = hasOrderData
+    ? orders.length.toLocaleString("en-US")
+    : unavailableOrderCount(user);
+  const totalSpentValue = hasOrderData ? formatCurrency(totalSpent) : user.totalSpent;
+  const lastOrder = hasOrderData ? orders[0].number : user.lastOrder;
+  const statusTone = user.status === "نشط" ? "green" : "secondary";
 
   return (
     <div className="space-y-6 px-6 py-10">
       <PageTitle
         title={user.name}
-        description="ملف شامل لبيانات المستخدم ونشاطه داخل لوحة التحكم"
+        description="ملف بيانات الحساب الخاص بعميل تطبيق يلا ماركت"
         size="compact"
         actions={
           <Link
@@ -62,14 +227,14 @@ export function UserDetailPage({
               priority
               className="size-20 rounded-2xl border"
             />
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-2xl font-semibold leading-8">{user.name}</h2>
-              <Badge tone="green">{user.status}</Badge>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-2xl font-semibold leading-8">{user.name}</h2>
+                <Badge tone={statusTone}>{user.status}</Badge>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">{user.role}</p>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">{user.role}</p>
           </div>
-        </div>
         </div>
 
         <div className="grid gap-0 md:grid-cols-3">
@@ -77,11 +242,20 @@ export function UserDetailPage({
             icon={<Mail className="size-4" />}
             label="البريد الإلكتروني"
             value={user.email}
-            extraValue={`@${user.username}`}
+            extraValue={user.username === "غير متاح" ? undefined : `@${user.username}`}
             dir="ltr"
           />
-          <DetailBlock icon={<Phone className="size-4" />} label="رقم الهاتف" value={user.phone} dir="ltr" />
-          <DetailBlock icon={<MapPin className="size-4" />} label="الموقع" value={user.location} />
+          <DetailBlock
+            icon={<Phone className="size-4" />}
+            label="رقم الهاتف"
+            value={user.phone}
+            dir="ltr"
+          />
+          <DetailBlock
+            icon={<MapPin className="size-4" />}
+            label="الموقع"
+            value={user.location}
+          />
         </div>
       </Card>
 
@@ -89,26 +263,26 @@ export function UserDetailPage({
         <InfoCard title="نشاط الطلبات" icon={<ShoppingCart className="size-4" />}>
           <InfoRow
             label="عدد الطلبات"
-            href="#user-orders"
+            href={hasOrderData ? "#user-orders" : undefined}
             value={
               <span className="inline-flex items-center gap-1 font-semibold text-primary">
-                {orders.length.toLocaleString("en-US")}
-                <Eye className="size-4" />
+                {orderCount}
+                {hasOrderData ? <Eye className="size-4" /> : null}
               </span>
             }
           />
-          <InfoRow label="إجمالي الإنفاق" value={formatCurrency(totalSpent)} />
+          <InfoRow label="إجمالي الإنفاق" value={totalSpentValue} />
           <InfoRow label="آخر طلب" value={lastOrder} />
         </InfoCard>
 
         <InfoCard title="التوقيتات" icon={<CalendarClock className="size-4" />}>
           <InfoRow label="تاريخ الانضمام" value={user.joinedAt} />
           <InfoRow label="آخر تسجيل دخول" value={user.lastLogin} />
-          <InfoRow label="آخر تحديث" value="اليوم" />
+          <InfoRow label="آخر تحديث" value="غير متاح" />
         </InfoCard>
       </div>
 
-      <UserOrdersSection orders={orders} />
+      <UserOrdersSection orders={orders} hasOrderData={hasOrderData} />
     </div>
   );
 }
@@ -198,7 +372,13 @@ function InfoRow({
   );
 }
 
-function UserOrdersSection({ orders }: { orders: DashboardOrder[] }) {
+function UserOrdersSection({
+  orders,
+  hasOrderData,
+}: {
+  orders: DashboardOrder[];
+  hasOrderData: boolean;
+}) {
   return (
     <div id="user-orders" className="scroll-mt-24">
       <Card className="overflow-hidden shadow">
@@ -206,10 +386,10 @@ function UserOrdersSection({ orders }: { orders: DashboardOrder[] }) {
           <div>
             <h3 className="text-base font-semibold">طلبات المستخدم</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              اضغط على أي طلب لعرض تفاصيله كاملة.
+              إحصائيات الطلبات تحتاج endpoint إداري في الباك، لذلك تظهر كغير متاحة الآن.
             </p>
           </div>
-          <Badge>{orders.length.toLocaleString("en-US")} طلب</Badge>
+          <Badge>{hasOrderData ? `${orders.length.toLocaleString("en-US")} طلب` : "غير متاح"}</Badge>
         </div>
 
         {orders.length ? (
@@ -264,7 +444,7 @@ function UserOrdersSection({ orders }: { orders: DashboardOrder[] }) {
           </div>
         ) : (
           <div className="p-8 text-center text-sm text-muted-foreground">
-            لا توجد طلبات مرتبطة بهذا المستخدم حتى الآن.
+            لا توجد بيانات طلبات إدارية لهذا المستخدم في الربط الحالي.
           </div>
         )}
       </Card>
