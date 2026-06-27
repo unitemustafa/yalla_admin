@@ -20,6 +20,13 @@ import {
 } from "lucide-react";
 
 import { itemRows, type ItemRow } from "../data";
+import { useAuth } from "@/features/auth/auth-provider";
+import {
+  adminApiPaths,
+  fetchAdminRows,
+  productRowFromApi,
+  sendAdminJson,
+} from "../admin-api";
 import { DashboardImage } from "../dashboard-image";
 import {
   ActionMenu,
@@ -626,6 +633,7 @@ function ItemsMobileCards({
 }
 
 export function ItemsPage() {
+  const { apiFetch } = useAuth();
   const { openRow, toggleRow } = useItemTableState();
   const { showSnackbar } = useSnackbar();
   const [rows, setRows] = useState<ItemRow[]>(() =>
@@ -634,7 +642,7 @@ export function ItemsPage() {
   const [filters, setFilters] = useState<ItemFilters>(defaultFilters);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(() => new Set());
-  const [loading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const visibleRows = useMemo(
@@ -678,6 +686,41 @@ export function ItemsPage() {
   }, [pagedRows, selectedRows]);
   const deleteRow = rows.find((row) => row.id === deleteId);
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadProducts() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const products = await fetchAdminRows(
+          apiFetch,
+          adminApiPaths.products,
+          productRowFromApi,
+        );
+
+        if (!active) return;
+        setRows(products.map(normalizeItemRow));
+      } catch (loadError) {
+        if (!active) return;
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "تعذر تحميل المنتجات من الباك.",
+        );
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadProducts();
+
+    return () => {
+      active = false;
+    };
+  }, [apiFetch]);
+
   function toggleAllRows() {
     setSelectedRows((currentRows) =>
       pagedRows.every((row) => currentRows.has(row.index))
@@ -702,16 +745,33 @@ export function ItemsPage() {
     });
   }
 
-  function toggleActive(row: ItemRow, active: boolean) {
+  async function toggleActive(row: ItemRow, active: boolean) {
+    const previousRows = rows;
     setRows((currentRows) =>
       currentRows.map((currentRow) =>
         currentRow.id === row.id ? { ...currentRow, active } : currentRow,
       ),
     );
     setError("");
-    showSnackbar({
-      message: "تم تحديث العرض التجريبي فقط؛ حفظ المنتجات غير مربوط بالـ backend.",
-    });
+
+    try {
+      await sendAdminJson(apiFetch, `${adminApiPaths.products}${encodeURIComponent(row.id)}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_active: active }),
+      });
+      showSnackbar({
+        message: active ? "تم تفعيل المنتج في الباك." : "تم إيقاف المنتج في الباك.",
+      });
+    } catch (updateError) {
+      setRows(previousRows);
+      showSnackbar({
+        message:
+          updateError instanceof Error
+            ? updateError.message
+            : "تعذر تحديث حالة المنتج في الباك.",
+        tone: "danger",
+      });
+    }
   }
 
   function duplicateRow(row: ItemRow) {
@@ -723,17 +783,16 @@ export function ItemsPage() {
       name: `${row.name} (نسخة)`,
     };
     setRows((currentRows) => [duplicate, ...currentRows]);
-    showSnackbar({
-      message: "تم إنشاء نسخة تجريبية؛ الحفظ غير مربوط بالـ backend.",
-    });
+    showSnackbar({ message: "تم إنشاء نسخة محلية. استخدم حفظ المنتج لإنشائها في الباك." });
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!deleteRow) {
       return;
     }
 
     const deletedItemName = deleteRow.name;
+    const previousRows = rows;
 
     setRows((currentRows) => currentRows.filter((row) => row.id !== deleteRow.id));
     setSelectedRows((currentRows) => {
@@ -744,10 +803,24 @@ export function ItemsPage() {
     setDeleteId(null);
     setError("");
 
-    showSnackbar({
-      message: `تم حذف ${deletedItemName} من العرض التجريبي فقط.`,
-      tone: "danger",
-    });
+    try {
+      await sendAdminJson(apiFetch, `${adminApiPaths.products}${encodeURIComponent(deleteRow.id)}/`, {
+        method: "DELETE",
+      });
+      showSnackbar({
+        message: `تم حذف ${deletedItemName} من الباك.`,
+        tone: "danger",
+      });
+    } catch (deleteError) {
+      setRows(previousRows);
+      showSnackbar({
+        message:
+          deleteError instanceof Error
+            ? deleteError.message
+            : "تعذر حذف المنتج من الباك.",
+        tone: "danger",
+      });
+    }
   }
 
   return (

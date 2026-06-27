@@ -12,6 +12,16 @@ import {
   X,
 } from "lucide-react";
 
+import { useAuth } from "@/features/auth/auth-provider";
+import {
+  adminApiPaths,
+  apiList,
+  categoryRowFromApi,
+  fetchAdminRows,
+  readApiData,
+  sendAdminJson,
+  type BackendRecord,
+} from "../admin-api";
 import { categoryRows, type CategoryRow } from "../data";
 import { DashboardImage } from "../dashboard-image";
 import {
@@ -58,7 +68,12 @@ function CategoryDrawer({
   category?: CategoryRow | null;
   sectionOptions: CategorySectionFilter[];
   onClose: () => void;
-  onSubmit: () => void;
+  onSubmit: (draft: {
+    name: string;
+    classificationName: string;
+    type: string;
+    description: string;
+  }) => void;
 }) {
   const isEditing = Boolean(category);
   const selectedSection = category?.sections[0] ?? "الطازج";
@@ -66,6 +81,10 @@ function CategoryDrawer({
   const categoryImageObjectUrlRef = useRef<string | null>(null);
   const [categoryImagePreview, setCategoryImagePreview] = useState(category?.image ?? "");
   const [categoryImageName, setCategoryImageName] = useState("");
+  const [name, setName] = useState(category?.name ?? "");
+  const [classificationName, setClassificationName] = useState(selectedSection);
+  const [type, setType] = useState(selectedType);
+  const [description, setDescription] = useState("");
 
   function revokeCategoryImageObjectUrl() {
     if (categoryImageObjectUrlRef.current) {
@@ -213,14 +232,16 @@ function CategoryDrawer({
               <span className="leading-5">اسم الفئة</span>
               <Input
                 className="h-11"
-                defaultValue={category?.name}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
                 placeholder="مثلاً: طيور، أسماك، لحوم فريش..."
               />
             </label>
             <label className="flex h-[76px] flex-col gap-3 text-sm font-medium">
               <span className="leading-5">تصنيف</span>
               <AppSelect
-                defaultValue={selectedSection}
+                value={classificationName}
+                onValueChange={setClassificationName}
                 options={sectionOptions
                   .filter((section) => section !== "all")
                   .map((section) => ({
@@ -234,7 +255,8 @@ function CategoryDrawer({
             <label className="flex h-[76px] flex-col gap-3 text-sm font-medium">
               <span className="leading-5">النوع</span>
               <AppSelect
-                defaultValue={selectedType}
+                value={type}
+                onValueChange={setType}
                 options={categoryTypeOptions}
                 ariaLabel="النوع"
                 className="h-11"
@@ -243,6 +265,8 @@ function CategoryDrawer({
             <label className="flex min-h-[124px] flex-col gap-3 text-sm font-medium sm:col-span-2">
               <span className="leading-5">وصف الفئة</span>
               <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
                 className="min-h-24 resize-none rounded-md border border-border bg-input px-3 py-2 text-sm font-normal leading-6 text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/40 focus:ring-2 focus:ring-primary/15"
                 placeholder="اكتب وصف مختصر للفئة..."
               />
@@ -253,7 +277,16 @@ function CategoryDrawer({
           <Button variant="outline" onClick={onClose}>
             إلغاء
           </Button>
-          <Button onClick={onSubmit}>
+          <Button
+            onClick={() =>
+              onSubmit({
+                name,
+                classificationName,
+                type,
+                description,
+              })
+            }
+          >
             {isEditing ? (
               <Pencil className="size-4" />
             ) : (
@@ -391,6 +424,7 @@ function CategoryActionsMenu({
 }
 
 export function CategoriesPage() {
+  const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const categoryDrawer = useDisclosure(false);
   const categorySectionDrawer = useDisclosure(false);
@@ -399,6 +433,9 @@ export function CategoriesPage() {
   const [categorySectionOptions, setCategorySectionOptions] = useState(
     () => initialCategorySectionOptions,
   );
+  const [categoryClassificationIds, setCategoryClassificationIds] = useState<
+    Record<string, string | number>
+  >({});
   const [editingCategory, setEditingCategory] = useState<CategoryRow | null>(
     null,
   );
@@ -409,6 +446,58 @@ export function CategoriesPage() {
     useState<CategoryStatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<CategoryTypeFilter>("all");
   const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadCategoryData() {
+      try {
+        const [categories, classificationsResponse] = await Promise.all([
+          fetchAdminRows(
+            apiFetch,
+            adminApiPaths.productCategories,
+            categoryRowFromApi,
+          ),
+          apiFetch(adminApiPaths.categoryClassifications),
+        ]);
+        const classificationsData = await readApiData(classificationsResponse);
+
+        if (!active) return;
+        setOrderedRows(categories);
+
+        if (classificationsResponse.ok) {
+          const nextSections = apiList(classificationsData)
+            .map((item) => String(item.name ?? "").trim())
+            .filter(Boolean);
+          const nextSectionIds = Object.fromEntries(
+            apiList(classificationsData)
+              .map((item) => [String(item.name ?? "").trim(), item.id])
+              .filter(([name, id]) => Boolean(name) && (typeof id === "string" || typeof id === "number")),
+          ) as Record<string, string | number>;
+
+          if (nextSections.length) {
+            setCategorySectionOptions(["all", ...nextSections]);
+            setCategoryClassificationIds(nextSectionIds);
+          }
+        }
+      } catch (error) {
+        if (!active) return;
+        showSnackbar({
+          message:
+            error instanceof Error
+              ? error.message
+              : "تعذر تحميل الفئات من الباك.",
+          tone: "danger",
+        });
+      }
+    }
+
+    void loadCategoryData();
+
+    return () => {
+      active = false;
+    };
+  }, [apiFetch, showSnackbar]);
 
   const visibleRows = orderedRows.filter((row) => {
     const matchesSearch = row.name
@@ -500,15 +589,146 @@ export function CategoriesPage() {
     setEditingCategory(null);
   }
 
-  function toggleCategoryStatus(rowIndex: string, checked: boolean) {
+  async function toggleCategoryStatus(rowIndex: string, checked: boolean) {
+    const previousRows = orderedRows;
     setOrderedRows((currentRows) =>
       currentRows.map((row) =>
         row.index === rowIndex ? { ...row, active: checked } : row,
       ),
     );
-    showSnackbar({
-      message: checked ? "تم تفعيل الفئة." : "تم إيقاف الفئة.",
-    });
+
+    try {
+      await sendAdminJson(
+        apiFetch,
+        `${adminApiPaths.productCategories}${encodeURIComponent(rowIndex)}/`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ is_active: checked }),
+        },
+      );
+      showSnackbar({
+        message: checked ? "تم تفعيل الفئة في الباك." : "تم إيقاف الفئة في الباك.",
+      });
+    } catch (error) {
+      setOrderedRows(previousRows);
+      showSnackbar({
+        message:
+          error instanceof Error
+            ? error.message
+            : "تعذر تحديث حالة الفئة في الباك.",
+        tone: "danger",
+      });
+    }
+  }
+
+  async function deleteCategory(category: CategoryRow) {
+    const previousRows = orderedRows;
+    setOrderedRows((currentRows) =>
+      currentRows.filter((row) => row.index !== category.index),
+    );
+
+    try {
+      await sendAdminJson(
+        apiFetch,
+        `${adminApiPaths.productCategories}${encodeURIComponent(category.index)}/`,
+        { method: "DELETE" },
+      );
+      showSnackbar({
+        message: `تم حذف ${category.name} من الباك.`,
+        tone: "danger",
+      });
+    } catch (error) {
+      setOrderedRows(previousRows);
+      showSnackbar({
+        message:
+          error instanceof Error
+            ? error.message
+            : "تعذر حذف الفئة من الباك.",
+        tone: "danger",
+      });
+    }
+  }
+
+  function classificationIdByName(name: string) {
+    if (categoryClassificationIds[name]) return categoryClassificationIds[name];
+
+    const sectionIndex = categorySectionOptions
+      .filter((section) => section !== "all")
+      .findIndex((section) => section === name);
+
+    return sectionIndex >= 0 ? sectionIndex + 1 : 1;
+  }
+
+  async function saveCategoryDraft(draft: {
+    name: string;
+    classificationName: string;
+    type: string;
+    description: string;
+  }) {
+    const payload = {
+      classification_id: classificationIdByName(draft.classificationName),
+      name: draft.name.trim(),
+      type: draft.type === "featured" ? "فئات مميزة" : "فئات شائعة",
+      description: draft.description.trim(),
+    };
+    const path = editingCategory
+      ? `${adminApiPaths.productCategories}${encodeURIComponent(editingCategory.index)}/`
+      : adminApiPaths.productCategories;
+    try {
+      const data = await sendAdminJson(apiFetch, path, {
+        method: editingCategory ? "PATCH" : "POST",
+        body: JSON.stringify(payload),
+      });
+      const nextRow = categoryRowFromApi(data as BackendRecord, orderedRows.length);
+
+      setOrderedRows((currentRows) =>
+        editingCategory
+          ? currentRows.map((row) =>
+              row.index === editingCategory.index ? nextRow : row,
+            )
+          : [nextRow, ...currentRows],
+      );
+      closeCategoryDrawer();
+      showSnackbar({
+        message: editingCategory
+          ? "تم حفظ تعديلات الفئة في الباك."
+          : "تم إنشاء الفئة في الباك.",
+      });
+    } catch (error) {
+      showSnackbar({
+        message:
+          error instanceof Error ? error.message : "تعذر حفظ الفئة في الباك.",
+        tone: "danger",
+      });
+    }
+  }
+
+  async function createCategorySection(sectionName: string) {
+    try {
+      const data = await sendAdminJson(apiFetch, adminApiPaths.categoryClassifications, {
+        method: "POST",
+        body: JSON.stringify({ name: sectionName }),
+      });
+      const record = data as BackendRecord;
+      const name = String(record?.name ?? sectionName).trim();
+      setCategorySectionOptions((currentSections) =>
+        currentSections.includes(name) ? currentSections : [...currentSections, name],
+      );
+      if (typeof record?.id === "string" || typeof record?.id === "number") {
+        setCategoryClassificationIds((currentIds) => ({
+          ...currentIds,
+          [name]: record.id as string | number,
+        }));
+      }
+      categorySectionDrawer.close();
+      showSnackbar({ message: "تم إنشاء التصنيف في الباك." });
+    } catch (error) {
+      showSnackbar({
+        message:
+          error instanceof Error ? error.message : "تعذر إنشاء التصنيف في الباك.",
+        tone: "danger",
+      });
+    }
   }
 
   return (
@@ -719,10 +939,7 @@ export function CategoriesPage() {
                   onEdit={() => openEditDrawer(row)}
                   onDelete={() => {
                     setOpenActionMenu(null);
-                    showSnackbar({
-                      message: `تم حذف ${row.name}.`,
-                      tone: "danger",
-                    });
+                    void deleteCategory(row);
                   }}
                 />,
               ])}
@@ -752,28 +969,14 @@ export function CategoriesPage() {
           category={editingCategory}
           sectionOptions={categorySectionOptions}
           onClose={closeCategoryDrawer}
-          onSubmit={() => {
-            closeCategoryDrawer();
-            showSnackbar({
-              message: editingCategory
-                ? "تم حفظ تعديلات الفئة بنجاح."
-                : "تم إنشاء الفئة بنجاح.",
-            });
-          }}
+          onSubmit={(draft) => void saveCategoryDraft(draft)}
         />
       ) : null}
       {categorySectionDrawer.isOpen ? (
         <CategorySectionDrawer
           existingSections={categorySectionOptions}
           onClose={categorySectionDrawer.close}
-          onSubmit={(sectionName) => {
-            setCategorySectionOptions((currentSections) => [
-              ...currentSections,
-              sectionName,
-            ]);
-            categorySectionDrawer.close();
-            showSnackbar({ message: "تم إنشاء التصنيف بنجاح." });
-          }}
+          onSubmit={(sectionName) => void createCategorySection(sectionName)}
         />
       ) : null}
     </div>

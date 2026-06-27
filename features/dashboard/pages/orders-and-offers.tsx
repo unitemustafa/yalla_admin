@@ -32,6 +32,16 @@ import {
 } from "lucide-react";
 
 import { addonRows, categoryRows, itemRows, type AddonRow, type ItemRow } from "../data";
+import { useAuth } from "@/features/auth/auth-provider";
+import {
+  addonRowFromApi,
+  adminApiPaths,
+  apiList,
+  fetchAdminRows,
+  readApiData,
+  sendAdminJson,
+  type BackendRecord,
+} from "../admin-api";
 import { DashboardImage } from "../dashboard-image";
 import {
   ActionMenu,
@@ -1938,17 +1948,24 @@ export function CreateOrderPageLegacy() {
 }
 
 export function AddonsPage() {
+  const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const [modalOpen, setModalOpen] = useState(false);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [addonSearch, setAddonSearch] = useState("");
   const [selectedAddonCategory, setSelectedAddonCategory] = useState("all");
   const [addonFormCategory, setAddonFormCategory] = useState(addonRows[0]?.category ?? "");
+  const [addonNameEn, setAddonNameEn] = useState("");
+  const [addonNameAr, setAddonNameAr] = useState("");
+  const [addonPrice, setAddonPrice] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
   const [rows, setRows] = useState<AddonRow[]>(() => addonRows);
   const [categoryOptions, setCategoryOptions] = useState<string[]>(() =>
     uniqueAddonCategories(addonRows),
+  );
+  const [categoryIds, setCategoryIds] = useState<Record<string, string | number>>(
+    {},
   );
   const [editingAddon, setEditingAddon] = useState<AddonRow | null>(null);
   const addonImageObjectUrlRef = useRef<string | null>(null);
@@ -1977,6 +1994,51 @@ export function AddonsPage() {
     pageStartIndex + dashboardListPageSize,
   );
   const currentAddonFormCategory = addonFormCategory || categoryOptions[0] || "";
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadAddons() {
+      try {
+        const [addons, classificationsResponse] = await Promise.all([
+          fetchAdminRows(
+            apiFetch,
+            adminApiPaths.productAdditions,
+            addonRowFromApi,
+          ),
+          apiFetch(adminApiPaths.additionClassifications),
+        ]);
+        const classificationsData = await readApiData(classificationsResponse);
+
+        if (!active) return;
+        setRows(addons);
+
+        if (classificationsResponse.ok) {
+          const classifications = apiList(classificationsData)
+            .map((item) => String(item.name ?? "").trim())
+            .filter(Boolean);
+          const classificationIds = Object.fromEntries(
+            apiList(classificationsData)
+              .map((item) => [String(item.name ?? "").trim(), item.id])
+              .filter(([name, id]) => Boolean(name) && (typeof id === "string" || typeof id === "number")),
+          ) as Record<string, string | number>;
+          if (classifications.length) {
+            setCategoryOptions(classifications);
+            setCategoryIds(classificationIds);
+            setAddonFormCategory(classifications[0] ?? "");
+          }
+        }
+      } catch {
+        // Keep seed add-ons visible when the backend is unavailable.
+      }
+    }
+
+    void loadAddons();
+
+    return () => {
+      active = false;
+    };
+  }, [apiFetch]);
 
   function revokeAddonImageObjectUrl() {
     if (addonImageObjectUrlRef.current) {
@@ -2030,6 +2092,9 @@ export function AddonsPage() {
   function closeAddonModal() {
     setModalOpen(false);
     setAddonFormCategory(categoryOptions[0] ?? "");
+    setAddonNameEn("");
+    setAddonNameAr("");
+    setAddonPrice("");
     resetAddonImage();
   }
 
@@ -2039,25 +2104,58 @@ export function AddonsPage() {
     setEditingAddon(addon);
   }
 
-  function saveEditingAddon() {
+  function classificationIdByName(name: string) {
+    if (categoryIds[name]) return categoryIds[name];
+
+    const index = categoryOptions.findIndex((category) => category === name);
+    return index >= 0 ? index + 1 : 1;
+  }
+
+  async function saveEditingAddon() {
     if (!editingAddon) {
       return;
     }
 
     const nextCategory = editingAddon.category.trim();
-    setRows((currentRows) =>
-      currentRows.map((row) => (row.id === editingAddon.id ? editingAddon : row)),
-    );
-    if (nextCategory) {
-      setCategoryOptions((currentCategories) =>
-        currentCategories.includes(nextCategory)
-          ? currentCategories
-          : [...currentCategories, nextCategory],
+
+    try {
+      const data = await sendAdminJson(
+        apiFetch,
+        `${adminApiPaths.productAdditions}${encodeURIComponent(editingAddon.id)}/`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            classification_id: classificationIdByName(nextCategory),
+            name_ar: editingAddon.nameAr,
+            name_en: editingAddon.name,
+            price: editingAddon.price.replace(/\s*EGP\s*$/i, ""),
+            is_active: true,
+          }),
+        },
       );
+      const updatedAddon = addonRowFromApi(data as BackendRecord, 0);
+      setRows((currentRows) =>
+        currentRows.map((row) =>
+          row.id === editingAddon.id ? updatedAddon : row,
+        ),
+      );
+      if (nextCategory) {
+        setCategoryOptions((currentCategories) =>
+          currentCategories.includes(nextCategory)
+            ? currentCategories
+            : [...currentCategories, nextCategory],
+        );
+      }
+      editAddonImageObjectUrlRef.current = null;
+      setEditingAddon(null);
+      showSnackbar({ message: `تم حفظ تعديل ${editingAddon.nameAr} في الباك.` });
+    } catch (error) {
+      showSnackbar({
+        message:
+          error instanceof Error ? error.message : "تعذر حفظ تعديل الإضافة.",
+        tone: "danger",
+      });
     }
-    editAddonImageObjectUrlRef.current = null;
-    setEditingAddon(null);
-    showSnackbar({ message: `تم حفظ تعديل ${editingAddon.nameAr}.` });
   }
 
   function cancelEditingAddon() {
@@ -2065,35 +2163,98 @@ export function AddonsPage() {
     setEditingAddon(null);
   }
 
-  function deleteAddon(addon: AddonRow) {
+  async function deleteAddon(addon: AddonRow) {
+    const previousRows = rows;
     setRows((currentRows) => currentRows.filter((row) => row.id !== addon.id));
     setOpenActionMenu(null);
     setEditingAddon((currentAddon) =>
       currentAddon?.id === addon.id ? null : currentAddon,
     );
-    showSnackbar({
-      message: `تم حذف ${addon.nameAr}.`,
-      tone: "danger",
-    });
+
+    try {
+      await sendAdminJson(
+        apiFetch,
+        `${adminApiPaths.productAdditions}${encodeURIComponent(addon.id)}/`,
+        { method: "DELETE" },
+      );
+      showSnackbar({
+        message: `تم حذف ${addon.nameAr} من الباك.`,
+        tone: "danger",
+      });
+    } catch (error) {
+      setRows(previousRows);
+      showSnackbar({
+        message:
+          error instanceof Error ? error.message : "تعذر حذف الإضافة من الباك.",
+        tone: "danger",
+      });
+    }
   }
 
-  function createAddonCategory() {
+  async function createAddonCategory() {
     const nextCategory = newCategoryName.trim();
 
     if (!nextCategory) {
       return;
     }
 
-    setCategoryOptions((currentCategories) =>
-      currentCategories.includes(nextCategory)
-        ? currentCategories
-        : [...currentCategories, nextCategory],
-    );
-    setSelectedAddonCategory(nextCategory);
-    setAddonFormCategory(nextCategory);
-    setNewCategoryName("");
-    setCategoryModalOpen(false);
-    showSnackbar({ message: `تمت إضافة تصنيف ${nextCategory}.` });
+    try {
+      const data = await sendAdminJson(apiFetch, adminApiPaths.additionClassifications, {
+        method: "POST",
+        body: JSON.stringify({ name: nextCategory }),
+      });
+      const record = data as BackendRecord;
+      const categoryName = String(record?.name ?? nextCategory).trim();
+      setCategoryOptions((currentCategories) =>
+        currentCategories.includes(categoryName)
+          ? currentCategories
+          : [...currentCategories, categoryName],
+      );
+      if (typeof record?.id === "string" || typeof record?.id === "number") {
+        setCategoryIds((currentIds) => ({
+          ...currentIds,
+          [categoryName]: record.id as string | number,
+        }));
+      }
+      setSelectedAddonCategory(categoryName);
+      setAddonFormCategory(categoryName);
+      setNewCategoryName("");
+      setCategoryModalOpen(false);
+      showSnackbar({ message: `تمت إضافة تصنيف ${categoryName} في الباك.` });
+    } catch (error) {
+      showSnackbar({
+        message:
+          error instanceof Error
+            ? error.message
+            : "تعذر إنشاء تصنيف الإضافة في الباك.",
+        tone: "danger",
+      });
+    }
+  }
+
+  async function createAddon() {
+    try {
+      const data = await sendAdminJson(apiFetch, adminApiPaths.productAdditions, {
+        method: "POST",
+        body: JSON.stringify({
+          classification_id: classificationIdByName(currentAddonFormCategory),
+          name_ar: addonNameAr.trim(),
+          name_en: addonNameEn.trim(),
+          price: addonPrice.trim(),
+          is_active: true,
+        }),
+      });
+      const createdAddon = addonRowFromApi(data as BackendRecord, rows.length);
+      setRows((currentRows) => [createdAddon, ...currentRows]);
+      closeAddonModal();
+      showSnackbar({ message: "تم إنشاء الإضافة في الباك." });
+    } catch (error) {
+      showSnackbar({
+        message:
+          error instanceof Error ? error.message : "تعذر إنشاء الإضافة في الباك.",
+        tone: "danger",
+      });
+    }
   }
 
   useEffect(() => revokeAddonImageObjectUrl, []);
@@ -2263,7 +2424,7 @@ export function AddonsPage() {
                                   )
                                 }
                                 onEdit={() => startEditingAddon(addon)}
-                                onDelete={() => deleteAddon(addon)}
+                                onDelete={() => void deleteAddon(addon)}
                               />
                             </td>
                           </tr>
@@ -2329,7 +2490,7 @@ export function AddonsPage() {
             className="w-full max-w-[420px] rounded-lg border bg-background p-5 shadow-lg"
             onSubmit={(event) => {
               event.preventDefault();
-              createAddonCategory();
+              void createAddonCategory();
             }}
           >
             <div className="flex items-start justify-between gap-4">
@@ -2447,10 +2608,19 @@ export function AddonsPage() {
               </Field>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="الاسم بالإنجليزي">
-                  <Input dir="ltr" placeholder="Extra Cheese" />
+                  <Input
+                    dir="ltr"
+                    value={addonNameEn}
+                    onChange={(event) => setAddonNameEn(event.target.value)}
+                    placeholder="Extra Cheese"
+                  />
                 </Field>
                 <Field label="الاسم بالعربي">
-                  <Input placeholder="جبنة زيادة" />
+                  <Input
+                    value={addonNameAr}
+                    onChange={(event) => setAddonNameAr(event.target.value)}
+                    placeholder="جبنة زيادة"
+                  />
                 </Field>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -2467,16 +2637,19 @@ export function AddonsPage() {
                   />
                 </Field>
                 <Field label="سعر الإضافة">
-                  <Input dir="ltr" placeholder="EGP 0.00" />
+                  <Input
+                    dir="ltr"
+                    value={addonPrice}
+                    onChange={(event) => setAddonPrice(event.target.value)}
+                    placeholder="EGP 0.00"
+                  />
                 </Field>
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={closeAddonModal}>إلغاء</Button>
                 <Button
-                  onClick={() => {
-                    closeAddonModal();
-                    showSnackbar({ message: "تم إنشاء الإضافة بنجاح." });
-                  }}
+                  onClick={() => void createAddon()}
+                  disabled={!addonNameAr.trim() || !addonNameEn.trim() || !addonPrice.trim()}
                 >
                   إنشاء
                 </Button>

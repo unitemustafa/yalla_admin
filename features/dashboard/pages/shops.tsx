@@ -3,6 +3,17 @@
 import { useEffect, useState } from "react";
 import { MapPin, Plus, Store, X } from "lucide-react";
 
+import { useAuth } from "@/features/auth/auth-provider";
+import {
+  adminApiPaths,
+  apiList,
+  fetchAdminRows,
+  readApiData,
+  sendAdminJson,
+  shopRowFromApi,
+  type BackendRecord,
+  type ShopRow,
+} from "../admin-api";
 import {
   AppSelect,
   Badge,
@@ -16,15 +27,6 @@ import {
 } from "../primitives";
 import { categoryRows } from "../data";
 import { deliveryZones } from "../reference-data";
-
-type ShopRow = {
-  id: string;
-  name: string;
-  category: string;
-  branch: string;
-  products: string;
-  active: boolean;
-};
 
 const initialShopRows: ShopRow[] = [
   {
@@ -64,9 +66,11 @@ const initialShopRows: ShopRow[] = [
 const shopsPageSize = 10;
 
 function AddShopDrawer({
+  categories,
   onClose,
   onSave,
 }: {
+  categories: string[];
   onClose: () => void;
   onSave: (shop: ShopRow) => void;
 }) {
@@ -154,9 +158,9 @@ function AddShopDrawer({
                 ariaLabel="اختيار التصنيف"
                 side="top"
                 contentClassName="max-h-44"
-                options={categoryRows.map((row) => ({
-                  value: row.name,
-                  label: row.name,
+                options={categories.map((category) => ({
+                  value: category,
+                  label: category,
                 }))}
               />
             </label>
@@ -194,13 +198,110 @@ function AddShopDrawer({
 }
 
 export function ShopsPage() {
+  const { apiFetch } = useAuth();
   const [currentPage, setCurrentPage] = useState(1);
   const [shops, setShops] = useState(initialShopRows);
+  const [marketClassifications, setMarketClassifications] = useState<string[]>(
+    () => categoryRows.map((row) => row.name),
+  );
+  const [marketClassificationIds, setMarketClassificationIds] = useState<
+    Record<string, string | number>
+  >({});
   const [addShopOpen, setAddShopOpen] = useState(false);
   const totalPages = Math.max(1, Math.ceil(shops.length / shopsPageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStartIndex = (safeCurrentPage - 1) * shopsPageSize;
   const pagedShops = shops.slice(pageStartIndex, pageStartIndex + shopsPageSize);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadMarkets() {
+      try {
+        const [markets, classificationsResponse] = await Promise.all([
+          fetchAdminRows(apiFetch, adminApiPaths.markets, shopRowFromApi),
+          apiFetch(adminApiPaths.marketClassifications),
+        ]);
+        const classificationsData = await readApiData(classificationsResponse);
+
+        if (!active) return;
+        setShops(markets);
+
+        if (classificationsResponse.ok) {
+          const classifications = apiList(classificationsData)
+            .map((item) => String(item.name ?? "").trim())
+            .filter(Boolean);
+          const classificationIds = Object.fromEntries(
+            apiList(classificationsData)
+              .map((item) => [String(item.name ?? "").trim(), item.id])
+              .filter(([name, id]) => Boolean(name) && (typeof id === "string" || typeof id === "number")),
+          ) as Record<string, string | number>;
+          if (classifications.length) {
+            setMarketClassifications(classifications);
+            setMarketClassificationIds(classificationIds);
+          }
+        }
+      } catch {
+        // Keep seed rows visible when the backend is unavailable.
+      }
+    }
+
+    void loadMarkets();
+
+    return () => {
+      active = false;
+    };
+  }, [apiFetch]);
+
+  function classificationIdByName(name: string) {
+    if (marketClassificationIds[name]) return marketClassificationIds[name];
+
+    const index = marketClassifications.findIndex((item) => item === name);
+    return index >= 0 ? index + 1 : 1;
+  }
+
+  async function createShop(shop: ShopRow) {
+    const payload = {
+      classification_id: classificationIdByName(shop.category),
+      name: shop.name,
+      branch: shop.branch,
+      status: "active",
+    };
+    try {
+      const data = await sendAdminJson(apiFetch, adminApiPaths.markets, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      const createdShop = shopRowFromApi(data as BackendRecord, shops.length);
+      setShops((current) => [createdShop, ...current]);
+      setCurrentPage(1);
+      setAddShopOpen(false);
+    } catch {
+      // The snackbar layer is not used on this page; keep the drawer open for correction/retry.
+    }
+  }
+
+  async function toggleShopStatus(shop: ShopRow, active: boolean) {
+    const previousShops = shops;
+    setShops((currentShops) =>
+      currentShops.map((currentShop) =>
+        currentShop.id === shop.id ? { ...currentShop, active } : currentShop,
+      ),
+    );
+
+    try {
+      await sendAdminJson(
+        apiFetch,
+        `${adminApiPaths.markets}${encodeURIComponent(shop.id)}/`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ status: active ? "active" : "inactive" }),
+        },
+      );
+    } catch {
+      setShops(previousShops);
+    }
+  }
 
   return (
     <div className="px-6 py-6">
@@ -283,7 +384,10 @@ export function ShopsPage() {
               </span>,
               <span key={`products-${shop.id}`}>{shop.products}</span>,
               <div key={`active-${shop.id}`} className="flex justify-center">
-                <Switch checked={shop.active} />
+                <Switch
+                  checked={shop.active}
+                  onCheckedChange={(checked) => void toggleShopStatus(shop, checked)}
+                />
               </div>,
             ])}
           />
@@ -306,12 +410,9 @@ export function ShopsPage() {
 
       {addShopOpen ? (
         <AddShopDrawer
+          categories={marketClassifications}
           onClose={() => setAddShopOpen(false)}
-          onSave={(shop) => {
-            setShops((current) => [shop, ...current]);
-            setCurrentPage(1);
-            setAddShopOpen(false);
-          }}
+          onSave={(shop) => void createShop(shop)}
         />
       ) : null}
     </div>

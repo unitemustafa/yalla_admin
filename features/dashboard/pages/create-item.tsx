@@ -35,6 +35,14 @@ import {
   type CategoryRow,
   type ItemRow,
 } from "../data";
+import { useAuth } from "@/features/auth/auth-provider";
+import {
+  adminApiPaths,
+  productRowFromApi,
+  readApiData,
+  sendAdminJson,
+  type BackendRecord,
+} from "../admin-api";
 import { AppSelect, Button, Input, Switch } from "../primitives";
 import { deliveryCityOptions, deliveryZones } from "../reference-data";
 import { cn } from "@/lib/utils";
@@ -1124,6 +1132,7 @@ function addonSelectionSummary({
 }
 
 export function CreateItemPage() {
+  const { apiFetch } = useAuth();
   const language: Language = "ar";
   const direction: Direction = "rtl";
   const params = useParams<{ itemId?: string | string[] }>();
@@ -1250,6 +1259,60 @@ export function CreateItemPage() {
     );
     setSelectedImageIndex(0);
   }, [editItemId, t.allShops]);
+
+  useEffect(() => {
+    if (!editItemId) {
+      return;
+    }
+
+    const productId = editItemId;
+    let active = true;
+
+    async function loadBackendProduct() {
+      try {
+        const response = await apiFetch(
+          `${adminApiPaths.products}${encodeURIComponent(productId)}/`,
+        );
+        const data = await readApiData(response);
+
+        if (!active || !response.ok || !data || typeof data !== "object") {
+          return;
+        }
+
+        const item = productRowFromApi(data as BackendRecord, 0);
+        const nextForm = productFormFromItem(item);
+        setForm(nextForm);
+        setSelectedLocationMode(locationModeFromItem(item));
+        setSelectedShop(item.shopName?.trim() || t.allShops);
+        setSelectedVariants(cloneSelections(nextForm.category));
+        setVariantDetails(parseVariantDetails(item.variantDetails));
+        setVisibilityMode(item.visibilityMode === "regions" ? "regions" : "general");
+        setVisibleRegionSlugs(item.regionSlugs ?? []);
+        setEditProductCode(item.code ?? item.id);
+        setProductImages(
+          item.image
+            ? [
+                {
+                  id: `backend-${item.id}`,
+                  name: "الصورة الحالية",
+                  url: item.image,
+                },
+              ]
+            : [],
+        );
+        setSelectedImageIndex(0);
+        setSaveError("");
+      } catch {
+        // The static record loaded above remains available as an edit fallback.
+      }
+    }
+
+    void loadBackendProduct();
+
+    return () => {
+      active = false;
+    };
+  }, [apiFetch, editItemId, t.allShops]);
 
   const activeCategory = categoryConfig(form.category);
   const addonCategoryOptions = useMemo(
@@ -1807,12 +1870,54 @@ export function CreateItemPage() {
     setSaving(true);
     setSaveError("");
 
-    setCreatedCode(
-      editProductCode || `DEMO-${Date.now().toString(36).toUpperCase()}`,
-    );
-    setSaveError("الحفظ غير مربوط بالـ backend؛ هذه معاينة محلية فقط.");
-    setConfirmationOpen(true);
-    setSaving(false);
+    try {
+      const selectedExistingImage = productImages.find((image) => !image.file);
+      const payload = {
+        name: form.name.trim(),
+        description: form.description.trim(),
+        category: form.subcategory,
+        product_category: form.subcategory,
+        price: form.price,
+        discount: form.discount || "0",
+        stock: form.stock || "0",
+        is_active: form.available,
+        is_featured: form.featured,
+        market: selectedLocationMode === "shop" ? selectedShop : null,
+        visibility_mode: visibilityMode,
+        region_slugs: visibleRegionSlugs,
+        additions: productAddons.enabled ? productAddons.selectedIds : [],
+        variants: selectedVariants,
+        variant_details: variantDetails,
+        image_url: selectedExistingImage?.url ?? null,
+      };
+      const path = isEditing && editItemId
+        ? `${adminApiPaths.products}${encodeURIComponent(editItemId)}/`
+        : adminApiPaths.products;
+      const data = await sendAdminJson(apiFetch, path, {
+        method: isEditing ? "PATCH" : "POST",
+        body: JSON.stringify(payload),
+      });
+      const backendCode =
+        data && typeof data === "object"
+          ? String(
+              (data as BackendRecord).code ??
+                (data as BackendRecord).id ??
+                editProductCode ??
+                "",
+            )
+          : "";
+
+      setCreatedCode(
+        backendCode ||
+          editProductCode ||
+          `PRD-${Date.now().toString(36).toUpperCase()}`,
+      );
+      setConfirmationOpen(true);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : t.saveError);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
