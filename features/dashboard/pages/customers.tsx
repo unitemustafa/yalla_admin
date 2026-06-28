@@ -23,7 +23,7 @@ import {
 } from "../users/api-users";
 import type { DashboardUser } from "../users/default-dashboard-users";
 import { DashboardImage } from "../dashboard-image";
-import { Button, Card, Input, PageTitle, Pagination } from "../primitives";
+import { Badge, Button, Card, Input, PageTitle, Pagination } from "../primitives";
 import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
 
@@ -248,6 +248,13 @@ export function CustomersPage() {
           </div>
         }
       />
+
+      <Card className="p-4">
+        <div className="text-2xl font-extrabold">{customers.length}</div>
+        <div className="text-xs font-bold text-muted-foreground">
+          إجمالي المستخدمين
+        </div>
+      </Card>
 
       {hasError ? (
         <CustomerErrorAlert
@@ -476,7 +483,7 @@ function AddCustomerDialog({
 
             <CustomerField label="اسم الدخول *" error={errorFor("username")}>
               <Input
-                dir="ltr"
+                dir="rtl"
                 value={draft.username}
                 onChange={(event) => updateDraft("username", event.target.value)}
                 placeholder="mustafa.ali"
@@ -486,7 +493,7 @@ function AddCustomerDialog({
 
             <CustomerField label="رقم الهاتف *" error={errorFor("phone")}>
               <Input
-                dir="ltr"
+                dir="rtl"
                 value={draft.phone}
                 onChange={(event) => updateDraft("phone", event.target.value)}
                 placeholder="+201001234567"
@@ -496,7 +503,7 @@ function AddCustomerDialog({
 
             <CustomerField label="البريد الإلكتروني *" error={errorFor("email")}>
               <Input
-                dir="ltr"
+                dir="rtl"
                 type="email"
                 value={draft.email}
                 onChange={(event) => updateDraft("email", event.target.value)}
@@ -508,7 +515,7 @@ function AddCustomerDialog({
             <CustomerField label="كلمة المرور *" error={errorFor("password")}>
               <div className="relative">
                 <Input
-                  dir="ltr"
+                  dir="rtl"
                   type={showPassword ? "text" : "password"}
                   value={draft.password}
                   onChange={(event) =>
@@ -528,9 +535,9 @@ function AddCustomerDialog({
                   disabled={saving}
                 >
                   {showPassword ? (
-                    <EyeOff className="size-4" />
-                  ) : (
                     <Eye className="size-4" />
+                  ) : (
+                    <EyeOff className="size-4" />
                   )}
                 </button>
               </div>
@@ -657,116 +664,103 @@ function CustomersTable({
   }
 
   return (
-    <Card className="overflow-hidden shadow">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[860px] caption-bottom text-sm">
-          <colgroup>
-            <col className="w-16" />
-            <col className="w-24" />
-            <col className="w-[28%]" />
-            <col className="w-[24%]" />
-            <col className="w-[28%]" />
-            <col className="w-24" />
-          </colgroup>
-          <thead>
-            <tr className="h-10 border-b transition-colors hover:bg-muted/50">
-              {[
-                "#",
-                "الصورة",
-                "اسم المستخدم",
-                "رقم الهاتف",
-                "البريد الإلكتروني",
-                "",
-              ].map((header) => (
-                <th
-                  key={header || "actions"}
-                  className="h-10 px-4 text-center align-middle text-xs font-medium text-muted-foreground"
-                >
-                  {header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {pagedCustomers.map((customer, index) => (
-              <tr
-                key={customer.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => openUser(customer)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    openUser(customer);
-                  }
-                }}
-                className="h-[68px] cursor-pointer border-b transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <td className="px-4 text-center align-middle font-medium text-muted-foreground">
-                  {pageStartIndex + index + 1}
-                </td>
-                <td className="px-4 align-middle">
-                  <DashboardImage
-                    src={customer.avatar}
-                    alt={customer.name}
-                    width={40}
-                    height={40}
-                    className="mx-auto size-10 rounded-full border"
-                  />
-                </td>
-                <td className="px-4 text-center align-middle">
-                  <div className="font-medium text-foreground">
-                    {customer.name}
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {customer.role} · {customer.status}
-                  </div>
-                </td>
-                <td className="px-4 text-center align-middle">
-                  <span dir="ltr" className="inline-block font-medium">
-                    {customer.phone}
-                  </span>
-                </td>
-                <td className="px-4 text-center align-middle">
-                  <span dir="ltr" className="inline-block font-medium">
-                    {customer.email}
-                  </span>
-                </td>
-                <td className="px-4 text-center align-middle">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`حذف ${customer.name}`}
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    disabled={deletingUserId === customer.id}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onDelete(customer.id);
-                    }}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <Pagination
-        text={`عرض ${pagedCustomers.length} من ${customers.length} نتيجة`}
-        pages={`${safeCurrentPage} / ${totalPages}`}
-        previousDisabled={safeCurrentPage === 1}
-        nextDisabled={safeCurrentPage === totalPages}
-        onPrevious={() =>
-          setCurrentPage((page) => Math.max(1, Math.min(page, totalPages) - 1))
-        }
-        onNext={() =>
-          setCurrentPage((page) =>
-            Math.min(totalPages, Math.min(page, totalPages) + 1),
-          )
-        }
-      />
-    </Card>
+    <div className="space-y-3">
+      {pagedCustomers.map((customer, index) => (
+        <Card
+          key={customer.id}
+          className="grid gap-4 p-4 xl:grid-cols-[minmax(280px,1fr)_420px_120px] xl:items-center"
+        >
+          <button
+            type="button"
+            onClick={() => openUser(customer)}
+            className="flex min-w-0 items-center gap-3 rounded-lg text-start transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+            aria-label={`عرض تفاصيل ${customer.name}`}
+          >
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">
+              {pageStartIndex + index + 1}
+            </span>
+            <DashboardImage
+              src={customer.avatar}
+              alt={customer.name}
+              width={56}
+              height={56}
+              className="size-14 shrink-0 overflow-hidden rounded-full"
+              imageClassName="object-cover"
+            />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-bold text-foreground">{customer.name}</h3>
+                <Badge tone={customer.status === "نشط" ? "green" : "red"}>
+                  {customer.status}
+                </Badge>
+              </div>
+              <p className="mt-1 truncate text-sm text-muted-foreground" dir="ltr">
+                {customer.phone} - {customer.email}
+              </p>
+              <p className="mt-1 truncate text-sm text-muted-foreground">
+                {customer.role}
+              </p>
+            </div>
+          </button>
+
+          <div className="grid grid-cols-3 gap-2 text-center text-sm">
+            <div className="rounded-md bg-muted px-3 py-2">
+              <div className="truncate font-bold" dir="ltr">@{customer.username}</div>
+              <div className="text-xs text-muted-foreground">اسم الدخول</div>
+            </div>
+            <div className="rounded-md bg-muted px-3 py-2">
+              <div className="font-bold">{customer.status}</div>
+              <div className="text-xs text-muted-foreground">الحالة</div>
+            </div>
+            <div className="rounded-md bg-muted px-3 py-2">
+              <div className="truncate font-bold">{customer.joinedAt}</div>
+              <div className="text-xs text-muted-foreground">تاريخ الانضمام</div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => openUser(customer)}
+              aria-label={`عرض تفاصيل ${customer.name}`}
+              title="عرض التفاصيل"
+            >
+              <Eye className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label={`حذف ${customer.name}`}
+              title="حذف"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              disabled={deletingUserId === customer.id}
+              onClick={() => onDelete(customer.id)}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        </Card>
+      ))}
+
+      <Card className="overflow-hidden shadow">
+        <Pagination
+          text={`عرض ${pagedCustomers.length} من ${customers.length} نتيجة`}
+          pages={`${safeCurrentPage} / ${totalPages}`}
+          previousDisabled={safeCurrentPage === 1}
+          nextDisabled={safeCurrentPage === totalPages}
+          onPrevious={() =>
+            setCurrentPage((page) => Math.max(1, Math.min(page, totalPages) - 1))
+          }
+          onNext={() =>
+            setCurrentPage((page) =>
+              Math.min(totalPages, Math.min(page, totalPages) + 1),
+            )
+          }
+        />
+      </Card>
+    </div>
   );
 }

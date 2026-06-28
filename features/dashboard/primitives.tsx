@@ -164,6 +164,30 @@ export function Badge({
   );
 }
 
+export function CurrencyText({
+  children,
+  className,
+}: {
+  children: string | number;
+  className?: string;
+}) {
+  const parts = String(children).split(/(EGP|جنيه|جنية)/gi);
+
+  return (
+    <span className={className}>
+      {parts.map((part, index) =>
+        /^(EGP|جنيه|جنية)$/i.test(part) ? (
+          <span key={`${part}-${index}`} className="currency-text">
+            {part}
+          </span>
+        ) : (
+          part
+        ),
+      )}
+    </span>
+  );
+}
+
 export function Input({
   className,
   ...props

@@ -25,7 +25,7 @@ import {
 } from "../users/api-users";
 import type { DashboardUser } from "../users/default-dashboard-users";
 import { DashboardImage } from "../dashboard-image";
-import { Badge, Button, Card, PageTitle } from "../primitives";
+import { Badge, Button, Card, CurrencyText, PageTitle } from "../primitives";
 
 const currency = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -271,7 +271,7 @@ export function UserDetailPage({
               </span>
             }
           />
-          <InfoRow label="إجمالي الإنفاق" value={totalSpentValue} />
+          <InfoRow label="إجمالي الإنفاق" value={<CurrencyText>{totalSpentValue}</CurrencyText>} />
           <InfoRow label="آخر طلب" value={lastOrder} />
         </InfoCard>
 
@@ -421,7 +421,7 @@ function UserOrdersSection({
                     <td className="px-4">{order.type}</td>
                     <td className="px-4">{order.payment}</td>
                     <td className="px-4 font-semibold">
-                      {formatCurrency(order.total)}
+                      <CurrencyText>{formatCurrency(order.total)}</CurrencyText>
                     </td>
                     <td className="px-4">
                       <div>{order.date}</div>

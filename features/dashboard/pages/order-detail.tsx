@@ -19,7 +19,7 @@ import {
   X,
 } from "lucide-react";
 
-import { Badge, Card } from "../primitives";
+import { Badge, Card, CurrencyText } from "../primitives";
 import { useSnackbar } from "../snackbar";
 import { dashboardUsers } from "../users/default-dashboard-users";
 import { cn } from "@/lib/utils";
@@ -288,7 +288,7 @@ function AmountSummaryItem({
             styles.value,
           )}
         >
-          {value}
+          <CurrencyText>{value}</CurrencyText>
         </span>
       </span>
     </div>

@@ -32,6 +32,7 @@ const pageKeys: Record<PageKey, TranslationKey> = {
   cities: "page.cities",
   "delivery-zone": "page.deliveryZone",
   couriers: "page.couriers",
+  "create-courier": "page.createCourier",
   customers: "page.customers",
   memberships: "page.memberships",
   account: "page.account",

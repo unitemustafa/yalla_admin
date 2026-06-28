@@ -481,7 +481,7 @@ function PriceCell({ price }: { price: string }) {
   return (
     <div className="inline-flex min-w-[78px] items-baseline justify-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-primary">
       <span className="text-sm font-black leading-none">{amount}</span>
-      {currency ? <span className="text-[11px] font-bold">{currency}</span> : null}
+      {currency ? <span className="currency-text text-[11px] font-bold">{currency}</span> : null}
     </div>
   );
 }

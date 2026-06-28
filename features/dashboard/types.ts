@@ -15,6 +15,7 @@ export type PageKey =
   | "cities"
   | "delivery-zone"
   | "couriers"
+  | "create-courier"
   | "customers"
   | "memberships"
   | "account"

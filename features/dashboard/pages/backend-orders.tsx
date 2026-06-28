@@ -6,9 +6,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   Check,
+  ChevronDown,
   ClipboardList,
   Copy,
-  ExternalLink,
   Loader2,
   PackageCheck,
   Plus,
@@ -17,12 +17,13 @@ import {
   ShoppingCart,
   Trash2,
   Truck,
+  X,
   XCircle,
 } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { cn } from "@/lib/utils";
-import { AppSelect, Badge, Button, Card, Field, Input, PageTitle } from "../primitives";
+import { AppSelect, Badge, Button, Card, CurrencyText, Field, Input, PageTitle, Pagination } from "../primitives";
 import { useSnackbar } from "../snackbar";
 import {
   apiResponseData,
@@ -100,6 +101,8 @@ type BackendProduct = {
   id: number;
   name: string;
   market?: { id: number; name?: string | null } | null;
+  category?: { id: number; name?: string | null; type?: string | null } | null;
+  is_available?: boolean;
   variants?: Array<{ id: number; price: string; sku?: string | null }>;
 };
 
@@ -108,6 +111,21 @@ type OrderLineDraft = {
   variantId: string;
   quantity: string;
 };
+
+type ProductVariantOption = {
+  id: string;
+  productId: number;
+  productName: string;
+  categoryName: string;
+  marketId?: number;
+  marketName: string;
+  sku?: string | null;
+  label: string;
+  price: number;
+  available: boolean;
+};
+
+type CreateOrderDeliveryType = "fixed_area" | "manual_quote";
 
 type AssignmentFilter = "all" | "ready_unassigned" | "assigned" | "unassigned";
 
@@ -129,6 +147,8 @@ const orderRouteStatuses: BackendOrderStatus[] = [
   "delivered",
 ];
 
+const ordersPageSize = 10;
+
 const statusLabels: Record<BackendOrderStatus, string> = {
   pending: "قيد الانتظار",
   confirmed: "مؤكد",
@@ -149,8 +169,8 @@ function deliveryTypeLabel(order: BackendOrder) {
   return order.delivery_type === "manual_quote" ? "دليفري" : "توصيل";
 }
 
-function deliveryTypeTone(order: BackendOrder): "blue" | "green" | "secondary" {
-  if (order.delivery_type === "manual_quote") return "blue";
+function deliveryTypeTone(order: BackendOrder): "blue" | "green" | "red" | "secondary" {
+  if (order.delivery_type === "manual_quote") return "red";
   if (order.delivery_price_status === "fixed") return "green";
   return "secondary";
 }
@@ -242,6 +262,7 @@ export function BackendOrdersPage() {
   const [deliveryType, setDeliveryType] = useState<"all" | "fixed_area" | "manual_quote">("all");
   const [assignment, setAssignment] = useState<AssignmentFilter>("all");
   const [courierId, setCourierId] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -310,6 +331,11 @@ export function BackendOrdersPage() {
     });
   }, [assignment, courierId, orders, query, status, deliveryType]);
 
+  const totalPages = Math.max(1, Math.ceil(visibleOrders.length / ordersPageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStartIndex = (safeCurrentPage - 1) * ordersPageSize;
+  const pagedOrders = visibleOrders.slice(pageStartIndex, pageStartIndex + ordersPageSize);
+
   const readyCount = orders.filter((order) => order.status === "ready" && !order.assigned_representative).length;
   const assignedCount = orders.filter((order) => Boolean(order.assigned_representative)).length;
   const deliveredCount = orders.filter((order) => order.status === "delivered").length;
@@ -359,14 +385,20 @@ export function BackendOrdersPage() {
             <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setCurrentPage(1);
+              }}
               className="ps-9"
               placeholder="بحث برقم الطلب أو العميل أو المحل..."
             />
           </label>
           <AppSelect
             value={status}
-            onValueChange={(value) => setStatus(value as "all" | BackendOrderStatus)}
+            onValueChange={(value) => {
+              setStatus(value as "all" | BackendOrderStatus);
+              setCurrentPage(1);
+            }}
             options={[
               { value: "all", label: "كل الحالات" },
               ...filterStatusOptions.map((value) => ({
@@ -380,7 +412,10 @@ export function BackendOrdersPage() {
           />
           <AppSelect
             value={assignment}
-            onValueChange={(value) => setAssignment(value as AssignmentFilter)}
+            onValueChange={(value) => {
+              setAssignment(value as AssignmentFilter);
+              setCurrentPage(1);
+            }}
             options={[
               { value: "all", label: "كل الإسنادات" },
               { value: "ready_unassigned", label: "جاهزة للإسناد" },
@@ -393,7 +428,10 @@ export function BackendOrdersPage() {
           />
           <AppSelect
             value={courierId}
-            onValueChange={setCourierId}
+            onValueChange={(value) => {
+              setCourierId(value);
+              setCurrentPage(1);
+            }}
             options={[
               { value: "all", label: "كل المندوبين" },
               ...couriers.map((courier) => ({
@@ -407,9 +445,10 @@ export function BackendOrdersPage() {
           />
           <AppSelect
             value={deliveryType}
-            onValueChange={(value) =>
-              setDeliveryType(value as "all" | "fixed_area" | "manual_quote")
-            }
+            onValueChange={(value) => {
+              setDeliveryType(value as "all" | "fixed_area" | "manual_quote");
+              setCurrentPage(1);
+            }}
             options={[
               { value: "all", label: "كل أنواع التوصيل" },
               { value: "fixed_area", label: "توصيل" },
@@ -432,83 +471,124 @@ export function BackendOrdersPage() {
             لا توجد طلبات مطابقة.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px] text-sm">
-              <thead>
-                <tr className="border-b bg-muted/30 text-xs text-muted-foreground">
-                  <th className="px-4 py-3 text-start">رقم الطلب</th>
-                  <th className="px-4 py-3 text-start">العميل</th>
-                  <th className="px-4 py-3 text-start">المحل</th>
-                  <th className="px-4 py-3 text-start">الحالة</th>
-                  <th className="px-4 py-3 text-start">المندوب</th>
-                  <th className="px-4 py-3 text-start">التوصيل</th>
-                  <th className="px-4 py-3 text-start">الإجمالي</th>
-                  <th className="px-4 py-3 text-start">التاريخ</th>
-                  <th className="px-4 py-3 text-start" />
-                </tr>
-              </thead>
-              <tbody>
-                {visibleOrders.map((order, index) => (
-                  <tr key={order.id} className="border-b last:border-0 hover:bg-muted/25">
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
-                        <span dir="ltr" className="font-semibold text-primary">
-                          {index + 1}. {orderNumber(order)}
-                        </span>
+          <div className="grid gap-3 p-4">
+            {pagedOrders.map((order, index) => {
+              const isDeliveryOrder = order.delivery_type === "manual_quote";
+
+              return (
+                <div
+                  key={order.id}
+                  className={cn(
+                    "grid gap-4 rounded-md border bg-card p-4 shadow-sm transition hover:border-primary/35 hover:bg-muted/20 xl:grid-cols-[minmax(270px,1.25fr)_minmax(180px,0.85fr)_160px_170px_150px_82px] xl:items-center",
+                    isDeliveryOrder &&
+                      "border-red-400/40 bg-red-500/5 hover:border-red-400/60 hover:bg-red-500/10",
+                  )}
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span
+                      className={cn(
+                        "flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary",
+                        isDeliveryOrder && "bg-red-500/10 text-red-600 dark:text-red-300",
+                      )}
+                    >
+                      {pageStartIndex + index + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <Link
+                          href={`/orders/view/${order.id}`}
+                          dir="ltr"
+                          className={cn(
+                            "truncate font-bold text-primary hover:underline",
+                            isDeliveryOrder && "text-red-600 dark:text-red-300",
+                          )}
+                        >
+                          {orderNumber(order)}
+                        </Link>
                         <button
                           type="button"
                           onClick={() => {
                             void copyOrderNumberFromList(order);
                           }}
-                          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                          className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border text-muted-foreground transition hover:bg-accent hover:text-foreground"
                           aria-label={`نسخ رقم الطلب ${orderNumber(order)}`}
                           title="نسخ رقم الطلب"
                         >
-                          <Copy className="size-3.5" />
+                          <Copy className="size-4" />
                         </button>
                       </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="font-medium">{customerName(order)}</div>
-                      <div className="text-xs text-muted-foreground" dir="ltr">
-                        {order.customer?.phone ?? "-"}
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Badge tone={statusTone(order.status)}>{statusLabels[order.status]}</Badge>
+                        <Badge tone={deliveryTypeTone(order)}>{deliveryTypeLabel(order)}</Badge>
                       </div>
-                    </td>
-                    <td className="px-4 py-4">{order.market?.name ?? "-"}</td>
-                    <td className="px-4 py-4">
-                      <Badge tone={statusTone(order.status)}>{statusLabels[order.status]}</Badge>
-                    </td>
-                    <td className="px-4 py-4">
+                    </div>
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="truncate font-bold">{customerName(order)}</div>
+                    <div className="mt-1 inline-block max-w-full truncate text-start text-xs text-muted-foreground [unicode-bidi:plaintext]" dir="ltr">
+                      {order.customer?.phone ?? "-"}
+                    </div>
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-muted-foreground">المحل</div>
+                    <div className="mt-1 truncate font-semibold">{order.market?.name ?? "-"}</div>
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-muted-foreground">المندوب</div>
+                    <div className="mt-1">
                       {order.assigned_representative ? (
                         <Link
                           href={representativeHref(order)}
-                          className="font-semibold text-primary hover:underline"
+                          className="inline-grid max-w-full gap-0.5 font-semibold text-primary hover:underline"
                         >
-                          {representativeName(order)}
+                          <span className="truncate">{representativeName(order)}</span>
+                          <span className="truncate text-start text-[11px] font-normal text-muted-foreground [unicode-bidi:plaintext]" dir="ltr">
+                            {order.assigned_representative.phone ?? `#${order.assigned_representative.id}`}
+                          </span>
                         </Link>
                       ) : (
                         <Badge tone={order.status === "ready" ? "blue" : "secondary"}>
                           {order.status === "ready" ? "جاهز للإسناد" : "غير مسند"}
                         </Badge>
                       )}
-                    </td>
-                    <td className="px-4 py-4">
-                      <Badge tone={deliveryTypeTone(order)}>{deliveryTypeLabel(order)}</Badge>
-                    </td>
-                    <td className="px-4 py-4">{money(order.total_price)}</td>
-                    <td className="px-4 py-4">{dateTime(order.created_at)}</td>
-                    <td className="px-4 py-4 text-end">
-                      <Link
-                        href={`/orders/view/${order.id}`}
-                        className="inline-flex h-8 items-center rounded-md border px-3 text-xs font-semibold hover:bg-accent"
-                      >
-                        فتح
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                  </div>
+
+                  <div className="min-w-0">
+                    <CurrencyText className="block text-base font-extrabold tabular-nums">
+                      {money(order.total_price)}
+                    </CurrencyText>
+                    <div className="mt-1 truncate text-xs text-muted-foreground">{dateTime(order.created_at)}</div>
+                  </div>
+
+                  <Link
+                    href={`/orders/view/${order.id}`}
+                    className="inline-flex h-9 items-center justify-center rounded-md border px-3 text-xs font-semibold transition hover:bg-accent xl:w-full"
+                  >
+                    فتح
+                  </Link>
+                </div>
+              );
+            })}
+            <div className="overflow-hidden rounded-md border bg-card shadow-sm">
+              <Pagination
+                text={`عرض ${pagedOrders.length} من ${visibleOrders.length} نتيجة`}
+                pages={`${safeCurrentPage} / ${totalPages}`}
+                previousDisabled={safeCurrentPage === 1}
+                nextDisabled={safeCurrentPage === totalPages}
+                onPrevious={() =>
+                  setCurrentPage((page) => Math.max(1, Math.min(page, totalPages) - 1))
+                }
+                onNext={() =>
+                  setCurrentPage((page) =>
+                    Math.min(totalPages, Math.min(page, totalPages) + 1),
+                  )
+                }
+              />
+            </div>
           </div>
         )}
       </Card>
@@ -534,12 +614,19 @@ export function BackendCreateOrderPage() {
   const [addresses, setAddresses] = useState<BackendAddress[]>([]);
   const [selectedUser, setSelectedUser] = useState("");
   const [selectedAddress, setSelectedAddress] = useState("");
+  const [orderDeliveryType, setOrderDeliveryType] = useState<CreateOrderDeliveryType>("fixed_area");
+  const [customDeliveryArea, setCustomDeliveryArea] = useState("");
   const [deliveryPrice, setDeliveryPrice] = useState("0");
   const [discount, setDiscount] = useState("0");
   const [description, setDescription] = useState("");
   const [lines, setLines] = useState<OrderLineDraft[]>([
     { id: draftLineId(), variantId: "", quantity: "1" },
   ]);
+  const [pickerLineId, setPickerLineId] = useState<string | null>(null);
+  const [productQuery, setProductQuery] = useState("");
+  const [productMarketFilter, setProductMarketFilter] = useState("all");
+  const [productCategoryFilter, setProductCategoryFilter] = useState("all");
+  const [productAvailabilityFilter, setProductAvailabilityFilter] = useState<"all" | "available" | "unavailable">("all");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -594,22 +681,65 @@ export function BackendCreateOrderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const variants = useMemo(() => {
+  const variants = useMemo<ProductVariantOption[]>(() => {
     return products.flatMap((product) =>
       (product.variants ?? []).map((variant) => ({
         id: String(variant.id),
+        productId: product.id,
+        productName: product.name,
+        categoryName: product.category?.name?.trim() || "بدون تصنيف",
+        marketName: product.market?.name?.trim() || "بدون محل",
         label: `${product.name} - ${money(variant.price)}${variant.sku ? ` - ${variant.sku}` : ""}`,
         price: Number(variant.price),
         marketId: product.market?.id,
+        sku: variant.sku,
+        available: product.is_available !== false,
       })),
     );
   }, [products]);
+
+  const productMarkets = useMemo(() => {
+    const map = new Map<string, string>();
+    variants.forEach((variant) => {
+      if (variant.marketId) map.set(String(variant.marketId), variant.marketName);
+    });
+    return Array.from(map, ([value, label]) => ({ value, label }));
+  }, [variants]);
+
+  const productCategories = useMemo(() => {
+    return Array.from(new Set(variants.map((variant) => variant.categoryName)))
+      .filter(Boolean)
+      .sort((first, second) => first.localeCompare(second, "ar"));
+  }, [variants]);
+
+  const filteredVariants = useMemo(() => {
+    const normalizedQuery = productQuery.trim().toLowerCase();
+
+    return variants.filter((variant) => {
+      const matchesQuery =
+        !normalizedQuery ||
+        [variant.productName, variant.sku, variant.marketName, variant.categoryName]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+      const matchesMarket =
+        productMarketFilter === "all" || String(variant.marketId ?? "") === productMarketFilter;
+      const matchesCategory =
+        productCategoryFilter === "all" || variant.categoryName === productCategoryFilter;
+      const matchesAvailability =
+        productAvailabilityFilter === "all" ||
+        (productAvailabilityFilter === "available" ? variant.available : !variant.available);
+
+      return matchesQuery && matchesMarket && matchesCategory && matchesAvailability;
+    });
+  }, [productAvailabilityFilter, productCategoryFilter, productMarketFilter, productQuery, variants]);
 
   const subtotal = lines.reduce((sum, line) => {
     const variant = variants.find((item) => item.id === line.variantId);
     return sum + (variant?.price ?? 0) * Math.max(1, Number(line.quantity) || 1);
   }, 0);
-  const total = Math.max(0, subtotal + Number(deliveryPrice || 0) - Number(discount || 0));
+  const effectiveDeliveryPrice =
+    orderDeliveryType === "manual_quote" ? 0 : Number(deliveryPrice || 0);
+  const total = Math.max(0, subtotal + effectiveDeliveryPrice - Number(discount || 0));
   const selectedVariants = lines.map((line) => line.variantId).filter(Boolean);
   const hasMixedMarkets =
     new Set(
@@ -630,7 +760,13 @@ export function BackendCreateOrderPage() {
 
   async function submitOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedUser || !selectedAddress || !selectedVariants.length || hasMixedMarkets) return;
+    if (
+      !selectedUser ||
+      !selectedAddress ||
+      !selectedVariants.length ||
+      hasMixedMarkets ||
+      (orderDeliveryType === "manual_quote" && !customDeliveryArea.trim())
+    ) return;
     setSaving(true);
     try {
       const response = await apiFetch("orders/", {
@@ -640,7 +776,10 @@ export function BackendCreateOrderPage() {
           user_id: Number(selectedUser),
           delivery_address_id: Number(selectedAddress),
           payment_method: "cash_on_delivery",
-          delivery_price: Number(deliveryPrice || 0),
+          delivery_type: orderDeliveryType,
+          custom_delivery_area:
+            orderDeliveryType === "manual_quote" ? customDeliveryArea.trim() : "",
+          delivery_price: orderDeliveryType === "manual_quote" ? 0 : Number(deliveryPrice || 0),
           discount: Number(discount || 0),
           description: description.trim(),
           items: lines
@@ -690,44 +829,74 @@ export function BackendCreateOrderPage() {
       ) : error ? (
         <Card className="mt-6 p-6 text-sm text-destructive">{error}</Card>
       ) : (
-        <form onSubmit={submitOrder} className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-          <Card className="p-5">
+        <form onSubmit={submitOrder} className="mt-6 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <Card className="p-5 xl:sticky xl:top-6">
             <div className="grid gap-4">
               <Field label="العميل">
-                <select
-                  required
+                <input required type="hidden" value={selectedUser} readOnly />
+                <AppSelect
                   value={selectedUser}
-                  onChange={(event) => {
-                    setSelectedUser(event.target.value);
-                    void loadAddresses(event.target.value);
+                  onValueChange={(value) => {
+                    setSelectedUser(value);
+                    void loadAddresses(value);
                   }}
-                  className="h-10 rounded-md border bg-input px-3 text-sm"
-                >
-                  <option value="">اختر العميل</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {fullNameFromBackendUser(user)} - {user.phone}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="اختر العميل"
+                  ariaLabel="اختيار العميل"
+                  className="h-10 bg-input"
+                  contentClassName="max-h-[360px]"
+                  options={users.map((user) => ({
+                    value: String(user.id),
+                    label: `${fullNameFromBackendUser(user)} - ${user.phone}`,
+                  }))}
+                />
               </Field>
 
               <Field label="عنوان التوصيل">
-                <select
-                  required
+                <input required type="hidden" value={selectedAddress} readOnly />
+                <AppSelect
                   value={selectedAddress}
-                  onChange={(event) => setSelectedAddress(event.target.value)}
-                  className="h-10 rounded-md border bg-input px-3 text-sm"
+                  onValueChange={setSelectedAddress}
+                  placeholder="اختر العنوان"
+                  ariaLabel="اختيار عنوان التوصيل"
+                  className="h-10 bg-input"
                   disabled={!selectedUser}
-                >
-                  <option value="">اختر العنوان</option>
-                  {addresses.map((address) => (
-                    <option key={address.id} value={address.id}>
-                      {address.name ?? `عنوان #${address.id}`}
-                    </option>
-                  ))}
-                </select>
+                  options={addresses.map((address) => ({
+                    value: String(address.id),
+                    label: address.name ?? `عنوان #${address.id}`,
+                  }))}
+                />
               </Field>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="نوع الطلب">
+                  <AppSelect
+                    value={orderDeliveryType}
+                    onValueChange={(value) => setOrderDeliveryType(value as CreateOrderDeliveryType)}
+                    placeholder="اختر نوع الطلب"
+                    ariaLabel="نوع الطلب"
+                    className="h-11 bg-input"
+                    options={[
+                      { value: "fixed_area", label: "توصيل" },
+                      { value: "manual_quote", label: "دليفري" },
+                    ]}
+                  />
+                </Field>
+                {orderDeliveryType === "manual_quote" ? (
+                  <Field label="منطقة الدليفري">
+                    <Input
+                      required
+                      value={customDeliveryArea}
+                      onChange={(event) => setCustomDeliveryArea(event.target.value)}
+                      placeholder="اكتب المنطقة بعد التواصل مع العميل"
+                      className="h-11"
+                    />
+                  </Field>
+                ) : (
+                  <Field label="رسوم التوصيل">
+                    <Input min={0} step="0.01" type="number" value={deliveryPrice} onChange={(event) => setDeliveryPrice(event.target.value)} className="h-11" />
+                  </Field>
+                )}
+              </div>
 
               <div className="grid gap-3">
                 <div className="flex items-center justify-between">
@@ -746,32 +915,45 @@ export function BackendCreateOrderPage() {
                     إضافة منتج
                   </Button>
                 </div>
-                {lines.map((line, index) => (
-                  <div key={line.id} className="grid gap-3 rounded-md border p-3 md:grid-cols-[minmax(0,1fr)_120px_40px]">
-                    <select
-                      required
-                      value={line.variantId}
-                      onChange={(event) => updateLine(line.id, { variantId: event.target.value })}
-                      className="h-10 rounded-md border bg-input px-3 text-sm"
+                {lines.map((line, index) => {
+                  const selectedVariant = variants.find((variant) => variant.id === line.variantId);
+
+                  return (
+                  <div key={line.id} className="grid gap-3 rounded-md border bg-muted/10 p-3 md:grid-cols-[minmax(0,1fr)_150px_44px] md:items-center">
+                    <input required type="hidden" value={line.variantId} readOnly />
+                    <button
+                      type="button"
+                      onClick={() => setPickerLineId(line.id)}
+                      className={cn(
+                        "flex h-14 w-full items-center justify-between gap-3 rounded-md border bg-input px-3 py-2 text-start text-sm shadow-sm transition hover:border-primary/45 hover:bg-accent/60",
+                        !selectedVariant && "text-muted-foreground",
+                      )}
                     >
-                      <option value="">اختر المنتج</option>
-                      {variants.map((variant) => (
-                        <option key={variant.id} value={variant.id}>
-                          {variant.label}
-                        </option>
-                      ))}
-                    </select>
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold">
+                          {selectedVariant?.productName ?? "اختر المنتج"}
+                        </span>
+                        <span className="mt-1 block truncate text-xs text-muted-foreground">
+                          {selectedVariant
+                            ? `${selectedVariant.marketName} - ${selectedVariant.categoryName} - ${money(selectedVariant.price)}${selectedVariant.sku ? ` - ${selectedVariant.sku}` : ""}`
+                            : "افتح قائمة المنتجات وابحث بالاسم أو الكود أو المحل."}
+                        </span>
+                      </span>
+                      <Search className="size-4 shrink-0 text-primary" />
+                    </button>
                     <Input
                       required
                       min={1}
                       type="number"
                       value={line.quantity}
                       onChange={(event) => updateLine(line.id, { quantity: event.target.value })}
+                      className="h-14 text-center text-base font-semibold"
                     />
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
+                      className="size-11"
                       disabled={lines.length === 1}
                       onClick={() => removeLine(line.id)}
                       aria-label={`حذف المنتج ${index + 1}`}
@@ -779,18 +961,16 @@ export function BackendCreateOrderPage() {
                       <Trash2 className="size-4 text-destructive" />
                     </Button>
                   </div>
-                ))}
+                  );
+                })}
                 {hasMixedMarkets ? (
                   <p className="text-sm text-destructive">كل منتجات الطلب يجب أن تكون من نفس المحل.</p>
                 ) : null}
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="رسوم التوصيل">
-                  <Input min={0} step="0.01" type="number" value={deliveryPrice} onChange={(event) => setDeliveryPrice(event.target.value)} />
-                </Field>
                 <Field label="الخصم">
-                  <Input min={0} step="0.01" type="number" value={discount} onChange={(event) => setDiscount(event.target.value)} />
+                  <Input min={0} step="0.01" type="number" value={discount} onChange={(event) => setDiscount(event.target.value)} className="h-11" />
                 </Field>
               </div>
               <Field label="ملاحظات">
@@ -803,27 +983,264 @@ export function BackendCreateOrderPage() {
             </div>
           </Card>
 
-          <Card className="h-fit p-5">
+          <Card className="p-5">
             <div className="mb-4 flex items-center gap-2 font-semibold">
               <ShoppingCart className="size-4 text-primary" />
               ملخص الطلب
             </div>
             <SummaryRow label="إجمالي المنتجات" value={money(subtotal)} />
-            <SummaryRow label="التوصيل" value={money(deliveryPrice)} />
+            <SummaryRow label={orderDeliveryType === "manual_quote" ? "الدليفري" : "التوصيل"} value={orderDeliveryType === "manual_quote" ? "سعر معلّق" : money(effectiveDeliveryPrice)} />
             <SummaryRow label="الخصم" value={money(discount)} />
             <div className="mt-4 border-t pt-4">
               <SummaryRow label="الإجمالي" value={money(total)} strong />
             </div>
             <Button
               className="mt-5 w-full"
-              disabled={saving || !selectedUser || !selectedAddress || !selectedVariants.length || hasMixedMarkets}
+              disabled={
+                saving ||
+                !selectedUser ||
+                !selectedAddress ||
+                !selectedVariants.length ||
+                hasMixedMarkets ||
+                (orderDeliveryType === "manual_quote" && !customDeliveryArea.trim())
+              }
             >
               {saving ? <Loader2 className="size-4 animate-spin" /> : <ClipboardList className="size-4" />}
               حفظ الطلب
             </Button>
           </Card>
+          <ProductVariantPicker
+            open={pickerLineId !== null}
+            variants={filteredVariants}
+            allVariantsCount={variants.length}
+            selectedVariantId={pickerLineId ? lines.find((line) => line.id === pickerLineId)?.variantId ?? "" : ""}
+            query={productQuery}
+            onQueryChange={setProductQuery}
+            marketFilter={productMarketFilter}
+            onMarketFilterChange={setProductMarketFilter}
+            marketOptions={productMarkets}
+            categoryFilter={productCategoryFilter}
+            onCategoryFilterChange={setProductCategoryFilter}
+            categoryOptions={productCategories}
+            availabilityFilter={productAvailabilityFilter}
+            onAvailabilityFilterChange={setProductAvailabilityFilter}
+            onClose={() => setPickerLineId(null)}
+            onSelect={(variantId) => {
+              if (pickerLineId) updateLine(pickerLineId, { variantId });
+              setPickerLineId(null);
+            }}
+          />
         </form>
       )}
+    </div>
+  );
+}
+
+function ProductVariantPicker({
+  open,
+  variants,
+  allVariantsCount,
+  selectedVariantId,
+  query,
+  onQueryChange,
+  marketFilter,
+  onMarketFilterChange,
+  marketOptions,
+  categoryFilter,
+  onCategoryFilterChange,
+  categoryOptions,
+  availabilityFilter,
+  onAvailabilityFilterChange,
+  onClose,
+  onSelect,
+}: {
+  open: boolean;
+  variants: ProductVariantOption[];
+  allVariantsCount: number;
+  selectedVariantId: string;
+  query: string;
+  onQueryChange: (value: string) => void;
+  marketFilter: string;
+  onMarketFilterChange: (value: string) => void;
+  marketOptions: Array<{ value: string; label: string }>;
+  categoryFilter: string;
+  onCategoryFilterChange: (value: string) => void;
+  categoryOptions: string[];
+  availabilityFilter: "all" | "available" | "unavailable";
+  onAvailabilityFilterChange: (value: "all" | "available" | "unavailable") => void;
+  onClose: () => void;
+  onSelect: (variantId: string) => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+
+    const scrollY = window.scrollY;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousOverflow = document.body.style.overflow;
+    const previousPosition = document.body.style.position;
+    const previousTop = document.body.style.top;
+    const previousWidth = document.body.style.width;
+
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+
+    return () => {
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.overflow = previousOverflow;
+      document.body.style.position = previousPosition;
+      document.body.style.top = previousTop;
+      document.body.style.width = previousWidth;
+      window.scrollTo(0, scrollY);
+    };
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/45 px-4 py-6 backdrop-blur-sm">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="product-variant-picker-title"
+        className="flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg border bg-background shadow-2xl"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b px-5 py-4">
+          <div>
+            <h2 id="product-variant-picker-title" className="text-base font-bold">
+              اختيار منتج للطلب
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              ابحث بالاسم أو الكود، وفلتر حسب المحل أو التصنيف قبل الإضافة.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={onClose}
+            aria-label="إغلاق اختيار المنتج"
+            className="size-9 rounded-full bg-muted/30"
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+
+        <div className="grid gap-3 border-b bg-muted/15 p-4 lg:grid-cols-[minmax(260px,1fr)_200px_190px_170px]">
+          <label className="grid gap-2 text-sm font-medium">
+            بحث
+            <div className="relative">
+              <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(event) => onQueryChange(event.target.value)}
+                placeholder="اسم المنتج أو الكود أو المحل..."
+                className="h-10 ps-9"
+                autoFocus
+              />
+            </div>
+          </label>
+
+          <label className="grid gap-2 text-sm font-medium">
+            المحل
+            <AppSelect
+              value={marketFilter}
+              onValueChange={onMarketFilterChange}
+              ariaLabel="فلتر المحل"
+              className="h-10 bg-input"
+              options={[{ value: "all", label: "كل المحلات" }, ...marketOptions]}
+            />
+          </label>
+
+          <label className="grid gap-2 text-sm font-medium">
+            التصنيف
+            <AppSelect
+              value={categoryFilter}
+              onValueChange={onCategoryFilterChange}
+              ariaLabel="فلتر التصنيف"
+              className="h-10 bg-input"
+              options={[
+                { value: "all", label: "كل التصنيفات" },
+                ...categoryOptions.map((category) => ({ value: category, label: category })),
+              ]}
+            />
+          </label>
+
+          <label className="grid gap-2 text-sm font-medium">
+            الحالة
+            <AppSelect
+              value={availabilityFilter}
+              onValueChange={(value) => onAvailabilityFilterChange(value as "all" | "available" | "unavailable")}
+              ariaLabel="فلتر حالة المنتج"
+              className="h-10 bg-input"
+              options={[
+                { value: "all", label: "كل الحالات" },
+                { value: "available", label: "متاح" },
+                { value: "unavailable", label: "غير متاح" },
+              ]}
+            />
+          </label>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          {variants.length > 0 ? (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {variants.map((variant) => {
+                const selected = variant.id === selectedVariantId;
+
+                return (
+                  <button
+                    key={variant.id}
+                    type="button"
+                    onClick={() => onSelect(variant.id)}
+                    className={cn(
+                      "group grid min-h-36 gap-3 rounded-md border bg-card p-4 text-start shadow-sm transition hover:border-primary/45 hover:bg-accent/45",
+                      selected && "border-primary/55 bg-primary/10",
+                    )}
+                  >
+                    <span className="flex items-start justify-between gap-3">
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-bold">{variant.productName}</span>
+                        <span className="mt-1 block truncate text-xs text-muted-foreground">{variant.sku || `#${variant.id}`}</span>
+                      </span>
+                      {selected ? (
+                        <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+                          <Check className="size-4" />
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+                      <span className="rounded-md bg-muted/60 px-2 py-1">{variant.marketName}</span>
+                      <span className="rounded-md bg-muted/60 px-2 py-1">{variant.categoryName}</span>
+                      <span className={cn("rounded-md px-2 py-1 font-semibold", variant.available ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300" : "bg-destructive/10 text-destructive")}>
+                        {variant.available ? "متاح" : "غير متاح"}
+                      </span>
+                    </span>
+                    <CurrencyText className="text-base font-extrabold tabular-nums">{money(variant.price)}</CurrencyText>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex min-h-52 flex-col items-center justify-center rounded-lg border bg-muted/10 px-4 text-center">
+              <Search className="mb-3 size-8 text-muted-foreground" />
+              <div className="text-sm font-semibold">لا توجد منتجات مطابقة</div>
+              <p className="mt-1 text-xs text-muted-foreground">جرّب تغيير البحث أو الفلاتر.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-muted/10 px-5 py-3">
+          <div className="text-xs text-muted-foreground">
+            ظاهر {variants.length} من {allVariantsCount} منتج
+          </div>
+          <Button type="button" variant="outline" className="h-10" onClick={onClose}>
+            إغلاق
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -832,7 +1249,7 @@ function SummaryRow({ label, value, strong }: { label: string; value: string; st
   return (
     <div className={cn("flex items-center justify-between gap-4 py-2 text-sm", strong && "text-base font-bold")}>
       <span className="text-muted-foreground">{label}</span>
-      <span dir="ltr">{value}</span>
+      <CurrencyText className="tabular-nums" >{value}</CurrencyText>
     </div>
   );
 }
@@ -845,6 +1262,8 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
   const [savingStatus, setSavingStatus] = useState(false);
   const [savingQuote, setSavingQuote] = useState(false);
   const [quoteDraft, setQuoteDraft] = useState("");
+  const [orderDetailsOpen, setOrderDetailsOpen] = useState(true);
+  const [representativeOpen, setRepresentativeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function loadOrder() {
@@ -996,9 +1415,9 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                   <tr key={item.id} className="border-b last:border-0">
                     <td className="px-4 py-4 text-muted-foreground">{index + 1}</td>
                     <td className="px-4 py-4 font-medium">{item.variant?.product?.name ?? "منتج"}</td>
-                    <td className="px-4 py-4">{money(item.unit_price)}</td>
+                    <td className="px-4 py-4"><CurrencyText>{money(item.unit_price)}</CurrencyText></td>
                     <td className="px-4 py-4">{item.quantity}</td>
-                    <td className="px-4 py-4">{money(Number(item.unit_price) * item.quantity)}</td>
+                    <td className="px-4 py-4"><CurrencyText>{money(Number(item.unit_price) * item.quantity)}</CurrencyText></td>
                   </tr>
                 ))}
               </tbody>
@@ -1046,18 +1465,49 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
           </Card>
 
           <Card className="p-5 text-sm">
-            <div className="mb-3 font-semibold">بيانات الطلب</div>
-            <SummaryRow label="العميل" value={customerName(order)} />
-            <SummaryRow label="الهاتف" value={order.customer?.phone ?? "-"} />
-            <SummaryRow label="المحل" value={order.market?.name ?? "-"} />
-            <SummaryRow label="العنوان" value={order.delivery_address?.name ?? "-"} />
-            <SummaryRow label="نوع التوصيل" value={deliveryTypeLabel(order)} />
-            {order.custom_delivery_area ? (
-              <SummaryRow label="منطقة الدليفري" value={order.custom_delivery_area} />
+            <button
+              type="button"
+              onClick={() => setOrderDetailsOpen((open) => !open)}
+              className="flex w-full items-center justify-between gap-3 rounded-md px-1 py-2 text-start font-semibold transition hover:bg-muted/40"
+            >
+              <span>بيانات الطلب</span>
+              <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", orderDetailsOpen && "rotate-180")} />
+            </button>
+            {orderDetailsOpen ? (
+              <div className="mt-3">
+                <SummaryRow label="العميل" value={customerName(order)} />
+                <SummaryRow label="الهاتف" value={order.customer?.phone ?? "-"} />
+                <SummaryRow label="المحل" value={order.market?.name ?? "-"} />
+                <SummaryRow label="العنوان" value={order.delivery_address?.name ?? "-"} />
+                <SummaryRow label="نوع الطلب" value={deliveryTypeLabel(order)} />
+                {order.custom_delivery_area ? (
+                  <SummaryRow label="منطقة الدليفري" value={order.custom_delivery_area} />
+                ) : null}
+                <div className="mt-4 border-t pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setRepresentativeOpen((open) => !open)}
+                    className="flex w-full items-center justify-between gap-3 rounded-md px-1 py-2 text-start font-semibold transition hover:bg-muted/40"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Truck className="size-4 text-primary" />
+                      المندوب
+                    </span>
+                    <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", representativeOpen && "rotate-180")} />
+                  </button>
+                  {representativeOpen ? (
+                    order.assigned_representative ? (
+                      <AssignedRepresentativeDetails order={order} />
+                    ) : (
+                      <div className="rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
+                        لم يتم إسناد الطلب لمندوب بعد.
+                      </div>
+                    )
+                  ) : null}
+                </div>
+              </div>
             ) : null}
           </Card>
-
-          {order.assigned_representative ? <AssignedRepresentativeCard order={order} /> : null}
 
           {order.delivery_type === "manual_quote" && order.delivery_price_status === "pending_quote" ? (
             <Card className="p-5 text-sm">
@@ -1099,29 +1549,17 @@ function FinancialSummaryCard({ order }: { order: BackendOrder }) {
   );
 }
 
-function AssignedRepresentativeCard({ order }: { order: BackendOrder }) {
+function AssignedRepresentativeDetails({ order }: { order: BackendOrder }) {
   const representative = order.assigned_representative;
   if (!representative) return null;
 
   return (
     <Link
       href={representativeHref(order)}
-      className="block rounded-[12px] border bg-card p-5 text-sm shadow-sm transition hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+      aria-label={`عرض تفاصيل المندوب ${representativeName(order)}`}
+      className="mt-2 inline-flex max-w-full rounded-md border bg-muted/15 px-3 py-2 text-sm font-semibold text-primary transition hover:border-primary/40 hover:bg-primary/5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
     >
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="font-semibold">المندوب</div>
-        <span className="flex size-9 items-center justify-center rounded-md bg-primary/10 text-primary">
-          <Truck className="size-4" />
-        </span>
-      </div>
-      <div className="font-semibold text-primary">{representativeName(order)}</div>
-      <div className="mt-1 text-xs text-muted-foreground" dir="ltr">
-        {representative.phone ?? `#${representative.id}`}
-      </div>
-      <div className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-primary">
-        عرض تفاصيل المندوب
-        <ExternalLink className="size-3.5" />
-      </div>
+      <span className="truncate">{representativeName(order)}</span>
     </Link>
   );
 }

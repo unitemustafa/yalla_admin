@@ -176,6 +176,17 @@
   --sidebar-ring: hsl(190 70% 45%);
 }
 
+.currency-text,
+[data-currency="true"] {
+  color: #059669 !important;
+  font-weight: 700;
+}
+
+.dark .currency-text,
+.dark [data-currency="true"] {
+  color: #34d399 !important;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

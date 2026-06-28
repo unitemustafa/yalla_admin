@@ -48,6 +48,7 @@ import {
   AppSelect,
   Button,
   Card,
+  CurrencyText,
   Field,
   FormCard,
   Input,
@@ -190,7 +191,7 @@ function MetricCards({
             </div>
             <div>
               <p className="text-xs text-muted-foreground">{label}</p>
-              <p className="text-xl font-semibold leading-tight">{value}</p>
+              <CurrencyText className="block text-xl font-semibold leading-tight">{value}</CurrencyText>
             </div>
           </div>
         </Card>
@@ -1908,12 +1909,12 @@ export function CreateOrderPageLegacy() {
                   className="flex min-h-10 items-center justify-between gap-4 rounded-md bg-muted/25 px-3"
                 >
                   <span className="text-muted-foreground">{label}</span>
-                  <span className={cn("font-medium", tone)}>{value}</span>
+                  <CurrencyText className={cn("font-medium", tone)}>{value}</CurrencyText>
                 </div>
               ))}
               <div className="mt-1 flex min-h-12 items-center justify-between gap-4 rounded-md border bg-background px-3 text-base font-semibold">
                 <span>الإجمالي</span>
-                <span className="text-green-500">0.00 EGP</span>
+                <CurrencyText className="text-green-500">0.00 EGP</CurrencyText>
               </div>
             </div>
           </Card>

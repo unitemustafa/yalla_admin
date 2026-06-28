@@ -43,7 +43,7 @@ import {
   sendAdminJson,
   type BackendRecord,
 } from "../admin-api";
-import { AppSelect, Button, Input, Switch } from "../primitives";
+import { AppSelect, Button, CurrencyText, Input, Switch } from "../primitives";
 import { deliveryZones } from "../reference-data";
 import { useServiceCities } from "../cities-api";
 import { cn } from "@/lib/utils";
@@ -4166,13 +4166,9 @@ function LivePreview({
                   dir="ltr"
                 >
                   <span className="flex min-w-0 items-center gap-2 text-left">
-                    <span className="font-black text-[#0B6B4F]">
-                      {priceText}
-                    </span>
+                    <CurrencyText className="font-black text-[#0B6B4F]">{priceText}</CurrencyText>
                     {oldPriceText ? (
-                      <span className="truncate text-xs font-bold text-white/45 line-through">
-                        EGP {oldPriceText}
-                      </span>
+                      <CurrencyText className="truncate text-xs font-bold text-white/45 line-through">{`EGP ${oldPriceText}`}</CurrencyText>
                     ) : null}
                   </span>
                   <span className="text-right font-bold text-white/55">السعر</span>
@@ -4271,13 +4267,11 @@ function AppPreviewPriceHeader({
         ) : null}
         <div className="flex min-h-11 flex-1 items-center justify-start gap-2 rounded-lg bg-[#0B6B4F]/20 px-3 py-2">
           <span className="min-w-0 truncate text-xl font-black">
-            <span className="text-[#0B6B4F]">{currency}</span>{" "}
+            <span className="currency-text">{currency}</span>{" "}
             <span className="text-white">{amount}</span>
           </span>
           {oldPrice ? (
-            <span className="min-w-0 truncate text-sm font-bold text-white/45 line-through">
-              {oldPrice}
-            </span>
+            <CurrencyText className="min-w-0 truncate text-sm font-bold text-white/45 line-through">{oldPrice}</CurrencyText>
           ) : null}
         </div>
       </div>

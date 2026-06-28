@@ -1,30 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
+  ArrowRight,
+  Camera,
+  ChevronDown,
   CheckCircle2,
   Eye,
   EyeOff,
+  IdCard,
   KeyRound,
   Loader2,
+  Mail,
+  MapPin,
   Pencil,
+  Phone,
   Plus,
   RefreshCw,
   Search,
   Send,
+  ShieldCheck,
   Trash2,
   Truck,
   Upload,
+  UserRound,
   UserRoundPlus,
   X,
 } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
+import { cn } from "@/lib/utils";
 import { DashboardImage } from "../dashboard-image";
-import { AppSelect, Badge, Button, Card, Field, Input, PageTitle } from "../primitives";
+import { AppSelect, Badge, Button, Card, Field, Input, PageTitle, Pagination } from "../primitives";
 import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
 import {
@@ -58,6 +68,8 @@ type Draft = {
   maxActiveOrders: string;
 };
 
+const couriersPageSize = 10;
+
 const emptyDraft: Draft = {
   firstName: "",
   lastName: "",
@@ -69,7 +81,7 @@ const emptyDraft: Draft = {
   vehicleType: "",
   plateNumber: "",
   deliveryArea: "",
-  maxActiveOrders: "3",
+  maxActiveOrders: "1",
 };
 
 function errorMessage(value: unknown, fallback: string) {
@@ -100,7 +112,7 @@ function Modal({
   maxWidth?: string;
 }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-foreground/60 p-4 backdrop-blur-sm">
       <div className={`w-full ${maxWidth} rounded-xl border bg-background shadow-2xl`}>
         <div className="flex items-center justify-between border-b px-5 py-4">
           <h2 className="text-lg font-bold">{title}</h2>
@@ -137,7 +149,7 @@ function draftFromCourier(user: BackendDashboardUser | null, areas: DeliveryArea
     vehicleType: user.courier_profile?.vehicle_type ?? "",
     plateNumber: user.courier_profile?.plate_number ?? "",
     deliveryArea: String(user.courier_profile?.delivery_area ?? areas[0]?.id ?? ""),
-    maxActiveOrders: String(user.courier_profile?.max_active_orders ?? 3),
+    maxActiveOrders: "1",
   };
 }
 
@@ -158,6 +170,7 @@ function CourierForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [deliveryOpen, setDeliveryOpen] = useState(true);
   const update = (key: keyof Draft, value: string) =>
     setDraft((current) => ({ ...current, [key]: value }));
   const passwordRules = [
@@ -223,137 +236,172 @@ function CourierForm({
   }
 
   return (
-    <Modal title={isEditing ? "تعديل مندوب" : "إضافة مندوب"} onClose={onClose}>
-      <form onSubmit={submit} className="grid gap-4 p-5 sm:grid-cols-2">
-        <Field label="الاسم الأول">
-          <Input required value={draft.firstName} onChange={(e) => update("firstName", e.target.value)} />
-        </Field>
-        <Field label="اسم العائلة">
-          <Input required value={draft.lastName} onChange={(e) => update("lastName", e.target.value)} />
-        </Field>
-        <Field label="اسم المستخدم">
-          <Input required dir="rtl" value={draft.username} onChange={(e) => update("username", e.target.value)} className="text-right" />
-        </Field>
-        <Field label="رقم الهاتف">
-          <Input required dir="rtl" value={draft.phone} onChange={(e) => update("phone", e.target.value)} className="text-right" />
-        </Field>
-        <Field label="البريد الإلكتروني">
-          <div className="space-y-2">
-            <Input
-              required
-              type="email"
-              dir="rtl"
-              value={draft.email}
-              onChange={(e) => update("email", e.target.value)}
-              className="text-right"
-            />
-            <p className="inline-flex h-6 max-w-full items-center overflow-hidden truncate rounded-md border border-border bg-muted/40 px-2 text-[10px] font-bold leading-none text-muted-foreground">
-              يستخدمه المندوب لتسجيل الدخول واستقبال التنبيهات.
-            </p>
+    <main className="min-h-full bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.08),transparent_32rem)] px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+      <div className="mx-auto w-full max-w-7xl">
+        <header className="mb-7 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="mt-1 hidden size-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 sm:flex">
+              <UserRoundPlus className="size-6" />
+            </div>
+            <div>
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+                <ShieldCheck className="size-3.5" />
+                حساب مندوب موثّق
+              </div>
+              <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
+                {isEditing ? "تعديل بيانات المندوب" : "إضافة مندوب جديد"}
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+                {isEditing
+                  ? "راجع بيانات الحساب والتوصيل، ثم احفظ التغييرات لتحديث ملف المندوب."
+                  : "أنشئ حسابًا متكاملًا للمندوب وحدد بيانات مركبته ومنطقة عمله في خطوة واحدة."}
+              </p>
+            </div>
           </div>
-        </Field>
-        <Field label={isEditing ? "كلمة المرور الجديدة" : "كلمة المرور"}>
-          <div className="space-y-2">
-            <div className="relative">
-              <Input
-                required
-                type={showPassword ? "text" : "password"}
-                dir="rtl"
-                minLength={8}
-                value={draft.password}
-                onChange={(e) => update("password", e.target.value)}
-                className="pe-11 text-right"
-              />
+          <Button type="button" variant="outline" onClick={onClose} className="h-11 self-start rounded-xl px-4 lg:self-auto">
+            <ArrowRight className="size-4" />
+            الرجوع إلى المندوبين
+          </Button>
+        </header>
+
+        <form onSubmit={submit} className="grid items-start gap-6">
+          <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <Card className="overflow-hidden border-border/70 shadow-xl shadow-black/5">
+              <section className="p-5 sm:p-7 lg:p-8">
+              <div className="mb-6 flex items-start gap-3 border-b border-border/70 pb-5">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><UserRound className="size-5" /></span>
+                <div><h2 className="text-lg font-extrabold">بيانات الحساب</h2><p className="mt-1 text-sm text-muted-foreground">معلومات الهوية وبيانات الدخول الأساسية.</p></div>
+              </div>
+              <div className="grid gap-x-5 gap-y-5 md:grid-cols-2">
+                <Field label="الاسم الأول"><Input required autoComplete="given-name" placeholder="مثال: أحمد" value={draft.firstName} onChange={(e) => update("firstName", e.target.value)} className="h-12 rounded-xl" /></Field>
+                <Field label="اسم العائلة"><Input required autoComplete="family-name" placeholder="مثال: محمد" value={draft.lastName} onChange={(e) => update("lastName", e.target.value)} className="h-12 rounded-xl" /></Field>
+                <Field label="اسم المستخدم"><div className="relative"><IdCard className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required autoComplete="username" dir="rtl" placeholder="اسم فريد لتسجيل الدخول" value={draft.username} onChange={(e) => update("username", e.target.value)} className="h-12 rounded-xl pe-11 text-right" /></div></Field>
+                <Field label="رقم الهاتف"><div className="relative"><Phone className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required autoComplete="tel" inputMode="tel" dir="rtl" placeholder="01xxxxxxxxx" value={draft.phone} onChange={(e) => update("phone", e.target.value)} className="h-12 rounded-xl pe-11 text-right" /></div></Field>
+                <Field label="البريد الإلكتروني"><div className="relative"><Mail className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required autoComplete="email" type="email" dir="rtl" placeholder="name@example.com" value={draft.email} onChange={(e) => update("email", e.target.value)} className="h-12 rounded-xl pe-11 text-right" /></div></Field>
+                <Field label={isEditing ? "كلمة المرور الجديدة (اختياري)" : "كلمة المرور"}>
+                  <div className="space-y-3"><div className="relative"><KeyRound className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required={!isEditing} autoComplete="new-password" type={showPassword ? "text" : "password"} dir="rtl" minLength={8} placeholder="8 أحرف على الأقل" value={draft.password} onChange={(e) => update("password", e.target.value)} className="h-12 rounded-xl pe-11 ps-12 text-right" /><button type="button" aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"} title={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"} onClick={() => setShowPassword((visible) => !visible)} className="absolute start-2 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{showPassword ? <Eye className="size-4" /> : <EyeOff className="size-4" />}</button></div>
+                    <div className="flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">{passwordRules.map((rule) => <span key={rule.label} className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 font-bold transition ${rule.done ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300" : "border-border bg-muted/30"}`}><CheckCircle2 className="size-3" />{rule.label}</span>)}</div>
+                  </div>
+                </Field>
+              </div>
+              </section>
+            </Card>
+
+            <Card className="overflow-hidden border-border/70 shadow-lg shadow-black/5">
+              <div className="h-16 bg-gradient-to-l from-primary via-primary/80 to-primary/50" />
+              <div className="px-5 pb-5">
+                <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 text-start">
+                  <div className="relative -mt-10 size-20"><DashboardImage src={draft.avatarUrl || "/default-user-avatar.svg"} alt="صورة المندوب" width={80} height={80} className="size-20 overflow-hidden rounded-2xl border-4 border-card bg-background shadow-lg" imageClassName="object-cover" /><span className="absolute -bottom-1 -start-1 flex size-6 items-center justify-center rounded-full border-2 border-card bg-emerald-500 text-white"><CheckCircle2 className="size-3.5" /></span></div>
+                  <div className="min-w-0">
+                    <h3 className="truncate text-lg font-extrabold">{[draft.firstName, draft.lastName].filter(Boolean).join(" ") || "اسم المندوب"}</h3>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{draft.phone || "رقم الهاتف سيظهر هنا"}</p>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-xl border border-dashed bg-muted/20 p-3 text-start"><div className="mb-2 flex items-center gap-2 text-xs font-bold"><Camera className="size-4 text-primary" />صورة المندوب</div><Input type="text" dir="rtl" value={draft.avatarUrl} onChange={(e) => update("avatarUrl", e.target.value)} placeholder="رابط الصورة" className="h-10 rounded-lg text-right text-xs" /><label className="mt-2 inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border bg-background px-3 text-xs font-bold text-muted-foreground transition hover:bg-accent hover:text-foreground"><Upload className="size-4" />رفع صورة من الجهاز<input type="file" accept="image/*" className="sr-only" onChange={(event) => uploadAvatar(event.target.files?.[0])} /></label></div>
+                <div className="mt-4 inline-flex max-w-full items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-start text-xs font-bold leading-5 text-emerald-800 dark:text-emerald-200"><ShieldCheck className="size-4 shrink-0" /><span className="truncate">جاهز للانضمام واستقبال الطلبات في المنطقة المحددة</span></div>
+              </div>
+            </Card>
+          </div>
+
+          <Card className="overflow-hidden border-border/70 shadow-xl shadow-black/5">
+            <section className="border-border/70 bg-muted/15 p-5 sm:p-7 lg:p-8">
               <button
                 type="button"
-                aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
-                title={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
-                onClick={() => setShowPassword((visible) => !visible)}
-                className="absolute end-1 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => setDeliveryOpen((open) => !open)}
+                className="mb-6 flex w-full items-start justify-between gap-3 border-b border-border/70 pb-5 text-start"
               >
-                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-              </button>
-            </div>
-            <div className="flex h-9 items-center gap-2 overflow-x-auto whitespace-nowrap pb-1 text-[10px] leading-none text-muted-foreground">
-              {passwordRules.map((rule) => (
-                <span
-                  key={rule.label}
-                  className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 font-bold transition ${
-                    rule.done
-                      ? "border-emerald-300 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/30 dark:text-emerald-200"
-                      : "border-border bg-muted/40"
-                  }`}
-                >
-                  <CheckCircle2 className="size-3" />
-                  {rule.label}
+                <span className="flex items-start gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400"><Truck className="size-5" /></span>
+                  <span><span className="block text-lg font-extrabold">بيانات التوصيل</span><span className="mt-1 block text-sm text-muted-foreground">تفاصيل المركبة ونطاق التشغيل الخاص بالمندوب.</span></span>
                 </span>
-              ))}
-            </div>
-          </div>
-        </Field>
-        <Field label="نوع المركبة">
-          <Input required value={draft.vehicleType} onChange={(e) => update("vehicleType", e.target.value)} />
-        </Field>
-        <Field label="رقم اللوحة">
-          <Input required value={draft.plateNumber} onChange={(e) => update("plateNumber", e.target.value)} />
-        </Field>
-        <Field label="منطقة التوصيل">
-          <AppSelect
-            value={draft.deliveryArea}
-            onValueChange={(value) => update("deliveryArea", value)}
-            options={areas
-              .filter((area) => area.is_active)
-              .map((area) => ({ value: String(area.id), label: area.name }))}
-            placeholder="اختر منطقة التوصيل"
-            className="h-10 bg-input"
-            contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl"
-            ariaLabel="منطقة التوصيل"
-          />
-        </Field>
-        <Field label="الحد الأقصى للطلبات">
-          <Input required type="number" min={1} value={draft.maxActiveOrders} onChange={(e) => update("maxActiveOrders", e.target.value)} className="h-10" />
-        </Field>
-        <div className="sm:col-span-2">
-          <Field label="صورة المندوب (اختياري)">
-            <div className="grid gap-3 rounded-lg border border-border bg-muted/20 p-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
-              <DashboardImage
-                src={draft.avatarUrl || "/default-user-avatar.svg"}
-                alt="صورة المندوب"
-                width={64}
-                height={64}
-                className="size-16 overflow-hidden rounded-full border border-border bg-background"
-                imageClassName="object-cover"
-              />
-              <div className="grid gap-2">
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    type="text"
-                    dir="rtl"
-                    value={draft.avatarUrl}
-                    onChange={(e) => update("avatarUrl", e.target.value)}
-                    placeholder="رابط الصورة أو ارفع صورة من الجهاز"
-                    className="h-10 flex-1 text-right"
-                  />
-                  <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-bold text-muted-foreground shadow-sm transition hover:bg-accent hover:text-accent-foreground">
-                    <Upload className="size-4" />
-                    رفع صورة
-                    <input type="file" accept="image/*" className="sr-only" onChange={(event) => uploadAvatar(event.target.files?.[0])} />
-                  </label>
+                <ChevronDown className={cn("mt-2 size-5 text-muted-foreground transition-transform", deliveryOpen && "rotate-180")} />
+              </button>
+              {deliveryOpen ? (
+                <div className="grid gap-x-5 gap-y-5 md:grid-cols-2">
+                  <Field label="نوع المركبة"><Input required placeholder="مثال: دراجة نارية" value={draft.vehicleType} onChange={(e) => update("vehicleType", e.target.value)} className="h-12 rounded-xl" /></Field>
+                  <Field label="رقم اللوحة"><Input required placeholder="مثال: أ ب ج 1234" value={draft.plateNumber} onChange={(e) => update("plateNumber", e.target.value)} className="h-12 rounded-xl" /></Field>
+                  <Field label="منطقة التوصيل"><AppSelect value={draft.deliveryArea} onValueChange={(value) => update("deliveryArea", value)} options={areas.filter((area) => area.is_active).map((area) => ({ value: String(area.id), label: area.name }))} placeholder="اختر منطقة التوصيل" icon={<MapPin className="size-4" />} className="h-12 rounded-xl bg-input" contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl" ariaLabel="منطقة التوصيل" /></Field>
+                  <Field label="الحد الأقصى للطلبات"><Input readOnly type="number" value="1" className="h-12 cursor-not-allowed rounded-xl bg-muted/50 opacity-70" /></Field>
                 </div>
-                <p className="text-xs font-medium leading-5 text-muted-foreground">
-                  يفضل صورة مربعة وواضحة لوجه المندوب.
-                </p>
-              </div>
+              ) : null}
+            </section>
+
+            {error ? <div role="alert" className="flex items-center gap-2 border-t border-destructive/20 bg-destructive/10 px-5 py-4 text-sm font-semibold text-destructive sm:px-8"><AlertCircle className="size-4 shrink-0" />{error}</div> : null}
+            <div className="flex flex-col-reverse gap-3 border-t border-border/70 bg-card px-5 py-5 sm:flex-row sm:justify-end sm:px-8">
+              <Button type="button" variant="outline" onClick={onClose} disabled={saving} className="h-11 rounded-xl sm:min-w-28">إلغاء</Button>
+              <Button disabled={saving || !draft.deliveryArea} className="h-11 rounded-xl px-6 sm:min-w-44">{saving ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}{isEditing ? "حفظ التعديلات" : "إنشاء حساب المندوب"}</Button>
             </div>
-          </Field>
-        </div>
-        {error ? <p role="alert" className="text-sm text-destructive sm:col-span-2">{error}</p> : null}
-        <Button disabled={saving || !draft.deliveryArea} className="sm:col-span-2">
-          {saving ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-          {isEditing ? "حفظ التعديل" : "إنشاء الحساب"}
-        </Button>
-      </form>
-    </Modal>
+          </Card>
+        </form>
+      </div>
+    </main>
+  );
+}
+
+export function CourierFormPage({ courierId }: { courierId?: string }) {
+  const { apiFetch } = useAuth();
+  const { showSnackbar } = useSnackbar();
+  const router = useRouter();
+  const [areas, setAreas] = useState<DeliveryArea[]>([]);
+  const [courier, setCourier] = useState<BackendDashboardUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const areasResponse = await apiFetch("locations/delivery-areas/");
+        const areasData = await apiResponseData(areasResponse);
+        if (!areasResponse.ok) {
+          throw new Error(errorMessage(areasData, "تعذر تحميل مناطق التوصيل."));
+        }
+        setAreas(Array.isArray(areasData) ? areasData as DeliveryArea[] : []);
+
+        if (courierId) {
+          const courierResponse = await apiFetch(`auth/users/${encodeURIComponent(courierId)}/`);
+          const courierData = await apiResponseData(courierResponse);
+          if (!courierResponse.ok) {
+            throw new Error(errorMessage(courierData, "تعذر تحميل بيانات المندوب."));
+          }
+          if (!isBackendDashboardUser(courierData) || courierData.role !== "representative") {
+            throw new Error("حساب المندوب غير موجود.");
+          }
+          setCourier(courierData);
+        }
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : "تعذر تحميل صفحة المندوب.");
+      } finally {
+        setLoading(false);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [apiFetch, courierId]);
+
+  if (loading) {
+    return <div className="flex min-h-80 items-center justify-center"><Loader2 className="size-7 animate-spin text-primary" /></div>;
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-3xl px-6 py-8">
+        <Card className="p-6 text-destructive"><AlertCircle className="me-2 inline size-5" />{error}</Card>
+      </div>
+    );
+  }
+
+  return (
+    <CourierForm
+      areas={areas}
+      courier={courierId ? courier : null}
+      onClose={() => router.push("/delivery/couriers")}
+      onSaved={() => {
+        showSnackbar({ message: "تم حفظ بيانات المندوب.", tone: "success" });
+        router.push("/delivery/couriers");
+      }}
+    />
   );
 }
 
@@ -394,7 +442,7 @@ function PasswordDialog({
               onClick={() => setVisible((current) => !current)}
               className="absolute end-1 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
             >
-              {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              {visible ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
             </button>
           </div>
         </Field>
@@ -450,13 +498,13 @@ export function CouriersPage() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editingCourier, setEditingCourier] = useState<BackendDashboardUser | null | undefined>();
   const [assigning, setAssigning] = useState<BackendDashboardUser | null>(null);
   const [passwordCourier, setPasswordCourier] = useState<BackendDashboardUser | null>(null);
   const [deleteCourier, setDeleteCourier] = useState<BackendDashboardUser | null>(null);
   const [selectedOrder, setSelectedOrder] = useState("");
   const [orderSearch, setOrderSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -520,6 +568,13 @@ export function CouriersPage() {
         .includes(focused),
     );
   }, [areaFilter, couriers, focusedCourier]);
+  const totalPages = Math.max(1, Math.ceil(filteredCouriers.length / couriersPageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStartIndex = (safeCurrentPage - 1) * couriersPageSize;
+  const pagedCouriers = filteredCouriers.slice(
+    pageStartIndex,
+    pageStartIndex + couriersPageSize,
+  );
 
   async function assign() {
     if (!assigning || !selectedOrder) return;
@@ -602,24 +657,13 @@ export function CouriersPage() {
     setBusy(null);
   }
 
-  function saveCourier(user: BackendDashboardUser) {
-    setCouriers((rows) => {
-      const exists = rows.some((row) => String(row.id) === String(user.id));
-      return exists
-        ? rows.map((row) => (String(row.id) === String(user.id) ? user : row))
-        : [user, ...rows];
-    });
-    setEditingCourier(undefined);
-    showSnackbar({ message: "تم حفظ بيانات المندوب.", tone: "success" });
-  }
-
   return (
     <div className="px-6 py-8">
       <PageTitle
         title="المندوبين"
         description="حسابات المندوبين وإسناد طلبات Yalla Home"
         size="compact"
-        actions={<><Button variant="outline" onClick={() => void load()}><RefreshCw className="size-4" />تحديث</Button><Button disabled={!areas.length} onClick={() => setEditingCourier(null)}><Plus className="size-4" />إضافة مندوب</Button></>}
+        actions={<><Button variant="outline" onClick={() => void load()}><RefreshCw className="size-4" />تحديث</Button><Link href="/delivery/couriers/new" className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90"><Plus className="size-4" />إضافة مندوب</Link></>}
       />
 
       <Card className="mt-6 p-4">
@@ -630,14 +674,17 @@ export function CouriersPage() {
               {focusedCourier
                 ? "تفاصيل المندوب المحدد من الطلب"
                 : areaFilter === "all"
-                  ? `كل المندوبين (${couriers.length})`
+                  ? "كل المندوبين"
                   : "مندوبين حسب المنطقة"}
             </div>
           </div>
           <div className="w-full md:w-72">
             <AppSelect
               value={areaFilter}
-              onValueChange={setAreaFilter}
+              onValueChange={(value) => {
+                setAreaFilter(value);
+                setCurrentPage(1);
+              }}
               options={[
                 { value: "all", label: "كل المناطق" },
                 ...areas.map((area) => ({ value: String(area.id), label: area.name })),
@@ -662,12 +709,12 @@ export function CouriersPage() {
               <h3 className="text-lg font-bold text-foreground">لا توجد حسابات مندوبين هنا</h3>
               <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">غيّر فلتر المنطقة أو أضف مندوبًا جديدًا.</p>
             </div>
-            <Button disabled={!areas.length} onClick={() => setEditingCourier(null)}><Plus className="size-4" />إضافة مندوب</Button>
+            <Link href="/delivery/couriers/new" className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90"><Plus className="size-4" />إضافة مندوب</Link>
           </div>
         </Card>
       ) : (
         <div className="mt-8 grid gap-3">
-          {filteredCouriers.map((courier) => {
+          {pagedCouriers.map((courier, index) => {
             const profile = courier.courier_profile;
             const active = orders.filter((order) => order.status === "ready" && String(order.assigned_representative?.id) === String(courier.id)).length;
             const delivered = orders.filter((order) => order.status === "delivered" && String(order.assigned_representative?.id) === String(courier.id)).length;
@@ -691,6 +738,9 @@ export function CouriersPage() {
                   className="flex min-w-0 items-center gap-3 rounded-lg transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
                   aria-label={`عرض تفاصيل ${fullNameFromBackendUser(courier)}`}
                 >
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">
+                    {pageStartIndex + index + 1}
+                  </span>
                   <DashboardImage src={courier.avatar_url || "/default-user-avatar.svg"} alt={fullNameFromBackendUser(courier)} width={56} height={56} className="size-14 shrink-0 overflow-hidden rounded-full" imageClassName="object-cover" />
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -726,19 +776,33 @@ export function CouriersPage() {
                   >
                     <Send className="size-4" />إسناد
                   </Button>
-                  <Button size="icon" variant="outline" disabled={busy !== null} onClick={() => setEditingCourier(courier)} aria-label="تعديل"><Pencil className="size-4" /></Button>
+                  <Link href={`/delivery/couriers/${courier.id}/edit`} aria-label="تعديل" title="تعديل" className="inline-flex size-9 items-center justify-center rounded-md border border-border bg-background text-muted-foreground shadow-sm transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"><Pencil className="size-4" /></Link>
                   <Button size="icon" variant="outline" disabled={busy !== null} onClick={() => setPasswordCourier(courier)} aria-label="كلمة المرور"><KeyRound className="size-4" /></Button>
                   <Button size="icon" variant="outline" disabled={busy !== null} onClick={() => setDeleteCourier(courier)} aria-label="حذف" className="text-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 className="size-4" /></Button>
                 </div>
               </Card>
             );
           })}
+
+          <Card className="mt-2 overflow-hidden shadow">
+            <Pagination
+              text={`عرض ${pagedCouriers.length} من ${filteredCouriers.length} نتيجة`}
+              pages={`${safeCurrentPage} / ${totalPages}`}
+              previousDisabled={safeCurrentPage === 1}
+              nextDisabled={safeCurrentPage === totalPages}
+              onPrevious={() =>
+                setCurrentPage((page) => Math.max(1, Math.min(page, totalPages) - 1))
+              }
+              onNext={() =>
+                setCurrentPage((page) =>
+                  Math.min(totalPages, Math.min(page, totalPages) + 1),
+                )
+              }
+            />
+          </Card>
         </div>
       )}
 
-      {editingCourier !== undefined ? (
-        <CourierForm areas={areas} courier={editingCourier} onClose={() => setEditingCourier(undefined)} onSaved={saveCourier} />
-      ) : null}
       {passwordCourier ? (
         <PasswordDialog courier={passwordCourier} busy={busy === `password-${passwordCourier.id}`} onClose={() => setPasswordCourier(null)} onConfirm={(password) => void confirmPassword(password)} />
       ) : null}

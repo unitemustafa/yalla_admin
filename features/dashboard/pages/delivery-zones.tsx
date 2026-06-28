@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowUpDown,
@@ -11,6 +11,7 @@ import {
   MapPin,
   PackageCheck,
   Plus,
+  RefreshCw,
   RotateCcw,
   Save,
   Search,
@@ -26,6 +27,7 @@ import {
   Badge,
   Button,
   Card,
+  CurrencyText,
   Field,
   Input,
   PageTitle,
@@ -34,10 +36,15 @@ import {
 } from "../primitives";
 import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
+import { useAuth } from "@/features/auth/auth-provider";
+import {
+  deleteDeliveryZone,
+  loadDeliveryZones,
+  saveDeliveryZone,
+} from "../delivery-zones-api";
 import {
   calculateDeliveryFee,
   initialDeliverySettings,
-  initialManagedDeliveryZones,
   type DeliveryFeeResult,
   type DeliveryPricingType,
   type DeliverySettings,
@@ -91,11 +98,12 @@ const statusOptions = [
 ] satisfies Array<{ value: DeliveryZoneStatus; label: string }>;
 
 function formatCurrency(value: number) {
-  return new Intl.NumberFormat("ar-EG-u-nu-latn", {
-    style: "currency",
-    currency: "EGP",
+  const formattedValue = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
+
+  return `${formattedValue} EGP`;
 }
 
 function formatDate(value: string) {
@@ -279,7 +287,7 @@ function MetricCards({
             </div>
             <div>
               <p className="text-xs text-muted-foreground">{label}</p>
-              <p className="text-xl font-semibold leading-tight">{value}</p>
+              <CurrencyText className="block text-xl font-semibold leading-tight">{value}</CurrencyText>
             </div>
           </div>
         </Card>
@@ -709,7 +717,7 @@ function ZonesTable({
                 {deliveryPriceLabel(zone)}
               </td>
               <td className="p-2 align-middle">
-                {formatCurrency(zone.minOrderAmount)}
+                <CurrencyText>{formatCurrency(zone.minOrderAmount)}</CurrencyText>
               </td>
               <td className="p-2 align-middle">{zone.maxDistanceKm} كم</td>
               <td className="p-2 align-middle">
@@ -751,10 +759,12 @@ function ZonesTable({
 
 function ZonesMobileList({
   zones,
+  startIndex,
   onEdit,
   onDelete,
 }: {
   zones: DeliveryZone[];
+  startIndex: number;
   onEdit: (zone: DeliveryZone) => void;
   onDelete: (zone: DeliveryZone) => void;
 }) {
@@ -763,37 +773,58 @@ function ZonesMobileList({
   }
 
   return (
-    <div className="grid gap-3 lg:hidden">
-      {zones.map((zone) => (
-        <article key={zone.id} className="rounded-lg border bg-card p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-base font-semibold">{zone.name}</h3>
-              <div className="mt-2 flex flex-wrap gap-2">
+    <div className="grid gap-3">
+      {zones.map((zone, index) => (
+        <Card
+          key={zone.id}
+          className="grid gap-4 p-4 xl:grid-cols-[minmax(280px,1fr)_420px_120px] xl:items-center"
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">
+              {startIndex + index + 1}
+            </span>
+            <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <MapPin className="size-7" />
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-bold text-foreground">{zone.name}</h3>
                 <PricingBadge type={zone.pricingType} />
                 <StatusBadge status={zone.status} />
               </div>
-            </div>
-            <div className="text-start text-sm font-semibold">
-              {deliveryPriceLabel(zone)}
+              <p className="mt-1 truncate text-sm text-muted-foreground">
+                {zone.notes || "منطقة توصيل"}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                أُنشئت في {formatDate(zone.createdAt)}
+              </p>
             </div>
           </div>
-          <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-            <PreviewRow label="الحد الأدنى" value={formatCurrency(zone.minOrderAmount)} />
-            <PreviewRow label="أقصى مسافة" value={`${zone.maxDistanceKm} كم`} />
-            <PreviewRow label="تاريخ الإنشاء" value={formatDate(zone.createdAt)} />
+
+          <div className="grid grid-cols-3 gap-2 text-center text-sm">
+            <div className="rounded-md bg-muted px-3 py-2">
+              <div className="truncate font-bold" dir="ltr">{deliveryPriceLabel(zone)}</div>
+              <div className="text-xs text-muted-foreground">سعر التوصيل</div>
+            </div>
+            <div className="rounded-md bg-muted px-3 py-2">
+              <CurrencyText className="block truncate font-bold">{formatCurrency(zone.minOrderAmount)}</CurrencyText>
+              <div className="text-xs text-muted-foreground">الحد الأدنى</div>
+            </div>
+            <div className="rounded-md bg-muted px-3 py-2">
+              <div className="font-bold">{zone.maxDistanceKm} كم</div>
+              <div className="text-xs text-muted-foreground">أقصى مسافة</div>
+            </div>
           </div>
-          <div className="mt-4 flex gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => onEdit(zone)}>
+
+          <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
+            <Button type="button" variant="outline" size="icon" onClick={() => onEdit(zone)} aria-label={`تعديل ${zone.name}`} title="تعديل">
               <Edit3 className="size-4" />
-              تعديل
             </Button>
-            <Button type="button" variant="danger" size="sm" onClick={() => onDelete(zone)}>
+            <Button type="button" variant="outline" size="icon" onClick={() => onDelete(zone)} aria-label={`حذف ${zone.name}`} title="حذف" className="text-destructive hover:bg-destructive/10 hover:text-destructive">
               <Trash2 className="size-4" />
-              حذف
             </Button>
           </div>
-        </article>
+        </Card>
       ))}
     </div>
   );
@@ -1018,25 +1049,41 @@ function DeliveryFeeTester({
 }
 
 export function DeliveryZonesPage() {
+  const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const queueUndoableDelete = useUndoableDelete();
   const [activeTab, setActiveTab] = useState<DeliveryTab>("zones");
   const [loading, setLoading] = useState(true);
-  const [zones, setZones] = useState<DeliveryZone[]>(initialManagedDeliveryZones);
+  const [zones, setZones] = useState<DeliveryZone[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [settings, setSettings] = useState<DeliverySettings>(
     initialDeliverySettings,
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
   const [editingZone, setEditingZone] = useState<DeliveryZone | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleteZone, setDeleteZone] = useState<DeliveryZone | null>(null);
 
+  const loadZones = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      setZones(await loadDeliveryZones(apiFetch));
+    } catch (error) {
+      setZones([]);
+      setLoadError(
+        error instanceof Error ? error.message : "تعذر تحميل مناطق التوصيل.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [apiFetch]);
+
   useEffect(() => {
-    const timer = window.setTimeout(() => setLoading(false), 350);
+    const timer = window.setTimeout(() => void loadZones(), 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [loadZones]);
 
   const filteredZones = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLocaleLowerCase("ar-EG");
@@ -1072,22 +1119,30 @@ export function DeliveryZonesPage() {
   const lowestPrice = displayPrices.length ? Math.min(...displayPrices) : 0;
   const highestPrice = displayPrices.length ? Math.max(...displayPrices) : 0;
 
-  function saveZone(zone: DeliveryZone) {
-    if (editingZone) {
+  async function saveZone(zone: DeliveryZone) {
+    try {
+      const savedZone = await saveDeliveryZone(apiFetch, zone);
+      if (editingZone) {
       setZones((currentZones) =>
         currentZones.map((currentZone) =>
-          currentZone.id === zone.id ? zone : currentZone,
+            currentZone.id === zone.id ? savedZone : currentZone,
         ),
       );
       setEditingZone(null);
-      showSnackbar({ message: "تم تحديث منطقة التوصيل بنجاح." });
-      return;
-    }
+        showSnackbar({ message: "تم تحديث منطقة التوصيل وحفظها في الباك.", tone: "success" });
+        return;
+      }
 
-    setZones((currentZones) => [zone, ...currentZones]);
-    setCreating(false);
-    setCurrentPage(1);
-    showSnackbar({ message: "تمت إضافة منطقة التوصيل بنجاح." });
+      setZones((currentZones) => [savedZone, ...currentZones]);
+      setCreating(false);
+      setCurrentPage(1);
+      showSnackbar({ message: "تمت إضافة منطقة التوصيل وحفظها في الباك.", tone: "success" });
+    } catch (error) {
+      showSnackbar({
+        message: error instanceof Error ? error.message : "تعذر حفظ منطقة التوصيل.",
+        tone: "danger",
+      });
+    }
   }
 
   function confirmDeleteZone() {
@@ -1098,7 +1153,6 @@ export function DeliveryZonesPage() {
     const zone = deleteZone;
     const zoneIndex = zones.findIndex((currentZone) => currentZone.id === zone.id);
     setDeleteZone(null);
-    setOpenActionMenu(null);
 
     queueUndoableDelete({
       message: `تم حذف ${zone.name}.`,
@@ -1116,6 +1170,13 @@ export function DeliveryZonesPage() {
           nextZones.splice(Math.max(0, zoneIndex), 0, zone);
           return nextZones;
         }),
+      onCommit: () => deleteDeliveryZone(apiFetch, zone.id),
+      onCommitError: (error) => {
+        showSnackbar({
+          message: error instanceof Error ? error.message : "تعذر حذف منطقة التوصيل.",
+          tone: "danger",
+        });
+      },
     });
   }
 
@@ -1126,10 +1187,16 @@ export function DeliveryZonesPage() {
         description="إدارة المناطق وقواعد التسعير وحدود التوصيل من مكان واحد."
         size="compact"
         actions={
-          <Button onClick={() => setCreating(true)}>
-            <Plus className="size-4" />
-            منطقة جديدة
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => void loadZones()} disabled={loading}>
+              <RefreshCw className={cn("size-4", loading && "animate-spin")} />
+              تحديث
+            </Button>
+            <Button onClick={() => setCreating(true)}>
+              <Plus className="size-4" />
+              منطقة جديدة
+            </Button>
+          </div>
         }
       />
 
@@ -1181,9 +1248,6 @@ export function DeliveryZonesPage() {
                 />
               </div>
             </Field>
-            <div className="text-sm text-muted-foreground">
-              عرض {filteredZones.length} من {zoneCount} منطقة
-            </div>
           </div>
 
           {loading ? (
@@ -1191,35 +1255,29 @@ export function DeliveryZonesPage() {
               {[0, 1, 2].map((item) => (
                 <div
                   key={item}
-                  className="h-16 animate-pulse rounded-md border bg-muted/30"
+                  className="h-28 animate-pulse rounded-md border bg-muted/30"
                 />
               ))}
             </div>
+          ) : loadError ? (
+            <Card className="mt-4 border-destructive/30 bg-destructive/10 p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3 text-destructive">
+                  <AlertCircle className="size-5 shrink-0" />
+                  <span>{loadError}</span>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => void loadZones()}>
+                  <RefreshCw className="size-4" />
+                  إعادة المحاولة
+                </Button>
+              </div>
+            </Card>
           ) : (
             <>
-              <div className="mt-4 hidden lg:block">
-                <ZonesTable
-                  zones={pagedZones}
-                  startIndex={pageStartIndex}
-                  openActionMenu={openActionMenu}
-                  onToggleMenu={(zoneId) =>
-                    setOpenActionMenu((current) =>
-                      current === zoneId ? null : zoneId,
-                    )
-                  }
-                  onEdit={(zone) => {
-                    setEditingZone(zone);
-                    setOpenActionMenu(null);
-                  }}
-                  onDelete={(zone) => {
-                    setDeleteZone(zone);
-                    setOpenActionMenu(null);
-                  }}
-                />
-              </div>
               <div className="mt-4">
                 <ZonesMobileList
                   zones={pagedZones}
+                  startIndex={pageStartIndex}
                   onEdit={setEditingZone}
                   onDelete={setDeleteZone}
                 />
@@ -1227,7 +1285,7 @@ export function DeliveryZonesPage() {
                   <ZonesTable
                     zones={pagedZones}
                     startIndex={pageStartIndex}
-                    openActionMenu={openActionMenu}
+                    openActionMenu={null}
                     onToggleMenu={() => undefined}
                     onEdit={setEditingZone}
                     onDelete={setDeleteZone}

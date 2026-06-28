@@ -32,6 +32,7 @@ import {
   Badge,
   Button,
   Card,
+  CurrencyText,
   Field,
   FilterBar,
   Input,
@@ -61,7 +62,7 @@ function MetricCards({
             </div>
             <div>
               <p className="text-xs text-muted-foreground">{label}</p>
-              <p className="text-xl font-semibold leading-tight">{value}</p>
+              <CurrencyText className="block text-xl font-semibold leading-tight">{value}</CurrencyText>
             </div>
           </div>
         </Card>

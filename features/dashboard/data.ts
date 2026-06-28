@@ -77,6 +77,7 @@ export const navGroups: NavGroup[] = [
             page: "delivery-zone",
           },
           { label: "المندوبين", href: "/delivery/couriers", page: "couriers" },
+          { label: "إضافة مندوب", href: "/delivery/couriers/new", page: "create-courier" },
         ],
       },
       { label: "المستخدمين", icon: Users, href: "/customers", page: "customers" },
@@ -143,6 +144,12 @@ export const breadcrumbByPage: Record<PageKey, BreadcrumbItem[]> = {
     { label: "مناطق التوصيل" },
   ],
   couriers: [dashboardCrumb, { label: "التوصيل" }, { label: "المندوبين" }],
+  "create-courier": [
+    dashboardCrumb,
+    { label: "التوصيل" },
+    { label: "المندوبين", href: "/delivery/couriers" },
+    { label: "إضافة مندوب" },
+  ],
   customers: [dashboardCrumb, { label: "المستخدمين" }],
   memberships: [dashboardCrumb, { label: "العضويات" }],
   account: [dashboardCrumb, { label: "Account" }],
@@ -174,6 +181,7 @@ export function pageFromPathname(pathname: string): PageKey {
   if (pathname === "/offers/create") return "create-offer";
   if (pathname === "/cities") return "cities";
   if (pathname === "/delivery-zone") return "delivery-zone";
+  if (pathname === "/delivery/couriers/new") return "create-courier";
   if (pathname === "/delivery/couriers" || pathname.startsWith("/delivery/couriers/")) {
     return "couriers";
   }

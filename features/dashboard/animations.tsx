@@ -194,9 +194,9 @@ export function AnimatedNumber({
 
   return (
     <span aria-label={finalText} aria-live="off" className={className}>
-      {prefix}
+      <span className={/(EGP|جنيه|جنية)/i.test(prefix) ? "currency-text" : undefined}>{prefix}</span>
       {formatter.format(animatedValue)}
-      {suffix}
+      <span className={/(EGP|جنيه|جنية)/i.test(suffix) ? "currency-text" : undefined}>{suffix}</span>
     </span>
   );
 }

@@ -21,7 +21,7 @@ import {
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { DashboardImage } from "../dashboard-image";
-import { AppSelect, Badge, Button, Card, Input } from "../primitives";
+import { AppSelect, Badge, Button, Card, CurrencyText, Input } from "../primitives";
 import {
   apiResponseData,
   firstApiError,
@@ -132,7 +132,7 @@ function SummaryMetric({
       <div className="flex items-center justify-between gap-4">
         <div>
           <div className="text-xs font-semibold text-muted-foreground">{title}</div>
-          <div className="mt-2 text-2xl font-extrabold">{value}</div>
+          <CurrencyText className="mt-2 block text-2xl font-extrabold">{value}</CurrencyText>
           <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
         </div>
         <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
@@ -204,7 +204,7 @@ function FeaturedOrder({
           <div className="mt-4 grid grid-cols-2 gap-3 border-t pt-4 text-sm">
             <div>
               <div className="text-xs text-muted-foreground">الإجمالي</div>
-              <div className="mt-1 font-bold" dir="ltr">{money(order.total_price)}</div>
+              <CurrencyText className="mt-1 block font-bold">{money(order.total_price)}</CurrencyText>
             </div>
             <div>
               <div className="text-xs text-muted-foreground">
@@ -579,7 +579,7 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
                       </Badge>
                     </td>
                     <td className="px-4 py-4 font-semibold" dir="ltr">
-                      {money(order.total_price)}
+                      <CurrencyText>{money(order.total_price)}</CurrencyText>
                     </td>
                     <td className="px-4 py-4">{dateTime(order.assigned_at)}</td>
                     <td className="px-4 py-4">{dateTime(order.delivered_at)}</td>
