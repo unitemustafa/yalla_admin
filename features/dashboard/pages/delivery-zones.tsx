@@ -33,6 +33,7 @@ import {
   Switch,
 } from "../primitives";
 import { useSnackbar } from "../snackbar";
+import { useUndoableDelete } from "../use-undoable-delete";
 import {
   calculateDeliveryFee,
   initialDeliverySettings,
@@ -1018,6 +1019,7 @@ function DeliveryFeeTester({
 
 export function DeliveryZonesPage() {
   const { showSnackbar } = useSnackbar();
+  const queueUndoableDelete = useUndoableDelete();
   const [activeTab, setActiveTab] = useState<DeliveryTab>("zones");
   const [loading, setLoading] = useState(true);
   const [zones, setZones] = useState<DeliveryZone[]>(initialManagedDeliveryZones);
@@ -1093,14 +1095,27 @@ export function DeliveryZonesPage() {
       return;
     }
 
-    setZones((currentZones) =>
-      currentZones.filter((zone) => zone.id !== deleteZone.id),
-    );
+    const zone = deleteZone;
+    const zoneIndex = zones.findIndex((currentZone) => currentZone.id === zone.id);
     setDeleteZone(null);
     setOpenActionMenu(null);
-    showSnackbar({
-      message: `تم حذف ${deleteZone.name}.`,
-      tone: "danger",
+
+    queueUndoableDelete({
+      message: `تم حذف ${zone.name}.`,
+      onDelete: () =>
+        setZones((currentZones) =>
+          currentZones.filter((currentZone) => currentZone.id !== zone.id),
+        ),
+      onUndo: () =>
+        setZones((currentZones) => {
+          if (currentZones.some((currentZone) => currentZone.id === zone.id)) {
+            return currentZones;
+          }
+
+          const nextZones = [...currentZones];
+          nextZones.splice(Math.max(0, zoneIndex), 0, zone);
+          return nextZones;
+        }),
     });
   }
 

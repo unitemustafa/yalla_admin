@@ -25,6 +25,7 @@ import type { DashboardUser } from "../users/default-dashboard-users";
 import { DashboardImage } from "../dashboard-image";
 import { Button, Card, Input, PageTitle, Pagination } from "../primitives";
 import { useSnackbar } from "../snackbar";
+import { useUndoableDelete } from "../use-undoable-delete";
 
 type CustomerPageState = "loading" | "error" | "ready";
 
@@ -88,6 +89,7 @@ function apiErrorMessage(data: unknown, fallback: string) {
 export function CustomersPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
+  const queueUndoableDelete = useUndoableDelete();
   const [customers, setCustomers] = useState<DashboardUser[]>([]);
   const [pageState, setPageState] = useState<CustomerPageState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -165,40 +167,56 @@ export function CustomersPage() {
     });
   }
 
-  async function handleDeleteCustomer(userId: string) {
-    const user = customers.find((customer) => customer.id === userId);
-    setDeletingUserId(userId);
-
-    try {
-      const response = await apiFetch(`auth/users/${encodeURIComponent(userId)}/`, {
-        method: "DELETE",
-      });
-      const data = await apiResponseData(response);
-
-      if (!response.ok) {
-        throw new Error(
-          apiErrorMessage(data, "تعذر حذف المستخدم من الباك."),
-        );
+  function restoreCustomer(customer: DashboardUser, index: number) {
+    setCustomers((currentCustomers) => {
+      if (currentCustomers.some((currentCustomer) => currentCustomer.id === customer.id)) {
+        return currentCustomers;
       }
 
-      setCustomers((currentCustomers) =>
-        currentCustomers.filter((customer) => customer.id !== userId),
-      );
-      showSnackbar({
-        message: `تم حذف ${user?.name ?? "المستخدم"} من الباك.`,
-        tone: "danger",
-      });
-    } catch (error) {
-      showSnackbar({
-        message:
-          error instanceof Error
-            ? error.message
-            : "تعذر حذف المستخدم من الباك.",
-        tone: "danger",
-      });
-    } finally {
-      setDeletingUserId(null);
-    }
+      const nextCustomers = [...currentCustomers];
+      nextCustomers.splice(Math.max(0, index), 0, customer);
+      return nextCustomers;
+    });
+  }
+
+  function handleDeleteCustomer(userId: string) {
+    const user = customers.find((customer) => customer.id === userId);
+    const userIndex = customers.findIndex((customer) => customer.id === userId);
+
+    if (!user) return;
+
+    setDeletingUserId(userId);
+    queueUndoableDelete({
+      message: `تم حذف ${user.name} من الباك.`,
+      onDelete: () =>
+        setCustomers((currentCustomers) =>
+          currentCustomers.filter((customer) => customer.id !== userId),
+        ),
+      onUndo: () => {
+        restoreCustomer(user, userIndex);
+        setDeletingUserId(null);
+      },
+      onCommit: async () => {
+        const response = await apiFetch(`auth/users/${encodeURIComponent(userId)}/`, {
+          method: "DELETE",
+        });
+        const data = await apiResponseData(response);
+
+        if (!response.ok) {
+          throw new Error(apiErrorMessage(data, "تعذر حذف المستخدم من الباك."));
+        }
+      },
+      onCommitError: (error) => {
+        showSnackbar({
+          message:
+            error instanceof Error
+              ? error.message
+              : "تعذر حذف المستخدم من الباك.",
+          tone: "danger",
+        });
+      },
+    });
+    setDeletingUserId(null);
   }
 
   const isLoading = pageState === "loading";

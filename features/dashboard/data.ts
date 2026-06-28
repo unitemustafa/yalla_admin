@@ -174,7 +174,9 @@ export function pageFromPathname(pathname: string): PageKey {
   if (pathname === "/offers/create") return "create-offer";
   if (pathname === "/cities") return "cities";
   if (pathname === "/delivery-zone") return "delivery-zone";
-  if (pathname === "/delivery/couriers") return "couriers";
+  if (pathname === "/delivery/couriers" || pathname.startsWith("/delivery/couriers/")) {
+    return "couriers";
+  }
   if (pathname === "/customers" || pathname.startsWith("/customers/")) return "customers";
   if (pathname === "/account") return "account";
   if (pathname === "/settings" || pathname.startsWith("/settings/")) return "settings";

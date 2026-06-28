@@ -44,6 +44,7 @@ import { cn } from "@/lib/utils";
 
 const deliveryListPageSize = 10;
 import { useSnackbar } from "../snackbar";
+import { useUndoableDelete } from "../use-undoable-delete";
 
 function MetricCards({
   cards,
@@ -966,6 +967,7 @@ export function DeliveryZonesPage() {
   const [editingZoneId, setEditingZoneId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<ZoneDraft>(createZoneDraft());
   const { showSnackbar } = useSnackbar();
+  const queueUndoableDelete = useUndoableDelete();
   const [currentPage, setCurrentPage] = useState(1);
   const zoneCount = zones.length;
   const totalPages = Math.max(1, Math.ceil(zoneCount / deliveryListPageSize));
@@ -1012,18 +1014,29 @@ export function DeliveryZonesPage() {
   }
 
   function deleteZone(zone: DeliveryZone) {
-    setZones((currentZones) =>
-      currentZones.filter((currentZone) => currentZone.id !== zone.id),
-    );
+    const zoneIndex = zones.findIndex((currentZone) => currentZone.id === zone.id);
     setOpenActionMenu(null);
 
     if (editingZoneId === zone.id) {
       setEditingZoneId(null);
     }
 
-    showSnackbar({
+    queueUndoableDelete({
       message: `تم حذف ${zone.name}.`,
-      tone: "danger",
+      onDelete: () =>
+        setZones((currentZones) =>
+          currentZones.filter((currentZone) => currentZone.id !== zone.id),
+        ),
+      onUndo: () =>
+        setZones((currentZones) => {
+          if (currentZones.some((currentZone) => currentZone.id === zone.id)) {
+            return currentZones;
+          }
+
+          const nextZones = [...currentZones];
+          nextZones.splice(Math.max(0, zoneIndex), 0, zone);
+          return nextZones;
+        }),
     });
   }
 

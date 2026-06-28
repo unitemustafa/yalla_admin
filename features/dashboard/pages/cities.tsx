@@ -33,6 +33,7 @@ import {
   useServiceCities,
 } from "../cities-api";
 import { useSnackbar } from "../snackbar";
+import { useUndoableDelete } from "../use-undoable-delete";
 import { useAuth } from "@/features/auth/auth-provider";
 
 const CityCoverageMap = dynamic(() => import("../city-coverage-map"), {
@@ -158,6 +159,7 @@ function CityDialog({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-foreground/60 px-4 py-6 backdrop-blur-sm">
       <section
+        dir="rtl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="city-dialog-title"
@@ -189,6 +191,8 @@ function CityDialog({
                 الاسم بالعربية *
                 <Input
                   autoFocus
+                  dir="rtl"
+                  className="text-right"
                   value={draft.nameAr}
                   onChange={(event) => update("nameAr", event.target.value)}
                   placeholder="مثال: القاهرة"
@@ -197,7 +201,8 @@ function CityDialog({
               <label className="grid gap-2 text-sm font-semibold">
                 الاسم بالإنجليزية *
                 <Input
-                  dir="ltr"
+                  dir="rtl"
+                  className="text-right"
                   value={draft.name}
                   onChange={(event) => update("name", event.target.value)}
                   placeholder="Example: Cairo"
@@ -206,7 +211,7 @@ function CityDialog({
               {city ? (
                 <label className="grid gap-2 text-sm font-semibold">
                   المعرّف الثابت
-                  <Input dir="ltr" value={city.slug} disabled />
+                  <Input dir="rtl" className="text-right" value={city.slug} disabled />
                 </label>
               ) : null}
               <div className="grid gap-4 sm:grid-cols-2">
@@ -214,6 +219,7 @@ function CityDialog({
                   خط العرض
                   <Input
                     dir="ltr"
+                    className="text-right"
                     inputMode="decimal"
                     value={draft.latitude}
                     onChange={(event) => update("latitude", event.target.value)}
@@ -223,6 +229,7 @@ function CityDialog({
                   خط الطول
                   <Input
                     dir="ltr"
+                    className="text-right"
                     inputMode="decimal"
                     value={draft.longitude}
                     onChange={(event) => update("longitude", event.target.value)}
@@ -233,6 +240,7 @@ function CityDialog({
                 نصف قطر التغطية (كم)
                 <Input
                   dir="ltr"
+                  className="text-right"
                   inputMode="decimal"
                   min="0.1"
                   step="0.1"
@@ -307,6 +315,7 @@ function CityDialog({
 export function CitiesPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
+  const queueUndoableDelete = useUndoableDelete();
   const { cities, setCities, loading, error, reload } = useServiceCities();
   const [query, setQuery] = useState("");
   const [editingCity, setEditingCity] = useState<ServiceCity | null | undefined>();
@@ -342,21 +351,38 @@ export function CitiesPage() {
     }
   }
 
-  async function removeCity(city: ServiceCity) {
+  function restoreCity(city: ServiceCity, index: number) {
+    setCities((current) => {
+      if (current.some((item) => item.id === city.id)) return current;
+      const next = [...current];
+      next.splice(Math.max(0, index), 0, city);
+      return next;
+    });
+  }
+
+  function removeCity(city: ServiceCity) {
     if (!window.confirm(`هل تريد حذف مدينة ${city.name_ar || city.name}؟`)) return;
+    const cityIndex = cities.findIndex((item) => item.id === city.id);
+
     setBusyCityId(city.id);
-    try {
-      await deleteServiceCity(apiFetch, city.id);
-      setCities((current) => current.filter((item) => item.id !== city.id));
-      showSnackbar({ message: "تم حذف المدينة." });
-    } catch (reason) {
-      showSnackbar({
-        message: reason instanceof Error ? reason.message : "تعذر حذف المدينة.",
-        tone: "danger",
-      });
-    } finally {
-      setBusyCityId(null);
-    }
+    queueUndoableDelete({
+      message: `تم حذف ${city.name_ar || city.name}.`,
+      onDelete: () => setCities((current) => current.filter((item) => item.id !== city.id)),
+      onUndo: () => {
+        restoreCity(city, cityIndex);
+        setBusyCityId(null);
+      },
+      onCommit: async () => {
+        await deleteServiceCity(apiFetch, city.id);
+      },
+      onCommitError: (reason) => {
+        showSnackbar({
+          message: reason instanceof Error ? reason.message : "تعذر حذف المدينة.",
+          tone: "danger",
+        });
+      },
+    });
+    setBusyCityId(null);
   }
 
   const activeCount = cities.filter((city) => city.is_active).length;
@@ -364,7 +390,7 @@ export function CitiesPage() {
   const linkedOffers = cities.reduce((total, city) => total + city.offer_count, 0);
 
   return (
-    <div className="px-6 py-6">
+    <div dir="rtl" className="px-6 py-6">
       <PageTitle
         title="المدن"
         description="إدارة المدن التي تحدد ظهور المحلات والمنتجات والعروض داخل تطبيق العميل."

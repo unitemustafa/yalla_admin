@@ -13,6 +13,7 @@ import {
   Pagination,
 } from "@/features/dashboard/primitives";
 import { useSnackbar } from "@/features/dashboard/snackbar";
+import { useUndoableDelete } from "@/features/dashboard/use-undoable-delete";
 import { cn } from "@/lib/utils";
 
 const notificationsStorageKey = "yalla-notifications-state";
@@ -76,6 +77,7 @@ function notificationCategoryKey(category: string) {
 export function NotificationsPage() {
   const { t } = useDashboardI18n();
   const { showSnackbar } = useSnackbar();
+  const queueUndoableDelete = useUndoableDelete();
   const [notifications, setNotifications] = useState(readStoredNotifications);
   const [activeFilter, setActiveFilter] = useState<NotificationFilter>("all");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -145,24 +147,51 @@ export function NotificationsPage() {
   }
 
   function deleteAllNotifications() {
-    setNotifications([]);
+    const deletedNotifications = notifications;
     setDeleteConfirmOpen(false);
-    showSnackbar({
+
+    queueUndoableDelete({
       message: "تم حذف كل الإشعارات.",
-      tone: "danger",
+      onDelete: () => setNotifications([]),
+      onUndo: () => setNotifications(deletedNotifications),
     });
   }
 
 
   function deleteNotification(notificationId: string) {
-    setNotifications((currentNotifications) =>
-      currentNotifications.filter(
-        (notification) => notification.id !== notificationId,
-      ),
+    const deletedNotificationIndex = notifications.findIndex(
+      (notification) => notification.id === notificationId,
     );
-    showSnackbar({
+    const deletedNotification = notifications[deletedNotificationIndex];
+
+    if (!deletedNotification) return;
+
+    queueUndoableDelete({
       message: "تم حذف الإشعار.",
-      tone: "danger",
+      onDelete: () =>
+        setNotifications((currentNotifications) =>
+          currentNotifications.filter(
+            (notification) => notification.id !== notificationId,
+          ),
+        ),
+      onUndo: () =>
+        setNotifications((currentNotifications) => {
+          if (
+            currentNotifications.some(
+              (notification) => notification.id === deletedNotification.id,
+            )
+          ) {
+            return currentNotifications;
+          }
+
+          const nextNotifications = [...currentNotifications];
+          nextNotifications.splice(
+            Math.max(0, deletedNotificationIndex),
+            0,
+            deletedNotification,
+          );
+          return nextNotifications;
+        }),
     });
   }
   return (

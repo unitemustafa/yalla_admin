@@ -33,6 +33,7 @@ import { logoSrc } from "@/features/dashboard/data";
 import { useDashboardI18n } from "@/features/dashboard/i18n";
 import { Button, Card, Input, PageTitle } from "@/features/dashboard/primitives";
 import { useSnackbar } from "@/features/dashboard/snackbar";
+import { useUndoableDelete } from "@/features/dashboard/use-undoable-delete";
 import { cn } from "@/lib/utils";
 
 function SettingBlock({
@@ -86,6 +87,7 @@ export function SettingsPage() {
   const { apiFetch } = useAuth();
   const { t } = useDashboardI18n();
   const { showSnackbar } = useSnackbar();
+  const queueUndoableDelete = useUndoableDelete();
   const { customization, setCustomization, resetCustomization } =
     useDashboardCustomization();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -184,19 +186,31 @@ export function SettingsPage() {
     }
   }
 
-  async function handleClearLogo() {
+  function handleClearLogo() {
+    const previousCustomization = customization;
     setIsUploadingLogo(true);
-    try {
-      const savedCustomization = await clearDashboardLogo(apiFetch);
-      setCustomization(savedCustomization);
-      setStatus("تم حذف اللوجو المخصص.");
-      showSnackbar({ message: "تم حذف اللوجو المخصص." });
-    } catch {
-      setStatus("تعذر حذف اللوجو المخصص.");
-      showSnackbar({ message: "تعذر حذف اللوجو المخصص.", tone: "danger" });
-    } finally {
-      setIsUploadingLogo(false);
-    }
+
+    queueUndoableDelete({
+      message: "تم حذف اللوجو المخصص.",
+      onDelete: () => {
+        setCustomization({ ...customization, logoDataUrl: "" });
+        setStatus("تم حذف اللوجو المخصص.");
+      },
+      onUndo: () => {
+        setCustomization(previousCustomization);
+        setIsUploadingLogo(false);
+      },
+      onCommit: async () => {
+        const savedCustomization = await clearDashboardLogo(apiFetch);
+        setCustomization(savedCustomization);
+        setIsUploadingLogo(false);
+      },
+      onCommitError: () => {
+        setStatus("تعذر حذف اللوجو المخصص.");
+        showSnackbar({ message: "تعذر حذف اللوجو المخصص.", tone: "danger" });
+        setIsUploadingLogo(false);
+      },
+    });
   }
 
   async function handleReset() {

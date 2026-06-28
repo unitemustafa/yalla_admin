@@ -7,6 +7,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { AppSelect, Badge, Button, Card, DataTable, Input, PageTitle, Switch } from "../primitives";
 import { useServiceCities, type ServiceCity } from "../cities-api";
 import { useSnackbar } from "../snackbar";
+import { useUndoableDelete } from "../use-undoable-delete";
 
 type Classification = { id: number; name: string };
 type Market = {
@@ -124,6 +125,7 @@ function MarketDialog({
 export function ShopsPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
+  const queueUndoableDelete = useUndoableDelete();
   const { cities } = useServiceCities({ activeOnly: true });
   const [markets, setMarkets] = useState<Market[]>([]);
   const [classifications, setClassifications] = useState<Classification[]>([]);
@@ -151,11 +153,36 @@ export function ShopsPage() {
     return value ? markets.filter((market) => [market.name, market.branch, market.classification.name].some((item) => item.toLowerCase().includes(value))) : markets;
   }, [markets, query]);
 
-  async function remove(market: Market) {
+  function restoreMarket(market: Market, index: number) {
+    setMarkets((current) => {
+      if (current.some((item) => item.id === market.id)) return current;
+      const next = [...current];
+      next.splice(Math.max(0, index), 0, market);
+      return next;
+    });
+  }
+
+  function remove(market: Market) {
     if (!window.confirm(`هل تريد حذف محل ${market.name}؟`)) return;
-    const response = await apiFetch(`home/markets/${market.id}/`, { method: "DELETE" });
-    if (response.ok) { setMarkets((current) => current.filter((item) => item.id !== market.id)); showSnackbar({ message: "تم حذف المحل." }); }
-    else showSnackbar({ message: errorMessage(await json(response), "تعذر حذف المحل."), tone: "danger" });
+    const marketIndex = markets.findIndex((item) => item.id === market.id);
+
+    queueUndoableDelete({
+      message: `تم حذف ${market.name}.`,
+      onDelete: () => setMarkets((current) => current.filter((item) => item.id !== market.id)),
+      onUndo: () => restoreMarket(market, marketIndex),
+      onCommit: async () => {
+        const response = await apiFetch(`home/markets/${market.id}/`, { method: "DELETE" });
+        if (!response.ok) {
+          throw new Error(errorMessage(await json(response), "تعذر حذف المحل."));
+        }
+      },
+      onCommitError: (reason) => {
+        showSnackbar({
+          message: reason instanceof Error ? reason.message : "تعذر حذف المحل.",
+          tone: "danger",
+        });
+      },
+    });
   }
 
   return (

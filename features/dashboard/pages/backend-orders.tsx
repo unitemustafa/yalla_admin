@@ -5,18 +5,24 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
+  Check,
   ClipboardList,
+  Copy,
+  ExternalLink,
   Loader2,
+  PackageCheck,
   Plus,
   RefreshCw,
   Search,
   ShoppingCart,
   Trash2,
+  Truck,
+  XCircle,
 } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { cn } from "@/lib/utils";
-import { Badge, Button, Card, Field, Input, PageTitle } from "../primitives";
+import { AppSelect, Badge, Button, Card, Field, Input, PageTitle } from "../primitives";
 import { useSnackbar } from "../snackbar";
 import {
   apiResponseData,
@@ -103,12 +109,24 @@ type OrderLineDraft = {
   quantity: string;
 };
 
+type AssignmentFilter = "all" | "ready_unassigned" | "assigned" | "unassigned";
+
 const statusOptions: BackendOrderStatus[] = [
   "pending",
   "confirmed",
   "under_preparation",
   "ready",
-  "cancelled",
+  "delivered",
+];
+
+const filterStatusOptions: BackendOrderStatus[] = [...statusOptions, "cancelled"];
+
+const orderRouteStatuses: BackendOrderStatus[] = [
+  "pending",
+  "confirmed",
+  "under_preparation",
+  "ready",
+  "delivered",
 ];
 
 const statusLabels: Record<BackendOrderStatus, string> = {
@@ -179,12 +197,51 @@ function apiError(value: unknown, fallback: string) {
   return firstApiError(value) ?? fallback;
 }
 
+function orderRouteIndex(status: BackendOrderStatus) {
+  const index = orderRouteStatuses.indexOf(status);
+  return index >= 0 ? index : 0;
+}
+
+function canMoveToStatus(currentStatus: BackendOrderStatus, nextStatus: BackendOrderStatus) {
+  if (currentStatus === "cancelled") return false;
+  const currentIndex = orderRouteIndex(currentStatus);
+  const nextIndex = orderRouteIndex(nextStatus);
+  return nextIndex > currentIndex;
+}
+
+function representativeName(order: BackendOrder) {
+  const representative = order.assigned_representative;
+  if (!representative) return "";
+  return [representative.first_name, representative.last_name]
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean)
+    .join(" ") || `مندوب #${representative.id}`;
+}
+
+function courierFilterName(courier: BackendDashboardUser) {
+  return fullNameFromBackendUser(courier) || `مندوب #${courier.id}`;
+}
+
+function representativeHref(order: BackendOrder) {
+  const representative = order.assigned_representative;
+  if (!representative) return "/delivery/couriers";
+  return `/delivery/couriers/${representative.id}`;
+}
+
+async function copyText(value: string) {
+  await navigator.clipboard.writeText(value);
+}
+
 export function BackendOrdersPage() {
   const { apiFetch } = useAuth();
+  const { showSnackbar } = useSnackbar();
   const [orders, setOrders] = useState<BackendOrder[]>([]);
+  const [couriers, setCouriers] = useState<BackendDashboardUser[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | BackendOrderStatus>("all");
   const [deliveryType, setDeliveryType] = useState<"all" | "fixed_area" | "manual_quote">("all");
+  const [assignment, setAssignment] = useState<AssignmentFilter>("all");
+  const [courierId, setCourierId] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -192,10 +249,22 @@ export function BackendOrdersPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await apiFetch("orders/admin/");
-      const data = await apiResponseData(response);
-      if (!response.ok) throw new Error(apiError(data, "تعذر تحميل الطلبات."));
-      setOrders(Array.isArray(data) ? (data as BackendOrder[]) : []);
+      const [ordersResponse, usersResponse] = await Promise.all([
+        apiFetch("orders/admin/"),
+        apiFetch("auth/users/"),
+      ]);
+      const [ordersData, usersData] = await Promise.all([
+        apiResponseData(ordersResponse),
+        apiResponseData(usersResponse),
+      ]);
+      if (!ordersResponse.ok) throw new Error(apiError(ordersData, "تعذر تحميل الطلبات."));
+      if (!usersResponse.ok) throw new Error(apiError(usersData, "تعذر تحميل المندوبين."));
+      setOrders(Array.isArray(ordersData) ? (ordersData as BackendOrder[]) : []);
+      setCouriers(
+        Array.isArray(usersData)
+          ? usersData.filter(isBackendDashboardUser).filter((user) => user.role === "representative")
+          : [],
+      );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر تحميل الطلبات.");
     } finally {
@@ -216,6 +285,14 @@ export function BackendOrdersPage() {
     return orders.filter((order) => {
       const matchesStatus = status === "all" || order.status === status;
       const matchesDeliveryType = deliveryType === "all" || order.delivery_type === deliveryType;
+      const isAssigned = Boolean(order.assigned_representative);
+      const matchesAssignment =
+        assignment === "all" ||
+        (assignment === "ready_unassigned" && order.status === "ready" && !isAssigned) ||
+        (assignment === "assigned" && isAssigned) ||
+        (assignment === "unassigned" && !isAssigned);
+      const matchesCourier =
+        courierId === "all" || String(order.assigned_representative?.id ?? "") === courierId;
       const matchesQuery =
         !normalized ||
         [
@@ -224,20 +301,30 @@ export function BackendOrdersPage() {
           customerName(order),
           order.customer?.phone,
           order.market?.name,
+          representativeName(order),
         ]
           .join(" ")
           .toLowerCase()
           .includes(normalized);
-      return matchesStatus && matchesDeliveryType && matchesQuery;
+      return matchesStatus && matchesDeliveryType && matchesAssignment && matchesCourier && matchesQuery;
     });
-  }, [orders, query, status, deliveryType]);
+  }, [assignment, courierId, orders, query, status, deliveryType]);
 
-  const readyCount = orders.filter((order) => order.status === "ready").length;
+  const readyCount = orders.filter((order) => order.status === "ready" && !order.assigned_representative).length;
+  const assignedCount = orders.filter((order) => Boolean(order.assigned_representative)).length;
   const deliveredCount = orders.filter((order) => order.status === "delivered").length;
-  const manualQuoteCount = orders.filter((order) => order.delivery_type === "manual_quote").length;
+
+  async function copyOrderNumberFromList(order: BackendOrder) {
+    try {
+      await copyText(orderNumber(order));
+      showSnackbar({ message: `تم نسخ رقم الطلب ${orderNumber(order)}.` });
+    } catch {
+      showSnackbar({ message: "تعذر نسخ رقم الطلب.", tone: "danger" });
+    }
+  }
 
   return (
-    <div className="px-6 py-8">
+    <div dir="rtl" className="px-6 py-8">
       <PageTitle
         title="الطلبات"
         description="عرض وإدارة كل الطلبات الواردة من يلا ماركت والداشبورد"
@@ -262,42 +349,76 @@ export function BackendOrdersPage() {
       <div className="mt-6 grid gap-3 md:grid-cols-4">
         <Metric title="إجمالي الطلبات" value={orders.length} />
         <Metric title="جاهزة للإسناد" value={readyCount} />
+        <Metric title="مسندة لمندوب" value={assignedCount} />
         <Metric title="تم التسليم" value={deliveredCount} />
-        <Metric title="دليفري" value={manualQuoteCount} />
       </div>
 
       <Card className="mt-6 overflow-hidden">
-        <div className="grid gap-3 border-b p-4 md:grid-cols-[minmax(0,1fr)_220px_180px]">
+        <div className="grid gap-3 border-b p-4 md:grid-cols-[minmax(0,1fr)_190px_170px_190px_220px]">
           <label className="relative">
             <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               className="ps-9"
-              placeholder="بحث برقم الطلب أو العميل أو السوق..."
+              placeholder="بحث برقم الطلب أو العميل أو المحل..."
             />
           </label>
-          <select
+          <AppSelect
             value={status}
-            onChange={(event) => setStatus(event.target.value as "all" | BackendOrderStatus)}
-            className="h-9 rounded-md border bg-input px-3 text-sm"
-          >
-            <option value="all">كل الحالات</option>
-            {Object.entries(statusLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <select
+            onValueChange={(value) => setStatus(value as "all" | BackendOrderStatus)}
+            options={[
+              { value: "all", label: "كل الحالات" },
+              ...filterStatusOptions.map((value) => ({
+                value,
+                label: statusLabels[value],
+              })),
+            ]}
+            ariaLabel="فلترة حالة الطلب"
+            dir="rtl"
+            className="h-9"
+          />
+          <AppSelect
+            value={assignment}
+            onValueChange={(value) => setAssignment(value as AssignmentFilter)}
+            options={[
+              { value: "all", label: "كل الإسنادات" },
+              { value: "ready_unassigned", label: "جاهزة للإسناد" },
+              { value: "assigned", label: "مسندة لمندوب" },
+              { value: "unassigned", label: "غير مسندة" },
+            ]}
+            ariaLabel="فلترة الإسناد"
+            dir="rtl"
+            className="h-9"
+          />
+          <AppSelect
+            value={courierId}
+            onValueChange={setCourierId}
+            options={[
+              { value: "all", label: "كل المندوبين" },
+              ...couriers.map((courier) => ({
+                value: String(courier.id),
+                label: courierFilterName(courier),
+              })),
+            ]}
+            ariaLabel="فلترة المندوب"
+            dir="rtl"
+            className="h-9"
+          />
+          <AppSelect
             value={deliveryType}
-            onChange={(event) => setDeliveryType(event.target.value as "all" | "fixed_area" | "manual_quote")}
-            className="h-9 rounded-md border bg-input px-3 text-sm"
-          >
-            <option value="all">كل أنواع التوصيل</option>
-            <option value="fixed_area">توصيل</option>
-            <option value="manual_quote">دليفري</option>
-          </select>
+            onValueChange={(value) =>
+              setDeliveryType(value as "all" | "fixed_area" | "manual_quote")
+            }
+            options={[
+              { value: "all", label: "كل أنواع التوصيل" },
+              { value: "fixed_area", label: "توصيل" },
+              { value: "manual_quote", label: "دليفري" },
+            ]}
+            ariaLabel="فلترة نوع التوصيل"
+            dir="rtl"
+            className="h-9"
+          />
         </div>
 
         {loading ? (
@@ -317,8 +438,9 @@ export function BackendOrdersPage() {
                 <tr className="border-b bg-muted/30 text-xs text-muted-foreground">
                   <th className="px-4 py-3 text-start">رقم الطلب</th>
                   <th className="px-4 py-3 text-start">العميل</th>
-                  <th className="px-4 py-3 text-start">السوق</th>
+                  <th className="px-4 py-3 text-start">المحل</th>
                   <th className="px-4 py-3 text-start">الحالة</th>
+                  <th className="px-4 py-3 text-start">المندوب</th>
                   <th className="px-4 py-3 text-start">التوصيل</th>
                   <th className="px-4 py-3 text-start">الإجمالي</th>
                   <th className="px-4 py-3 text-start">التاريخ</th>
@@ -326,10 +448,25 @@ export function BackendOrdersPage() {
                 </tr>
               </thead>
               <tbody>
-                {visibleOrders.map((order) => (
+                {visibleOrders.map((order, index) => (
                   <tr key={order.id} className="border-b last:border-0 hover:bg-muted/25">
-                    <td className="px-4 py-4 font-semibold" dir="ltr">
-                      {orderNumber(order)}
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-2">
+                        <span dir="ltr" className="font-semibold text-primary">
+                          {index + 1}. {orderNumber(order)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void copyOrderNumberFromList(order);
+                          }}
+                          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                          aria-label={`نسخ رقم الطلب ${orderNumber(order)}`}
+                          title="نسخ رقم الطلب"
+                        >
+                          <Copy className="size-3.5" />
+                        </button>
+                      </div>
                     </td>
                     <td className="px-4 py-4">
                       <div className="font-medium">{customerName(order)}</div>
@@ -340,6 +477,20 @@ export function BackendOrdersPage() {
                     <td className="px-4 py-4">{order.market?.name ?? "-"}</td>
                     <td className="px-4 py-4">
                       <Badge tone={statusTone(order.status)}>{statusLabels[order.status]}</Badge>
+                    </td>
+                    <td className="px-4 py-4">
+                      {order.assigned_representative ? (
+                        <Link
+                          href={representativeHref(order)}
+                          className="font-semibold text-primary hover:underline"
+                        >
+                          {representativeName(order)}
+                        </Link>
+                      ) : (
+                        <Badge tone={order.status === "ready" ? "blue" : "secondary"}>
+                          {order.status === "ready" ? "جاهز للإسناد" : "غير مسند"}
+                        </Badge>
+                      )}
                     </td>
                     <td className="px-4 py-4">
                       <Badge tone={deliveryTypeTone(order)}>{deliveryTypeLabel(order)}</Badge>
@@ -516,7 +667,7 @@ export function BackendCreateOrderPage() {
   }
 
   return (
-    <div className="px-6 py-8">
+    <div dir="rtl" className="px-6 py-8">
       <PageTitle
         title="إنشاء طلب"
         description="إنشاء طلب لعميل موجود وإرساله لمسار الطلبات الحقيقي"
@@ -630,7 +781,7 @@ export function BackendCreateOrderPage() {
                   </div>
                 ))}
                 {hasMixedMarkets ? (
-                  <p className="text-sm text-destructive">كل منتجات الطلب يجب أن تكون من نفس السوق.</p>
+                  <p className="text-sm text-destructive">كل منتجات الطلب يجب أن تكون من نفس المحل.</p>
                 ) : null}
               </div>
 
@@ -715,6 +866,10 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
 
   async function updateStatus(nextStatus: BackendOrderStatus) {
     if (!order || order.status === nextStatus) return;
+    if (nextStatus !== "cancelled" && !canMoveToStatus(order.status, nextStatus)) {
+      showSnackbar({ message: "لا يمكن الرجوع لمرحلة سابقة في حالة الطلب.", tone: "danger" });
+      return;
+    }
     setSavingStatus(true);
     try {
       const response = await apiFetch(`orders/admin/${order.id}/status/`, {
@@ -761,6 +916,16 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
     }
   }
 
+  async function copyOrderNumber() {
+    if (!order) return;
+    try {
+      await copyText(orderNumber(order));
+      showSnackbar({ message: `تم نسخ رقم الطلب ${orderNumber(order)}.` });
+    } catch {
+      showSnackbar({ message: "تعذر نسخ رقم الطلب.", tone: "danger" });
+    }
+  }
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadOrder();
@@ -782,21 +947,35 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
   }
 
   return (
-    <div className="px-6 py-8">
-      <PageTitle
-        title={`طلب ${orderNumber(order)}`}
-        description={`${customerName(order)} - ${dateTime(order.created_at)}`}
-        size="compact"
-        actions={
-          <Link
-            href="/orders"
-            className="inline-flex h-9 items-center gap-2 rounded-md border px-4 text-sm font-medium hover:bg-accent"
-          >
-            <ArrowLeft className="size-4" />
-            الرجوع
-          </Link>
-        }
-      />
+    <div dir="rtl" className="px-6 py-8">
+      <div className="flex min-h-14 flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div>
+          <h1 className="text-2xl font-semibold leading-8 tracking-normal">
+            طلب{" "}
+            <span dir="ltr" className="inline-block text-primary">
+              {orderNumber(order)}
+            </span>
+          </h1>
+          <p className="mt-1 text-sm leading-5 text-muted-foreground">
+            {customerName(order)} - {dateTime(order.created_at)}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+            <Button type="button" variant="outline" onClick={() => void copyOrderNumber()}>
+              <Copy className="size-4" />
+              نسخ رقم الطلب
+            </Button>
+            <Link
+              href="/orders"
+              className="inline-flex h-9 items-center gap-2 rounded-md border px-4 text-sm font-medium hover:bg-accent"
+            >
+              <ArrowLeft className="size-4" />
+              الرجوع
+            </Link>
+        </div>
+      </div>
+
+      <OrderRouteCard order={order} />
 
       <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Card className="overflow-hidden">
@@ -805,6 +984,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
             <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="border-b text-xs text-muted-foreground">
+                  <th className="w-16 px-4 py-3 text-start">#</th>
                   <th className="px-4 py-3 text-start">المنتج</th>
                   <th className="px-4 py-3 text-start">السعر</th>
                   <th className="px-4 py-3 text-start">الكمية</th>
@@ -812,8 +992,9 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                 </tr>
               </thead>
               <tbody>
-                {(order.items ?? []).map((item) => (
+                {(order.items ?? []).map((item, index) => (
                   <tr key={item.id} className="border-b last:border-0">
+                    <td className="px-4 py-4 text-muted-foreground">{index + 1}</td>
                     <td className="px-4 py-4 font-medium">{item.variant?.product?.name ?? "منتج"}</td>
                     <td className="px-4 py-4">{money(item.unit_price)}</td>
                     <td className="px-4 py-4">{item.quantity}</td>
@@ -823,6 +1004,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
               </tbody>
             </table>
           </div>
+          <FinancialSummaryCard order={order} />
         </Card>
 
         <div className="grid gap-4">
@@ -830,17 +1012,36 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
             <div className="mb-3 font-semibold">حالة الطلب</div>
             <Badge tone={statusTone(order.status)}>{statusLabels[order.status]}</Badge>
             <div className="mt-4 grid grid-cols-2 gap-2">
-              {statusOptions.map((option) => (
-                <Button
-                  key={option}
-                  type="button"
-                  variant={order.status === option ? "default" : "outline"}
-                  disabled={savingStatus}
-                  onClick={() => void updateStatus(option)}
-                >
-                  {statusLabels[option]}
-                </Button>
-              ))}
+              {statusOptions.map((option) => {
+                const current = order.status === option;
+                const canMove = canMoveToStatus(order.status, option);
+                const completed = orderRouteIndex(option) < orderRouteIndex(order.status);
+
+                return (
+                  <Button
+                    key={option}
+                    type="button"
+                    variant={current ? "default" : "outline"}
+                    disabled={savingStatus || current || !canMove}
+                    title={completed ? "مرحلة تمت ولا يمكن الرجوع إليها" : undefined}
+                    onClick={() => void updateStatus(option)}
+                  >
+                    {statusLabels[option]}
+                  </Button>
+                );
+              })}
+            </div>
+            <div className="mt-3 border-t pt-3">
+              <Button
+                type="button"
+                variant={order.status === "cancelled" ? "danger" : "outline"}
+                className="w-full"
+                disabled={savingStatus || order.status === "cancelled"}
+                onClick={() => void updateStatus("cancelled")}
+              >
+                <XCircle className="size-4" />
+                إلغاء الطلب
+              </Button>
             </div>
           </Card>
 
@@ -848,32 +1049,20 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
             <div className="mb-3 font-semibold">بيانات الطلب</div>
             <SummaryRow label="العميل" value={customerName(order)} />
             <SummaryRow label="الهاتف" value={order.customer?.phone ?? "-"} />
-            <SummaryRow label="السوق" value={order.market?.name ?? "-"} />
+            <SummaryRow label="المحل" value={order.market?.name ?? "-"} />
             <SummaryRow label="العنوان" value={order.delivery_address?.name ?? "-"} />
             <SummaryRow label="نوع التوصيل" value={deliveryTypeLabel(order)} />
             {order.custom_delivery_area ? (
               <SummaryRow label="منطقة الدليفري" value={order.custom_delivery_area} />
             ) : null}
-            <SummaryRow
-              label="المندوب"
-              value={
-                order.assigned_representative
-                  ? [order.assigned_representative.first_name, order.assigned_representative.last_name].filter(Boolean).join(" ")
-                  : "لم يتم الإسناد"
-              }
-            />
           </Card>
 
-          <Card className="p-5 text-sm">
-            <div className="mb-3 font-semibold">ملخص مالي</div>
-            <SummaryRow label="المنتجات" value={money(order.subtotal_price)} />
-            <SummaryRow label="التوصيل" value={deliveryFeeLabel(order)} />
-            <SummaryRow label="الخصم" value={money(order.discount)} />
-            <div className="mt-3 border-t pt-3">
-              <SummaryRow label="الإجمالي" value={money(order.total_price)} strong />
-            </div>
-            {order.delivery_type === "manual_quote" && order.delivery_price_status === "pending_quote" ? (
-              <div className="mt-4 grid gap-2 border-t pt-4">
+          {order.assigned_representative ? <AssignedRepresentativeCard order={order} /> : null}
+
+          {order.delivery_type === "manual_quote" && order.delivery_price_status === "pending_quote" ? (
+            <Card className="p-5 text-sm">
+              <div className="mb-3 font-semibold">سعر الدليفري</div>
+              <div className="grid gap-2">
                 <Field label="سعر الدليفري بعد التواصل">
                   <Input
                     min={0}
@@ -888,10 +1077,139 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                   تثبيت السعر
                 </Button>
               </div>
-            ) : null}
-          </Card>
+            </Card>
+          ) : null}
         </div>
       </div>
     </div>
+  );
+}
+
+function FinancialSummaryCard({ order }: { order: BackendOrder }) {
+  return (
+    <div className="m-5 rounded-lg border border-cyan-400/25 bg-cyan-500/10 p-5 text-sm shadow-sm shadow-cyan-950/10">
+      <div className="mb-3 font-semibold text-cyan-700 dark:text-cyan-200">ملخص مالي</div>
+      <SummaryRow label="المنتجات" value={money(order.subtotal_price)} />
+      <SummaryRow label="التوصيل" value={deliveryFeeLabel(order)} />
+      <SummaryRow label="الخصم" value={money(order.discount)} />
+      <div className="mt-3 border-t border-cyan-400/25 pt-3">
+        <SummaryRow label="الإجمالي" value={money(order.total_price)} strong />
+      </div>
+    </div>
+  );
+}
+
+function AssignedRepresentativeCard({ order }: { order: BackendOrder }) {
+  const representative = order.assigned_representative;
+  if (!representative) return null;
+
+  return (
+    <Link
+      href={representativeHref(order)}
+      className="block rounded-[12px] border bg-card p-5 text-sm shadow-sm transition hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+    >
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="font-semibold">المندوب</div>
+        <span className="flex size-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <Truck className="size-4" />
+        </span>
+      </div>
+      <div className="font-semibold text-primary">{representativeName(order)}</div>
+      <div className="mt-1 text-xs text-muted-foreground" dir="ltr">
+        {representative.phone ?? `#${representative.id}`}
+      </div>
+      <div className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-primary">
+        عرض تفاصيل المندوب
+        <ExternalLink className="size-3.5" />
+      </div>
+    </Link>
+  );
+}
+
+function OrderRouteCard({ order }: { order: BackendOrder }) {
+  const activeIndex = orderRouteIndex(order.status);
+  const isCancelled = order.status === "cancelled";
+
+  return (
+    <Card className="mt-6 overflow-hidden">
+      <div className="flex flex-col gap-3 border-b bg-muted/25 px-5 py-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-500">
+            <PackageCheck className="size-5" />
+          </span>
+          <div>
+            <div className="font-semibold">مسار الطلب</div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              آخر تحديث {dateTime(order.updated_at ?? order.created_at)}
+            </div>
+          </div>
+        </div>
+        <Badge tone={statusTone(order.status)}>{statusLabels[order.status]}</Badge>
+      </div>
+      {isCancelled ? (
+        <div className="flex min-h-24 items-center gap-3 px-5 py-5 text-sm text-destructive">
+          <XCircle className="size-5" />
+          تم فصل الإلغاء عن مسار الحالات الأساسية لهذا الطلب.
+        </div>
+      ) : (
+        <ol className="grid gap-y-5 px-5 py-6 md:grid-cols-5 md:gap-y-0">
+          {orderRouteStatuses.map((status, index) => {
+            const isReached = index <= activeIndex;
+            const isActive = index === activeIndex;
+            const isConnectorReached = index < activeIndex;
+
+            return (
+              <li
+                key={status}
+                className="relative flex min-w-0 items-start gap-3 text-sm md:flex-col md:items-center md:gap-3 md:text-center"
+              >
+                {index < orderRouteStatuses.length - 1 ? (
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "absolute start-[15px] top-8 z-0 h-[calc(100%+1.25rem)] w-0.5 transition-colors md:start-auto md:right-1/2 md:top-4 md:h-0.5 md:w-full",
+                      isConnectorReached ? "bg-emerald-500" : "bg-border",
+                    )}
+                  />
+                ) : null}
+                <span
+                  className={cn(
+                    "relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full border-2 transition-all",
+                    isReached
+                      ? "border-emerald-500 bg-emerald-500 text-white shadow-sm shadow-emerald-500/25"
+                      : "border-border bg-card text-muted-foreground",
+                    isActive && "ring-4 ring-emerald-500/10",
+                  )}
+                >
+                  {isReached ? <Check className="size-4 stroke-[3]" /> : null}
+                </span>
+                <div className="min-w-0 text-right md:text-center">
+                  <div
+                    className={cn(
+                      "font-semibold transition-colors",
+                      isReached
+                        ? "text-emerald-600 dark:text-emerald-300"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {statusLabels[status]}
+                  </div>
+                  <time
+                    className={cn(
+                      "mt-0.5 block text-xs",
+                      isReached
+                        ? "text-emerald-600/75 dark:text-emerald-300/75"
+                        : "text-muted-foreground/60",
+                    )}
+                  >
+                    {isReached ? dateTime(order.updated_at ?? order.created_at) : "في الانتظار"}
+                  </time>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </Card>
   );
 }

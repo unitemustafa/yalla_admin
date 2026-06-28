@@ -160,12 +160,19 @@ function LoginPageContent({
               <LockKeyhole className="size-7" />
             </span>
             <h2
-              id="session-expired-title"
-              className="mt-4 text-2xl font-extrabold"
+              aria-hidden="true"
+              className="mt-4 hidden text-2xl font-extrabold"
             >
               انتهت الجلسة
             </h2>
+            <h2 id="session-expired-title" className="mt-4 text-2xl font-extrabold">
+              انتهت الجلسة
+            </h2>
             <p className="mt-3 leading-7 text-muted-foreground">
+              انتهت جلستك. سجل الدخول من جديد للمتابعة، ويمكنك تفعيل
+              &quot;افتكرني&quot; للاحتفاظ بتسجيل الدخول لمدة أطول.
+            </p>
+            <p className="hidden">
               سجّل الدخول من جديد للمتابعة. فعّل «افتكرني» للاحتفاظ
               بتسجيل الدخول لمدة 30 يومًا حتى بعد غلق التاب.
             </p>
@@ -174,7 +181,10 @@ function LoginPageContent({
               className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-bold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20"
               onClick={() => setSessionExpired(false)}
             >
+              <span>تسجيل الدخول</span>
+              <span className="hidden">
               تسجيل الدخول
+              </span>
             </button>
           </div>
         </div>
@@ -360,7 +370,7 @@ function LoginPageContent({
                   href={supportWhatsAppUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex shrink-0 items-center gap-1.5 font-semibold text-primary transition hover:text-primary/80"
+                  className="inline-flex shrink-0 items-center gap-1.5 font-bold text-primary transition hover:text-primary/80"
                 >
                   <MessageCircle className="size-4" />
                   الدعم الفني
