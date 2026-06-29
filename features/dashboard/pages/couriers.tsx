@@ -514,7 +514,7 @@ export function CouriersPage() {
       const [usersResponse, areasResponse, ordersResponse] = await Promise.all([
         apiFetch("auth/users/"),
         apiFetch("locations/delivery-areas/"),
-        apiFetch("orders/admin/"),
+        apiFetch("auth/representatives/"),
       ]);
       const [usersData, areasData, ordersData] = await Promise.all([
         apiResponseData(usersResponse),

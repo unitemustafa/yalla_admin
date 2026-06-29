@@ -268,7 +268,7 @@ export function BackendOrdersPage() {
     setError(null);
     try {
       const [ordersResponse, usersResponse] = await Promise.all([
-        apiFetch("orders/admin/"),
+        apiFetch("auth/representatives/"),
         apiFetch("auth/users/"),
       ]);
       const [ordersData, usersData] = await Promise.all([
@@ -1248,7 +1248,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
     setLoading(true);
     setError(null);
     try {
-      const response = await apiFetch(`orders/admin/${encodeURIComponent(orderId)}/`);
+      const response = await apiFetch(`auth/representatives/${encodeURIComponent(orderId)}/`);
       const data = await apiResponseData(response);
       if (!response.ok) throw new Error(apiError(data, "تعذر تحميل تفاصيل الطلب."));
       const nextOrder = data as BackendOrder;
@@ -1269,7 +1269,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
     }
     setSavingStatus(true);
     try {
-      const response = await apiFetch(`orders/admin/${order.id}/status/`, {
+      const response = await apiFetch(`auth/representatives/${order.id}/status/`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: nextStatus }),
@@ -1292,7 +1292,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
     if (!order || !quoteDraft.trim()) return;
     setSavingQuote(true);
     try {
-      const response = await apiFetch(`orders/admin/${order.id}/delivery-quote/`, {
+      const response = await apiFetch(`auth/representatives/${order.id}/delivery-quote/`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ delivery_price: Number(quoteDraft || 0) }),

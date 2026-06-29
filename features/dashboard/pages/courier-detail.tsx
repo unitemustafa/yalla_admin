@@ -246,7 +246,7 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
     try {
       const [courierResponse, ordersResponse] = await Promise.all([
         apiFetch(`auth/users/${encodeURIComponent(courierId)}/`),
-        apiFetch("orders/admin/"),
+        apiFetch("auth/representatives/"),
       ]);
       const [courierData, ordersData] = await Promise.all([
         apiResponseData(courierResponse),
