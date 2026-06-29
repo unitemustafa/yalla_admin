@@ -6,10 +6,13 @@ export const adminApiPaths = {
   productAdditions: "catalog/product-additions/",
   additionClassifications: "catalog/addition-classifications/",
   productCategories: "catalog/product-categories/",
+  categoryAttributes: "catalog/category-attributes/",
+  categoryOptions: "catalog/category-options/",
   categoryClassifications: "catalog/category-classifications/",
   markets: "home/markets/",
   marketClassifications: "home/market-classifications/",
   users: "auth/users/",
+  offers: "offers/",
 } as const;
 
 export type ApiFetch = (path: string, init?: RequestInit) => Promise<Response>;

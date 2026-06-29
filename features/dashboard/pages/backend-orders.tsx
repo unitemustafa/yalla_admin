@@ -125,8 +125,6 @@ type ProductVariantOption = {
   available: boolean;
 };
 
-type CreateOrderDeliveryType = "fixed_area" | "manual_quote";
-
 type AssignmentFilter = "all" | "ready_unassigned" | "assigned" | "unassigned";
 
 const statusOptions: BackendOrderStatus[] = [
@@ -134,10 +132,9 @@ const statusOptions: BackendOrderStatus[] = [
   "confirmed",
   "under_preparation",
   "ready",
-  "delivered",
 ];
 
-const filterStatusOptions: BackendOrderStatus[] = [...statusOptions, "cancelled"];
+const filterStatusOptions: BackendOrderStatus[] = [...statusOptions, "delivered", "cancelled"];
 
 const orderRouteStatuses: BackendOrderStatus[] = [
   "pending",
@@ -614,8 +611,7 @@ export function BackendCreateOrderPage() {
   const [addresses, setAddresses] = useState<BackendAddress[]>([]);
   const [selectedUser, setSelectedUser] = useState("");
   const [selectedAddress, setSelectedAddress] = useState("");
-  const [orderDeliveryType, setOrderDeliveryType] = useState<CreateOrderDeliveryType>("fixed_area");
-  const [customDeliveryArea, setCustomDeliveryArea] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("cash_on_delivery");
   const [deliveryPrice, setDeliveryPrice] = useState("0");
   const [discount, setDiscount] = useState("0");
   const [description, setDescription] = useState("");
@@ -737,8 +733,7 @@ export function BackendCreateOrderPage() {
     const variant = variants.find((item) => item.id === line.variantId);
     return sum + (variant?.price ?? 0) * Math.max(1, Number(line.quantity) || 1);
   }, 0);
-  const effectiveDeliveryPrice =
-    orderDeliveryType === "manual_quote" ? 0 : Number(deliveryPrice || 0);
+  const effectiveDeliveryPrice = Number(deliveryPrice || 0);
   const total = Math.max(0, subtotal + effectiveDeliveryPrice - Number(discount || 0));
   const selectedVariants = lines.map((line) => line.variantId).filter(Boolean);
   const hasMixedMarkets =
@@ -764,8 +759,7 @@ export function BackendCreateOrderPage() {
       !selectedUser ||
       !selectedAddress ||
       !selectedVariants.length ||
-      hasMixedMarkets ||
-      (orderDeliveryType === "manual_quote" && !customDeliveryArea.trim())
+      hasMixedMarkets
     ) return;
     setSaving(true);
     try {
@@ -775,12 +769,9 @@ export function BackendCreateOrderPage() {
         body: JSON.stringify({
           user_id: Number(selectedUser),
           delivery_address_id: Number(selectedAddress),
-          payment_method: "cash_on_delivery",
-          delivery_type: orderDeliveryType,
-          custom_delivery_area:
-            orderDeliveryType === "manual_quote" ? customDeliveryArea.trim() : "",
-          delivery_price: orderDeliveryType === "manual_quote" ? 0 : Number(deliveryPrice || 0),
-          discount: Number(discount || 0),
+          payment_method: paymentMethod,
+          delivery_price: Number(deliveryPrice || 0).toFixed(2),
+          discount: Number(discount || 0).toFixed(2),
           description: description.trim(),
           items: lines
             .filter((line) => line.variantId)
@@ -868,34 +859,21 @@ export function BackendCreateOrderPage() {
               </Field>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="نوع الطلب">
+                <Field label="طريقة الدفع">
                   <AppSelect
-                    value={orderDeliveryType}
-                    onValueChange={(value) => setOrderDeliveryType(value as CreateOrderDeliveryType)}
-                    placeholder="اختر نوع الطلب"
-                    ariaLabel="نوع الطلب"
+                    value={paymentMethod}
+                    onValueChange={setPaymentMethod}
+                    placeholder="اختر طريقة الدفع"
+                    ariaLabel="طريقة الدفع"
                     className="h-11 bg-input"
                     options={[
-                      { value: "fixed_area", label: "توصيل" },
-                      { value: "manual_quote", label: "دليفري" },
+                      { value: "cash_on_delivery", label: "الدفع عند الاستلام" },
                     ]}
                   />
                 </Field>
-                {orderDeliveryType === "manual_quote" ? (
-                  <Field label="منطقة الدليفري">
-                    <Input
-                      required
-                      value={customDeliveryArea}
-                      onChange={(event) => setCustomDeliveryArea(event.target.value)}
-                      placeholder="اكتب المنطقة بعد التواصل مع العميل"
-                      className="h-11"
-                    />
-                  </Field>
-                ) : (
-                  <Field label="رسوم التوصيل">
-                    <Input min={0} step="0.01" type="number" value={deliveryPrice} onChange={(event) => setDeliveryPrice(event.target.value)} className="h-11" />
-                  </Field>
-                )}
+                <Field label="رسوم التوصيل">
+                  <Input min={0} step="0.01" type="number" value={deliveryPrice} onChange={(event) => setDeliveryPrice(event.target.value)} className="h-11" />
+                </Field>
               </div>
 
               <div className="grid gap-3">
@@ -989,7 +967,7 @@ export function BackendCreateOrderPage() {
               ملخص الطلب
             </div>
             <SummaryRow label="إجمالي المنتجات" value={money(subtotal)} />
-            <SummaryRow label={orderDeliveryType === "manual_quote" ? "الدليفري" : "التوصيل"} value={orderDeliveryType === "manual_quote" ? "سعر معلّق" : money(effectiveDeliveryPrice)} />
+            <SummaryRow label="رسوم التوصيل" value={money(effectiveDeliveryPrice)} />
             <SummaryRow label="الخصم" value={money(discount)} />
             <div className="mt-4 border-t pt-4">
               <SummaryRow label="الإجمالي" value={money(total)} strong />
@@ -1001,8 +979,7 @@ export function BackendCreateOrderPage() {
                 !selectedUser ||
                 !selectedAddress ||
                 !selectedVariants.length ||
-                hasMixedMarkets ||
-                (orderDeliveryType === "manual_quote" && !customDeliveryArea.trim())
+                hasMixedMarkets
               }
             >
               {saving ? <Loader2 className="size-4 animate-spin" /> : <ClipboardList className="size-4" />}
@@ -1261,6 +1238,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
   const [loading, setLoading] = useState(true);
   const [savingStatus, setSavingStatus] = useState(false);
   const [savingQuote, setSavingQuote] = useState(false);
+  const [savingAssignment, setSavingAssignment] = useState(false);
   const [quoteDraft, setQuoteDraft] = useState("");
   const [orderDetailsOpen, setOrderDetailsOpen] = useState(true);
   const [representativeOpen, setRepresentativeOpen] = useState(false);
@@ -1332,6 +1310,29 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
       });
     } finally {
       setSavingQuote(false);
+    }
+  }
+
+  async function unassignRepresentative() {
+    if (!order?.assigned_representative || order.status !== "ready") return;
+    setSavingAssignment(true);
+    try {
+      const response = await apiFetch(`orders/${order.id}/assignment/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ representative_id: null }),
+      });
+      const data = await apiResponseData(response);
+      if (!response.ok) throw new Error(apiError(data, "تعذر إلغاء إسناد الطلب."));
+      setOrder(data as BackendOrder);
+      showSnackbar({ message: "تم إلغاء إسناد المندوب.", tone: "success" });
+    } catch (reason) {
+      showSnackbar({
+        message: reason instanceof Error ? reason.message : "تعذر إلغاء الإسناد.",
+        tone: "danger",
+      });
+    } finally {
+      setSavingAssignment(false);
     }
   }
 
@@ -1497,7 +1498,20 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                   </button>
                   {representativeOpen ? (
                     order.assigned_representative ? (
-                      <AssignedRepresentativeDetails order={order} />
+                      <div className="grid gap-3">
+                        <AssignedRepresentativeDetails order={order} />
+                        {order.status === "ready" ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={savingAssignment}
+                            onClick={() => void unassignRepresentative()}
+                          >
+                            {savingAssignment ? <Loader2 className="size-4 animate-spin" /> : <X className="size-4" />}
+                            إلغاء إسناد المندوب
+                          </Button>
+                        ) : null}
+                      </div>
                     ) : (
                       <div className="rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
                         لم يتم إسناد الطلب لمندوب بعد.

@@ -419,7 +419,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             Authorization: `Bearer ${accessToken}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ refreshToken }),
+          body: JSON.stringify({ refresh: refreshToken }),
         });
       }
     } catch {

@@ -28,7 +28,6 @@ import {
 } from "lucide-react";
 
 import {
-  addonRows,
   categoryRows,
   itemRows,
   type AddonRow,
@@ -38,6 +37,8 @@ import {
 import { useAuth } from "@/features/auth/auth-provider";
 import {
   adminApiPaths,
+  addonRowFromApi,
+  apiList,
   productRowFromApi,
   readApiData,
   sendAdminJson,
@@ -47,6 +48,7 @@ import { AppSelect, Button, CurrencyText, Input, Switch } from "../primitives";
 import { deliveryZones } from "../reference-data";
 import { useServiceCities } from "../cities-api";
 import { cn } from "@/lib/utils";
+import { useSnackbar } from "../snackbar";
 
 type Language = "ar" | "en";
 type Direction = "rtl" | "ltr";
@@ -71,6 +73,7 @@ type ProductForm = {
 
 type VariantOption = {
   value: string;
+  apiId?: string | number;
   label: LocalizedText;
   color?: string;
   disabled?: boolean;
@@ -100,6 +103,7 @@ type ProductCategory = {
 
 type VariantField = {
   id: string;
+  apiId?: string | number;
   label: LocalizedText;
   description: LocalizedText;
   input: ChoiceInput;
@@ -118,6 +122,12 @@ type ProductAddonSelection = {
   enabled: boolean;
   category: string;
   selectedIds: string[];
+};
+
+type ApiChoice = {
+  id: string;
+  name: string;
+  description?: string;
 };
 
 const popularColorOptions: VariantOption[] = [
@@ -782,10 +792,6 @@ function productFormFromItem(item: ItemRow): ProductForm {
   };
 }
 
-function locationModeFromItem(item: ItemRow): ProductLocationMode {
-  return item.shopName?.trim() ? "shop" : "general";
-}
-
 function optionLabel(
   options: VariantOption[],
   value: string,
@@ -1064,6 +1070,70 @@ function categoryRowSections(row?: CategoryRow) {
   return row?.sections.length ? row.sections.join(", ") : "";
 }
 
+function apiVariantFieldFromRecord(record: BackendRecord): VariantField {
+  const name = String(record.name ?? "متغير");
+  const apiId = record.id as string | number;
+  const options = Array.isArray(record.options) ? record.options : [];
+
+  return {
+    id: `api-attribute-${apiId}`,
+    apiId,
+    label: { ar: name, en: name },
+    description: {
+      ar: options.map((option) => String((option as BackendRecord).value ?? "")).join("، "),
+      en: options.map((option) => String((option as BackendRecord).value ?? "")).join(", "),
+    },
+    input: "chips",
+    multiple: true,
+    options: options.map((option) => {
+      const item = option as BackendRecord;
+      const value = String(item.value ?? "");
+      return {
+        value: `api-option-${item.id}`,
+        apiId: item.id as string | number,
+        label: { ar: value, en: value },
+      };
+    }),
+  };
+}
+
+function apiVariantSelections(
+  fields: VariantField[],
+  selections: Record<string, string[]>,
+) {
+  return fields.flatMap((field) => {
+    if (field.apiId === undefined) return [];
+    return (selections[field.id] ?? []).flatMap((value) => {
+      const option = field.options.find((item) => item.value === value);
+      return option?.apiId === undefined
+        ? []
+        : [{ attribute_id: field.apiId, option_id: option.apiId }];
+    });
+  });
+}
+
+function apiVariantCombinations(
+  fields: VariantField[],
+  selections: Record<string, string[]>,
+) {
+  return fields.reduce<Array<Array<{ attribute_id: string | number; option_id: string | number }>>>(
+    (combinations, field) => {
+      if (field.apiId === undefined) return combinations;
+      const values = (selections[field.id] ?? []).flatMap((value) => {
+        const option = field.options.find((item) => item.value === value);
+        return option?.apiId === undefined
+          ? []
+          : [{ attribute_id: field.apiId!, option_id: option.apiId }];
+      });
+      if (!values.length) return combinations;
+      return combinations.flatMap((combination) =>
+        values.map((value) => [...combination, value]),
+      );
+    },
+    [[]],
+  );
+}
+
 function categoryThemeTone(categoryId: CategoryKey) {
   const tones: Partial<
     Record<
@@ -1134,6 +1204,7 @@ function addonSelectionSummary({
 
 export function CreateItemPage() {
   const { apiFetch } = useAuth();
+  const { showSnackbar } = useSnackbar();
   const language: Language = "ar";
   const direction: Direction = "rtl";
   const params = useParams<{ itemId?: string | string[] }>();
@@ -1147,10 +1218,6 @@ export function CreateItemPage() {
   const pageSubtitle = isEditing
     ? "\u0639\u062f\u0651\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0645\u0646\u062a\u062c \u0648\u0627\u0644\u0633\u0639\u0631 \u0648\u0627\u0644\u062a\u0635\u0646\u064a\u0641."
     : t.subtitle;
-  const [selectedLocationMode, setSelectedLocationMode] =
-    useState<ProductLocationMode>("general");
-  const [selectedRegion, setSelectedRegion] = useState(t.allRegions);
-  const [selectedShop, setSelectedShop] = useState(t.allShops);
   const [visibilityMode, setVisibilityMode] =
     useState<ProductVisibilityMode>("general");
   const [visibleRegionSlugs, setVisibleRegionSlugs] = useState<string[]>([]);
@@ -1159,12 +1226,6 @@ export function CreateItemPage() {
     Record<string, string[]>
   >(() => cloneSelections(initialCategory));
   const [variantDetails, setVariantDetails] = useState<VariantDetails>({});
-  const [activeStockDetailKeys, setActiveStockDetailKeys] = useState<string[]>(
-    [],
-  );
-  const [activePriceDetailKeys, setActivePriceDetailKeys] = useState<string[]>(
-    [],
-  );
   const [customVariantOptions, setCustomVariantOptions] = useState<
     Record<string, VariantOption[]>
   >({});
@@ -1192,13 +1253,16 @@ export function CreateItemPage() {
   const [productImages, setProductImages] = useState<ProductImage[]>([]);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const productImagesRef = useRef<ProductImage[]>([]);
-  const [confirmationOpen, setConfirmationOpen] = useState(false);
-  const [createdCode, setCreatedCode] = useState("");
   const [saveError, setSaveError] = useState("");
   const [editProductCode, setEditProductCode] = useState("");
   const [saving, setSaving] = useState(false);
-  const [locationDialogOpen, setLocationDialogOpen] = useState(false);
-  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [markets, setMarkets] = useState<ApiChoice[]>([]);
+  const [categories, setCategories] = useState<ApiChoice[]>([]);
+  const [selectedMarketId, setSelectedMarketId] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [apiVariantFields, setApiVariantFields] = useState<VariantField[]>([]);
+  const [apiAddonRows, setApiAddonRows] = useState<AddonRow[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [addonsDialogOpen, setAddonsDialogOpen] = useState(false);
   const [productAddons, setProductAddons] = useState<ProductAddonSelection>({
     enabled: true,
@@ -1206,14 +1270,95 @@ export function CreateItemPage() {
     selectedIds: [],
   });
   const dialogOpen =
-    confirmationOpen ||
-    locationDialogOpen ||
-    categoryDialogOpen ||
     addonsDialogOpen ||
     variantFieldDialogOpen ||
     Boolean(variantValueField);
 
   useBodyScrollLock(dialogOpen);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadCatalogChoices() {
+      setCatalogLoading(true);
+      try {
+        const [
+          marketsResponse,
+          categoriesResponse,
+          attributesResponse,
+          additionsResponse,
+        ] =
+          await Promise.all([
+            apiFetch(adminApiPaths.markets),
+            apiFetch(adminApiPaths.productCategories),
+            apiFetch(adminApiPaths.categoryAttributes),
+            apiFetch(adminApiPaths.productAdditions),
+          ]);
+        const [marketsData, categoriesData, attributesData, additionsData] =
+          await Promise.all([
+            readApiData(marketsResponse),
+            readApiData(categoriesResponse),
+            readApiData(attributesResponse),
+            readApiData(additionsResponse),
+          ]);
+
+        if (
+          !marketsResponse.ok ||
+          !categoriesResponse.ok ||
+          !attributesResponse.ok ||
+          !additionsResponse.ok
+        ) {
+          throw new Error("تعذر تحميل الأسواق والفئات من الباك.");
+        }
+        if (!active) return;
+
+        const nextMarkets = apiList(marketsData).map((record) => ({
+          id: String(record.id),
+          name: String(record.name ?? `سوق #${record.id}`),
+          description: String(record.branch ?? ""),
+        }));
+        const nextCategories = apiList(categoriesData).map((record) => ({
+          id: String(record.id),
+          name: String(record.name ?? `فئة #${record.id}`),
+          description:
+            record.classification && typeof record.classification === "object"
+              ? String((record.classification as BackendRecord).name ?? "")
+              : "",
+        }));
+        const attributeRecords = apiList(attributesData);
+        const initialCategoryId = nextCategories[0]?.id || "";
+
+        setMarkets(nextMarkets);
+        setCategories(nextCategories);
+        setApiAddonRows(apiList(additionsData).map(addonRowFromApi));
+        setSelectedMarketId((current) => current || nextMarkets[0]?.id || "");
+        setSelectedCategoryId((current) => current || nextCategories[0]?.id || "");
+        setApiVariantFields(
+          attributeRecords
+            .filter((record) => {
+              const category = record.category;
+              const categoryId =
+                category && typeof category === "object"
+                  ? (category as BackendRecord).id
+                  : record.category_id;
+              return String(categoryId) === initialCategoryId;
+            })
+            .map(apiVariantFieldFromRecord),
+        );
+      } catch (error) {
+        if (active) {
+          setSaveError(error instanceof Error ? error.message : "تعذر تحميل بيانات المنتج.");
+        }
+      } finally {
+        if (active) setCatalogLoading(false);
+      }
+    }
+
+    void loadCatalogChoices();
+    return () => {
+      active = false;
+    };
+  }, [apiFetch]);
 
   useEffect(() => {
     if (!editItemId) {
@@ -1234,8 +1379,6 @@ export function CreateItemPage() {
 
     const nextForm = productFormFromItem(item);
     setForm(nextForm);
-    setSelectedLocationMode(locationModeFromItem(item));
-    setSelectedShop(item.shopName?.trim() || t.allShops);
     setSelectedVariants(cloneSelections(nextForm.category));
     setVariantDetails(parseVariantDetails(item.variantDetails));
     setVisibilityMode(item.visibilityMode === "regions" ? "regions" : "general");
@@ -1259,7 +1402,7 @@ export function CreateItemPage() {
         : [],
     );
     setSelectedImageIndex(0);
-  }, [editItemId, t.allShops]);
+  }, [editItemId]);
 
   useEffect(() => {
     if (!editItemId) {
@@ -1283,8 +1426,6 @@ export function CreateItemPage() {
         const item = productRowFromApi(data as BackendRecord, 0);
         const nextForm = productFormFromItem(item);
         setForm(nextForm);
-        setSelectedLocationMode(locationModeFromItem(item));
-        setSelectedShop(item.shopName?.trim() || t.allShops);
         setSelectedVariants(cloneSelections(nextForm.category));
         setVariantDetails(parseVariantDetails(item.variantDetails));
         setVisibilityMode(item.visibilityMode === "regions" ? "regions" : "general");
@@ -1313,17 +1454,19 @@ export function CreateItemPage() {
     return () => {
       active = false;
     };
-  }, [apiFetch, editItemId, t.allShops]);
+  }, [apiFetch, editItemId]);
 
   const activeCategory = categoryConfig(form.category);
   const addonCategoryOptions = useMemo(
-    () => uniqueAddonCategories(addonRows),
-    [],
+    () => uniqueAddonCategories(apiAddonRows),
+    [apiAddonRows],
   );
   const selectedAddonRows = useMemo(
     () =>
-      addonRows.filter((addon) => productAddons.selectedIds.includes(addon.id)),
-    [productAddons.selectedIds],
+      apiAddonRows.filter((addon) =>
+        productAddons.selectedIds.includes(addon.id),
+      ),
+    [apiAddonRows, productAddons.selectedIds],
   );
   const selectedAddonSummary = addonSelectionSummary({
     enabled: productAddons.enabled,
@@ -1331,20 +1474,16 @@ export function CreateItemPage() {
     t,
     language,
   });
-  const selectedSecondaryCategory =
-    categoryRows.find((row) => row.name === form.subcategory) ??
-    categoryRows[0];
-  const selectedSecondaryCategoryName = selectedSecondaryCategory
-    ? categoryRowDisplayName(selectedSecondaryCategory)
-    : form.subcategory || t.empty;
+  const selectedSecondaryCategory = categories.find(
+    (category) => category.id === selectedCategoryId,
+  );
+  const selectedSecondaryCategoryName =
+    selectedSecondaryCategory?.name || t.empty;
   const selectedSecondaryCategorySections =
-    categoryRowSections(selectedSecondaryCategory) || t.empty;
+    selectedSecondaryCategory?.description || t.empty;
   const activeFields = useMemo(
     () =>
-      [
-        ...variantDefinitions[form.category],
-        ...(customVariantFields[form.category] ?? []),
-      ]
+      apiVariantFields
         .filter(
           (field) =>
             !(removedVariantFields[form.category] ?? []).includes(field.id),
@@ -1368,10 +1507,10 @@ export function CreateItemPage() {
         };
       }),
     [
-      customVariantFields,
       customVariantOptions,
       disabledVariantOptions,
       form.category,
+      apiVariantFields,
       removedVariantFields,
       removedVariantOptions,
     ],
@@ -1390,39 +1529,6 @@ export function CreateItemPage() {
       }),
     [activeFields, language, selectedVariants],
   );
-  const activeVariantCombinations = useMemo(
-    () => variantCombinations(activeFields, selectedVariants, language),
-    [activeFields, language, selectedVariants],
-  );
-  const activeStockCombinations = useMemo(
-    () => stockCombinations(activeFields, selectedVariants, language),
-    [activeFields, language, selectedVariants],
-  );
-  const visibleStockDetailKeys = useMemo(() => {
-    const stockKeys = new Set(
-      activeStockCombinations.map((combination) => combination.key),
-    );
-
-    return activeStockDetailKeys.filter((key) => stockKeys.has(key));
-  }, [activeStockCombinations, activeStockDetailKeys]);
-  const visiblePriceDetailKeys = useMemo(() => {
-    const priceKeys = new Set(
-      activeVariantCombinations.map((combination) => combination.key),
-    );
-
-    return activePriceDetailKeys.filter((key) => priceKeys.has(key));
-  }, [activeVariantCombinations, activePriceDetailKeys]);
-  const missingStockCount = activeStockCombinations.filter(
-    (combination) =>
-      !visibleStockDetailKeys.includes(combination.key) ||
-      !variantDetailFor(variantDetails, combination.key, form).stock.trim(),
-  ).length;
-  const missingPriceCount = activeVariantCombinations.filter(
-    (combination) =>
-      !visiblePriceDetailKeys.includes(combination.key) ||
-      !variantDetailFor(variantDetails, combination.key, form).price.trim(),
-  ).length;
-
   const visibleRegionNames = deliveryZones
     .filter((zone) => visibleRegionSlugs.includes(zone.id))
     .map((zone) => zone.name);
@@ -1441,10 +1547,6 @@ export function CreateItemPage() {
     { label: t.addons, value: selectedAddonSummary },
     ...variantSummary,
   ];
-  const selectedProductLocation =
-    selectedLocationMode === "shop"
-      ? `${selectedRegion} / ${selectedShop}`
-      : selectedRegion;
   const productName = form.name.trim() || t.productFallback;
   const productDescription =
     form.description.trim() || t.descriptionPlaceholder;
@@ -1470,83 +1572,6 @@ export function CreateItemPage() {
     setForm((currentForm) => ({ ...currentForm, [key]: value }));
   }
 
-  function updateVariantDetail(
-    key: string,
-    detail: Partial<VariantValueDetail>,
-  ) {
-    setVariantDetails((currentDetails) => ({
-      ...currentDetails,
-      [key]: {
-        price: currentDetails[key]?.price ?? form.price,
-        discount: currentDetails[key]?.discount ?? form.discount,
-        stock: currentDetails[key]?.stock ?? form.stock ?? "0",
-        available: currentDetails[key]?.available ?? form.available,
-        ...detail,
-      },
-    }));
-  }
-
-  function addStockDetailRow(key: string) {
-    setActiveStockDetailKeys((currentKeys) =>
-      currentKeys.includes(key) ? currentKeys : [...currentKeys, key],
-    );
-    updateVariantDetail(key, {
-      price: "",
-      stock: variantDetails[key]?.stock ?? "0",
-      available: isStockAvailable(variantDetails[key]?.stock ?? "0"),
-    });
-  }
-
-  function addPriceDetailRow(key: string) {
-    setActivePriceDetailKeys((currentKeys) =>
-      currentKeys.includes(key) ? currentKeys : [...currentKeys, key],
-    );
-    updateVariantDetail(key, {
-      price: variantDetails[key]?.price ?? form.price,
-      discount: variantDetails[key]?.discount ?? form.discount,
-      stock: "",
-    });
-  }
-
-  function replaceDetailRow(
-    kind: "stock" | "price",
-    currentKey: string,
-    nextKey: string,
-  ) {
-    const setKeys =
-      kind === "stock" ? setActiveStockDetailKeys : setActivePriceDetailKeys;
-
-    setKeys((currentKeys) =>
-      currentKeys.map((key) => (key === currentKey ? nextKey : key)),
-    );
-    setVariantDetails((currentDetails) => {
-      const nextDetails = { ...currentDetails };
-      nextDetails[nextKey] = currentDetails[nextKey] ??
-        currentDetails[currentKey] ?? {
-          price: kind === "price" ? form.price : "",
-          discount: kind === "price" ? form.discount : "",
-          stock: kind === "stock" ? form.stock || "0" : "",
-          available: form.available,
-        };
-      delete nextDetails[currentKey];
-
-      return nextDetails;
-    });
-  }
-
-  function removeDetailRow(kind: "stock" | "price", keyToRemove: string) {
-    const setKeys =
-      kind === "stock" ? setActiveStockDetailKeys : setActivePriceDetailKeys;
-
-    setKeys((currentKeys) => currentKeys.filter((key) => key !== keyToRemove));
-    setVariantDetails((currentDetails) => {
-      const nextDetails = { ...currentDetails };
-      delete nextDetails[keyToRemove];
-
-      return nextDetails;
-    });
-  }
-
   function changeCategory(category: CategoryKey) {
     setForm((currentForm) => ({
       ...currentForm,
@@ -1563,17 +1588,34 @@ export function CreateItemPage() {
     updateForm("subcategory", subcategory);
   }
 
-  function changeLocationMode(mode: ProductLocationMode) {
-    setSelectedLocationMode(mode);
+  async function changeApiCategory(categoryId: string) {
+    setSelectedCategoryId(categoryId);
+    setSelectedVariants({});
+    setApiVariantFields([]);
+    setSaveError("");
 
-    if (mode === "general") {
-      setSelectedShop(t.allShops);
+    try {
+      const response = await apiFetch(adminApiPaths.categoryAttributes);
+      const data = await readApiData(response);
+      if (!response.ok) {
+        throw new Error("تعذر تحميل متغيرات الفئة.");
+      }
+
+      setApiVariantFields(
+        apiList(data)
+          .filter((record) => {
+            const category = record.category;
+            const categoryIdValue =
+              category && typeof category === "object"
+                ? (category as BackendRecord).id
+                : record.category_id;
+            return String(categoryIdValue) === categoryId;
+          })
+          .map(apiVariantFieldFromRecord),
+      );
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "تعذر تحميل متغيرات الفئة.");
     }
-  }
-
-  function changeProductRegion(region: string) {
-    setSelectedRegion(region);
-    setSelectedShop(t.allShops);
   }
 
   function updateProductAddons(nextSelection: ProductAddonSelection) {
@@ -1684,20 +1726,6 @@ export function CreateItemPage() {
 
       return nextDetails;
     });
-    setActiveStockDetailKeys((currentKeys) =>
-      currentKeys.filter((detailKey) => {
-        const directKey = `${field.id}:${value}`;
-
-        return !detailKey.split("|").includes(directKey);
-      }),
-    );
-    setActivePriceDetailKeys((currentKeys) =>
-      currentKeys.filter((detailKey) => {
-        const directKey = `${field.id}:${value}`;
-
-        return !detailKey.split("|").includes(directKey);
-      }),
-    );
     setDisabledVariantOptions((currentOptions) => ({
       ...currentOptions,
       [key]: (currentOptions[key] ?? []).filter((item) => item !== value),
@@ -1720,12 +1748,6 @@ export function CreateItemPage() {
 
       return nextSelections;
     });
-    setActiveStockDetailKeys((currentKeys) =>
-      currentKeys.filter((detailKey) => !detailKey.includes(`${field.id}:`)),
-    );
-    setActivePriceDetailKeys((currentKeys) =>
-      currentKeys.filter((detailKey) => !detailKey.includes(`${field.id}:`)),
-    );
     setCustomVariantOptions((currentOptions) => {
       const nextOptions = { ...currentOptions };
       delete nextOptions[variantKey(form.category, field.id)];
@@ -1777,7 +1799,7 @@ export function CreateItemPage() {
     setVariantFieldInput("chips");
   }
 
-  function addVariantField() {
+  async function addVariantField() {
     const fieldName = variantFieldName.trim();
     const optionLabels = Array.from(
       new Set(
@@ -1788,65 +1810,91 @@ export function CreateItemPage() {
       ),
     );
 
-    if (!fieldName || !optionLabels.length) {
+    if (!fieldName || !optionLabels.length || !selectedCategoryId) {
       return;
     }
 
-    const fieldId = createId("custom-field");
-    const options = optionLabels.map((label) => ({
-      value: createId("custom-option"),
-      label: { ar: label, en: label },
-    }));
-    const field: VariantField = {
-      id: fieldId,
-      label: { ar: fieldName, en: fieldName },
-      description: {
-        ar: optionLabels.join("، "),
-        en: optionLabels.join(", "),
-      },
-      input: variantFieldInput,
-      multiple: variantFieldInput === "chips",
-      options,
-    };
+    try {
+      const attribute = (await sendAdminJson(
+        apiFetch,
+        adminApiPaths.categoryAttributes,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            category_id: Number(selectedCategoryId),
+            name: fieldName,
+          }),
+        },
+      )) as BackendRecord;
+      const attributeId = attribute.id as string | number;
+      const createdOptions = await Promise.all(
+        optionLabels.map((value) =>
+          sendAdminJson(apiFetch, adminApiPaths.categoryOptions, {
+            method: "POST",
+            body: JSON.stringify({ attribute_id: attributeId, value }),
+          }),
+        ),
+      );
+      const nextField = apiVariantFieldFromRecord({
+        ...attribute,
+        options: createdOptions,
+      });
 
-    setCustomVariantFields((currentFields) => ({
-      ...currentFields,
-      [form.category]: [...(currentFields[form.category] ?? []), field],
-    }));
-    setSelectedVariants((currentSelections) => ({
-      ...currentSelections,
-      [fieldId]: [options[0].value],
-    }));
-    closeVariantFieldDialog();
+      setApiVariantFields((currentFields) => [...currentFields, nextField]);
+      setSelectedVariants((currentSelections) => ({
+        ...currentSelections,
+        [nextField.id]: nextField.options[0]
+          ? [nextField.options[0].value]
+          : [],
+      }));
+      closeVariantFieldDialog();
+      showSnackbar({ message: "تمت إضافة خاصية الفئة وخياراتها.", tone: "success" });
+    } catch (error) {
+      setSaveError(
+        error instanceof Error ? error.message : "تعذر إضافة خاصية الفئة.",
+      );
+    }
   }
 
-  function addVariantValue(field: VariantField, label: string, color?: string) {
-    const key = variantKey(form.category, field.id);
+  async function addVariantValue(field: VariantField, label: string) {
     const rawValue = label.trim();
-    const rawColor = color?.trim();
 
-    if (!rawValue) {
+    if (!rawValue || field.apiId === undefined) {
       return;
     }
 
-    const option: VariantOption = {
-      value: createId("custom-option"),
-      label: { ar: rawValue, en: rawValue },
-      color: field.input === "swatch" && rawColor ? rawColor : undefined,
-    };
+    try {
+      const data = (await sendAdminJson(apiFetch, adminApiPaths.categoryOptions, {
+        method: "POST",
+        body: JSON.stringify({ attribute_id: field.apiId, value: rawValue }),
+      })) as BackendRecord;
+      const option: VariantOption = {
+        value: `api-option-${data.id}`,
+        apiId: data.id as string | number,
+        label: {
+          ar: String(data.value ?? rawValue),
+          en: String(data.value ?? rawValue),
+        },
+      };
 
-    setCustomVariantOptions((currentOptions) => ({
-      ...currentOptions,
-      [key]: [...(currentOptions[key] ?? []), option],
-    }));
-    setSelectedVariants((currentSelections) => ({
-      ...currentSelections,
-      [field.id]:
-        field.multiple || field.input === "checkbox" || field.input === "swatch"
-          ? [...(currentSelections[field.id] ?? []), option.value]
-          : [option.value],
-    }));
-    closeVariantValueDialog();
+      setApiVariantFields((currentFields) =>
+        currentFields.map((currentField) =>
+          currentField.id === field.id
+            ? { ...currentField, options: [...currentField.options, option] }
+            : currentField,
+        ),
+      );
+      setSelectedVariants((currentSelections) => ({
+        ...currentSelections,
+        [field.id]: [...(currentSelections[field.id] ?? []), option.value],
+      }));
+      closeVariantValueDialog();
+      showSnackbar({ message: "تمت إضافة الخيار إلى خاصية الفئة.", tone: "success" });
+    } catch (error) {
+      setSaveError(
+        error instanceof Error ? error.message : "تعذر إضافة خيار الفئة.",
+      );
+    }
   }
 
   async function openConfirmation(event: React.FormEvent<HTMLFormElement>) {
@@ -1856,15 +1904,13 @@ export function CreateItemPage() {
       return;
     }
 
-    if (missingStockCount > 0 || missingPriceCount > 0) {
-      setSaveError(
-        `${t.missingCases}: ${t.inventoryDetails} ${missingStockCount} / ${t.priceDetails} ${missingPriceCount}`,
-      );
+    if (visibilityMode === "regions" && visibleRegionSlugs.length === 0) {
+      setSaveError("اختر منطقة واحدة على الأقل أو اجعل المنتج عامًا.");
       return;
     }
 
-    if (visibilityMode === "regions" && visibleRegionSlugs.length === 0) {
-      setSaveError("اختر منطقة واحدة على الأقل أو اجعل المنتج عامًا.");
+    if (!form.name.trim() || !selectedMarketId || !selectedCategoryId || !form.price) {
+      setSaveError("أدخل اسم المنتج والسعر، ثم اختر السوق والفئة.");
       return;
     }
 
@@ -1872,48 +1918,42 @@ export function CreateItemPage() {
     setSaveError("");
 
     try {
-      const selectedExistingImage = productImages.find((image) => !image.file);
+      const attributeValues = apiVariantSelections(activeFields, selectedVariants);
+      const combinations = apiVariantCombinations(activeFields, selectedVariants);
+      const skuPrefix = form.name.trim().replace(/\s+/g, "-").slice(0, 20) || "PRODUCT";
       const payload = {
+        market_id: Number(selectedMarketId),
+        category_id: Number(selectedCategoryId),
+        is_available: form.available,
         name: form.name.trim(),
         description: form.description.trim(),
-        category: form.subcategory,
-        product_category: form.subcategory,
-        price: form.price,
         discount: form.discount || "0",
-        stock: form.stock || "0",
-        is_active: form.available,
-        is_featured: form.featured,
-        market: selectedLocationMode === "shop" ? selectedShop : null,
-        visibility_mode: visibilityMode,
-        region_slugs: visibleRegionSlugs,
-        additions: productAddons.enabled ? productAddons.selectedIds : [],
-        variants: selectedVariants,
-        variant_details: variantDetails,
-        image_url: selectedExistingImage?.url ?? null,
+        image: null,
+        additions: productAddons.enabled
+          ? productAddons.selectedIds.map(Number)
+          : [],
+        attribute_values: attributeValues,
+        variants: (combinations.length ? combinations : [[]]).map(
+          (combination, index) => ({
+            price: form.price,
+            sku: `${skuPrefix}-${Date.now().toString(36)}-${index + 1}`.toUpperCase(),
+            attribute_values: combination,
+          }),
+        ),
       };
       const path = isEditing && editItemId
         ? `${adminApiPaths.products}${encodeURIComponent(editItemId)}/`
         : adminApiPaths.products;
-      const data = await sendAdminJson(apiFetch, path, {
+      await sendAdminJson(apiFetch, path, {
         method: isEditing ? "PATCH" : "POST",
         body: JSON.stringify(payload),
       });
-      const backendCode =
-        data && typeof data === "object"
-          ? String(
-              (data as BackendRecord).code ??
-                (data as BackendRecord).id ??
-                editProductCode ??
-                "",
-            )
-          : "";
-
-      setCreatedCode(
-        backendCode ||
-          editProductCode ||
-          `PRD-${Date.now().toString(36).toUpperCase()}`,
-      );
-      setConfirmationOpen(true);
+      showSnackbar({
+        message: isEditing
+          ? "تم تحديث المنتج بنجاح."
+          : "تم إنشاء المنتج بنجاح.",
+        tone: "success",
+      });
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : t.saveError);
     } finally {
@@ -1943,25 +1983,6 @@ export function CreateItemPage() {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:justify-end">
-          <button
-            aria-label={t.chooseProductLocation}
-            className="inline-flex h-10 w-full items-center justify-between gap-3 rounded-md border border-primary/35 bg-input px-3 text-sm font-medium text-foreground shadow-sm transition hover:border-primary/60 hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 sm:w-[300px]"
-            onClick={() => setLocationDialogOpen(true)}
-            type="button"
-          >
-            <span className="inline-flex min-w-0 items-center gap-2">
-              <MapPin className="size-4 shrink-0 text-primary" />
-              <span className="min-w-0">
-                <span className="block truncate text-start font-semibold">
-                  {t.region}
-                </span>
-                <span className="block truncate text-start text-xs text-muted-foreground">
-                  {selectedProductLocation}
-                </span>
-              </span>
-            </span>
-            <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
-          </button>
           <Link
             href="/items"
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium text-muted-foreground shadow-sm transition hover:bg-accent hover:text-accent-foreground"
@@ -1995,7 +2016,7 @@ export function CreateItemPage() {
             right={
               <StatusPill>
                 <BadgeCheck className="size-3.5" />
-                {activeCategory.label[language]}
+                {selectedSecondaryCategoryName}
               </StatusPill>
             }
           >
@@ -2112,83 +2133,41 @@ export function CreateItemPage() {
             </div>
 
             <div className="grid gap-4">
-              <LabelText label={t.category}>
-                <div
-                  aria-label={t.category}
-                  className="grid grid-cols-1 gap-3 md:grid-cols-2"
-                  role="radiogroup"
-                >
-                  {visibleProductCategories.map((category) => {
-                    const CategoryIcon = category.icon;
-                    const selected = form.category === category.id;
-                    const tone = categoryThemeTone(category.id);
-
-                    return (
-                      <button
-                        key={category.id}
-                        aria-checked={selected}
-                        className={cn(
-                          "relative flex min-h-[118px] min-w-0 items-center gap-4 overflow-hidden rounded-lg border p-4 text-start text-sm shadow-sm shadow-black/5 outline-none ring-1 ring-transparent transition hover:-translate-y-0.5 hover:shadow-lg focus:ring-2 dark:shadow-none",
-                          tone.card,
-                          selected && `ring-2 shadow-lg ${tone.selected}`,
-                        )}
-                        onClick={() => changeCategory(category.id)}
-                        role="radio"
-                        type="button"
-                      >
-                        <span
-                          className={cn(
-                            "absolute inset-y-4 end-0 w-1.5 rounded-s-full",
-                            tone.marker,
-                          )}
-                        />
-                        <span
-                          className={cn(
-                            "flex size-14 shrink-0 items-center justify-center rounded-lg shadow-lg transition",
-                            tone.icon,
-                          )}
-                        >
-                          <CategoryIcon className="size-6" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xl font-black leading-7 text-foreground">
-                            {category.label[language]}
-                          </span>
-                          <span className="mt-1 block line-clamp-2 text-sm font-medium leading-5 text-muted-foreground">
-                            {category.description[language]}
-                          </span>
-                        </span>
-                        {selected ? (
-                          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                            <Check className="size-4" />
-                          </span>
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              </LabelText>
-
               <div className="grid gap-4 md:grid-cols-2">
-                <LabelText label={t.subcategory}>
-                  <button
-                    type="button"
-                    onClick={() => setCategoryDialogOpen(true)}
-                    className="flex min-h-10 w-full items-center justify-between gap-3 rounded-md border border-border bg-input px-3 py-2 text-start text-sm shadow-sm outline-none transition hover:border-primary/40 hover:bg-accent/50 focus:border-primary focus:ring-2 focus:ring-primary/15"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate font-semibold text-foreground">
-                        {selectedSecondaryCategoryName}
-                      </span>
-                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                        {selectedSecondaryCategorySections}
-                      </span>
-                    </span>
-                    <span className="inline-flex shrink-0 items-center gap-2 rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
-                      <Layers3 className="size-3.5" />
-                      {t.chooseSubcategory}
-                    </span>
-                  </button>
+                <LabelText label="السوق">
+                  <AppSelect
+                    ariaLabel="السوق"
+                    className="h-10"
+                    disabled={catalogLoading || !markets.length}
+                    icon={<Store className="size-4" />}
+                    onValueChange={setSelectedMarketId}
+                    options={markets.map((market) => ({
+                      value: market.id,
+                      label: market.description
+                        ? `${market.name} - ${market.description}`
+                        : market.name,
+                    }))}
+                    placeholder={catalogLoading ? "جار التحميل..." : "اختر السوق"}
+                    value={selectedMarketId}
+                  />
+                </LabelText>
+
+                <LabelText label="الفئة">
+                  <AppSelect
+                    ariaLabel="الفئة"
+                    className="h-10"
+                    disabled={catalogLoading || !categories.length}
+                    icon={<Layers3 className="size-4" />}
+                    onValueChange={(value) => void changeApiCategory(value)}
+                    options={categories.map((category) => ({
+                      value: category.id,
+                      label: category.description
+                        ? `${category.name} - ${category.description}`
+                        : category.name,
+                    }))}
+                    placeholder={catalogLoading ? "جار التحميل..." : "اختر الفئة"}
+                    value={selectedCategoryId}
+                  />
                 </LabelText>
 
                 <LabelText label={t.addons}>
@@ -2226,8 +2205,8 @@ export function CreateItemPage() {
             title={t.variants}
             right={
               <StatusPill>
-                <activeCategory.icon className="size-3.5" />
-                {activeCategory.description[language]}
+                <Layers3 className="size-3.5" />
+                {selectedSecondaryCategoryName}
               </StatusPill>
             }
           >
@@ -2235,12 +2214,13 @@ export function CreateItemPage() {
               <div className="flex justify-start">
                 <Button
                   className="h-10"
+                  disabled={!selectedCategoryId}
                   onClick={openVariantFieldDialog}
                   type="button"
                   variant="outline"
                 >
                   <Plus className="size-4" />
-                  {t.addNewVariant}
+                  إضافة خاصية وخيارات
                 </Button>
               </div>
               {activeFields.length ? (
@@ -2262,34 +2242,6 @@ export function CreateItemPage() {
                     t={t}
                   />
                 ))}
-                <StockCombinationEditor
-                  activeKeys={visibleStockDetailKeys}
-                  combinations={activeStockCombinations}
-                  form={form}
-                  missingCount={missingStockCount}
-                  onAddRow={addStockDetailRow}
-                  onRemoveRow={(key) => removeDetailRow("stock", key)}
-                  onReplaceRow={(currentKey, nextKey) =>
-                    replaceDetailRow("stock", currentKey, nextKey)
-                  }
-                  onUpdateDetail={updateVariantDetail}
-                  t={t}
-                  variantDetails={variantDetails}
-                />
-                <PriceCombinationEditor
-                  activeKeys={visiblePriceDetailKeys}
-                  combinations={activeVariantCombinations}
-                  form={form}
-                  missingCount={missingPriceCount}
-                  onAddRow={addPriceDetailRow}
-                  onRemoveRow={(key) => removeDetailRow("price", key)}
-                  onReplaceRow={(currentKey, nextKey) =>
-                    replaceDetailRow("price", currentKey, nextKey)
-                  }
-                  onUpdateDetail={updateVariantDetail}
-                  t={t}
-                  variantDetails={variantDetails}
-                />
                 </>
               ) : (
                 <div className="rounded-lg border border-dashed bg-muted/20 p-5 text-sm text-muted-foreground">
@@ -2304,6 +2256,22 @@ export function CreateItemPage() {
             title={t.attributes}
           >
             <div className="grid gap-4">
+              <LabelText label={t.price}>
+                <div className="relative" dir="ltr">
+                  <Input
+                    className="h-10 pe-14 text-left"
+                    inputMode="decimal"
+                    onChange={(event) =>
+                      updateForm("price", discountInputValue(event.target.value))
+                    }
+                    placeholder="0.00"
+                    value={form.price}
+                  />
+                  <CurrencyText className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-xs font-bold text-muted-foreground">
+                    EGP
+                  </CurrencyText>
+                </div>
+              </LabelText>
               <LabelText label={t.variantDiscount}>
                 <div className="relative" dir="ltr">
                   <Input
@@ -2336,7 +2304,6 @@ export function CreateItemPage() {
             productImages={productImages}
             selectedData={selectedData}
             selectedImageIndex={selectedImageIndex}
-            selectedRegion={selectedProductLocation}
             selectedVariants={selectedVariants}
             variantDetails={variantDetails}
             title={productName}
@@ -2345,50 +2312,6 @@ export function CreateItemPage() {
         </aside>
       </div>
 
-      {confirmationOpen ? (
-        <ConfirmationDialog
-          activeCategory={activeCategory}
-          createdCode={createdCode || editProductCode}
-          form={form}
-          imageNames={productImages.map(
-            (image, index) => `${index + 1}. ${image.name}`,
-          )}
-          language={language}
-          onClose={() => setConfirmationOpen(false)}
-          selectedSecondaryCategoryName={selectedSecondaryCategoryName}
-          selectedRegion={selectedProductLocation}
-          visibilitySummary={visibilitySummary}
-          selectedAddonSummary={selectedAddonSummary}
-          t={t}
-          priceKeys={visiblePriceDetailKeys}
-          stockCombinations={activeStockCombinations}
-          stockKeys={visibleStockDetailKeys}
-          variantCombinations={activeVariantCombinations}
-          variantDetails={variantDetails}
-          variantSummary={variantSummary}
-        />
-      ) : null}
-      {locationDialogOpen ? (
-        <ProductLocationDialog
-          locationMode={selectedLocationMode}
-          onChangeLocationMode={changeLocationMode}
-          onChangeRegion={changeProductRegion}
-          onChangeShop={setSelectedShop}
-          onClose={() => setLocationDialogOpen(false)}
-          selectedRegion={selectedRegion}
-          selectedShop={selectedShop}
-          t={t}
-        />
-      ) : null}
-      {categoryDialogOpen ? (
-        <SecondaryCategoryPickerDialog
-          categories={categoryRows}
-          onChange={changeSecondaryCategory}
-          onClose={() => setCategoryDialogOpen(false)}
-          selectedSubcategory={form.subcategory}
-          t={t}
-        />
-      ) : null}
       {variantFieldDialogOpen ? (
         <VariantFieldDialog
           inputType={variantFieldInput}
@@ -2415,7 +2338,6 @@ export function CreateItemPage() {
             addVariantValue(
               variantValueField,
               variantValueName,
-              variantColorValue,
             )
           }
           onUsePopularColor={(option) => {
@@ -2428,7 +2350,7 @@ export function CreateItemPage() {
       {addonsDialogOpen ? (
         <AddonsPickerDialog
           addonCategoryOptions={addonCategoryOptions}
-          addons={addonRows}
+          addons={apiAddonRows}
           language={language}
           onChange={updateProductAddons}
           onClose={() => setAddonsDialogOpen(false)}
@@ -3965,7 +3887,6 @@ function LivePreview({
   productImages,
   selectedData,
   selectedImageIndex,
-  selectedRegion,
   selectedVariants,
   t,
   title,
@@ -3981,7 +3902,6 @@ function LivePreview({
   productImages: ProductImage[];
   selectedData: Array<{ label: string; value: string }>;
   selectedImageIndex: number;
-  selectedRegion: string;
   selectedVariants: Record<string, string[]>;
   t: (typeof copy)[Language];
   title: string;
@@ -4234,7 +4154,6 @@ function LivePreview({
             label={t.category}
             value={activeCategory.label[language]}
           />
-          <SummaryRow label={t.region} value={selectedRegion} />
           {selectedData.map((item) => (
             <SummaryRow key={`${item.label}-${item.value}`} {...item} />
           ))}
@@ -4421,14 +4340,8 @@ function ConfirmationDialog({
   onClose,
   selectedSecondaryCategoryName,
   selectedAddonSummary,
-  selectedRegion,
   visibilitySummary,
   t,
-  priceKeys,
-  stockCombinations,
-  stockKeys,
-  variantCombinations,
-  variantDetails,
   variantSummary,
 }: {
   activeCategory: ProductCategory;
@@ -4439,60 +4352,15 @@ function ConfirmationDialog({
   onClose: () => void;
   selectedSecondaryCategoryName: string;
   selectedAddonSummary: string;
-  selectedRegion: string;
   visibilitySummary: string;
   t: (typeof copy)[Language];
-  priceKeys: string[];
-  stockCombinations: VariantCombination[];
-  stockKeys: string[];
-  variantCombinations: VariantCombination[];
-  variantDetails: VariantDetails;
   variantSummary: Array<{ label: string; value: string }>;
 }) {
-  const stockRows = stockKeys.flatMap((key) => {
-    const entry = stockCombinations.find(
-      (combination) => combination.key === key,
-    );
-
-    if (!entry) {
-      return [];
-    }
-
-    const detail = variantDetailFor(variantDetails, entry.key, form);
-
-    return [
-      {
-        label: entry.label,
-        value: `${t.stock}: ${detail.stock || t.empty} / ${
-          isStockAvailable(detail.stock) ? t.available : t.empty
-        }`,
-      },
-    ];
-  });
-  const variantDetailRows = priceKeys.flatMap((key) => {
-    const combination = variantCombinations.find((entry) => entry.key === key);
-
-    if (!combination) {
-      return [];
-    }
-
-    const detail = variantDetailFor(variantDetails, combination.key, form);
-
-    return [
-      {
-        label: combination.label,
-        value: `${t.price}: ${detail.price || t.empty} / ${t.variantDiscount}: ${
-          detail.discount || t.empty
-        }`,
-      },
-    ];
-  });
   const rows = [
     ...(createdCode ? [{ label: t.productCode, value: createdCode }] : []),
     { label: t.productName, value: form.name.trim() || t.empty },
     { label: t.description, value: form.description.trim() || t.empty },
     { label: t.image, value: imageNames.join(", ") || t.empty },
-    { label: t.region, value: selectedRegion },
     { label: "مناطق الظهور", value: visibilitySummary },
     { label: t.category, value: activeCategory.label[language] },
     { label: t.subcategory, value: selectedSecondaryCategoryName },
@@ -4500,8 +4368,6 @@ function ConfirmationDialog({
     { label: t.price, value: form.price || t.empty },
     { label: t.stock, value: form.stock || t.empty },
     ...variantSummary,
-    ...stockRows,
-    ...variantDetailRows,
   ];
 
   return (

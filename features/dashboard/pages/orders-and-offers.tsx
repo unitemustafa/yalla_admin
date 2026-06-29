@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpDown,
   Banknote,
@@ -36,8 +36,10 @@ import { useAuth } from "@/features/auth/auth-provider";
 import {
   addonRowFromApi,
   adminApiPaths,
+  apiErrorMessage,
   apiList,
   fetchAdminRows,
+  productRowFromApi,
   readApiData,
   sendAdminJson,
   type BackendRecord,
@@ -58,7 +60,6 @@ import {
 } from "../primitives";
 import { cn } from "@/lib/utils";
 import { useSnackbar } from "../snackbar";
-import { useServiceCities } from "../cities-api";
 import { dashboardUsers, type DashboardUser } from "../users/default-dashboard-users";
 import {
   dashboardOrders,
@@ -1973,6 +1974,7 @@ export function AddonsPage() {
   const editAddonImageObjectUrlRef = useRef<string | null>(null);
   const [addonImagePreview, setAddonImagePreview] = useState("");
   const [addonImageName, setAddonImageName] = useState("");
+  const [addonImageFile, setAddonImageFile] = useState<File | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const visibleAddons = useMemo(
     () =>
@@ -2067,6 +2069,7 @@ export function AddonsPage() {
     addonImageObjectUrlRef.current = nextPreview;
     setAddonImagePreview(nextPreview);
     setAddonImageName(file.name);
+    setAddonImageFile(file);
     event.target.value = "";
   }
 
@@ -2088,6 +2091,7 @@ export function AddonsPage() {
     revokeAddonImageObjectUrl();
     setAddonImagePreview("");
     setAddonImageName("");
+    setAddonImageFile(null);
   }
 
   function closeAddonModal() {
@@ -2235,16 +2239,24 @@ export function AddonsPage() {
 
   async function createAddon() {
     try {
-      const data = await sendAdminJson(apiFetch, adminApiPaths.productAdditions, {
+      const formData = new FormData();
+      formData.set(
+        "classification_id",
+        String(classificationIdByName(currentAddonFormCategory)),
+      );
+      formData.set("name_ar", addonNameAr.trim());
+      formData.set("name_en", addonNameEn.trim());
+      formData.set("price", addonPrice.trim());
+      if (addonImageFile) formData.set("image", addonImageFile);
+
+      const response = await apiFetch(adminApiPaths.productAdditions, {
         method: "POST",
-        body: JSON.stringify({
-          classification_id: classificationIdByName(currentAddonFormCategory),
-          name_ar: addonNameAr.trim(),
-          name_en: addonNameEn.trim(),
-          price: addonPrice.trim(),
-          is_active: true,
-        }),
+        body: formData,
       });
+      const data = await readApiData(response);
+      if (!response.ok) {
+        throw new Error(apiErrorMessage(data, "تعذر إنشاء الإضافة في الباك."));
+      }
       const createdAddon = addonRowFromApi(data as BackendRecord, rows.length);
       setRows((currentRows) => [createdAddon, ...currentRows]);
       closeAddonModal();
@@ -2688,6 +2700,47 @@ type OfferCard = {
   iconBg: string;
 };
 
+const offerTypeLabels: Record<string, string> = {
+  package: "باكج",
+  flash: "فلاش",
+  discount: "خصم",
+  ad: "إعلان",
+  advertisement: "إعلان",
+  delivery: "توصيل",
+};
+
+const offerTypeValues: Record<string, string> = {
+  باكج: "package",
+  فلاش: "flash",
+  خصم: "discount",
+  إعلان: "ad",
+  توصيل: "delivery",
+};
+
+function offerCardFromApi(record: BackendRecord): OfferCard {
+  const type = offerTypeLabels[String(record.type ?? "")] ?? String(record.type ?? "خصم");
+  const meta = offerVisualMeta(type);
+  const startsAt = String(record.start_time ?? "");
+  const endsAt = String(record.end_time ?? "");
+  const expired = Number.isFinite(new Date(endsAt).getTime()) && new Date(endsAt).getTime() < Date.now();
+  const backendStatus = String(record.status ?? "active").toLowerCase();
+
+  return {
+    id: String(record.id),
+    title: String(record.title ?? `عرض #${record.id}`),
+    type,
+    method: "تطبيق تلقائي",
+    status: expired ? "منتهي" : backendStatus === "active" ? "نشط" : "متوقف",
+    period: `${startsAt ? new Date(startsAt).toLocaleDateString("ar-EG") : "—"} → ${endsAt ? new Date(endsAt).toLocaleDateString("ar-EG") : "—"}`,
+    startsAt,
+    endsAt,
+    image: typeof record.image === "string" ? record.image : undefined,
+    icon: meta.icon,
+    accent: meta.accent,
+    iconBg: meta.bg,
+  };
+}
+
 const initialOffers: OfferCard[] = [
   {
     id: "1",
@@ -2927,8 +2980,9 @@ function OfferVisual({
 
 export function OffersPage() {
   const router = useRouter();
+  const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
-  const [offers, setOffers] = useState(initialOffers);
+  const [offers, setOffers] = useState<OfferCard[]>([]);
   const [now, setNow] = useState<number | null>(null);
   const activeOffers = offers.filter((offer) => offer.status === "نشط").length;
   const expiredOffers = offers.filter((offer) => offer.status === "منتهي").length;
@@ -2944,15 +2998,53 @@ export function OffersPage() {
     };
   }, []);
 
-  function toggleOfferStatus(offerId: string) {
+  useEffect(() => {
+    let active = true;
+
+    void apiFetch(adminApiPaths.offers)
+      .then(async (response) => {
+        const data = await readApiData(response);
+        if (!response.ok) throw new Error("تعذر تحميل العروض من الباك.");
+        if (active) setOffers(apiList(data).map(offerCardFromApi));
+      })
+      .catch((error) => {
+        if (active) {
+          showSnackbar({
+            message: error instanceof Error ? error.message : "تعذر تحميل العروض.",
+            tone: "danger",
+          });
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [apiFetch, showSnackbar]);
+
+  async function toggleOfferStatus(offerId: string) {
+    const offer = offers.find((item) => item.id === offerId);
+    if (!offer) return;
+    const nextStatus = offer.status === "نشط" ? "inactive" : "active";
+
+    try {
+      const data = await sendAdminJson(
+        apiFetch,
+        `${adminApiPaths.offers}${encodeURIComponent(offerId)}/`,
+        { method: "PATCH", body: JSON.stringify({ status: nextStatus }) },
+      );
+      const updated = offerCardFromApi(data as BackendRecord);
     setOffers((currentOffers) =>
       currentOffers.map((offer) =>
-        offer.id === offerId
-          ? { ...offer, status: offer.status === "نشط" ? "متوقف" : "نشط" }
-          : offer,
+          offer.id === offerId ? updated : offer,
       ),
     );
-    showSnackbar({ message: "تم تحديث حالة العرض." });
+      showSnackbar({ message: "تم تحديث حالة العرض.", tone: "success" });
+    } catch (error) {
+      showSnackbar({
+        message: error instanceof Error ? error.message : "تعذر تحديث العرض.",
+        tone: "danger",
+      });
+    }
   }
 
   function editOffer(offer: OfferCard) {
@@ -2960,32 +3052,21 @@ export function OffersPage() {
     router.push(`/offers/create?edit=${offer.id}`);
   }
 
-  function deleteOffer(offerId: string) {
-    const deletedOfferIndex = offers.findIndex((offer) => offer.id === offerId);
-    const deletedOffer = offers[deletedOfferIndex];
-
-    if (!deletedOffer) {
-      return;
+  async function deleteOffer(offerId: string) {
+    try {
+      await sendAdminJson(
+        apiFetch,
+        `${adminApiPaths.offers}${encodeURIComponent(offerId)}/`,
+        { method: "DELETE" },
+      );
+      setOffers((currentOffers) => currentOffers.filter((offer) => offer.id !== offerId));
+      showSnackbar({ message: "تم حذف العرض.", tone: "success" });
+    } catch (error) {
+      showSnackbar({
+        message: error instanceof Error ? error.message : "تعذر حذف العرض.",
+        tone: "danger",
+      });
     }
-
-    setOffers((currentOffers) => currentOffers.filter((offer) => offer.id !== offerId));
-    showSnackbar({
-      message: "تم حذف العرض.",
-      tone: "danger",
-      actionLabel: "تراجع",
-      durationMs: 5000,
-      onAction: () => {
-        setOffers((currentOffers) => {
-          if (currentOffers.some((offer) => offer.id === deletedOffer.id)) {
-            return currentOffers;
-          }
-
-          const nextOffers = [...currentOffers];
-          nextOffers.splice(deletedOfferIndex, 0, deletedOffer);
-          return nextOffers;
-        });
-      },
-    });
   }
 
   return (
@@ -3098,7 +3179,17 @@ const weekDayShortLabels: Record<(typeof weekDayOptions)[number], string> = {
   السبت: "س",
   الأحد: "ح",
 };
+const weekDayApiValues: Record<string, string> = {
+  الاثنين: "monday",
+  الثلاثاء: "tuesday",
+  الأربعاء: "wednesday",
+  الخميس: "thursday",
+  الجمعة: "friday",
+  السبت: "saturday",
+  الأحد: "sunday",
+};
 const selectableItems = itemRows;
+const OfferProductsContext = createContext<ItemRow[]>(selectableItems);
 const activeSelectableItems = selectableItems.filter((item) => item.active);
 const defaultSelectableItems =
   activeSelectableItems.length > 0 ? activeSelectableItems : selectableItems;
@@ -3107,14 +3198,6 @@ const packageSeedItems =
   preferredPackageSeedItems.length > 0
     ? preferredPackageSeedItems
     : defaultSelectableItems.slice(0, 3);
-
-type OfferVisibilityMode = "general" | "regions";
-
-function itemCoversOfferRegions(item: ItemRow, offerRegionSlugs: string[]) {
-  if (item.visibilityMode !== "regions") return true;
-  const itemRegions = item.regionSlugs ?? [];
-  return offerRegionSlugs.every((slug) => itemRegions.includes(slug));
-}
 
 type BundleLine = {
   id: string;
@@ -3139,6 +3222,10 @@ function fallbackSelectableItem(): ItemRow {
 
 function selectedBundleItem(itemId: string): ItemRow {
   return selectableItems.find((item) => item.id === itemId) ?? fallbackSelectableItem();
+}
+
+function selectedItemFrom(rows: ItemRow[], itemId: string): ItemRow {
+  return rows.find((item) => item.id === itemId) ?? rows[0] ?? fallbackSelectableItem();
 }
 
 function selectedOfferItem(itemId: string): ItemRow {
@@ -3193,8 +3280,9 @@ function ProductPicker({
   value: string;
   onChange: (itemId: string) => void;
 }) {
+  const products = useContext(OfferProductsContext);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const selectedItem = selectedOfferItem(value);
+  const selectedItem = selectedItemFrom(products, value);
 
   function selectProduct(itemId: string) {
     onChange(itemId);
@@ -3273,14 +3361,15 @@ function PackageProductSearchModal({
   onClose: () => void;
   onSelect: (itemId: string) => void;
 }) {
+  const products = useContext(OfferProductsContext);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
-  const categories = useMemo(() => uniqueProductCategories(selectableItems), []);
+  const categories = useMemo(() => uniqueProductCategories(products), [products]);
   const normalizedQuery = normalizeProductSearch(query);
   const filteredItems = useMemo(
     () =>
-      selectableItems.filter((item) => {
+      products.filter((item) => {
         const matchesSearch = itemMatchesProductSearch(item, normalizedQuery);
         const matchesCategory = category === "all" || item.category === category;
         const matchesStatus =
@@ -3288,7 +3377,7 @@ function PackageProductSearchModal({
 
         return matchesSearch && matchesCategory && matchesStatus;
       }),
-    [category, normalizedQuery, status],
+    [category, normalizedQuery, products, status],
   );
 
   useEffect(() => {
@@ -3463,7 +3552,7 @@ function PackageProductSearchModal({
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-muted/10 px-5 py-3">
           <div className="text-xs text-muted-foreground">
-            ظاهر {filteredItems.length} من {selectableItems.length} منتج
+            ظاهر {filteredItems.length} من {products.length} منتج
           </div>
           <Button type="button" variant="outline" className="h-10" onClick={onClose}>
             إغلاق
@@ -3491,11 +3580,12 @@ function SingleOfferProductPanel({
   discountPercent?: number;
   contextLabel?: string;
 }) {
+  const products = useContext(OfferProductsContext);
   const [productsOpen, setProductsOpen] = useState(false);
   const [productSearchOpen, setProductSearchOpen] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const selectedItem = selectedItemId
-    ? selectableItems.find((item) => item.id === selectedItemId) ?? null
+    ? products.find((item) => item.id === selectedItemId) ?? null
     : null;
   const hasSelectedProduct = Boolean(selectedItem);
   const productTotal =
@@ -3559,17 +3649,15 @@ function SingleOfferProductPanel({
             </p>
           </button>
           <div className="flex flex-wrap items-center gap-2">
-            {!hasSelectedProduct ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="h-9"
-                onClick={() => setProductSearchOpen(true)}
-              >
-                <Plus className="size-4" />
-                إضافة منتج
-              </Button>
-            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9"
+              onClick={() => setProductSearchOpen(true)}
+            >
+              <Plus className="size-4" />
+              إضافة منتج
+            </Button>
             {hasSelectedProduct ? (
               <button
                 type="button"
@@ -4158,11 +4246,17 @@ function ScheduleTimeField({
 }
 
 export function CreateOfferPage() {
+  const { apiFetch } = useAuth();
+  const router = useRouter();
   const { showSnackbar } = useSnackbar();
-  const { cities: serviceCities, loading: citiesLoading } = useServiceCities({ activeOnly: true });
   const [editingOfferId, setEditingOfferId] = useState("");
-  const editingOffer = initialOffers.find((offer) => offer.id === editingOfferId);
-  const formMode = editingOffer ? "edit" : "create";
+  const [editingOffer, setEditingOffer] = useState<OfferCard | null>(null);
+  const formMode = editingOfferId ? "edit" : "create";
+  const [markets, setMarkets] = useState<Array<{ id: string; name: string }>>([]);
+  const [offerProducts, setOfferProducts] = useState<ItemRow[]>([]);
+  const [selectedMarketId, setSelectedMarketId] = useState("");
+  const [savingOffer, setSavingOffer] = useState(false);
+  const [offerStatus, setOfferStatus] = useState("active");
   const [offerTitle, setOfferTitle] = useState(editingOffer?.title ?? "");
   const [offerDescription, setOfferDescription] = useState("");
   const offerImageObjectUrlRef = useRef<string | null>(null);
@@ -4192,13 +4286,13 @@ export function CreateOfferPage() {
   const flashDiscountRate = clampDiscountPercent(Number(flashDiscountPercent) || 0);
   const packageDiscountRate = clampDiscountPercent(Number(packageDiscountPercent) || 0);
   const packageSubtotal = bundleItems.reduce((total, line) => {
-    const item = selectedBundleItem(line.itemId);
+    const item = selectedItemFrom(offerProducts, line.itemId);
     return total + parseItemPrice(item.price) * line.quantity;
   }, 0);
   const packageFinalPrice = packageSubtotal * (1 - packageDiscountRate / 100);
   const packageSaving = Math.max(packageSubtotal - packageFinalPrice, 0);
   const packageProductNames = bundleItems
-    .map((line) => selectedBundleItem(line.itemId).name)
+    .map((line) => selectedItemFrom(offerProducts, line.itemId).name)
     .slice(0, 3)
     .join("، ");
   const packageProductIds = bundleItems.map((line) => line.itemId);
@@ -4210,9 +4304,8 @@ export function CreateOfferPage() {
   const [startTime, setStartTime] = useState(initialScheduleValues.time);
   const [endTime, setEndTime] = useState(initialScheduleValues.time);
   const [activeWeekDays, setActiveWeekDays] = useState<string[]>([]);
-  const [offerVisibilityMode, setOfferVisibilityMode] =
-    useState<OfferVisibilityMode>("general");
-  const [offerRegionSlugs, setOfferRegionSlugs] = useState<string[]>([]);
+  const [useLimits, setUseLimits] = useState("");
+  const [userLimit, setUserLimit] = useState("");
 
   function setScheduleDateOpen(field: "start" | "end", open: boolean) {
     setOpenScheduleDate(open ? field : null);
@@ -4265,7 +4358,7 @@ export function CreateOfferPage() {
   }
 
   function addBundleProduct(itemId: string) {
-    const selectedItem = selectableItems.find((item) => item.id === itemId);
+    const selectedItem = offerProducts.find((item) => item.id === itemId);
 
     if (!selectedItem) return;
 
@@ -4324,94 +4417,104 @@ export function CreateOfferPage() {
     });
   }
 
-  function toggleOfferRegion(regionSlug: string) {
-    setOfferRegionSlugs((currentSlugs) =>
-      currentSlugs.includes(regionSlug)
-        ? currentSlugs.filter((slug) => slug !== regionSlug)
-        : [...currentSlugs, regionSlug],
-    );
-  }
-
   function selectedOfferItems() {
     if (selectedType === "باكج") {
-      return bundleItems.map((line) => selectedBundleItem(line.itemId));
+      return bundleItems.map((line) => selectedItemFrom(offerProducts, line.itemId));
     }
     if (selectedType === "فلاش") {
       return flashProductIds
-        .map((itemId) => selectableItems.find((item) => item.id === itemId))
+        .map((itemId) => offerProducts.find((item) => item.id === itemId))
         .filter((item): item is ItemRow => Boolean(item));
     }
     if (selectedType === "توصيل") {
-      const item = selectableItems.find((currentItem) => currentItem.id === deliveryProductId);
+      const item = offerProducts.find((currentItem) => currentItem.id === deliveryProductId);
       return item ? [item] : [];
     }
     if (selectedType === "إعلان" && adLinkType === "product") {
-      const item = selectableItems.find((currentItem) => currentItem.id === adProductId);
+      const item = offerProducts.find((currentItem) => currentItem.id === adProductId);
       return item ? [item] : [];
     }
-    const item = selectableItems.find((currentItem) => currentItem.id === discountProductId);
+    const item = offerProducts.find((currentItem) => currentItem.id === discountProductId);
     return item ? [item] : [];
   }
 
-  function saveOffer() {
-    if (offerVisibilityMode === "regions" && offerRegionSlugs.length === 0) {
-      showSnackbar({
-        message: "اختر منطقة واحدة على الأقل أو اجعل العرض عامًا.",
-        tone: "danger",
-      });
+  async function saveOffer() {
+    if (savingOffer) return;
+    if (!offerTitle.trim() || !selectedMarketId) {
+      showSnackbar({ message: "أدخل عنوان العرض واختر السوق.", tone: "danger" });
+      return;
+    }
+    const productIds = Array.from(
+      new Set(selectedOfferItems().map((item) => Number(item.id)).filter(Number.isFinite)),
+    );
+    if (!productIds.length) {
+      showSnackbar({ message: "اختر منتجًا واحدًا على الأقل للعرض.", tone: "danger" });
       return;
     }
 
-    if (offerVisibilityMode === "regions") {
-      const invalidItems = selectedOfferItems().filter(
-        (item) => !itemCoversOfferRegions(item, offerRegionSlugs),
-      );
+    const discount =
+      selectedType === "فلاش"
+        ? flashDiscountPercent
+        : selectedType === "باكج"
+          ? packageDiscountPercent
+          : selectedType === "خصم"
+            ? discountPercent
+            : "0";
+    const payload = {
+      market_id: Number(selectedMarketId),
+      product_ids: productIds,
+      title: offerTitle.trim(),
+      description: offerDescription.trim(),
+      image: null,
+      type: offerTypeValues[selectedType] ?? "discount",
+      discount,
+      start_time: new Date(`${startDate}T${startTime}`).toISOString(),
+      end_time: new Date(`${endDate}T${endTime}`).toISOString(),
+      active_days: activeWeekDays.map((day) => weekDayApiValues[day]).filter(Boolean),
+      use_limits: useLimits ? Number(useLimits) : null,
+      user_limit: userLimit ? Number(userLimit) : null,
+      status: offerStatus,
+    };
 
-      if (invalidItems.length > 0) {
-        showSnackbar({
-          message: `لا يمكن حفظ العرض. المنتجات التالية غير متاحة لكل مناطق العرض: ${invalidItems
-            .map((item) => item.name)
-            .join("، ")}.`,
-          tone: "danger",
-        });
-        return;
-      }
-    }
-
-    showSnackbar({
-      message:
+    setSavingOffer(true);
+    try {
+      await sendAdminJson(
+        apiFetch,
         formMode === "edit"
-          ? "تم حفظ تعديل العرض بنجاح."
-          : "تم إنشاء العرض بنجاح.",
-    });
+          ? `${adminApiPaths.offers}${encodeURIComponent(editingOfferId)}/`
+          : adminApiPaths.offers,
+        {
+          method: formMode === "edit" ? "PATCH" : "POST",
+          body: JSON.stringify(payload),
+        },
+      );
+      showSnackbar({
+        message:
+          formMode === "edit"
+            ? "تم حفظ تعديل العرض بنجاح."
+            : "تم إنشاء العرض بنجاح.",
+        tone: "success",
+      });
+      router.push("/offers");
+    } catch (error) {
+      showSnackbar({
+        message: error instanceof Error ? error.message : "تعذر حفظ العرض.",
+        tone: "danger",
+      });
+    } finally {
+      setSavingOffer(false);
+    }
   }
 
   useEffect(() => {
+    let active = true;
     const timeoutId = window.setTimeout(() => {
       const searchParams = new URLSearchParams(window.location.search);
       const nextEditingOfferId = searchParams.get("edit") ?? "";
-      const nextEditingOffer = initialOffers.find((offer) => offer.id === nextEditingOfferId);
 
       setEditingOfferId(nextEditingOfferId);
 
-      if (nextEditingOffer) {
-        const fallbackScheduleDate = new Date();
-        const nextStartDate = parseOfferEndDate(nextEditingOffer.startsAt) ?? fallbackScheduleDate;
-        const nextEndDate = parseOfferEndDate(nextEditingOffer.endsAt) ?? fallbackScheduleDate;
-        setSelectedType(nextEditingOffer.type);
-        setOfferTitle(nextEditingOffer.title);
-        setOfferDescription("");
-        revokeOfferImageObjectUrl();
-        setOfferImagePreview(nextEditingOffer.image ?? "");
-        setOfferImageName(nextEditingOffer.image ? "صورة العرض الحالية" : "");
-        setStartDate(formatDateInputValue(nextStartDate));
-        setStartTime(formatTimeInputValue(nextStartDate));
-        setEndDate(formatDateInputValue(nextEndDate));
-        setEndTime(formatTimeInputValue(nextEndDate));
-        setActiveWeekDays([]);
-        setOfferVisibilityMode("general");
-        setOfferRegionSlugs([]);
-      } else {
+      if (!nextEditingOfferId) {
         const nextScheduleValues = currentScheduleValues();
         setOfferTitle("");
         setOfferDescription("");
@@ -4423,17 +4526,113 @@ export function CreateOfferPage() {
         setStartTime(nextScheduleValues.time);
         setEndTime(nextScheduleValues.time);
         setActiveWeekDays([]);
-        setOfferVisibilityMode("general");
-        setOfferRegionSlugs([]);
         setOpenScheduleDate(null);
         setOpenScheduleTime(null);
       }
     }, 0);
 
-    return () => window.clearTimeout(timeoutId);
-  }, []);
+    void apiFetch(adminApiPaths.markets)
+      .then(async (response) => {
+        const data = await readApiData(response);
+        if (!response.ok) throw new Error("تعذر تحميل الأسواق.");
+        if (!active) return;
+        const nextMarkets = apiList(data).map((record) => ({
+          id: String(record.id),
+          name: String(record.name ?? `سوق #${record.id}`),
+        }));
+        setMarkets(nextMarkets);
+        setSelectedMarketId((current) => current || nextMarkets[0]?.id || "");
+      })
+      .catch((error) => {
+        if (active) showSnackbar({ message: error instanceof Error ? error.message : "تعذر تحميل الأسواق.", tone: "danger" });
+      });
+
+    void fetchAdminRows(apiFetch, adminApiPaths.products, productRowFromApi)
+      .then((products) => {
+        if (!active) return;
+        setOfferProducts(products);
+        setDiscountProductId((current) =>
+          products.some((product) => product.id === current)
+            ? current
+            : products[0]?.id ?? "",
+        );
+        setBundleItems((current) => {
+          const valid = current.filter((line) =>
+            products.some((product) => product.id === line.itemId),
+          );
+          return valid.length
+            ? valid
+            : products.slice(0, 3).map((product) => ({
+                id: `bundle-${product.id}`,
+                itemId: product.id,
+                quantity: 1,
+              }));
+        });
+      })
+      .catch((error) => {
+        if (active) showSnackbar({ message: error instanceof Error ? error.message : "تعذر تحميل المنتجات.", tone: "danger" });
+      });
+
+    const searchParams = new URLSearchParams(window.location.search);
+    const offerId = searchParams.get("edit");
+    if (offerId) {
+      void apiFetch(`${adminApiPaths.offers}${encodeURIComponent(offerId)}/`)
+        .then(async (response) => {
+          const data = await readApiData(response);
+          if (!response.ok || !data || typeof data !== "object") {
+            throw new Error("تعذر تحميل بيانات العرض.");
+          }
+          if (!active) return;
+          const record = data as BackendRecord;
+          const card = offerCardFromApi(record);
+          const market = record.market as BackendRecord | undefined;
+          const products = Array.isArray(record.products) ? record.products as BackendRecord[] : [];
+          const productIds = products.map((product) => String(product.id));
+          const start = new Date(String(record.start_time));
+          const end = new Date(String(record.end_time));
+          const apiDays = Array.isArray(record.active_days) ? record.active_days.map(String) : [];
+
+          setEditingOffer(card);
+          setOfferTitle(card.title);
+          setOfferDescription(String(record.description ?? ""));
+          setSelectedType(card.type);
+          setSelectedMarketId(String(market?.id ?? record.market_id ?? ""));
+          setOfferImagePreview(card.image ?? "");
+          setOfferImageName(card.image ? "صورة العرض الحالية" : "");
+          setStartDate(formatDateInputValue(start));
+          setStartTime(formatTimeInputValue(start));
+          setEndDate(formatDateInputValue(end));
+          setEndTime(formatTimeInputValue(end));
+          setActiveWeekDays(
+            weekDayOptions.filter((day) => apiDays.includes(weekDayApiValues[day])),
+          );
+          setUseLimits(record.use_limits == null ? "" : String(record.use_limits));
+          setUserLimit(record.user_limit == null ? "" : String(record.user_limit));
+          setOfferStatus(String(record.status ?? "active"));
+          if (card.type === "فلاش") {
+            setFlashProductIds(productIds);
+            setFlashDiscountPercent(String(record.discount ?? "0"));
+          } else if (card.type === "باكج") {
+            setBundleItems(productIds.map((itemId) => ({ id: `bundle-${itemId}`, itemId, quantity: 1 })));
+            setPackageDiscountPercent(String(record.discount ?? "0"));
+          } else {
+            setDiscountProductId(productIds[0] ?? "");
+            setDiscountPercent(String(record.discount ?? "0"));
+          }
+        })
+        .catch((error) => {
+          if (active) showSnackbar({ message: error instanceof Error ? error.message : "تعذر تحميل العرض.", tone: "danger" });
+        });
+    }
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [apiFetch, showSnackbar]);
 
   return (
+    <OfferProductsContext.Provider value={offerProducts}>
     <div className="px-6 py-8">
       <PageTitle
         title={formMode === "edit" ? "تعديل العرض" : "إنشاء عرض"}
@@ -4456,10 +4655,11 @@ export function CreateOfferPage() {
             </Link>
             <Button
               className="h-10"
+              disabled={savingOffer}
               onClick={saveOffer}
             >
               <CheckCircle2 className="size-4" />
-              {formMode === "edit" ? "حفظ التعديل" : "إنشاء"}
+              {savingOffer ? "جار الحفظ..." : formMode === "edit" ? "حفظ التعديل" : "إنشاء"}
             </Button>
           </>
         }
@@ -4491,6 +4691,34 @@ export function CreateOfferPage() {
                     placeholder="وصف مختصر يظهر للعميل..."
                   />
                 </Field>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="السوق *">
+                <AppSelect
+                  ariaLabel="السوق"
+                  className="h-10 bg-input"
+                  onValueChange={setSelectedMarketId}
+                  options={markets.map((market) => ({
+                    value: market.id,
+                    label: market.name,
+                  }))}
+                  placeholder="اختر السوق"
+                  value={selectedMarketId}
+                />
+              </Field>
+              <Field label="الحالة *">
+                <AppSelect
+                  ariaLabel="حالة العرض"
+                  className="h-10 bg-input"
+                  onValueChange={setOfferStatus}
+                  options={[
+                    { value: "active", label: "نشط" },
+                    { value: "inactive", label: "متوقف" },
+                  ]}
+                  value={offerStatus}
+                />
+              </Field>
               </div>
 
               <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/15 p-3 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-center">
@@ -4658,7 +4886,7 @@ export function CreateOfferPage() {
                   {packageProductsOpen ? (
                     <div className="grid gap-3 border-t bg-background/30 p-3">
                       {bundleItems.map((line) => {
-                        const item = selectedBundleItem(line.itemId);
+                        const item = selectedItemFrom(offerProducts, line.itemId);
                         const lineTotal = parseItemPrice(item.price) * line.quantity;
 
                         return (
@@ -4799,79 +5027,8 @@ export function CreateOfferPage() {
             )}
           </FormCard>
 
-          <FormCard title="مناطق الظهور">
-            <div className="grid gap-4">
-              <div className="grid gap-2 rounded-lg border bg-muted/20 p-1 sm:grid-cols-2">
-                {[
-                  { value: "general" as const, label: "عام" },
-                  { value: "regions" as const, label: "مناطق محددة" },
-                ].map((option) => {
-                  const selected = offerVisibilityMode === option.value;
-
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => setOfferVisibilityMode(option.value)}
-                      className={cn(
-                        "inline-flex h-10 items-center justify-center rounded-md px-3 text-sm font-black transition",
-                        selected
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                      )}
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {offerVisibilityMode === "regions" ? (
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {serviceCities.map((city) => {
-                    const selected = offerRegionSlugs.includes(city.slug);
-
-                    return (
-                      <button
-                        key={city.id}
-                        type="button"
-                        aria-pressed={selected}
-                        onClick={() => toggleOfferRegion(city.slug)}
-                        className={cn(
-                          "flex min-h-11 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-start text-sm font-bold transition hover:border-primary/50 hover:bg-accent/50",
-                          selected &&
-                            "border-primary bg-primary/10 text-primary ring-1 ring-primary/20",
-                        )}
-                      >
-                        <span className="truncate">{city.name_ar || city.name}</span>
-                        {selected ? <CheckCircle2 className="size-4 shrink-0" /> : null}
-                      </button>
-                    );
-                  })}
-                  {!citiesLoading && serviceCities.length === 0 ? (
-                    <p className="sm:col-span-2 lg:col-span-3 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                      لا توجد مدن نشطة. أضف مدينة من قسم المدن أولًا.
-                    </p>
-                  ) : null}
-                </div>
-              ) : (
-                <p className="rounded-md border border-dashed bg-muted/20 px-3 py-3 text-sm font-medium text-muted-foreground">
-                  العرض العام يظهر لكل المستخدمين. العرض المحدد لا يظهر لمستخدم &quot;عام&quot; ولا خارج مناطقه.
-                </p>
-              )}
-            </div>
-          </FormCard>
-
           <FormCard title="الجدولة">
-            <div
-              className={cn(
-                "grid gap-4",
-                selectedType === "فلاش" ? "lg:grid-cols-2" : "lg:grid-cols-4",
-              )}
-            >
-              {selectedType !== "فلاش" ? (
-                <>
+            <div className="grid gap-4 lg:grid-cols-4">
                   <Field label="تاريخ البداية *">
                     <ScheduleDateField
                       value={startDate}
@@ -4894,8 +5051,6 @@ export function CreateOfferPage() {
                       onOpenChange={(open) => setScheduleDateOpen("end", open)}
                     />
                   </Field>
-                </>
-              ) : null}
               <Field label="بداية الوقت">
                 <ScheduleTimeField
                   value={startTime}
@@ -4915,7 +5070,6 @@ export function CreateOfferPage() {
                 />
               </Field>
             </div>
-            {selectedType !== "فلاش" ? (
               <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <div className="text-sm font-semibold">أيام التفعيل</div>
@@ -4975,24 +5129,36 @@ export function CreateOfferPage() {
                   })}
                 </div>
               </div>
-            ) : null}
           </FormCard>
 
-          {selectedType !== "إعلان" ? (
             <FormCard title="حدود الاستخدام">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="إجمالي الاستخدام">
-                  <Input className="h-10" placeholder="غير محدود" />
+                  <Input
+                    className="h-10"
+                    min="1"
+                    onChange={(event) => setUseLimits(event.target.value)}
+                    placeholder="غير محدود"
+                    type="number"
+                    value={useLimits}
+                  />
                 </Field>
                 <Field label="الحد لكل عميل">
-                  <Input className="h-10" placeholder="غير محدود" />
+                  <Input
+                    className="h-10"
+                    min="1"
+                    onChange={(event) => setUserLimit(event.target.value)}
+                    placeholder="غير محدود"
+                    type="number"
+                    value={userLimit}
+                  />
                 </Field>
               </div>
             </FormCard>
-          ) : null}
         </div>
 
       </div>
     </div>
+    </OfferProductsContext.Provider>
   );
 }

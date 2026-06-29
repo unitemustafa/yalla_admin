@@ -2106,7 +2106,7 @@
                       "bearer": [
                         {
                           "key": "token",
-                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNDAxMzk0LCJpYXQiOjE3ODI0MDA0OTQsImp0aSI6Ijc2ZGUxMWU4YTk4ZTQ3YTlhODQxNjk5NmQ2NjBhNmM1IiwidXNlcl9pZCI6IjEifQ.YxjIy5JV4rpaHnRy7Wgb-tWxR937cDuW2qQDp4pwS6E",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjg0MjgyLCJpYXQiOjE3ODI2ODMzODIsImp0aSI6IjZiMTBkMGY4NjhiMTQzOWU4NzI5Mzc1NjFiMWY5MTk3IiwidXNlcl9pZCI6IjEifQ.WHTDx8xRxo8dpqV1dnouxRhJKnlJFi3TZ3petVKuA7c",
                           "type": "string"
                         }
                       ]
@@ -2753,7 +2753,7 @@
                       "bearer": [
                         {
                           "key": "token",
-                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNDY2NDk4LCJpYXQiOjE3ODI0NjU1OTgsImp0aSI6ImM4NzhhZDU4NzcxZTQ2YjNiNjU3MDlhN2JmZDk2ODY1IiwidXNlcl9pZCI6IjEifQ.TNios_SyVirjh_YmkrsIq4TkB6Lm4Ry3fjNMiG1aLDk",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjg0MjgyLCJpYXQiOjE3ODI2ODMzODIsImp0aSI6IjZiMTBkMGY4NjhiMTQzOWU4NzI5Mzc1NjFiMWY5MTk3IiwidXNlcl9pZCI6IjEifQ.WHTDx8xRxo8dpqV1dnouxRhJKnlJFi3TZ3petVKuA7c",
                           "type": "string"
                         }
                       ]
@@ -3178,7 +3178,7 @@
                       "bearer": [
                         {
                           "key": "token",
-                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNDcwNTgxLCJpYXQiOjE3ODI0Njk2ODEsImp0aSI6IjJjODI3MTJmZDVkYTQzMTk4MTg5NTQxYWMzMDYyYWZlIiwidXNlcl9pZCI6IjEifQ.TF-ZlVLlVutCLBbSqPW8TFAJR1Kawc5d1nCzGZsXfNs",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjg0MjgyLCJpYXQiOjE3ODI2ODMzODIsImp0aSI6IjZiMTBkMGY4NjhiMTQzOWU4NzI5Mzc1NjFiMWY5MTk3IiwidXNlcl9pZCI6IjEifQ.WHTDx8xRxo8dpqV1dnouxRhJKnlJFi3TZ3petVKuA7c",
                           "type": "string"
                         }
                       ]
@@ -3277,7 +3277,7 @@
                       "bearer": [
                         {
                           "key": "token",
-                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNDcwNTgxLCJpYXQiOjE3ODI0Njk2ODEsImp0aSI6IjJjODI3MTJmZDVkYTQzMTk4MTg5NTQxYWMzMDYyYWZlIiwidXNlcl9pZCI6IjEifQ.TF-ZlVLlVutCLBbSqPW8TFAJR1Kawc5d1nCzGZsXfNs",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjg2ODE5LCJpYXQiOjE3ODI2ODU5MTksImp0aSI6ImY0MTA5M2FmODY3ZTQ5YzBhMTNlM2ExYzE5N2E3N2I3IiwidXNlcl9pZCI6IjEifQ.83BtOlp-C5faCpbFKm6KRllVgBhPFuCKtTHck-aAYOA",
                           "type": "string"
                         }
                       ]
@@ -3286,7 +3286,7 @@
                     "header": [],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"classification_id\": 3,\n  \"name\": \"عصائر\",\n  \"type\": \"فئات مميزة\",\n  \"description\": \"مشروبات طازجة\"\n}",
+                      "raw": "{\n  \"classification_id\": 3,\n  \"name\": \"لحوم\",\n  \"type\": \"فئات مميزة\",\n  \"description\": \"لحم مشوي\",\n  \"image\" : null\n}",
                       "options": {
                         "raw": {
                           "language": "json"
@@ -3837,7 +3837,7 @@
                       "bearer": [
                         {
                           "key": "token",
-                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNDkxMjc5LCJpYXQiOjE3ODI0OTAzNzksImp0aSI6IjU3NDZkNGVjNDZhOTRjN2Y4ZjJkZDdkNjhlMTkwMjQzIiwidXNlcl9pZCI6IjEifQ.8vqz32tQp1vb30HZJ-JbeZ349mLQ2P18mkY1Q54E6Dw",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjg0MjgyLCJpYXQiOjE3ODI2ODMzODIsImp0aSI6IjZiMTBkMGY4NjhiMTQzOWU4NzI5Mzc1NjFiMWY5MTk3IiwidXNlcl9pZCI6IjEifQ.WHTDx8xRxo8dpqV1dnouxRhJKnlJFi3TZ3petVKuA7c",
                           "type": "string"
                         }
                       ]
@@ -4090,7 +4090,7 @@
                       "bearer": [
                         {
                           "key": "token",
-                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNDkxMjc5LCJpYXQiOjE3ODI0OTAzNzksImp0aSI6IjU3NDZkNGVjNDZhOTRjN2Y4ZjJkZDdkNjhlMTkwMjQzIiwidXNlcl9pZCI6IjEifQ.8vqz32tQp1vb30HZJ-JbeZ349mLQ2P18mkY1Q54E6Dw",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjg0MjgyLCJpYXQiOjE3ODI2ODMzODIsImp0aSI6IjZiMTBkMGY4NjhiMTQzOWU4NzI5Mzc1NjFiMWY5MTk3IiwidXNlcl9pZCI6IjEifQ.WHTDx8xRxo8dpqV1dnouxRhJKnlJFi3TZ3petVKuA7c",
                           "type": "string"
                         }
                       ]
@@ -4334,7 +4334,134 @@
                 {
                   "name": "Create Product",
                   "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjg1OTE5LCJpYXQiOjE3ODI2ODUwMTksImp0aSI6ImM5MDhkMjAyYjM3MDQ0N2Q5NGE2MTY2YzhiMTI2NzA5IiwidXNlcl9pZCI6IjEifQ.CSuITB6wXjHLe4GCeBjwxLzxGbIt63egUZ1hwo85s_8",
+                          "type": "string"
+                        }
+                      ]
+                    },
                     "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"market_id\": 1,\n  \"category_id\": 2,\n  \"is_available\": true,\n  \"name\": \"سندويتش\",\n  \"description\": \"طبق تجريبي\",\n  \"image\" : null,\n  \"discount\": \"10.00\",\n  \"attribute_values\": [\n    {\n      \"attribute_id\": 2,\n      \"option_id\": 1\n    }\n  ],\n  \"variants\": [\n    {\n      \"price\": \"500.00\",\n      \"sku\": \"MEAL-S\",\n      \"attribute_values\": [\n        {\n          \"attribute_id\": 2,\n          \"option_id\": 1\n        }\n      ]\n    }\n  ]\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{local}}/api/v1/catalog/products/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "catalog",
+                        "products",
+                        ""
+                      ]
+                    }
+                  },
+                  "response": [
+                    {
+                      "name": "Create Product",
+                      "originalRequest": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"market_id\": 1,\n  \"category_id\": 2,\n  \"is_available\": true,\n  \"name\": \"طبق جديد\",\n  \"description\": \"طبق تجريبي\",\n  \"discount\": \"10.00\",\n  \"attribute_values\": [\n    {\n      \"attribute_id\": 1,\n      \"option_id\": 1\n    }\n  ],\n  \"variants\": [\n    {\n      \"price\": \"500.00\",\n      \"sku\": \"MEAL-S\",\n      \"attribute_values\": [\n        {\n          \"attribute_id\": 1,\n          \"option_id\": 1\n        }\n      ]\n    }\n  ]\n}",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          }
+                        },
+                        "url": {
+                          "raw": "{{local}}/api/v1/catalog/products/",
+                          "host": [
+                            "{{local}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "catalog",
+                            "products",
+                            ""
+                          ]
+                        }
+                      },
+                      "status": "Created",
+                      "code": 201,
+                      "_postman_previewlanguage": null,
+                      "header": [
+                        {
+                          "key": "Date",
+                          "value": "Sun, 28 Jun 2026 17:43:41 GMT"
+                        },
+                        {
+                          "key": "Server",
+                          "value": "WSGIServer/0.2 CPython/3.14.5"
+                        },
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        },
+                        {
+                          "key": "Vary",
+                          "value": "Accept, origin"
+                        },
+                        {
+                          "key": "Allow",
+                          "value": "GET, POST, HEAD, OPTIONS"
+                        },
+                        {
+                          "key": "X-Frame-Options",
+                          "value": "DENY"
+                        },
+                        {
+                          "key": "Content-Length",
+                          "value": "934"
+                        },
+                        {
+                          "key": "X-Content-Type-Options",
+                          "value": "nosniff"
+                        },
+                        {
+                          "key": "Referrer-Policy",
+                          "value": "same-origin"
+                        },
+                        {
+                          "key": "Cross-Origin-Opener-Policy",
+                          "value": "same-origin"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n    \"id\": 1,\n    \"market\": {\n        \"id\": 1,\n        \"name\": \"سوق جديد\",\n        \"branch\": \"فرع أول\",\n        \"status\": \"active\",\n        \"classification_id\": 1\n    },\n    \"category\": {\n        \"id\": 2,\n        \"classification\": {\n            \"id\": 3,\n            \"name\": \"الأكل\"\n        },\n        \"name\": \"عصائر\",\n        \"type\": \"فئات مميزة\",\n        \"description\": \"مشروبات طازجة\",\n        \"image\": null,\n        \"attributes\": [\n            {\n                \"id\": 1,\n                \"name\": \"الحجم\",\n                \"options\": [\n                    {\n                        \"id\": 1,\n                        \"value\": \"1 لتر\"\n                    }\n                ]\n            }\n        ]\n    },\n    \"is_available\": true,\n    \"name\": \"طبق جديد\",\n    \"description\": \"طبق تجريبي\",\n    \"image\": null,\n    \"discount\": \"10.00\",\n    \"attribute_values\": [\n        {\n            \"id\": 1,\n            \"attribute\": {\n                \"id\": 1,\n                \"name\": \"الحجم\",\n                \"options\": [\n                    {\n                        \"id\": 1,\n                        \"value\": \"1 لتر\"\n                    }\n                ]\n            },\n            \"option\": {\n                \"id\": 1,\n                \"value\": \"1 لتر\"\n            }\n        }\n    ],\n    \"variants\": [\n        {\n            \"id\": 1,\n            \"price\": \"500.00\",\n            \"sku\": \"MEAL-S\",\n            \"attribute_values\": [\n                {\n                    \"id\": 1,\n                    \"attribute\": {\n                        \"id\": 1,\n                        \"name\": \"الحجم\",\n                        \"options\": [\n                            {\n                                \"id\": 1,\n                                \"value\": \"1 لتر\"\n                            }\n                        ]\n                    },\n                    \"option\": {\n                        \"id\": 1,\n                        \"value\": \"1 لتر\"\n                    }\n                }\n            ]\n        }\n    ],\n    \"additions\": [],\n    \"created_at\": \"2026-06-28T17:43:41.445648Z\",\n    \"updated_at\": \"2026-06-28T17:43:41.445665Z\"\n}"
+                    }
+                  ]
+                },
+                {
+                  "name": "Get All Products",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjg0MjgyLCJpYXQiOjE3ODI2ODMzODIsImp0aSI6IjZiMTBkMGY4NjhiMTQzOWU4NzI5Mzc1NjFiMWY5MTk3IiwidXNlcl9pZCI6IjEifQ.WHTDx8xRxo8dpqV1dnouxRhJKnlJFi3TZ3petVKuA7c",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
                     "header": [],
                     "url": {
                       "raw": "{{local}}/api/v1/catalog/products/",
@@ -4346,6 +4473,853 @@
                         "v1",
                         "catalog",
                         "products",
+                        ""
+                      ]
+                    }
+                  },
+                  "response": [
+                    {
+                      "name": "Get All Products",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{local}}/api/v1/catalog/products/",
+                          "host": [
+                            "{{local}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "catalog",
+                            "products",
+                            ""
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": null,
+                      "header": [
+                        {
+                          "key": "Date",
+                          "value": "Sun, 28 Jun 2026 17:44:57 GMT"
+                        },
+                        {
+                          "key": "Server",
+                          "value": "WSGIServer/0.2 CPython/3.14.5"
+                        },
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        },
+                        {
+                          "key": "Vary",
+                          "value": "Accept, origin"
+                        },
+                        {
+                          "key": "Allow",
+                          "value": "GET, POST, HEAD, OPTIONS"
+                        },
+                        {
+                          "key": "X-Frame-Options",
+                          "value": "DENY"
+                        },
+                        {
+                          "key": "Content-Length",
+                          "value": "936"
+                        },
+                        {
+                          "key": "X-Content-Type-Options",
+                          "value": "nosniff"
+                        },
+                        {
+                          "key": "Referrer-Policy",
+                          "value": "same-origin"
+                        },
+                        {
+                          "key": "Cross-Origin-Opener-Policy",
+                          "value": "same-origin"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "[\n    {\n        \"id\": 1,\n        \"market\": {\n            \"id\": 1,\n            \"name\": \"سوق جديد\",\n            \"branch\": \"فرع أول\",\n            \"status\": \"active\",\n            \"classification_id\": 1\n        },\n        \"category\": {\n            \"id\": 2,\n            \"classification\": {\n                \"id\": 3,\n                \"name\": \"الأكل\"\n            },\n            \"name\": \"عصائر\",\n            \"type\": \"فئات مميزة\",\n            \"description\": \"مشروبات طازجة\",\n            \"image\": null,\n            \"attributes\": [\n                {\n                    \"id\": 1,\n                    \"name\": \"الحجم\",\n                    \"options\": [\n                        {\n                            \"id\": 1,\n                            \"value\": \"1 لتر\"\n                        }\n                    ]\n                }\n            ]\n        },\n        \"is_available\": true,\n        \"name\": \"طبق جديد\",\n        \"description\": \"طبق تجريبي\",\n        \"image\": null,\n        \"discount\": \"10.00\",\n        \"attribute_values\": [\n            {\n                \"id\": 1,\n                \"attribute\": {\n                    \"id\": 1,\n                    \"name\": \"الحجم\",\n                    \"options\": [\n                        {\n                            \"id\": 1,\n                            \"value\": \"1 لتر\"\n                        }\n                    ]\n                },\n                \"option\": {\n                    \"id\": 1,\n                    \"value\": \"1 لتر\"\n                }\n            }\n        ],\n        \"variants\": [\n            {\n                \"id\": 1,\n                \"price\": \"500.00\",\n                \"sku\": \"MEAL-S\",\n                \"attribute_values\": [\n                    {\n                        \"id\": 1,\n                        \"attribute\": {\n                            \"id\": 1,\n                            \"name\": \"الحجم\",\n                            \"options\": [\n                                {\n                                    \"id\": 1,\n                                    \"value\": \"1 لتر\"\n                                }\n                            ]\n                        },\n                        \"option\": {\n                            \"id\": 1,\n                            \"value\": \"1 لتر\"\n                        }\n                    }\n                ]\n            }\n        ],\n        \"additions\": [],\n        \"created_at\": \"2026-06-28T17:43:41.445648Z\",\n        \"updated_at\": \"2026-06-28T17:43:41.445665Z\"\n    }\n]"
+                    }
+                  ]
+                },
+                {
+                  "name": "Get Product Details",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjY5NDEwLCJpYXQiOjE3ODI2Njg1MTAsImp0aSI6ImRiOGEyMDhlZTkwZjRmOTA5NjgwNDllZTAwZGU3ZGU5IiwidXNlcl9pZCI6IjEifQ.Q9e_LpVm7fwpsnWrEvJ4tuBbIKhYlQ0zcaG1i1yyxUo",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/catalog/products/1/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "catalog",
+                        "products",
+                        "1",
+                        ""
+                      ]
+                    }
+                  },
+                  "response": [
+                    {
+                      "name": "Get Product Details",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{local}}/api/v1/catalog/products/1/",
+                          "host": [
+                            "{{local}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "catalog",
+                            "products",
+                            "1",
+                            ""
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": null,
+                      "header": [
+                        {
+                          "key": "Date",
+                          "value": "Sun, 28 Jun 2026 17:46:28 GMT"
+                        },
+                        {
+                          "key": "Server",
+                          "value": "WSGIServer/0.2 CPython/3.14.5"
+                        },
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        },
+                        {
+                          "key": "Vary",
+                          "value": "Accept, origin"
+                        },
+                        {
+                          "key": "Allow",
+                          "value": "GET, PATCH, DELETE, HEAD, OPTIONS"
+                        },
+                        {
+                          "key": "X-Frame-Options",
+                          "value": "DENY"
+                        },
+                        {
+                          "key": "Content-Length",
+                          "value": "934"
+                        },
+                        {
+                          "key": "X-Content-Type-Options",
+                          "value": "nosniff"
+                        },
+                        {
+                          "key": "Referrer-Policy",
+                          "value": "same-origin"
+                        },
+                        {
+                          "key": "Cross-Origin-Opener-Policy",
+                          "value": "same-origin"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n    \"id\": 1,\n    \"market\": {\n        \"id\": 1,\n        \"name\": \"سوق جديد\",\n        \"branch\": \"فرع أول\",\n        \"status\": \"active\",\n        \"classification_id\": 1\n    },\n    \"category\": {\n        \"id\": 2,\n        \"classification\": {\n            \"id\": 3,\n            \"name\": \"الأكل\"\n        },\n        \"name\": \"عصائر\",\n        \"type\": \"فئات مميزة\",\n        \"description\": \"مشروبات طازجة\",\n        \"image\": null,\n        \"attributes\": [\n            {\n                \"id\": 1,\n                \"name\": \"الحجم\",\n                \"options\": [\n                    {\n                        \"id\": 1,\n                        \"value\": \"1 لتر\"\n                    }\n                ]\n            }\n        ]\n    },\n    \"is_available\": true,\n    \"name\": \"طبق جديد\",\n    \"description\": \"طبق تجريبي\",\n    \"image\": null,\n    \"discount\": \"10.00\",\n    \"attribute_values\": [\n        {\n            \"id\": 1,\n            \"attribute\": {\n                \"id\": 1,\n                \"name\": \"الحجم\",\n                \"options\": [\n                    {\n                        \"id\": 1,\n                        \"value\": \"1 لتر\"\n                    }\n                ]\n            },\n            \"option\": {\n                \"id\": 1,\n                \"value\": \"1 لتر\"\n            }\n        }\n    ],\n    \"variants\": [\n        {\n            \"id\": 1,\n            \"price\": \"500.00\",\n            \"sku\": \"MEAL-S\",\n            \"attribute_values\": [\n                {\n                    \"id\": 1,\n                    \"attribute\": {\n                        \"id\": 1,\n                        \"name\": \"الحجم\",\n                        \"options\": [\n                            {\n                                \"id\": 1,\n                                \"value\": \"1 لتر\"\n                            }\n                        ]\n                    },\n                    \"option\": {\n                        \"id\": 1,\n                        \"value\": \"1 لتر\"\n                    }\n                }\n            ]\n        }\n    ],\n    \"additions\": [],\n    \"created_at\": \"2026-06-28T17:43:41.445648Z\",\n    \"updated_at\": \"2026-06-28T17:43:41.445665Z\"\n}"
+                    }
+                  ]
+                },
+                {
+                  "name": "Update Product",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjY5NDEwLCJpYXQiOjE3ODI2Njg1MTAsImp0aSI6ImRiOGEyMDhlZTkwZjRmOTA5NjgwNDllZTAwZGU3ZGU5IiwidXNlcl9pZCI6IjEifQ.Q9e_LpVm7fwpsnWrEvJ4tuBbIKhYlQ0zcaG1i1yyxUo",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "PATCH",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"market_id\": 1,\n  \"category_id\": 2,\n  \"is_available\": true,\n  \"name\": \"سندويتش كباب\",\n  \"description\": \"طبق تجريبي\",\n  \"discount\": \"10.00\",\n  \"attribute_values\": [\n    {\n      \"attribute_id\": 1,\n      \"option_id\": 1\n    }\n  ],\n  \"variants\": [\n    {\n      \"price\": \"500.00\",\n      \"sku\": \"MEAL-S\",\n      \"attribute_values\": [\n        {\n          \"attribute_id\": 1,\n          \"option_id\": 1\n        }\n      ]\n    }\n  ]\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{local}}/api/v1/catalog/products/1/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "catalog",
+                        "products",
+                        "1",
+                        ""
+                      ]
+                    }
+                  },
+                  "response": [
+                    {
+                      "name": "New Request",
+                      "originalRequest": {
+                        "method": "PATCH",
+                        "header": [],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"market_id\": 1,\n  \"category_id\": 2,\n  \"is_available\": true,\n  \"name\": \"سندويتش كباب\",\n  \"description\": \"طبق تجريبي\",\n  \"discount\": \"10.00\",\n  \"attribute_values\": [\n    {\n      \"attribute_id\": 1,\n      \"option_id\": 1\n    }\n  ],\n  \"variants\": [\n    {\n      \"price\": \"500.00\",\n      \"sku\": \"MEAL-S\",\n      \"attribute_values\": [\n        {\n          \"attribute_id\": 1,\n          \"option_id\": 1\n        }\n      ]\n    }\n  ]\n}",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          }
+                        },
+                        "url": {
+                          "raw": "{{local}}/api/v1/catalog/products/1/",
+                          "host": [
+                            "{{local}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "catalog",
+                            "products",
+                            "1",
+                            ""
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": null,
+                      "header": [
+                        {
+                          "key": "Date",
+                          "value": "Sun, 28 Jun 2026 17:47:58 GMT"
+                        },
+                        {
+                          "key": "Server",
+                          "value": "WSGIServer/0.2 CPython/3.14.5"
+                        },
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        },
+                        {
+                          "key": "Vary",
+                          "value": "Accept, origin"
+                        },
+                        {
+                          "key": "Allow",
+                          "value": "GET, PATCH, DELETE, HEAD, OPTIONS"
+                        },
+                        {
+                          "key": "X-Frame-Options",
+                          "value": "DENY"
+                        },
+                        {
+                          "key": "Content-Length",
+                          "value": "942"
+                        },
+                        {
+                          "key": "X-Content-Type-Options",
+                          "value": "nosniff"
+                        },
+                        {
+                          "key": "Referrer-Policy",
+                          "value": "same-origin"
+                        },
+                        {
+                          "key": "Cross-Origin-Opener-Policy",
+                          "value": "same-origin"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n    \"id\": 1,\n    \"market\": {\n        \"id\": 1,\n        \"name\": \"سوق جديد\",\n        \"branch\": \"فرع أول\",\n        \"status\": \"active\",\n        \"classification_id\": 1\n    },\n    \"category\": {\n        \"id\": 2,\n        \"classification\": {\n            \"id\": 3,\n            \"name\": \"الأكل\"\n        },\n        \"name\": \"عصائر\",\n        \"type\": \"فئات مميزة\",\n        \"description\": \"مشروبات طازجة\",\n        \"image\": null,\n        \"attributes\": [\n            {\n                \"id\": 1,\n                \"name\": \"الحجم\",\n                \"options\": [\n                    {\n                        \"id\": 1,\n                        \"value\": \"1 لتر\"\n                    }\n                ]\n            }\n        ]\n    },\n    \"is_available\": true,\n    \"name\": \"سندويتش كباب\",\n    \"description\": \"طبق تجريبي\",\n    \"image\": null,\n    \"discount\": \"10.00\",\n    \"attribute_values\": [\n        {\n            \"id\": 2,\n            \"attribute\": {\n                \"id\": 1,\n                \"name\": \"الحجم\",\n                \"options\": [\n                    {\n                        \"id\": 1,\n                        \"value\": \"1 لتر\"\n                    }\n                ]\n            },\n            \"option\": {\n                \"id\": 1,\n                \"value\": \"1 لتر\"\n            }\n        }\n    ],\n    \"variants\": [\n        {\n            \"id\": 2,\n            \"price\": \"500.00\",\n            \"sku\": \"MEAL-S\",\n            \"attribute_values\": [\n                {\n                    \"id\": 2,\n                    \"attribute\": {\n                        \"id\": 1,\n                        \"name\": \"الحجم\",\n                        \"options\": [\n                            {\n                                \"id\": 1,\n                                \"value\": \"1 لتر\"\n                            }\n                        ]\n                    },\n                    \"option\": {\n                        \"id\": 1,\n                        \"value\": \"1 لتر\"\n                    }\n                }\n            ]\n        }\n    ],\n    \"additions\": [],\n    \"created_at\": \"2026-06-28T17:43:41.445648Z\",\n    \"updated_at\": \"2026-06-28T17:47:58.317801Z\"\n}"
+                    }
+                  ]
+                },
+                {
+                  "name": "Delete Product",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjY5NDEwLCJpYXQiOjE3ODI2Njg1MTAsImp0aSI6ImRiOGEyMDhlZTkwZjRmOTA5NjgwNDllZTAwZGU3ZGU5IiwidXNlcl9pZCI6IjEifQ.Q9e_LpVm7fwpsnWrEvJ4tuBbIKhYlQ0zcaG1i1yyxUo",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "DELETE",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/catalog/products/1/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "catalog",
+                        "products",
+                        "1",
+                        ""
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Category Attributes Management",
+              "item": [
+                {
+                  "name": "Create Category Attribute",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjg0MjgyLCJpYXQiOjE3ODI2ODMzODIsImp0aSI6IjZiMTBkMGY4NjhiMTQzOWU4NzI5Mzc1NjFiMWY5MTk3IiwidXNlcl9pZCI6IjEifQ.WHTDx8xRxo8dpqV1dnouxRhJKnlJFi3TZ3petVKuA7c",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"category_id\": 2,\n  \"name\": \"المقاس\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{local}}/api/v1/catalog/category-attributes/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "catalog",
+                        "category-attributes",
+                        ""
+                      ]
+                    }
+                  },
+                  "response": [
+                    {
+                      "name": "Create Category Attribute",
+                      "originalRequest": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"category_id\": 2,\n  \"name\": \"الحجم\"\n}",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          }
+                        },
+                        "url": {
+                          "raw": "{{local}}/api/v1/catalog/category-attributes/",
+                          "host": [
+                            "{{local}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "catalog",
+                            "category-attributes",
+                            ""
+                          ]
+                        }
+                      },
+                      "status": "Created",
+                      "code": 201,
+                      "_postman_previewlanguage": null,
+                      "header": [
+                        {
+                          "key": "Date",
+                          "value": "Sun, 28 Jun 2026 17:38:15 GMT"
+                        },
+                        {
+                          "key": "Server",
+                          "value": "WSGIServer/0.2 CPython/3.14.5"
+                        },
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        },
+                        {
+                          "key": "Vary",
+                          "value": "Accept, origin"
+                        },
+                        {
+                          "key": "Allow",
+                          "value": "GET, POST, HEAD, OPTIONS"
+                        },
+                        {
+                          "key": "X-Frame-Options",
+                          "value": "DENY"
+                        },
+                        {
+                          "key": "Content-Length",
+                          "value": "211"
+                        },
+                        {
+                          "key": "X-Content-Type-Options",
+                          "value": "nosniff"
+                        },
+                        {
+                          "key": "Referrer-Policy",
+                          "value": "same-origin"
+                        },
+                        {
+                          "key": "Cross-Origin-Opener-Policy",
+                          "value": "same-origin"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n    \"id\": 1,\n    \"category\": {\n        \"id\": 2,\n        \"classification\": {\n            \"id\": 3,\n            \"name\": \"الأكل\"\n        },\n        \"name\": \"عصائر\",\n        \"type\": \"فئات مميزة\",\n        \"description\": \"مشروبات طازجة\",\n        \"image\": null\n    },\n    \"name\": \"الحجم\",\n    \"options\": []\n}"
+                    }
+                  ]
+                },
+                {
+                  "name": "Update Category Attribute",
+                  "request": {
+                    "method": "PATCH",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/catalog/category-attributes/1/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "catalog",
+                        "category-attributes",
+                        "1",
+                        ""
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Delete Category Attribute",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/catalog/category-attributes/1/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "catalog",
+                        "category-attributes",
+                        "1",
+                        ""
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get all Category Attributes",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjg1OTE5LCJpYXQiOjE3ODI2ODUwMTksImp0aSI6ImM5MDhkMjAyYjM3MDQ0N2Q5NGE2MTY2YzhiMTI2NzA5IiwidXNlcl9pZCI6IjEifQ.CSuITB6wXjHLe4GCeBjwxLzxGbIt63egUZ1hwo85s_8",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/catalog/category-attributes/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "catalog",
+                        "category-attributes",
+                        ""
+                      ]
+                    }
+                  },
+                  "response": [
+                    {
+                      "name": "Get all Category Attributes",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{local}}/api/v1/catalog/category-attributes/",
+                          "host": [
+                            "{{local}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "catalog",
+                            "category-attributes",
+                            ""
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": null,
+                      "header": [
+                        {
+                          "key": "Date",
+                          "value": "Sun, 28 Jun 2026 22:24:38 GMT"
+                        },
+                        {
+                          "key": "Server",
+                          "value": "WSGIServer/0.2 CPython/3.14.5"
+                        },
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        },
+                        {
+                          "key": "Vary",
+                          "value": "Accept, origin"
+                        },
+                        {
+                          "key": "Allow",
+                          "value": "GET, POST, HEAD, OPTIONS"
+                        },
+                        {
+                          "key": "X-Frame-Options",
+                          "value": "DENY"
+                        },
+                        {
+                          "key": "Content-Length",
+                          "value": "471"
+                        },
+                        {
+                          "key": "X-Content-Type-Options",
+                          "value": "nosniff"
+                        },
+                        {
+                          "key": "Referrer-Policy",
+                          "value": "same-origin"
+                        },
+                        {
+                          "key": "Cross-Origin-Opener-Policy",
+                          "value": "same-origin"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "[\n    {\n        \"id\": 1,\n        \"category\": {\n            \"id\": 2,\n            \"classification\": {\n                \"id\": 3,\n                \"name\": \"الأكل\"\n            },\n            \"name\": \"عصائر\",\n            \"type\": \"فئات مميزة\",\n            \"description\": \"مشروبات طازجة\",\n            \"image\": null\n        },\n        \"name\": \"الحجم\",\n        \"options\": [\n            {\n                \"id\": 2,\n                \"value\": \"1 L\"\n            }\n        ]\n    },\n    {\n        \"id\": 2,\n        \"category\": {\n            \"id\": 2,\n            \"classification\": {\n                \"id\": 3,\n                \"name\": \"الأكل\"\n            },\n            \"name\": \"عصائر\",\n            \"type\": \"فئات مميزة\",\n            \"description\": \"مشروبات طازجة\",\n            \"image\": null\n        },\n        \"name\": \"المقاس\",\n        \"options\": [\n            {\n                \"id\": 1,\n                \"value\": \"1 L\"\n            }\n        ]\n    }\n]"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "Category Option Management",
+              "item": [
+                {
+                  "name": "Create Categoty Option",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjg0MjgyLCJpYXQiOjE3ODI2ODMzODIsImp0aSI6IjZiMTBkMGY4NjhiMTQzOWU4NzI5Mzc1NjFiMWY5MTk3IiwidXNlcl9pZCI6IjEifQ.WHTDx8xRxo8dpqV1dnouxRhJKnlJFi3TZ3petVKuA7c",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"attribute_id\": 1,\n  \"value\": \"1 L\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{local}}/api/v1/catalog/category-options/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "catalog",
+                        "category-options",
+                        ""
+                      ]
+                    }
+                  },
+                  "response": [
+                    {
+                      "name": "Create Categoty Option",
+                      "originalRequest": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"attribute_id\": 1,\n  \"value\": \"1 لتر\"\n}",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          }
+                        },
+                        "url": {
+                          "raw": "{{local}}/api/v1/catalog/category-options/",
+                          "host": [
+                            "{{local}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "catalog",
+                            "category-options",
+                            ""
+                          ]
+                        }
+                      },
+                      "status": "Created",
+                      "code": 201,
+                      "_postman_previewlanguage": null,
+                      "header": [
+                        {
+                          "key": "Date",
+                          "value": "Sun, 28 Jun 2026 17:42:27 GMT"
+                        },
+                        {
+                          "key": "Server",
+                          "value": "WSGIServer/0.2 CPython/3.14.5"
+                        },
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        },
+                        {
+                          "key": "Vary",
+                          "value": "Accept, origin"
+                        },
+                        {
+                          "key": "Allow",
+                          "value": "GET, POST, HEAD, OPTIONS"
+                        },
+                        {
+                          "key": "X-Frame-Options",
+                          "value": "DENY"
+                        },
+                        {
+                          "key": "Content-Length",
+                          "value": "84"
+                        },
+                        {
+                          "key": "X-Content-Type-Options",
+                          "value": "nosniff"
+                        },
+                        {
+                          "key": "Referrer-Policy",
+                          "value": "same-origin"
+                        },
+                        {
+                          "key": "Cross-Origin-Opener-Policy",
+                          "value": "same-origin"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n    \"id\": 1,\n    \"attribute\": {\n        \"id\": 1,\n        \"name\": \"الحجم\",\n        \"category_id\": 2\n    },\n    \"value\": \"1 لتر\"\n}"
+                    }
+                  ]
+                },
+                {
+                  "name": "Update Category Option",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjg0MjgyLCJpYXQiOjE3ODI2ODMzODIsImp0aSI6IjZiMTBkMGY4NjhiMTQzOWU4NzI5Mzc1NjFiMWY5MTk3IiwidXNlcl9pZCI6IjEifQ.WHTDx8xRxo8dpqV1dnouxRhJKnlJFi3TZ3petVKuA7c",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "PATCH",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"attribute_id\": 2,\n  \"value\": \"1 L\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{local}}/api/v1/catalog/category-options/1/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "catalog",
+                        "category-options",
+                        "1",
+                        ""
+                      ]
+                    }
+                  },
+                  "response": [
+                    {
+                      "name": "Update Category Option",
+                      "originalRequest": {
+                        "method": "PATCH",
+                        "header": [],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"attribute_id\": 2,\n  \"value\": \"1 L\"\n}",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          }
+                        },
+                        "url": {
+                          "raw": "{{local}}/api/v1/catalog/category-options/1/",
+                          "host": [
+                            "{{local}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "catalog",
+                            "category-options",
+                            "1",
+                            ""
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": null,
+                      "header": [
+                        {
+                          "key": "Date",
+                          "value": "Sun, 28 Jun 2026 21:54:15 GMT"
+                        },
+                        {
+                          "key": "Server",
+                          "value": "WSGIServer/0.2 CPython/3.14.5"
+                        },
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        },
+                        {
+                          "key": "Vary",
+                          "value": "Accept, origin"
+                        },
+                        {
+                          "key": "Allow",
+                          "value": "GET, PATCH, DELETE, HEAD, OPTIONS"
+                        },
+                        {
+                          "key": "X-Frame-Options",
+                          "value": "DENY"
+                        },
+                        {
+                          "key": "Content-Length",
+                          "value": "81"
+                        },
+                        {
+                          "key": "X-Content-Type-Options",
+                          "value": "nosniff"
+                        },
+                        {
+                          "key": "Referrer-Policy",
+                          "value": "same-origin"
+                        },
+                        {
+                          "key": "Cross-Origin-Opener-Policy",
+                          "value": "same-origin"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n    \"id\": 1,\n    \"attribute\": {\n        \"id\": 2,\n        \"name\": \"المقاس\",\n        \"category_id\": 2\n    },\n    \"value\": \"1 L\"\n}"
+                    }
+                  ]
+                },
+                {
+                  "name": "Delete Category Option",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}api/v1/catalog/category-options/1/",
+                      "host": [
+                        "{{local}}api"
+                      ],
+                      "path": [
+                        "v1",
+                        "catalog",
+                        "category-options",
+                        "1",
                         ""
                       ]
                     }
@@ -5004,6 +5978,464 @@
               ]
             }
           ]
+        },
+        {
+          "name": "Offers",
+          "item": [
+            {
+              "name": "Create Offer",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjcwOTMwLCJpYXQiOjE3ODI2NzAwMzAsImp0aSI6Ijc3MGE1ZTcyYjExMzRlZjg5MWNjNmNmOWZlOGQzYzM4IiwidXNlcl9pZCI6IjEifQ.OUa7zOpkPXG8WNjqzs1kAgWN5JmdAFFoEC4wnKah8QU",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"market_id\": 1,\n  \"product_ids\": [2],\n  \"title\": \"عرض فلاش\",\n  \"description\": \"تخفيض مميز\",\n  \"image\": null,\n  \"type\": \"flash\",\n  \"discount\": \"50.00\",\n  \"start_time\": \"2026-06-28T10:00:00Z\",\n  \"end_time\": \"2026-07-01T10:00:00Z\",\n  \"active_days\": [\"saturday\", \"sunday\"],\n  \"use_limits\": 100,\n  \"user_limit\": 2,\n  \"status\": \"active\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{local}}/api/v1/offers/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "offers",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Create Offer",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"market_id\": 1,\n  \"product_ids\": [2],\n  \"title\": \"عرض فلاش\",\n  \"description\": \"تخفيض مميز\",\n  \"image\": null,\n  \"type\": \"flash\",\n  \"discount\": \"50.00\",\n  \"start_time\": \"2026-06-28T10:00:00Z\",\n  \"end_time\": \"2026-07-01T10:00:00Z\",\n  \"active_days\": [\"saturday\", \"sunday\"],\n  \"use_limits\": 100,\n  \"user_limit\": 2,\n  \"status\": \"active\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{local}}/api/v1/offers/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "offers",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "Created",
+                  "code": 201,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Sun, 28 Jun 2026 18:07:49 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, POST, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "848"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"id\": 1,\n    \"market\": {\n        \"id\": 1,\n        \"classification\": {\n            \"id\": 1,\n            \"name\": \"مطاعم\"\n        },\n        \"name\": \"سوق جديد\",\n        \"branch\": \"فرع أول\",\n        \"status\": \"active\",\n        \"delivery_areas\": [],\n        \"created_at\": \"2026-06-26T16:23:40.532566Z\",\n        \"updated_at\": \"2026-06-28T17:54:06.206956Z\"\n    },\n    \"products\": [\n        {\n            \"id\": 2,\n            \"market_id\": 1,\n            \"category_id\": 2,\n            \"is_available\": true,\n            \"name\": \"طبق جديد\",\n            \"description\": \"طبق تجريبي\",\n            \"image\": null,\n            \"discount\": \"10.00\",\n            \"created_at\": \"2026-06-28T17:51:38.950407Z\",\n            \"updated_at\": \"2026-06-28T17:51:38.950425Z\"\n        }\n    ],\n    \"title\": \"عرض فلاش\",\n    \"description\": \"تخفيض مميز\",\n    \"image\": null,\n    \"type\": \"flash\",\n    \"discount\": \"50.00\",\n    \"start_time\": \"2026-06-28T10:00:00Z\",\n    \"end_time\": \"2026-07-01T10:00:00Z\",\n    \"active_days\": [\n        \"saturday\",\n        \"sunday\"\n    ],\n    \"use_limits\": 100,\n    \"user_limit\": 2,\n    \"status\": \"active\",\n    \"created_at\": \"2026-06-28T18:07:49.768758Z\",\n    \"updated_at\": \"2026-06-28T18:07:49.768774Z\"\n}"
+                }
+              ]
+            },
+            {
+              "name": "Get All Offers",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjcwOTMwLCJpYXQiOjE3ODI2NzAwMzAsImp0aSI6Ijc3MGE1ZTcyYjExMzRlZjg5MWNjNmNmOWZlOGQzYzM4IiwidXNlcl9pZCI6IjEifQ.OUa7zOpkPXG8WNjqzs1kAgWN5JmdAFFoEC4wnKah8QU",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{local}}/api/v1/offers/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "offers",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Get All Offers",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/offers/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "offers",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Sun, 28 Jun 2026 18:08:29 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, POST, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "850"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "[\n    {\n        \"id\": 1,\n        \"market\": {\n            \"id\": 1,\n            \"classification\": {\n                \"id\": 1,\n                \"name\": \"مطاعم\"\n            },\n            \"name\": \"سوق جديد\",\n            \"branch\": \"فرع أول\",\n            \"status\": \"active\",\n            \"delivery_areas\": [],\n            \"created_at\": \"2026-06-26T16:23:40.532566Z\",\n            \"updated_at\": \"2026-06-28T17:54:06.206956Z\"\n        },\n        \"products\": [\n            {\n                \"id\": 2,\n                \"market_id\": 1,\n                \"category_id\": 2,\n                \"is_available\": true,\n                \"name\": \"طبق جديد\",\n                \"description\": \"طبق تجريبي\",\n                \"image\": null,\n                \"discount\": \"10.00\",\n                \"created_at\": \"2026-06-28T17:51:38.950407Z\",\n                \"updated_at\": \"2026-06-28T17:51:38.950425Z\"\n            }\n        ],\n        \"title\": \"عرض فلاش\",\n        \"description\": \"تخفيض مميز\",\n        \"image\": null,\n        \"type\": \"flash\",\n        \"discount\": \"50.00\",\n        \"start_time\": \"2026-06-28T10:00:00Z\",\n        \"end_time\": \"2026-07-01T10:00:00Z\",\n        \"active_days\": [\n            \"saturday\",\n            \"sunday\"\n        ],\n        \"use_limits\": 100,\n        \"user_limit\": 2,\n        \"status\": \"active\",\n        \"created_at\": \"2026-06-28T18:07:49.768758Z\",\n        \"updated_at\": \"2026-06-28T18:07:49.768774Z\"\n    }\n]"
+                }
+              ]
+            },
+            {
+              "name": "Get Offer Details",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjcwOTMwLCJpYXQiOjE3ODI2NzAwMzAsImp0aSI6Ijc3MGE1ZTcyYjExMzRlZjg5MWNjNmNmOWZlOGQzYzM4IiwidXNlcl9pZCI6IjEifQ.OUa7zOpkPXG8WNjqzs1kAgWN5JmdAFFoEC4wnKah8QU",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{local}}/api/v1/offers/1/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "offers",
+                    "1",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Get Offer Details",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/offers/1/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "offers",
+                        "1",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Sun, 28 Jun 2026 18:09:08 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, PATCH, DELETE, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "848"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"id\": 1,\n    \"market\": {\n        \"id\": 1,\n        \"classification\": {\n            \"id\": 1,\n            \"name\": \"مطاعم\"\n        },\n        \"name\": \"سوق جديد\",\n        \"branch\": \"فرع أول\",\n        \"status\": \"active\",\n        \"delivery_areas\": [],\n        \"created_at\": \"2026-06-26T16:23:40.532566Z\",\n        \"updated_at\": \"2026-06-28T17:54:06.206956Z\"\n    },\n    \"products\": [\n        {\n            \"id\": 2,\n            \"market_id\": 1,\n            \"category_id\": 2,\n            \"is_available\": true,\n            \"name\": \"طبق جديد\",\n            \"description\": \"طبق تجريبي\",\n            \"image\": null,\n            \"discount\": \"10.00\",\n            \"created_at\": \"2026-06-28T17:51:38.950407Z\",\n            \"updated_at\": \"2026-06-28T17:51:38.950425Z\"\n        }\n    ],\n    \"title\": \"عرض فلاش\",\n    \"description\": \"تخفيض مميز\",\n    \"image\": null,\n    \"type\": \"flash\",\n    \"discount\": \"50.00\",\n    \"start_time\": \"2026-06-28T10:00:00Z\",\n    \"end_time\": \"2026-07-01T10:00:00Z\",\n    \"active_days\": [\n        \"saturday\",\n        \"sunday\"\n    ],\n    \"use_limits\": 100,\n    \"user_limit\": 2,\n    \"status\": \"active\",\n    \"created_at\": \"2026-06-28T18:07:49.768758Z\",\n    \"updated_at\": \"2026-06-28T18:07:49.768774Z\"\n}"
+                }
+              ]
+            },
+            {
+              "name": "Update Offer",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNjcwOTMwLCJpYXQiOjE3ODI2NzAwMzAsImp0aSI6Ijc3MGE1ZTcyYjExMzRlZjg5MWNjNmNmOWZlOGQzYzM4IiwidXNlcl9pZCI6IjEifQ.OUa7zOpkPXG8WNjqzs1kAgWN5JmdAFFoEC4wnKah8QU",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"market_id\": 1,\n  \"product_ids\": [2],\n  \"title\": \"عرض فلاش\",\n  \"description\": \"تخفيض مميز\",\n  \"image\": null,\n  \"type\": \"flash\",\n  \"discount\": \"50.00\",\n  \"start_time\": \"2026-06-28T10:00:00Z\",\n  \"end_time\": \"2026-07-01T10:00:00Z\",\n  \"active_days\": [\"saturday\", \"sunday\"],\n  \"use_limits\": 100,\n  \"user_limit\": 2,\n  \"status\": \"active\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{local}}/api/v1/offers/1/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "offers",
+                    "1",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Update Offer",
+                  "originalRequest": {
+                    "method": "PATCH",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"market_id\": 1,\n  \"product_ids\": [2],\n  \"title\": \"عرض فلاش\",\n  \"description\": \"تخفيض مميز\",\n  \"image\": null,\n  \"type\": \"flash\",\n  \"discount\": \"50.00\",\n  \"start_time\": \"2026-06-28T10:00:00Z\",\n  \"end_time\": \"2026-07-01T10:00:00Z\",\n  \"active_days\": [\"saturday\", \"sunday\"],\n  \"use_limits\": 100,\n  \"user_limit\": 2,\n  \"status\": \"active\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{local}}/api/v1/offers/1/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "offers",
+                        "1",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Sun, 28 Jun 2026 18:09:56 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, PATCH, DELETE, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "848"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"id\": 1,\n    \"market\": {\n        \"id\": 1,\n        \"classification\": {\n            \"id\": 1,\n            \"name\": \"مطاعم\"\n        },\n        \"name\": \"سوق جديد\",\n        \"branch\": \"فرع أول\",\n        \"status\": \"active\",\n        \"delivery_areas\": [],\n        \"created_at\": \"2026-06-26T16:23:40.532566Z\",\n        \"updated_at\": \"2026-06-28T17:54:06.206956Z\"\n    },\n    \"products\": [\n        {\n            \"id\": 2,\n            \"market_id\": 1,\n            \"category_id\": 2,\n            \"is_available\": true,\n            \"name\": \"طبق جديد\",\n            \"description\": \"طبق تجريبي\",\n            \"image\": null,\n            \"discount\": \"10.00\",\n            \"created_at\": \"2026-06-28T17:51:38.950407Z\",\n            \"updated_at\": \"2026-06-28T17:51:38.950425Z\"\n        }\n    ],\n    \"title\": \"عرض فلاش\",\n    \"description\": \"تخفيض مميز\",\n    \"image\": null,\n    \"type\": \"flash\",\n    \"discount\": \"50.00\",\n    \"start_time\": \"2026-06-28T10:00:00Z\",\n    \"end_time\": \"2026-07-01T10:00:00Z\",\n    \"active_days\": [\n        \"saturday\",\n        \"sunday\"\n    ],\n    \"use_limits\": 100,\n    \"user_limit\": 2,\n    \"status\": \"active\",\n    \"created_at\": \"2026-06-28T18:07:49.768758Z\",\n    \"updated_at\": \"2026-06-28T18:09:56.091722Z\"\n}"
+                }
+              ]
+            },
+            {
+              "name": "Delete Offer",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{local}}/api/v1/offers/<offer_id>/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "offers",
+                    "<offer_id>",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Delivery Areas",
+          "item": []
         }
       ]
     }
