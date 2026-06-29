@@ -106,12 +106,22 @@ function formatCurrency(value: number) {
   return `${formattedValue} EGP`;
 }
 
-function formatDate(value: string) {
+function formatDate(value?: string | number | Date | null) {
+  if (!value) {
+    return "—";
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
   return new Intl.DateTimeFormat("ar-EG-u-nu-latn", {
     day: "numeric",
     month: "long",
     year: "numeric",
-  }).format(new Date(value));
+  }).format(date);
 }
 
 function getTodayIso() {

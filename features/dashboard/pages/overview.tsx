@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -24,7 +24,16 @@ import {
   YAxis,
 } from "recharts";
 
-import { topItems } from "../data";
+import { useAuth } from "@/features/auth/auth-provider";
+import {
+  formatMoney,
+  formatPercent,
+  getDashboardOverview,
+  safeNumber,
+  translateOrderStatus,
+  type BackendRecord,
+  type DashboardOverview,
+} from "../admin-api";
 import {
   AnimatedChartWrapper,
   AnimatedNumber,
@@ -35,21 +44,6 @@ import { Button, Card, CardHeader, HoverTooltip, PageTitle } from "../primitives
 import { useDashboardI18n } from "../i18n";
 import { cn } from "@/lib/utils";
 
-function formatMoney(value: number, locale: string, prefix: string, suffix: string) {
-  return `${prefix}${value.toLocaleString(locale, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}${suffix}`;
-}
-
-const revenueProductKeys = [
-  "overview.product.beefRound",
-  "overview.product.tomatoes",
-  "overview.product.whiteChicken",
-  "overview.product.bananas",
-  "overview.product.redChicken",
-] as const;
-
 const revenueDotColors = [
   "var(--chart-1)",
   "var(--chart-2)",
@@ -58,86 +52,173 @@ const revenueDotColors = [
   "var(--chart-5)",
 ];
 
-const topShopItems = [
-  {
-    rank: 1,
-    nameAr: "يلا ماركت - الرئيسي",
-    nameEn: "Yalla Market - Main",
-    zoneAr: "التل الكبير",
-    zoneEn: "El Tall El Kebir",
-    orders: 74,
-    average: 3.28,
-    revenue: 18240.5,
-  },
-  {
-    rank: 2,
-    nameAr: "خضار البلد",
-    nameEn: "Balad Produce",
-    zoneAr: "الحي الشرقي",
-    zoneEn: "East District",
-    orders: 58,
-    average: 2.84,
-    revenue: 14980,
-  },
-  {
-    rank: 3,
-    nameAr: "فراخ الطازة",
-    nameEn: "Fresh Chicken",
-    zoneAr: "وسط البلد",
-    zoneEn: "Downtown",
-    orders: 44,
-    average: 2.32,
-    revenue: 11275.25,
-  },
-  {
-    rank: 4,
-    nameAr: "مخبوزات الصباح",
-    nameEn: "Morning Bakery",
-    zoneAr: "المحطة",
-    zoneEn: "Station",
-    orders: 38,
-    average: 1.92,
-    revenue: 7650.75,
-  },
-  {
-    rank: 5,
-    nameAr: "بيت الفاكهة",
-    nameEn: "Fruit House",
-    zoneAr: "الحي الغربي",
-    zoneEn: "West District",
-    orders: 29,
-    average: 2.14,
-    revenue: 6205.5,
-  },
-];
+const dashboardEmptyState: DashboardOverview = {
+  currency: "EGP",
+  revenue: { total: 0, percentage: 0 },
+  orders: { total: 0, completed: 0, incomplete: 0, completion_rate: 0 },
+  customers: { new: 0, returning: 0, return_rate: 0 },
+  top_products: [],
+  active_orders: [],
+  top_shops: [],
+};
 
-function TopCategoriesCard() {
-  const { direction, language, numberLocale, t } = useDashboardI18n();
-  const totalRevenue = topShopItems.reduce((total, item) => total + item.revenue, 0);
-  const currencyPrefix = t("common.egpPrefix");
-  const currencySuffix = t("common.egpSuffix");
+function valueText(record: BackendRecord | undefined, keys: string[], fallback = "") {
+  if (!record) return fallback;
+
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+
+  return fallback;
+}
+
+function firstValue(record: BackendRecord, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && !value.trim()) continue;
+    if (value !== undefined && value !== null) return value;
+  }
+
+  return undefined;
+}
+
+function fullNameFromNested(value: unknown) {
+  if (!value || typeof value !== "object") return "";
+
+  const record = value as BackendRecord;
+  const name = valueText(record, ["name"]);
+  const fullName = [
+    valueText(record, ["first_name"]),
+    valueText(record, ["last_name"]),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return name || fullName || valueText(record, ["username"]);
+}
+
+function clampedPercent(value: unknown) {
+  return Math.min(Math.max(safeNumber(value), 0), 100);
+}
+
+function recordList(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter(
+        (item): item is BackendRecord => Boolean(item && typeof item === "object"),
+      )
+    : [];
+}
+
+function productChartData(items: BackendRecord[]) {
+  return items.map((item, index) => {
+    const name = valueText(item, ["name", "product_name", "title"], "منتج");
+
+    return {
+      chartName: name.length > 14 ? `${name.slice(0, 14).trimEnd()}...` : name,
+      name,
+      revenue: safeNumber(firstValue(item, ["revenue", "total_revenue"])),
+      orders: safeNumber(firstValue(item, ["orders_count", "order_count"])),
+      sold: safeNumber(firstValue(item, ["quantity_sold", "quantity"])),
+      key: `${name}-${index}`,
+    };
+  });
+}
+
+function activeOrderData(items: BackendRecord[]) {
+  return items.map((order, index) => {
+    const nestedCustomerName =
+      fullNameFromNested(order.customer) || fullNameFromNested(order.user);
+    const customerName =
+      valueText(order, ["customer_name", "user_name"]) ||
+      nestedCustomerName ||
+      "عميل";
+    const code =
+      valueText(order, ["order_number", "code", "description"]) ||
+      `ORD-${valueText(order, ["id"], String(index + 1))}`;
+
+    return {
+      key: `${code}-${index}`,
+      code,
+      customerName,
+      amount: safeNumber(firstValue(order, ["total_price", "total", "amount"])),
+      status: translateOrderStatus(order.status),
+    };
+  });
+}
+
+function topShopData(items: BackendRecord[]) {
+  return items
+    .map((shop, index) => {
+      const name = valueText(shop, ["name", "market_name", "shop_name"], "محل");
+      const branch = valueText(shop, ["branch", "branch_name"]);
+      const category = valueText(shop, ["category", "classification_name"]);
+      const revenue = safeNumber(firstValue(shop, ["revenue", "total_revenue"]));
+      const orders = safeNumber(firstValue(shop, ["orders_count", "order_count"]));
+      const providedAverage = firstValue(shop, [
+        "average_order_value",
+        "avg_order_value",
+      ]);
+      const average =
+        providedAverage !== undefined && providedAverage !== null
+          ? safeNumber(providedAverage)
+          : orders > 0
+            ? revenue / orders
+            : 0;
+
+      return {
+        key: `${name}-${index}`,
+        rank: index + 1,
+        name: branch ? `${name} - ${branch}` : name,
+        category,
+        revenue,
+        orders,
+        average: Number.isFinite(average) ? average : 0,
+      };
+    })
+    .sort((left, right) => right.revenue - left.revenue)
+    .map((shop, index) => ({ ...shop, rank: index + 1 }));
+}
+
+function TopCategoriesCard({
+  currency,
+  shops,
+}: {
+  currency: string;
+  shops: BackendRecord[];
+}) {
+  const { direction, numberLocale, t } = useDashboardI18n();
+  const displayItems = topShopData(shops);
+  const totalRevenue = displayItems.reduce((total, item) => total + item.revenue, 0);
+  const currencyPrefix = `${currency} `;
+  const currencySuffix = "";
   const progressColorClass = "bg-cyan-500";
   const rankBadgeClass =
     "bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-200";
   const zoneBadgeClass =
     "rounded border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium leading-[15px] text-amber-700 dark:border-amber-400/30 dark:bg-amber-500/15 dark:text-amber-200";
-  const shopMeta = (item: (typeof topShopItems)[number]) =>
-    `${item.orders.toLocaleString(numberLocale)} ${t("common.orders")} · ${t(
-      "overview.topItems.average",
-    )} ${item.average.toLocaleString(numberLocale, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}/${t("common.order")}`;
-  const displayItems = [...topShopItems]
-    .sort((left, right) => right.revenue - left.revenue)
-    .map((item, index) => ({
-      rank: index + 1,
-      name: language === "ar" ? item.nameAr : item.nameEn,
-      zone: language === "ar" ? item.zoneAr : item.zoneEn,
-      meta: shopMeta(item),
-      value: item.revenue,
-    }));
-  const maxValue = Math.max(...displayItems.map((item) => item.value));
+  const shopMeta = (item: (typeof displayItems)[number]) => {
+    const parts = [
+      `${item.orders.toLocaleString(numberLocale)} ${t("common.orders")}`,
+    ];
+
+    if (item.orders > 0) {
+      parts.push(
+        `${t("overview.topItems.average")} ${item.average.toLocaleString(
+          numberLocale,
+          {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          },
+        )}/${t("common.order")}`,
+      );
+    }
+
+    return parts.join(" · ");
+  };
+  const maxValue = Math.max(...displayItems.map((item) => item.revenue), 0);
 
   return (
     <Card className="mt-6 border-border bg-card text-card-foreground shadow-sm">
@@ -172,12 +253,17 @@ function TopCategoriesCard() {
         </div>
 
         <div className="mt-5 flex flex-col gap-3.5">
+          {displayItems.length === 0 ? (
+            <div className="flex min-h-[120px] items-center justify-center rounded-lg border border-dashed text-center text-sm text-muted-foreground">
+              لا توجد بيانات محلات في هذه الفترة
+            </div>
+          ) : null}
           {displayItems.map((item, index) => {
-            const progress = (item.value / maxValue) * 100;
+            const progress = maxValue > 0 ? (item.revenue / maxValue) * 100 : 0;
             const delay = 120 + index * 70;
 
             return (
-              <div key={item.name}>
+              <div key={item.key}>
                 <div className="mb-2 flex items-end justify-between gap-4">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <div
@@ -193,16 +279,18 @@ function TopCategoriesCard() {
                         <span className="truncate text-base font-semibold leading-5 text-card-foreground">
                           {item.name}
                         </span>
-                        <span className={zoneBadgeClass}>{item.zone}</span>
+                        {item.category ? (
+                          <span className={zoneBadgeClass}>{item.category}</span>
+                        ) : null}
                       </div>
                       <div className="mt-0.5 truncate text-xs leading-4 text-muted-foreground">
-                        {item.meta}
+                        {shopMeta(item)}
                       </div>
                     </div>
                   </div>
                   <div className="shrink-0 pb-1 text-left text-sm font-bold leading-5 text-card-foreground">
                     <AnimatedNumber
-                      value={item.value}
+                      value={item.revenue}
                       decimals={2}
                       delay={delay}
                       locale={numberLocale}
@@ -230,7 +318,12 @@ function TopCategoriesCard() {
   );
 }
 
-function RevenueTooltip({ active, label, payload }: TooltipContentProps) {
+function RevenueTooltip({
+  active,
+  label,
+  payload,
+  currency,
+}: TooltipContentProps & { currency: string }) {
   const { numberLocale, t } = useDashboardI18n();
 
   if (!active || !payload?.length) {
@@ -241,19 +334,12 @@ function RevenueTooltip({ active, label, payload }: TooltipContentProps) {
   const item = payload[0]?.payload as
     | { sold?: number; orders?: number }
     | undefined;
-  const currencyPrefix = t("common.egpPrefix");
-  const currencySuffix = t("common.egpSuffix");
 
   return (
     <div className="grid min-w-[9rem] items-start gap-1.5 rounded-lg border border-border/50 bg-background px-3 py-2 text-xs shadow-xl">
       <div className="font-medium">{label}</div>
       <div className="font-semibold" dir="ltr">
-        {formatMoney(
-          value,
-          numberLocale,
-          currencyPrefix,
-          currencySuffix,
-        ).replace(" ", "\u00A0")}
+        {formatMoney(value, currency).replace(" ", "\u00A0")}
       </div>
       {item ? (
         <div className="text-muted-foreground">
@@ -307,15 +393,17 @@ function UpdateCadenceLabel({
 }
 
 function OrdersKpiCard({
+  orders,
   height = "h-[388px]",
 }: {
+  orders: DashboardOverview["orders"];
   height?: string;
 }) {
   const { numberLocale, t } = useDashboardI18n();
-  const completedOrders = 168;
-  const incompleteOrders = 105;
-  const totalOrders = 273;
-  const completionRate = 61.5;
+  const completedOrders = safeNumber(orders?.completed);
+  const incompleteOrders = safeNumber(orders?.incomplete);
+  const totalOrders = safeNumber(orders?.total);
+  const completionRate = clampedPercent(orders?.completion_rate);
 
   return (
     <Card className={cn("flex flex-col shadow", height)}>
@@ -440,17 +528,22 @@ function OrdersKpiCard({
   );
 }
 
-function RevenuePerformanceChart() {
-  const { t } = useDashboardI18n();
-  const revenueChartData = topItems.map((item, index) => {
-    const name = t(revenueProductKeys[index]);
+function RevenuePerformanceChart({
+  currency,
+  products,
+}: {
+  currency: string;
+  products: BackendRecord[];
+}) {
+  const revenueChartData = productChartData(products);
 
-    return {
-      ...item,
-      chartName:
-        name.length > 14 ? `${name.slice(0, 14).trimEnd()}...` : name,
-    };
-  });
+  if (revenueChartData.length === 0) {
+    return (
+      <div className="flex h-full w-full items-center justify-center rounded-lg border border-dashed text-center text-sm text-muted-foreground">
+        لا توجد بيانات منتجات في هذه الفترة
+      </div>
+    );
+  }
 
   return (
     <div
@@ -515,7 +608,9 @@ function RevenuePerformanceChart() {
               />
               <YAxis hide domain={[0, "dataMax + 220"]} tickCount={4} />
               <Tooltip
-                content={(props) => <RevenueTooltip {...props} />}
+                content={(props) => (
+                  <RevenueTooltip {...props} currency={currency} />
+                )}
                 cursor={{ fill: "var(--muted)" }}
               />
               <Bar
@@ -584,6 +679,27 @@ function atStartOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+function formatDateParam(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function isValidDate(value: Date) {
+  return value instanceof Date && Number.isFinite(value.getTime());
+}
+
+function createDefaultDateRange(): DateRange {
+  const today = atStartOfDay(new Date());
+
+  return {
+    from: new Date(today.getFullYear(), today.getMonth(), 1),
+    to: today,
+  };
+}
+
 function isInRange(date: Date, range: DateRange) {
   const time = atStartOfDay(date).getTime();
   return (
@@ -611,15 +727,20 @@ function getCalendarCells(viewDate: Date) {
   });
 }
 
-function OverviewDateActions() {
+function OverviewDateActions({
+  range,
+  loading,
+  onRangeChange,
+  onRefresh,
+}: {
+  range: DateRange;
+  loading: boolean;
+  onRangeChange: (range: DateRange) => void;
+  onRefresh: () => void;
+}) {
   const { direction, numberLocale, t } = useDashboardI18n();
   const rootRef = useRef<HTMLDivElement>(null);
-  const [range, setRange] = useState<DateRange>({
-    from: new Date(2026, 4, 1),
-    to: new Date(2026, 4, 22),
-  });
   const [activeField, setActiveField] = useState<DateField | null>(null);
-  const [refreshState, setRefreshState] = useState<"idle" | "loading">("idle");
 
   useEffect(() => {
     function handlePointerDown(event: globalThis.PointerEvent) {
@@ -647,27 +768,13 @@ function OverviewDateActions() {
   }, []);
 
   function updateDate(field: DateField, date: Date) {
-    setRange((currentRange) => {
-      const nextDate = atStartOfDay(date);
+    const nextDate = atStartOfDay(date);
 
-      if (field === "from") {
-        return {
-          from: nextDate,
-          to: nextDate > currentRange.to ? nextDate : currentRange.to,
-        };
-      }
-
-      return {
-        from: nextDate < currentRange.from ? nextDate : currentRange.from,
-        to: nextDate,
-      };
+    onRangeChange({
+      ...range,
+      [field]: nextDate,
     });
     setActiveField(null);
-  }
-
-  function refreshDashboard() {
-    setRefreshState("loading");
-    window.location.reload();
   }
 
   return (
@@ -708,16 +815,16 @@ function OverviewDateActions() {
         variant="outline"
         size="sm"
         className="h-10 w-[116px] self-start"
-        disabled={refreshState === "loading"}
-        onClick={refreshDashboard}
+        disabled={loading}
+        onClick={onRefresh}
       >
         <RefreshCcw
           className={cn(
             "size-4",
-            refreshState === "loading" && "animate-spin",
+            loading && "animate-spin",
           )}
         />
-        {refreshState === "loading" ? t("common.loading") : t("common.refresh")}
+        {loading ? t("common.loading") : t("common.refresh")}
       </Button>
     </div>
   );
@@ -877,18 +984,97 @@ function DatePickerPopover({
 }
 
 export function OverviewPage() {
+  const { apiFetch } = useAuth();
   const { direction, numberLocale, t } = useDashboardI18n();
-  const currencyPrefix = t("common.egpPrefix");
-  const currencySuffix = t("common.egpSuffix");
+  const [range, setRange] = useState<DateRange>(() => createDefaultDateRange());
+  const [dashboardData, setDashboardData] = useState<DashboardOverview | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const didLoadInitialData = useRef(false);
   const MoreArrow = direction === "rtl" ? ArrowLeft : ArrowRight;
+  const data = dashboardData ?? dashboardEmptyState;
+  const currency = data.currency?.trim() || "EGP";
+  const currencyPrefix = `${currency} `;
+  const currencySuffix = "";
+  const revenueTotal = safeNumber(data.revenue?.total);
+  const revenuePercentage = clampedPercent(data.revenue?.percentage);
+  const customersReturnRate = clampedPercent(data.customers?.return_rate);
+  const newCustomers = safeNumber(data.customers?.new);
+  const returningCustomers = safeNumber(data.customers?.returning);
+  const activeOrders = activeOrderData(recordList(data.active_orders));
+  const topProducts = recordList(data.top_products);
+  const topShops = recordList(data.top_shops);
+
+  const loadDashboard = useCallback(
+    async (selectedRange: DateRange) => {
+      if (!isValidDate(selectedRange.from) || !isValidDate(selectedRange.to)) {
+        setError("الرجاء اختيار تاريخ صحيح");
+        return;
+      }
+
+      if (atStartOfDay(selectedRange.from) > atStartOfDay(selectedRange.to)) {
+        setError("تاريخ البداية يجب أن يكون قبل تاريخ النهاية");
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const overview = await getDashboardOverview(
+          apiFetch,
+          formatDateParam(selectedRange.from),
+          formatDateParam(selectedRange.to),
+        );
+        setDashboardData(overview);
+      } catch (reason) {
+        setDashboardData(null);
+        const message =
+          reason instanceof Error ? reason.message : "تعذر تحميل بيانات لوحة التحكم";
+
+        setError(
+          message.includes("جلسة") || message.includes("401")
+            ? "انتهت الجلسة، الرجاء تسجيل الدخول مرة أخرى"
+            : message || "تعذر تحميل بيانات لوحة التحكم",
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [apiFetch],
+  );
+
+  useEffect(() => {
+    if (didLoadInitialData.current) return;
+    didLoadInitialData.current = true;
+    void loadDashboard(range);
+  }, [loadDashboard, range]);
 
   return (
     <div className="px-6 py-6">
       <PageTitle
         title={t("overview.title")}
         description={t("overview.description")}
-        actions={<OverviewDateActions />}
+        actions={
+          <OverviewDateActions
+            range={range}
+            loading={loading}
+            onRangeChange={setRange}
+            onRefresh={() => void loadDashboard(range)}
+          />
+        }
       />
+
+      {loading ? (
+        <div className="mt-4 rounded-md border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+          جاري تحميل بيانات لوحة التحكم...
+        </div>
+      ) : null}
+      {error ? (
+        <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
+          {error}
+        </div>
+      ) : null}
 
       <div className="mt-6 grid gap-4 xl:grid-cols-3">
         <AnimatedCircularStatCard
@@ -898,9 +1084,8 @@ export function OverviewPage() {
               {t("overview.totalRevenue.subtitle")}
             </UpdateCadenceLabel>
           }
-          value={46745.94}
-          maxValue={46745.94}
-          percentage={100}
+          value={revenueTotal}
+          percentage={revenuePercentage}
           label={t("overview.totalRevenue.label")}
           color="var(--chart-1)"
           decimals={2}
@@ -910,12 +1095,7 @@ export function OverviewPage() {
           tooltip={
             <MetricTooltip
               title={t("overview.totalRevenue.label")}
-              value={formatMoney(
-                46745.94,
-                numberLocale,
-                currencyPrefix,
-                currencySuffix,
-              )}
+              value={formatMoney(revenueTotal, currency)}
               detail={t("overview.totalRevenue.note")}
             />
           }
@@ -925,27 +1105,27 @@ export function OverviewPage() {
                 content={
                   <MetricTooltip
                     title={t("overview.totalRevenue.label")}
-                    value={formatMoney(
-                      46745.94,
-                      numberLocale,
-                      currencyPrefix,
-                      currencySuffix,
-                    )}
-                    detail="100%"
+                    value={formatMoney(revenueTotal, currency)}
+                    detail={formatPercent(revenuePercentage)}
                   />
                 }
               >
                 <div className="flex items-center justify-center gap-1 font-medium leading-none">
                   {t("overview.totalRevenue.label")}{" "}
                   <AnimatedNumber
-                    value={46745.94}
+                    value={revenueTotal}
                     decimals={2}
                     locale={numberLocale}
                     prefix={currencyPrefix}
                     suffix={currencySuffix}
                   />{" "}
                   (
-                  <AnimatedNumber value={100} suffix="%" locale={numberLocale} />
+                  <AnimatedNumber
+                    value={revenuePercentage}
+                    decimals={Number.isInteger(revenuePercentage) ? 0 : 1}
+                    suffix="%"
+                    locale={numberLocale}
+                  />
                   )
                   <TrendingUp className="size-4" />
                 </div>
@@ -956,7 +1136,7 @@ export function OverviewPage() {
             </>
           }
         />
-        <OrdersKpiCard />
+        <OrdersKpiCard orders={data.orders} />
         <AnimatedCircularStatCard
           title={t("overview.customerAnalysis.title")}
           subtitle={
@@ -964,8 +1144,8 @@ export function OverviewPage() {
               {t("overview.customerAnalysis.subtitle")}
             </UpdateCadenceLabel>
           }
-          value={0}
-          percentage={0}
+          value={customersReturnRate}
+          percentage={customersReturnRate}
           label={t("overview.customerAnalysis.returnRateLabel")}
           color="var(--chart-1)"
           radius={85}
@@ -980,8 +1160,8 @@ export function OverviewPage() {
           tooltip={
             <MetricTooltip
               title={t("overview.customerAnalysis.returnRateLabel")}
-              value="0.0%"
-              detail={`${t("overview.customerAnalysis.newCustomers")} ${(129).toLocaleString(numberLocale)} / ${t("overview.customerAnalysis.returningCustomers")} ${(0).toLocaleString(numberLocale)}`}
+              value={formatPercent(customersReturnRate)}
+              detail={`${t("overview.customerAnalysis.newCustomers")} ${newCustomers.toLocaleString(numberLocale)} / ${t("overview.customerAnalysis.returningCustomers")} ${returningCustomers.toLocaleString(numberLocale)}`}
             />
           }
           footer={
@@ -990,15 +1170,15 @@ export function OverviewPage() {
                 content={
                   <MetricTooltip
                     title={t("overview.customerAnalysis.returnRate")}
-                    value="0.0%"
-                    detail={`${t("overview.customerAnalysis.returningCustomers")} ${(0).toLocaleString(numberLocale)}`}
+                    value={formatPercent(customersReturnRate)}
+                    detail={`${t("overview.customerAnalysis.returningCustomers")} ${returningCustomers.toLocaleString(numberLocale)}`}
                   />
                 }
               >
                 <div className="flex items-center justify-center gap-1 font-medium leading-none">
                   {t("overview.customerAnalysis.returnRate")}{" "}
                   <AnimatedNumber
-                    value={0}
+                    value={customersReturnRate}
                     decimals={1}
                     suffix="%"
                     delay={200}
@@ -1009,9 +1189,17 @@ export function OverviewPage() {
               </HoverTooltip>
               <div className="text-xs leading-none text-muted-foreground">
                 {t("overview.customerAnalysis.newCustomers")}{" "}
-                <AnimatedNumber value={129} delay={200} locale={numberLocale} />{" "}
+                <AnimatedNumber
+                  value={newCustomers}
+                  delay={200}
+                  locale={numberLocale}
+                />{" "}
                 · {t("overview.customerAnalysis.returningCustomers")}{" "}
-                <AnimatedNumber value={0} delay={200} locale={numberLocale} />
+                <AnimatedNumber
+                  value={returningCustomers}
+                  delay={200}
+                  locale={numberLocale}
+                />
               </div>
             </>
           }
@@ -1027,7 +1215,7 @@ export function OverviewPage() {
               className="min-h-[65px] border-b"
             />
             <div className="h-[442px] px-6 pb-4 pt-6">
-              <RevenuePerformanceChart />
+              <RevenuePerformanceChart currency={currency} products={topProducts} />
             </div>
           </Card>
         </div>
@@ -1041,15 +1229,14 @@ export function OverviewPage() {
             />
             <div className="no-scrollbar flex-1 overflow-y-auto px-3 py-2">
               <div className="space-y-2 pt-1">
-                {[
-                  ["#ORD-20260521-0F65T3", "overview.customer.donia", "379"],
-                  ["#ORD-20260517-3L65XO", "overview.customer.umMohamed", "100"],
-                  ["#ORD-20260516-AUD0P6", "overview.customer.ahmedMorsy", "97"],
-                  ["#ORD-20260513-BIWPBM", "overview.customer.salma", "40"],
-                  ["#ORD-20260513-U97BRV", "overview.customer.ahmedKhaled", "230"],
-                ].map(([id, nameKey, total], index) => (
+                {activeOrders.length === 0 ? (
+                  <div className="flex min-h-[300px] items-center justify-center rounded-lg border border-dashed px-4 text-center text-sm text-muted-foreground">
+                    لا توجد طلبات نشطة في هذه الفترة
+                  </div>
+                ) : null}
+                {activeOrders.map((order, index) => (
                   <Link
-                    key={id}
+                    key={order.key}
                     href="/orders"
                     className="flex min-h-[67px] items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2.5 text-start transition-colors hover:border-primary hover:bg-primary/5"
                   >
@@ -1058,16 +1245,17 @@ export function OverviewPage() {
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold leading-5">
-                        {id}
+                        {order.code}
                       </span>
                       <span className="block truncate text-xs leading-4 text-muted-foreground">
-                        {t(nameKey)}
+                        {order.customerName}
                       </span>
                     </span>
                     <span className="flex shrink-0 flex-col items-end gap-1">
                       <span className="text-sm font-semibold leading-5">
                         <AnimatedNumber
-                          value={Number(total)}
+                          value={order.amount}
+                          decimals={2}
                           locale={numberLocale}
                           prefix={currencyPrefix}
                           suffix={currencySuffix}
@@ -1075,7 +1263,7 @@ export function OverviewPage() {
                         />
                       </span>
                       <span className="rounded border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium leading-[15px] text-amber-700 dark:border-amber-400/30 dark:bg-amber-500/15 dark:text-amber-200">
-                        {t("overview.activeOrders.pending")}
+                        {order.status}
                       </span>
                     </span>
                   </Link>
@@ -1094,7 +1282,7 @@ export function OverviewPage() {
         </div>
       </div>
 
-      <TopCategoriesCard />
+      <TopCategoriesCard currency={currency} shops={topShops} />
     </div>
   );
 }

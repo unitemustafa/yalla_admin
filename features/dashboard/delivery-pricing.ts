@@ -15,8 +15,8 @@ export type DeliveryZone = {
   estimatedDeliveryMinutes: number;
   status: DeliveryZoneStatus;
   notes: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 
 export type DeliverySettings = {
@@ -27,8 +27,8 @@ export type DeliverySettings = {
   pricePerExtraKm: number;
   maxDistanceKm: number;
   outsideZoneUnavailableMessage: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 
 export type DeliveryFeeResult = {

@@ -13,11 +13,39 @@ export const adminApiPaths = {
   marketClassifications: "home/market-classifications/",
   users: "auth/users/",
   offers: "offers/",
+  dashboardOverview: "dashboard/overview/",
 } as const;
 
 export type ApiFetch = (path: string, init?: RequestInit) => Promise<Response>;
 
 export type BackendRecord = Record<string, unknown>;
+
+export type DashboardOverview = {
+  range?: {
+    from?: string;
+    to?: string;
+    timezone?: string;
+  };
+  currency?: string;
+  revenue?: {
+    total?: string | number | null;
+    percentage?: string | number | null;
+  };
+  orders?: {
+    total?: string | number | null;
+    completed?: string | number | null;
+    incomplete?: string | number | null;
+    completion_rate?: string | number | null;
+  };
+  customers?: {
+    new?: string | number | null;
+    returning?: string | number | null;
+    return_rate?: string | number | null;
+  };
+  top_products?: BackendRecord[];
+  active_orders?: BackendRecord[];
+  top_shops?: BackendRecord[];
+};
 
 export type ShopRow = {
   id: string;
@@ -36,6 +64,59 @@ export function apiErrorMessage(data: unknown, fallback: string) {
 
 export async function readApiData(response: Response) {
   return (await response.json().catch(() => null)) as unknown;
+}
+
+export function safeNumber(value: unknown) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/,/g, "").trim());
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+export function formatMoney(value: unknown, currency = "EGP") {
+  const amount = safeNumber(value).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  return `${currency || "EGP"} ${amount}`;
+}
+
+export function formatPercent(value: unknown) {
+  const percentage = safeNumber(value);
+  const decimals = Number.isInteger(percentage) ? 0 : 1;
+
+  return `${percentage.toLocaleString("en-US", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })}%`;
+}
+
+export function translateOrderStatus(status: unknown) {
+  if (typeof status !== "string" || !status.trim()) return "غير معروف";
+
+  const labels: Record<string, string> = {
+    pending: "قيد الانتظار",
+    under_preparation: "قيد التحضير",
+    preparing: "قيد التحضير",
+    ready: "جاهز",
+    on_the_way: "في الطريق",
+    delivered: "مكتمل",
+    completed: "مكتمل",
+    cancelled: "ملغي",
+    canceled: "ملغي",
+    rejected: "مرفوض",
+  };
+
+  return labels[status.trim().toLowerCase()] ?? status;
+}
+
+function isDashboardOverview(value: unknown): value is DashboardOverview {
+  return Boolean(value && typeof value === "object");
 }
 
 export function apiList(value: unknown): BackendRecord[] {
@@ -183,6 +264,38 @@ export async function fetchAdminRows<T>(
   }
 
   return apiList(data).map(mapper);
+}
+
+export async function getDashboardOverview(
+  apiFetch: ApiFetch,
+  from: string,
+  to: string,
+) {
+  const params = new URLSearchParams({ from, to });
+  const response = await apiFetch(
+    `${adminApiPaths.dashboardOverview}?${params.toString()}`,
+    {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    },
+  );
+  const data = await readApiData(response);
+
+  if (!response.ok) {
+    const fallback =
+      response.status === 401
+        ? "انتهت الجلسة، الرجاء تسجيل الدخول مرة أخرى"
+        : "تعذر تحميل بيانات لوحة التحكم";
+
+    throw new Error(apiErrorMessage(data, fallback));
+  }
+
+  if (!isDashboardOverview(data)) {
+    throw new Error("تعذر تحميل بيانات لوحة التحكم");
+  }
+
+  return data;
 }
 
 export async function sendAdminJson(

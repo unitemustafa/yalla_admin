@@ -16,8 +16,10 @@ type DeliveryAreaResponse = {
   estimated_delivery_minutes: number;
   status: DeliveryZone["status"];
   notes?: string;
-  created_at: string;
-  updated_at: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 function numberValue(value: string | number | undefined) {
@@ -45,8 +47,8 @@ function deliveryZoneFromResponse(area: DeliveryAreaResponse): DeliveryZone {
     estimatedDeliveryMinutes: numberValue(area.estimated_delivery_minutes),
     status: area.status ?? "active",
     notes: area.notes ?? "",
-    createdAt: area.created_at,
-    updatedAt: area.updated_at,
+    createdAt: area.createdAt ?? area.created_at ?? null,
+    updatedAt: area.updatedAt ?? area.updated_at ?? null,
   };
 }
 
