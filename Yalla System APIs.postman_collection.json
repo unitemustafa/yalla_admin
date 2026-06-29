@@ -3720,7 +3720,7 @@
                       "bearer": [
                         {
                           "key": "token",
-                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNDkxMjc5LCJpYXQiOjE3ODI0OTAzNzksImp0aSI6IjU3NDZkNGVjNDZhOTRjN2Y4ZjJkZDdkNjhlMTkwMjQzIiwidXNlcl9pZCI6IjEifQ.8vqz32tQp1vb30HZJ-JbeZ349mLQ2P18mkY1Q54E6Dw",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQyMDI2LCJpYXQiOjE3ODI3NDExMjYsImp0aSI6IjA2ZjdmNjc1OTdjYjRhNDFiZjU1MzIzZGM0MjBhMGU1IiwidXNlcl9pZCI6IjEifQ.OoZZh7g6w8RAKakTGEUqibK3FFQZiyioNkDrZg88g88",
                           "type": "string"
                         }
                       ]
@@ -3729,7 +3729,7 @@
                     "header": [],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"classification_id\": 1,\n  \"name\": \"سوق جديد\",\n  \"branch\": \"فرع أول\",\n  \"status\": \"active\"\n}",
+                      "raw": "{\n  \"classification_id\": 1,\n  \"name\": \"Market Name\",\n  \"branch\": \"Main Branch\",\n  \"status\": \"active\",\n  \"delivery_areas\": [2]\n}",
                       "options": {
                         "raw": {
                           "language": "json"
@@ -3758,7 +3758,7 @@
                         "header": [],
                         "body": {
                           "mode": "raw",
-                          "raw": "{\n  \"classification_id\": 1,\n  \"name\": \"سوق جديد\",\n  \"branch\": \"فرع أول\",\n  \"status\": \"active\"\n}",
+                          "raw": "{\n  \"classification_id\": 1,\n  \"name\": \"Market Name\",\n  \"branch\": \"Main Branch\",\n  \"status\": \"active\",\n  \"delivery_areas\": [2]\n}",
                           "options": {
                             "raw": {
                               "language": "json"
@@ -3785,7 +3785,7 @@
                       "header": [
                         {
                           "key": "Date",
-                          "value": "Fri, 26 Jun 2026 16:23:40 GMT"
+                          "value": "Mon, 29 Jun 2026 13:53:12 GMT"
                         },
                         {
                           "key": "Server",
@@ -3809,7 +3809,7 @@
                         },
                         {
                           "key": "Content-Length",
-                          "value": "228"
+                          "value": "398"
                         },
                         {
                           "key": "X-Content-Type-Options",
@@ -3825,7 +3825,7 @@
                         }
                       ],
                       "cookie": [],
-                      "body": "{\n    \"id\": 1,\n    \"classification\": {\n        \"id\": 1,\n        \"name\": \"مطاعم\"\n    },\n    \"name\": \"سوق جديد\",\n    \"branch\": \"فرع أول\",\n    \"status\": \"active\",\n    \"delivery_areas\": [],\n    \"created_at\": \"2026-06-26T16:23:40.532566Z\",\n    \"updated_at\": \"2026-06-26T16:23:40.532596Z\"\n}"
+                      "body": "{\n    \"id\": 2,\n    \"classification\": {\n        \"id\": 1,\n        \"name\": \"مطاعم\"\n    },\n    \"name\": \"Market Name\",\n    \"branch\": \"Main Branch\",\n    \"status\": \"active\",\n    \"delivery_areas\": [\n        {\n            \"id\": 2,\n            \"service_city_id\": 2,\n            \"name\": \"Algiers Center\",\n            \"delivery_price\": \"200.00\",\n            \"center_latitude\": \"36.7525000\",\n            \"center_longitude\": \"3.0420000\",\n            \"radius_km\": \"8.00\",\n            \"is_active\": true\n        }\n    ],\n    \"created_at\": \"2026-06-29T13:53:12.008418Z\",\n    \"updated_at\": \"2026-06-29T13:53:12.008434Z\"\n}"
                     }
                   ]
                 },
@@ -3936,7 +3936,7 @@
                       "bearer": [
                         {
                           "key": "token",
-                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNDk2NDE0LCJpYXQiOjE3ODI0OTU1MTQsImp0aSI6IjdmZmI3NzI0ZjZhODQyMzM5NjE3ODc2YTE3M2MwNjQyIiwidXNlcl9pZCI6IjEifQ.P15Nws8kYFsVo55z2eg63KZmWwvta1GGzlN6zX37ml0",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQxNTI4LCJpYXQiOjE3ODI3NDA2MjgsImp0aSI6IjBjNWVjYzA3ODExMzQzNDNhYzZhZjg5N2YzYWNhMDA2IiwidXNlcl9pZCI6IjEifQ.IvGHbOMGgbsWH2QnfcO422-x_Fxwx8I7Ajsd5zExf8I",
                           "type": "string"
                         }
                       ]
@@ -3958,7 +3958,296 @@
                       ]
                     }
                   },
-                  "response": []
+                  "response": [
+                    {
+                      "name": "Get Market Details",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{local}}/api/v1/home/markets/1/",
+                          "host": [
+                            "{{local}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "home",
+                            "markets",
+                            "1",
+                            ""
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": null,
+                      "header": [
+                        {
+                          "key": "Date",
+                          "value": "Mon, 29 Jun 2026 13:44:08 GMT"
+                        },
+                        {
+                          "key": "Server",
+                          "value": "WSGIServer/0.2 CPython/3.14.5"
+                        },
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        },
+                        {
+                          "key": "Vary",
+                          "value": "Accept, origin"
+                        },
+                        {
+                          "key": "Allow",
+                          "value": "GET, PATCH, DELETE, HEAD, OPTIONS"
+                        },
+                        {
+                          "key": "X-Frame-Options",
+                          "value": "DENY"
+                        },
+                        {
+                          "key": "Content-Length",
+                          "value": "232"
+                        },
+                        {
+                          "key": "X-Content-Type-Options",
+                          "value": "nosniff"
+                        },
+                        {
+                          "key": "Referrer-Policy",
+                          "value": "same-origin"
+                        },
+                        {
+                          "key": "Cross-Origin-Opener-Policy",
+                          "value": "same-origin"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n    \"id\": 1,\n    \"classification\": {\n        \"id\": 1,\n        \"name\": \"مطاعم\"\n    },\n    \"name\": \"محل فراخ\",\n    \"branch\": \"شرم الشيخ\",\n    \"status\": \"active\",\n    \"delivery_areas\": [],\n    \"created_at\": \"2026-06-29T12:35:03.604984Z\",\n    \"updated_at\": \"2026-06-29T12:35:03.605014Z\"\n}"
+                    }
+                  ]
+                },
+                {
+                  "name": "Update Market",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQyMDI2LCJpYXQiOjE3ODI3NDExMjYsImp0aSI6IjA2ZjdmNjc1OTdjYjRhNDFiZjU1MzIzZGM0MjBhMGU1IiwidXNlcl9pZCI6IjEifQ.OoZZh7g6w8RAKakTGEUqibK3FFQZiyioNkDrZg88g88",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "PATCH",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"classification_id\": 1,\n  \"name\": \"Yalla Market Updated\",\n  \"branch\": \"New Branch\",\n  \"status\": \"inactive\",\n  \"delivery_areas\": [2]\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{local}}/api/v1/home/markets/2/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "home",
+                        "markets",
+                        "2",
+                        ""
+                      ]
+                    }
+                  },
+                  "response": [
+                    {
+                      "name": "Update Market",
+                      "originalRequest": {
+                        "method": "PATCH",
+                        "header": [],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"classification_id\": 1,\n  \"name\": \"Yalla Market Updated\",\n  \"branch\": \"New Branch\",\n  \"status\": \"inactive\",\n  \"delivery_areas\": [2]\n}",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          }
+                        },
+                        "url": {
+                          "raw": "{{local}}/api/v1/home/markets/2/",
+                          "host": [
+                            "{{local}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "home",
+                            "markets",
+                            "2",
+                            ""
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": null,
+                      "header": [
+                        {
+                          "key": "Date",
+                          "value": "Mon, 29 Jun 2026 13:56:00 GMT"
+                        },
+                        {
+                          "key": "Server",
+                          "value": "WSGIServer/0.2 CPython/3.14.5"
+                        },
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        },
+                        {
+                          "key": "Vary",
+                          "value": "Accept, origin"
+                        },
+                        {
+                          "key": "Allow",
+                          "value": "GET, PATCH, DELETE, HEAD, OPTIONS"
+                        },
+                        {
+                          "key": "X-Frame-Options",
+                          "value": "DENY"
+                        },
+                        {
+                          "key": "Content-Length",
+                          "value": "408"
+                        },
+                        {
+                          "key": "X-Content-Type-Options",
+                          "value": "nosniff"
+                        },
+                        {
+                          "key": "Referrer-Policy",
+                          "value": "same-origin"
+                        },
+                        {
+                          "key": "Cross-Origin-Opener-Policy",
+                          "value": "same-origin"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n    \"id\": 2,\n    \"classification\": {\n        \"id\": 1,\n        \"name\": \"مطاعم\"\n    },\n    \"name\": \"Yalla Market Updated\",\n    \"branch\": \"New Branch\",\n    \"status\": \"inactive\",\n    \"delivery_areas\": [\n        {\n            \"id\": 2,\n            \"service_city_id\": 2,\n            \"name\": \"Algiers Center\",\n            \"delivery_price\": \"200.00\",\n            \"center_latitude\": \"36.7525000\",\n            \"center_longitude\": \"3.0420000\",\n            \"radius_km\": \"8.00\",\n            \"is_active\": true\n        }\n    ],\n    \"created_at\": \"2026-06-29T13:53:12.008418Z\",\n    \"updated_at\": \"2026-06-29T13:56:00.934267Z\"\n}"
+                    }
+                  ]
+                },
+                {
+                  "name": "Delete Market",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQyMDI2LCJpYXQiOjE3ODI3NDExMjYsImp0aSI6IjA2ZjdmNjc1OTdjYjRhNDFiZjU1MzIzZGM0MjBhMGU1IiwidXNlcl9pZCI6IjEifQ.OoZZh7g6w8RAKakTGEUqibK3FFQZiyioNkDrZg88g88",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "DELETE",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/home/markets/4/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "home",
+                        "markets",
+                        "4",
+                        ""
+                      ]
+                    }
+                  },
+                  "response": [
+                    {
+                      "name": "Delete Market",
+                      "originalRequest": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                          "raw": "{{local}}/api/v1/home/markets/4/",
+                          "host": [
+                            "{{local}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "home",
+                            "markets",
+                            "4",
+                            ""
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": null,
+                      "header": [
+                        {
+                          "key": "Date",
+                          "value": "Mon, 29 Jun 2026 13:59:41 GMT"
+                        },
+                        {
+                          "key": "Server",
+                          "value": "WSGIServer/0.2 CPython/3.14.5"
+                        },
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        },
+                        {
+                          "key": "Vary",
+                          "value": "Accept, origin"
+                        },
+                        {
+                          "key": "Allow",
+                          "value": "GET, PATCH, DELETE, HEAD, OPTIONS"
+                        },
+                        {
+                          "key": "X-Frame-Options",
+                          "value": "DENY"
+                        },
+                        {
+                          "key": "Content-Length",
+                          "value": "34"
+                        },
+                        {
+                          "key": "X-Content-Type-Options",
+                          "value": "nosniff"
+                        },
+                        {
+                          "key": "Referrer-Policy",
+                          "value": "same-origin"
+                        },
+                        {
+                          "key": "Cross-Origin-Opener-Policy",
+                          "value": "same-origin"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n    \"details\": \"Deleted Successfully\"\n}"
+                    }
+                  ]
                 }
               ]
             },
@@ -3973,7 +4262,7 @@
                       "bearer": [
                         {
                           "key": "token",
-                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNDkxMjc5LCJpYXQiOjE3ODI0OTAzNzksImp0aSI6IjU3NDZkNGVjNDZhOTRjN2Y4ZjJkZDdkNjhlMTkwMjQzIiwidXNlcl9pZCI6IjEifQ.8vqz32tQp1vb30HZJ-JbeZ349mLQ2P18mkY1Q54E6Dw",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzM2OTQ1LCJpYXQiOjE3ODI3MzYwNDUsImp0aSI6IjEzNWFjNzEyNjNlNjRjNTFiNTQ5MDI0ODhhZjg4NDY2IiwidXNlcl9pZCI6IjEifQ.ddsUzfKsIR-HFKrTzpJjRVchk1mcHbDJJ0lJQa_zeUg",
                           "type": "string"
                         }
                       ]
@@ -4348,7 +4637,7 @@
                     "header": [],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"market_id\": 1,\n  \"category_id\": 2,\n  \"is_available\": true,\n  \"name\": \"سندويتش\",\n  \"description\": \"طبق تجريبي\",\n  \"image\" : null,\n  \"discount\": \"10.00\",\n  \"attribute_values\": [\n    {\n      \"attribute_id\": 2,\n      \"option_id\": 1\n    }\n  ],\n  \"variants\": [\n    {\n      \"price\": \"500.00\",\n      \"sku\": \"MEAL-S\",\n      \"attribute_values\": [\n        {\n          \"attribute_id\": 2,\n          \"option_id\": 1\n        }\n      ]\n    }\n  ]\n}",
+                      "raw": "{\n  \"market_id\": 1,\n  \"category_id\": 2,\n  \"is_available\": true,\n  \"name\": \"سندويتش\",\n  \"description\": \"طبق تجريبي\",\n  \"image\" : null,\n  \"discount\": \"10.00\",\n  \"additions\": [1, 2],\n  \"attribute_values\": [\n    {\n      \"attribute_id\": 2,\n      \"option_id\": 1\n    }\n  ],\n  \"variants\": [\n    {\n      \"price\": \"500.00\",\n      \"sku\": \"MEAL-S\",\n      \"attribute_values\": [\n        {\n          \"attribute_id\": 2,\n          \"option_id\": 1\n        }\n      ]\n    }\n  ]\n}",
                       "options": {
                         "raw": {
                           "language": "json"
@@ -5325,51 +5614,56 @@
                     }
                   },
                   "response": []
+                },
+                {
+                  "name": "Get all Options",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQyOTYxLCJpYXQiOjE3ODI3NDIwNjEsImp0aSI6IjcyYzU2NDRmZWU5NzQ3YzRhNjdkZDQ0YmI1NWQ1NWYzIiwidXNlcl9pZCI6IjEifQ.XIbVG8Ldf3Dkq6SIgYvZrzXNVXRr_VgVQkaGKZMAJY8",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/catalog/category-options/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "catalog",
+                        "category-options",
+                        ""
+                      ]
+                    }
+                  },
+                  "response": []
                 }
               ]
             },
             {
-              "name": "Add New Addition Classification",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNDAxMzk0LCJpYXQiOjE3ODI0MDA0OTQsImp0aSI6Ijc2ZGUxMWU4YTk4ZTQ3YTlhODQxNjk5NmQ2NjBhNmM1IiwidXNlcl9pZCI6IjEifQ.YxjIy5JV4rpaHnRy7Wgb-tWxR937cDuW2qQDp4pwS6E",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "POST",
-                "header": [],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"name\" : \"صلصات\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "url": {
-                  "raw": "{{local}}/api/v1/catalog/addition-classifications/",
-                  "host": [
-                    "{{local}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "catalog",
-                    "addition-classifications",
-                    ""
-                  ]
-                }
-              },
-              "response": [
+              "name": "Addition Classification Management",
+              "item": [
                 {
                   "name": "Add New Addition Classification",
-                  "originalRequest": {
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNDAxMzk0LCJpYXQiOjE3ODI0MDA0OTQsImp0aSI6Ijc2ZGUxMWU4YTk4ZTQ3YTlhODQxNjk5NmQ2NjBhNmM1IiwidXNlcl9pZCI6IjEifQ.YxjIy5JV4rpaHnRy7Wgb-tWxR937cDuW2qQDp4pwS6E",
+                          "type": "string"
+                        }
+                      ]
+                    },
                     "method": "POST",
                     "header": [],
                     "body": {
@@ -5395,53 +5689,334 @@
                       ]
                     }
                   },
-                  "status": "Created",
-                  "code": 201,
-                  "_postman_previewlanguage": null,
-                  "header": [
+                  "response": [
                     {
-                      "key": "Date",
-                      "value": "Wed, 24 Jun 2026 13:48:12 GMT"
-                    },
-                    {
-                      "key": "Server",
-                      "value": "WSGIServer/0.2 CPython/3.14.5"
-                    },
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json"
-                    },
-                    {
-                      "key": "Vary",
-                      "value": "Accept, origin"
-                    },
-                    {
-                      "key": "Allow",
-                      "value": "POST, OPTIONS"
-                    },
-                    {
-                      "key": "X-Frame-Options",
-                      "value": "DENY"
-                    },
-                    {
-                      "key": "Content-Length",
-                      "value": "28"
-                    },
-                    {
-                      "key": "X-Content-Type-Options",
-                      "value": "nosniff"
-                    },
-                    {
-                      "key": "Referrer-Policy",
-                      "value": "same-origin"
-                    },
-                    {
-                      "key": "Cross-Origin-Opener-Policy",
-                      "value": "same-origin"
+                      "name": "Add New Addition Classification",
+                      "originalRequest": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n    \"name\" : \"صلصات\"\n}",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          }
+                        },
+                        "url": {
+                          "raw": "{{local}}/api/v1/catalog/addition-classifications/",
+                          "host": [
+                            "{{local}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "catalog",
+                            "addition-classifications",
+                            ""
+                          ]
+                        }
+                      },
+                      "status": "Created",
+                      "code": 201,
+                      "_postman_previewlanguage": null,
+                      "header": [
+                        {
+                          "key": "Date",
+                          "value": "Wed, 24 Jun 2026 13:48:12 GMT"
+                        },
+                        {
+                          "key": "Server",
+                          "value": "WSGIServer/0.2 CPython/3.14.5"
+                        },
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        },
+                        {
+                          "key": "Vary",
+                          "value": "Accept, origin"
+                        },
+                        {
+                          "key": "Allow",
+                          "value": "POST, OPTIONS"
+                        },
+                        {
+                          "key": "X-Frame-Options",
+                          "value": "DENY"
+                        },
+                        {
+                          "key": "Content-Length",
+                          "value": "28"
+                        },
+                        {
+                          "key": "X-Content-Type-Options",
+                          "value": "nosniff"
+                        },
+                        {
+                          "key": "Referrer-Policy",
+                          "value": "same-origin"
+                        },
+                        {
+                          "key": "Cross-Origin-Opener-Policy",
+                          "value": "same-origin"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n    \"id\": 1,\n    \"name\": \"صلصات\"\n}"
                     }
-                  ],
-                  "cookie": [],
-                  "body": "{\n    \"id\": 1,\n    \"name\": \"صلصات\"\n}"
+                  ]
+                },
+                {
+                  "name": "Get All Addition Classifications",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQyOTYxLCJpYXQiOjE3ODI3NDIwNjEsImp0aSI6IjcyYzU2NDRmZWU5NzQ3YzRhNjdkZDQ0YmI1NWQ1NWYzIiwidXNlcl9pZCI6IjEifQ.XIbVG8Ldf3Dkq6SIgYvZrzXNVXRr_VgVQkaGKZMAJY8",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/catalog/addition-classifications/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "catalog",
+                        "addition-classifications",
+                        ""
+                      ]
+                    }
+                  },
+                  "response": [
+                    {
+                      "name": "Get All Addition Classifications",
+                      "originalRequest": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{local}}/api/v1/catalog/addition-classifications/",
+                          "host": [
+                            "{{local}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "catalog",
+                            "addition-classifications",
+                            ""
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": null,
+                      "header": [
+                        {
+                          "key": "Date",
+                          "value": "Mon, 29 Jun 2026 14:12:16 GMT"
+                        },
+                        {
+                          "key": "Server",
+                          "value": "WSGIServer/0.2 CPython/3.14.5"
+                        },
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        },
+                        {
+                          "key": "Vary",
+                          "value": "Accept, origin"
+                        },
+                        {
+                          "key": "Allow",
+                          "value": "GET, POST, HEAD, OPTIONS"
+                        },
+                        {
+                          "key": "X-Frame-Options",
+                          "value": "DENY"
+                        },
+                        {
+                          "key": "Content-Length",
+                          "value": "32"
+                        },
+                        {
+                          "key": "X-Content-Type-Options",
+                          "value": "nosniff"
+                        },
+                        {
+                          "key": "Referrer-Policy",
+                          "value": "same-origin"
+                        },
+                        {
+                          "key": "Cross-Origin-Opener-Policy",
+                          "value": "same-origin"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "[\n    {\n        \"id\": 1,\n        \"name\": \"سكريات\"\n    }\n]"
+                    }
+                  ]
+                },
+                {
+                  "name": "Update Addition Classification",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQyOTYxLCJpYXQiOjE3ODI3NDIwNjEsImp0aSI6IjcyYzU2NDRmZWU5NzQ3YzRhNjdkZDQ0YmI1NWQ1NWYzIiwidXNlcl9pZCI6IjEifQ.XIbVG8Ldf3Dkq6SIgYvZrzXNVXRr_VgVQkaGKZMAJY8",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "PATCH",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"Updated Toppings\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{local}}/api/v1/catalog/addition-classifications/1/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "catalog",
+                        "addition-classifications",
+                        "1",
+                        ""
+                      ]
+                    }
+                  },
+                  "response": [
+                    {
+                      "name": "Update Addition Classification",
+                      "originalRequest": {
+                        "method": "PATCH",
+                        "header": [],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"name\": \"Updated Toppings\"\n}",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          }
+                        },
+                        "url": {
+                          "raw": "{{local}}/api/v1/catalog/addition-classifications/1/",
+                          "host": [
+                            "{{local}}"
+                          ],
+                          "path": [
+                            "api",
+                            "v1",
+                            "catalog",
+                            "addition-classifications",
+                            "1",
+                            ""
+                          ]
+                        }
+                      },
+                      "status": "OK",
+                      "code": 200,
+                      "_postman_previewlanguage": null,
+                      "header": [
+                        {
+                          "key": "Date",
+                          "value": "Mon, 29 Jun 2026 14:13:53 GMT"
+                        },
+                        {
+                          "key": "Server",
+                          "value": "WSGIServer/0.2 CPython/3.14.5"
+                        },
+                        {
+                          "key": "Content-Type",
+                          "value": "application/json"
+                        },
+                        {
+                          "key": "Vary",
+                          "value": "Accept, origin"
+                        },
+                        {
+                          "key": "Allow",
+                          "value": "GET, PATCH, DELETE, HEAD, OPTIONS"
+                        },
+                        {
+                          "key": "X-Frame-Options",
+                          "value": "DENY"
+                        },
+                        {
+                          "key": "Content-Length",
+                          "value": "34"
+                        },
+                        {
+                          "key": "X-Content-Type-Options",
+                          "value": "nosniff"
+                        },
+                        {
+                          "key": "Referrer-Policy",
+                          "value": "same-origin"
+                        },
+                        {
+                          "key": "Cross-Origin-Opener-Policy",
+                          "value": "same-origin"
+                        }
+                      ],
+                      "cookie": [],
+                      "body": "{\n    \"id\": 1,\n    \"name\": \"Updated Toppings\"\n}"
+                    }
+                  ]
+                },
+                {
+                  "name": "Delete Addition Classification",
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQyOTYxLCJpYXQiOjE3ODI3NDIwNjEsImp0aSI6IjcyYzU2NDRmZWU5NzQ3YzRhNjdkZDQ0YmI1NWQ1NWYzIiwidXNlcl9pZCI6IjEifQ.XIbVG8Ldf3Dkq6SIgYvZrzXNVXRr_VgVQkaGKZMAJY8",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "DELETE",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/catalog/addition-classifications/1/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "catalog",
+                        "addition-classifications",
+                        "1",
+                        ""
+                      ]
+                    }
+                  },
+                  "response": []
                 }
               ]
             }
@@ -5552,11 +6127,21 @@
             {
               "name": "Create User",
               "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzM4NTM5LCJpYXQiOjE3ODI3Mzc2MzksImp0aSI6ImFjN2VjMTQ2NTNiNTQ5Y2M4ZmFlYmJhMTNmMjYzMWMyIiwidXNlcl9pZCI6IjEifQ.V-L34doohHvejypGcZD1WRtVvVot-aHqBldoX-CIBPs",
+                      "type": "string"
+                    }
+                  ]
+                },
                 "method": "POST",
                 "header": [],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"first_name\": \"لقمان عبد المنعم\",\n  \"last_name\": \"براهمية\",\n  \"username\": \"Skylok_24\",\n  \"email\": \"lokman@example.com\",\n  \"phone\": \"+213555000022\",\n  \"password\": \"12345678L/\",\n  \"gender\" : \"male\",\n  \"birth_date\" : null,\n \"avatar_url\" : null,\n  \"role\": \"admin\",\n  \"is_active\": true,\n  \"is_staff\": false,\n  \"is_superuser\": false\n}",
+                  "raw": "{\n  \"first_name\": \"Ahmed\",\n  \"last_name\": \"Ali\",\n  \"username\": \"ahmed_courier\",\n  \"email\": \"ahmed@example.com\",\n  \"phone\": \"+213555123456\",\n  \"password\": \"Password123!\",\n  \"gender\": \"male\",\n  \"birth_date\": \"1995-05-20\",\n  \"avatar_url\": \"https://example.com/avatar.jpg\",\n  \"role\": \"representative\",\n  \"is_active\": true,\n  \"is_staff\": false,\n  \"is_superuser\": false\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -6434,8 +7019,1943 @@
           ]
         },
         {
-          "name": "Delivery Areas",
-          "item": []
+          "name": "Orders",
+          "item": [
+            {
+              "name": "Create Order",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzM4MjY2LCJpYXQiOjE3ODI3MzczNjYsImp0aSI6ImQ3MTU4MjBlMzVmYzRmNTlhNDhiMjVlMjUxM2ViZmU1IiwidXNlcl9pZCI6IjEifQ.w5ZQTnYMByA0ThOCIc4BIpj8Y7s_2PaoJHzZXC07AnA",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"user_id\": 2,\n  \"delivery_address_id\": 1,\n  \"assigned_representative_id\": null,\n  \"market_id\": 1,\n  \"payment_method\": \"cash_on_delivery\",\n  \"discount\": \"50.00\",\n  \"description\": \"Call the customer on arrival\",\n  \"status\": \"pending\",\n  \"delivery_price\": \"100.00\",\n  \"subtotal_price\": \"1000.00\",\n  \"total_price\": \"1050.00\",\n  \"image\": null,\n  \"assigned_at\": null,\n  \"delivered_at\": null,\n  \"delivery_note\": \"\",\n  \"delivery_proof\": null,\n  \"items\": [\n    {\n      \"variant_id\": 1,\n      \"quantity\": 2,\n      \"unit_price\": \"500.00\"\n    }\n  ],\n  \"offers\": [\n    {\n      \"offer_id\": 1,\n      \"discount_amount\": \"50.00\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{local}}/api/v1/orders/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "orders",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Create Order",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"user_id\": 2,\n  \"delivery_address_id\": 1,\n  \"assigned_representative_id\": null,\n  \"market_id\": 1,\n  \"payment_method\": \"cash_on_delivery\",\n  \"discount\": \"50.00\",\n  \"description\": \"Call the customer on arrival\",\n  \"status\": \"pending\",\n  \"delivery_price\": \"100.00\",\n  \"subtotal_price\": \"1000.00\",\n  \"total_price\": \"1050.00\",\n  \"image\": null,\n  \"assigned_at\": null,\n  \"delivered_at\": null,\n  \"delivery_note\": \"\",\n  \"delivery_proof\": null,\n  \"items\": [\n    {\n      \"variant_id\": 1,\n      \"quantity\": 2,\n      \"unit_price\": \"500.00\"\n    }\n  ],\n  \"offers\": [\n    {\n      \"offer_id\": 1,\n      \"discount_amount\": \"50.00\"\n    }\n  ]\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{local}}/api/v1/orders/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "orders",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "Created",
+                  "code": 201,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Mon, 29 Jun 2026 12:49:40 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, POST, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "638"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"id\": 1,\n    \"user_id\": 2,\n    \"delivery_address_id\": 1,\n    \"assigned_representative_id\": null,\n    \"market_id\": 1,\n    \"payment_method\": \"cash_on_delivery\",\n    \"discount\": \"50.00\",\n    \"description\": \"Call the customer on arrival\",\n    \"status\": \"pending\",\n    \"delivery_price\": \"100.00\",\n    \"subtotal_price\": \"1000.00\",\n    \"total_price\": \"1050.00\",\n    \"image\": null,\n    \"assigned_at\": null,\n    \"delivered_at\": null,\n    \"delivery_note\": \"\",\n    \"delivery_proof\": null,\n    \"items\": [\n        {\n            \"id\": 1,\n            \"variant_id\": 1,\n            \"quantity\": 2,\n            \"unit_price\": \"500.00\"\n        }\n    ],\n    \"offers\": [\n        {\n            \"id\": 1,\n            \"offer_id\": 1,\n            \"discount_amount\": \"50.00\",\n            \"created_at\": \"2026-06-29T12:49:40.451997Z\"\n        }\n    ],\n    \"created_at\": \"2026-06-29T12:49:40.447336Z\",\n    \"updated_at\": \"2026-06-29T12:49:40.447349Z\"\n}"
+                }
+              ]
+            },
+            {
+              "name": "Assign Order to Reprisentative",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzM4NTM5LCJpYXQiOjE3ODI3Mzc2MzksImp0aSI6ImFjN2VjMTQ2NTNiNTQ5Y2M4ZmFlYmJhMTNmMjYzMWMyIiwidXNlcl9pZCI6IjEifQ.V-L34doohHvejypGcZD1WRtVvVot-aHqBldoX-CIBPs",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": ""
+                },
+                "url": {
+                  "raw": "{{local}}/api/v1/orders/1/assignment/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "orders",
+                    "1",
+                    "assignment",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Assign Order to Reprisentative",
+                  "originalRequest": {
+                    "method": "PATCH",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"representative_id\": 3\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{local}}/api/v1/orders/1/assignment/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "orders",
+                        "1",
+                        "assignment",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Mon, 29 Jun 2026 13:03:16 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "PATCH, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "658"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"id\": 1,\n    \"user_id\": 2,\n    \"delivery_address_id\": 1,\n    \"assigned_representative_id\": 3,\n    \"market_id\": 1,\n    \"payment_method\": \"cash_on_delivery\",\n    \"discount\": \"50.00\",\n    \"description\": \"Call the customer on arrival\",\n    \"status\": \"ready\",\n    \"delivery_price\": \"100.00\",\n    \"subtotal_price\": \"1000.00\",\n    \"total_price\": \"1050.00\",\n    \"image\": null,\n    \"assigned_at\": \"2026-06-29T13:03:16.834373Z\",\n    \"delivered_at\": null,\n    \"delivery_note\": \"\",\n    \"delivery_proof\": null,\n    \"items\": [\n        {\n            \"id\": 1,\n            \"variant_id\": 1,\n            \"quantity\": 2,\n            \"unit_price\": \"500.00\"\n        }\n    ],\n    \"offers\": [\n        {\n            \"id\": 1,\n            \"offer_id\": 1,\n            \"discount_amount\": \"50.00\",\n            \"created_at\": \"2026-06-29T12:49:40.451997Z\"\n        }\n    ],\n    \"created_at\": \"2026-06-29T12:49:40.447336Z\",\n    \"updated_at\": \"2026-06-29T13:03:16.834663Z\"\n}"
+                }
+              ]
+            },
+            {
+              "name": "Change Order Status",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzM4NTM5LCJpYXQiOjE3ODI3Mzc2MzksImp0aSI6ImFjN2VjMTQ2NTNiNTQ5Y2M4ZmFlYmJhMTNmMjYzMWMyIiwidXNlcl9pZCI6IjEifQ.V-L34doohHvejypGcZD1WRtVvVot-aHqBldoX-CIBPs",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"under_preparation\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{local}}/api/v1/orders/1/status/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "orders",
+                    "1",
+                    "status",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Change Order Status",
+                  "originalRequest": {
+                    "method": "PATCH",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"status\": \"under_preparation\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{local}}/api/v1/orders/1/status/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "orders",
+                        "1",
+                        "status",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Mon, 29 Jun 2026 13:05:16 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "PATCH, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "648"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"id\": 1,\n    \"user_id\": 2,\n    \"delivery_address_id\": 1,\n    \"assigned_representative_id\": null,\n    \"market_id\": 1,\n    \"payment_method\": \"cash_on_delivery\",\n    \"discount\": \"50.00\",\n    \"description\": \"Call the customer on arrival\",\n    \"status\": \"under_preparation\",\n    \"delivery_price\": \"100.00\",\n    \"subtotal_price\": \"1000.00\",\n    \"total_price\": \"1050.00\",\n    \"image\": null,\n    \"assigned_at\": null,\n    \"delivered_at\": null,\n    \"delivery_note\": \"\",\n    \"delivery_proof\": null,\n    \"items\": [\n        {\n            \"id\": 1,\n            \"variant_id\": 1,\n            \"quantity\": 2,\n            \"unit_price\": \"500.00\"\n        }\n    ],\n    \"offers\": [\n        {\n            \"id\": 1,\n            \"offer_id\": 1,\n            \"discount_amount\": \"50.00\",\n            \"created_at\": \"2026-06-29T12:49:40.451997Z\"\n        }\n    ],\n    \"created_at\": \"2026-06-29T12:49:40.447336Z\",\n    \"updated_at\": \"2026-06-29T13:05:16.210683Z\"\n}"
+                }
+              ]
+            },
+            {
+              "name": "Get All Orders",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzM4NTM5LCJpYXQiOjE3ODI3Mzc2MzksImp0aSI6ImFjN2VjMTQ2NTNiNTQ5Y2M4ZmFlYmJhMTNmMjYzMWMyIiwidXNlcl9pZCI6IjEifQ.V-L34doohHvejypGcZD1WRtVvVot-aHqBldoX-CIBPs",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{local}}/api/v1/orders/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "orders",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Get All Orders",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/orders/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "orders",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Mon, 29 Jun 2026 13:06:27 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, POST, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "650"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "[\n    {\n        \"id\": 1,\n        \"user_id\": 2,\n        \"delivery_address_id\": 1,\n        \"assigned_representative_id\": null,\n        \"market_id\": 1,\n        \"payment_method\": \"cash_on_delivery\",\n        \"discount\": \"50.00\",\n        \"description\": \"Call the customer on arrival\",\n        \"status\": \"under_preparation\",\n        \"delivery_price\": \"100.00\",\n        \"subtotal_price\": \"1000.00\",\n        \"total_price\": \"1050.00\",\n        \"image\": null,\n        \"assigned_at\": null,\n        \"delivered_at\": null,\n        \"delivery_note\": \"\",\n        \"delivery_proof\": null,\n        \"items\": [\n            {\n                \"id\": 1,\n                \"variant_id\": 1,\n                \"quantity\": 2,\n                \"unit_price\": \"500.00\"\n            }\n        ],\n        \"offers\": [\n            {\n                \"id\": 1,\n                \"offer_id\": 1,\n                \"discount_amount\": \"50.00\",\n                \"created_at\": \"2026-06-29T12:49:40.451997Z\"\n            }\n        ],\n        \"created_at\": \"2026-06-29T12:49:40.447336Z\",\n        \"updated_at\": \"2026-06-29T13:05:16.210683Z\"\n    }\n]"
+                }
+              ]
+            },
+            {
+              "name": "Get Orders With Status",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzM4NTM5LCJpYXQiOjE3ODI3Mzc2MzksImp0aSI6ImFjN2VjMTQ2NTNiNTQ5Y2M4ZmFlYmJhMTNmMjYzMWMyIiwidXNlcl9pZCI6IjEifQ.V-L34doohHvejypGcZD1WRtVvVot-aHqBldoX-CIBPs",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{local}}/api/v1/orders/?status=ready",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "orders",
+                    ""
+                  ],
+                  "query": [
+                    {
+                      "key": "status",
+                      "value": "ready"
+                    }
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Get Orders With Status",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/orders/?status=ready",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "orders",
+                        ""
+                      ],
+                      "query": [
+                        {
+                          "key": "status",
+                          "value": "ready"
+                        }
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Mon, 29 Jun 2026 13:07:21 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, POST, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "2"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "[]"
+                }
+              ]
+            },
+            {
+              "name": "Get Order Details",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzM4NTM5LCJpYXQiOjE3ODI3Mzc2MzksImp0aSI6ImFjN2VjMTQ2NTNiNTQ5Y2M4ZmFlYmJhMTNmMjYzMWMyIiwidXNlcl9pZCI6IjEifQ.V-L34doohHvejypGcZD1WRtVvVot-aHqBldoX-CIBPs",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{local}}/api/v1/orders/1/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "orders",
+                    "1",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Get Order Details",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/orders/1/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "orders",
+                        "1",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Mon, 29 Jun 2026 13:08:21 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, PUT, PATCH, DELETE, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "648"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"id\": 1,\n    \"user_id\": 2,\n    \"delivery_address_id\": 1,\n    \"assigned_representative_id\": null,\n    \"market_id\": 1,\n    \"payment_method\": \"cash_on_delivery\",\n    \"discount\": \"50.00\",\n    \"description\": \"Call the customer on arrival\",\n    \"status\": \"under_preparation\",\n    \"delivery_price\": \"100.00\",\n    \"subtotal_price\": \"1000.00\",\n    \"total_price\": \"1050.00\",\n    \"image\": null,\n    \"assigned_at\": null,\n    \"delivered_at\": null,\n    \"delivery_note\": \"\",\n    \"delivery_proof\": null,\n    \"items\": [\n        {\n            \"id\": 1,\n            \"variant_id\": 1,\n            \"quantity\": 2,\n            \"unit_price\": \"500.00\"\n        }\n    ],\n    \"offers\": [\n        {\n            \"id\": 1,\n            \"offer_id\": 1,\n            \"discount_amount\": \"50.00\",\n            \"created_at\": \"2026-06-29T12:49:40.451997Z\"\n        }\n    ],\n    \"created_at\": \"2026-06-29T12:49:40.447336Z\",\n    \"updated_at\": \"2026-06-29T13:05:16.210683Z\"\n}"
+                }
+              ]
+            },
+            {
+              "name": "Modify order",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzM5NTA0LCJpYXQiOjE3ODI3Mzg2MDQsImp0aSI6ImZjMTFhOWU5YmNhZDQ0OWJhYTA1N2Y0NzA1YjI5N2Q0IiwidXNlcl9pZCI6IjEifQ.Z5u_Dzoymjyt9YNFkoVlad-HHwKjXLn4cmvXf1ySW00",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"user_id\": 2,\n  \"delivery_address_id\": 1,\n  \"assigned_representative_id\": null,\n  \"market_id\": 1,\n  \"payment_method\": \"cash_on_delivery\",\n  \"discount\": \"50.00\",\n  \"description\": \"Call the customer on arrival\",\n  \"status\": \"pending\",\n  \"delivery_price\": \"100.00\",\n  \"subtotal_price\": \"1000.00\",\n  \"total_price\": \"1050.00\",\n  \"image\": null,\n  \"assigned_at\": null,\n  \"delivered_at\": null,\n  \"delivery_note\": \"\",\n  \"delivery_proof\": null,\n  \"items\": [\n    {\n      \"variant_id\": 1,\n      \"quantity\": 2,\n      \"unit_price\": \"500.00\"\n    }\n  ],\n  \"offers\": [\n    {\n      \"offer_id\": 1,\n      \"discount_amount\": \"50.00\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{local}}/api/v1/orders/1/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "orders",
+                    "1",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Modify order",
+                  "originalRequest": {
+                    "method": "PATCH",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"user_id\": 2,\n  \"delivery_address_id\": 1,\n  \"assigned_representative_id\": null,\n  \"market_id\": 1,\n  \"payment_method\": \"cash_on_delivery\",\n  \"discount\": \"50.00\",\n  \"description\": \"Call the customer on arrival\",\n  \"status\": \"pending\",\n  \"delivery_price\": \"100.00\",\n  \"subtotal_price\": \"1000.00\",\n  \"total_price\": \"1050.00\",\n  \"image\": null,\n  \"assigned_at\": null,\n  \"delivered_at\": null,\n  \"delivery_note\": \"\",\n  \"delivery_proof\": null,\n  \"items\": [\n    {\n      \"variant_id\": 1,\n      \"quantity\": 2,\n      \"unit_price\": \"500.00\"\n    }\n  ],\n  \"offers\": [\n    {\n      \"offer_id\": 1,\n      \"discount_amount\": \"50.00\"\n    }\n  ]\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{local}}/api/v1/orders/1/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "orders",
+                        "1",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Mon, 29 Jun 2026 13:10:15 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, PUT, PATCH, DELETE, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "638"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"id\": 1,\n    \"user_id\": 2,\n    \"delivery_address_id\": 1,\n    \"assigned_representative_id\": null,\n    \"market_id\": 1,\n    \"payment_method\": \"cash_on_delivery\",\n    \"discount\": \"50.00\",\n    \"description\": \"Call the customer on arrival\",\n    \"status\": \"pending\",\n    \"delivery_price\": \"100.00\",\n    \"subtotal_price\": \"1000.00\",\n    \"total_price\": \"1050.00\",\n    \"image\": null,\n    \"assigned_at\": null,\n    \"delivered_at\": null,\n    \"delivery_note\": \"\",\n    \"delivery_proof\": null,\n    \"items\": [\n        {\n            \"id\": 2,\n            \"variant_id\": 1,\n            \"quantity\": 2,\n            \"unit_price\": \"500.00\"\n        }\n    ],\n    \"offers\": [\n        {\n            \"id\": 2,\n            \"offer_id\": 1,\n            \"discount_amount\": \"50.00\",\n            \"created_at\": \"2026-06-29T13:10:15.926009Z\"\n        }\n    ],\n    \"created_at\": \"2026-06-29T12:49:40.447336Z\",\n    \"updated_at\": \"2026-06-29T13:10:15.918814Z\"\n}"
+                }
+              ]
+            },
+            {
+              "name": "Cancel Order",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzM5NTA0LCJpYXQiOjE3ODI3Mzg2MDQsImp0aSI6ImZjMTFhOWU5YmNhZDQ0OWJhYTA1N2Y0NzA1YjI5N2Q0IiwidXNlcl9pZCI6IjEifQ.Z5u_Dzoymjyt9YNFkoVlad-HHwKjXLn4cmvXf1ySW00",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{local}}/api/v1/orders/1/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "orders",
+                    "1",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Delete Order",
+                  "originalRequest": {
+                    "method": "DELETE",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/orders/1/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "orders",
+                        "1",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Mon, 29 Jun 2026 13:11:10 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, PUT, PATCH, DELETE, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "640"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"id\": 1,\n    \"user_id\": 2,\n    \"delivery_address_id\": 1,\n    \"assigned_representative_id\": null,\n    \"market_id\": 1,\n    \"payment_method\": \"cash_on_delivery\",\n    \"discount\": \"50.00\",\n    \"description\": \"Call the customer on arrival\",\n    \"status\": \"cancelled\",\n    \"delivery_price\": \"100.00\",\n    \"subtotal_price\": \"1000.00\",\n    \"total_price\": \"1050.00\",\n    \"image\": null,\n    \"assigned_at\": null,\n    \"delivered_at\": null,\n    \"delivery_note\": \"\",\n    \"delivery_proof\": null,\n    \"items\": [\n        {\n            \"id\": 2,\n            \"variant_id\": 1,\n            \"quantity\": 2,\n            \"unit_price\": \"500.00\"\n        }\n    ],\n    \"offers\": [\n        {\n            \"id\": 2,\n            \"offer_id\": 1,\n            \"discount_amount\": \"50.00\",\n            \"created_at\": \"2026-06-29T13:10:15.926009Z\"\n        }\n    ],\n    \"created_at\": \"2026-06-29T12:49:40.447336Z\",\n    \"updated_at\": \"2026-06-29T13:11:10.548314Z\"\n}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "ServiceCity Management",
+          "item": [
+            {
+              "name": "Create City",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQwMzMzLCJpYXQiOjE3ODI3Mzk0MzMsImp0aSI6ImU3NjU0MjRmNmJjZTQ5NTdiMmE2ZWUxODkzNWYxODQyIiwidXNlcl9pZCI6IjEifQ.ErfPrcOheLpoRtAnjqLqIcIHkmH95v5kbeJYyJPsjT4",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"القاهرة\",\n  \"center_latitude\": \"36.7525000\",\n  \"center_longitude\": \"3.0420000\",\n  \"radius_km\": \"25.00\",\n  \"is_active\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{local}}/api/v1/locations/service-cities/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "locations",
+                    "service-cities",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Create City",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"القاهرة\",\n  \"center_latitude\": \"36.7525000\",\n  \"center_longitude\": \"3.0420000\",\n  \"radius_km\": \"25.00\",\n  \"is_active\": true\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{local}}/api/v1/locations/service-cities/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "locations",
+                        "service-cities",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "Created",
+                  "code": 201,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Mon, 29 Jun 2026 13:24:37 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, POST, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "131"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"id\": 1,\n    \"name\": \"القاهرة\",\n    \"center_latitude\": \"36.7525000\",\n    \"center_longitude\": \"3.0420000\",\n    \"radius_km\": \"25.00\",\n    \"is_active\": true\n}"
+                }
+              ]
+            },
+            {
+              "name": "Update Service City",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQwMzMzLCJpYXQiOjE3ODI3Mzk0MzMsImp0aSI6ImU3NjU0MjRmNmJjZTQ5NTdiMmE2ZWUxODkzNWYxODQyIiwidXNlcl9pZCI6IjEifQ.ErfPrcOheLpoRtAnjqLqIcIHkmH95v5kbeJYyJPsjT4",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"القاهرة الجديدة\",\n  \"center_latitude\": \"36.7525000\",\n  \"center_longitude\": \"3.0420000\",\n  \"radius_km\": \"30.00\",\n  \"is_active\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{local}}/api/v1/locations/service-cities/1/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "locations",
+                    "service-cities",
+                    "1",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Update Service City",
+                  "originalRequest": {
+                    "method": "PUT",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"القاهرة الجديدة\",\n  \"center_latitude\": \"36.7525000\",\n  \"center_longitude\": \"3.0420000\",\n  \"radius_km\": \"30.00\",\n  \"is_active\": true\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{local}}/api/v1/locations/service-cities/1/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "locations",
+                        "service-cities",
+                        "1",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Mon, 29 Jun 2026 13:26:21 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, PUT, PATCH, DELETE, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "146"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"id\": 1,\n    \"name\": \"القاهرة الجديدة\",\n    \"center_latitude\": \"36.7525000\",\n    \"center_longitude\": \"3.0420000\",\n    \"radius_km\": \"30.00\",\n    \"is_active\": true\n}"
+                }
+              ]
+            },
+            {
+              "name": "Delete Service City",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQwMzMzLCJpYXQiOjE3ODI3Mzk0MzMsImp0aSI6ImU3NjU0MjRmNmJjZTQ5NTdiMmE2ZWUxODkzNWYxODQyIiwidXNlcl9pZCI6IjEifQ.ErfPrcOheLpoRtAnjqLqIcIHkmH95v5kbeJYyJPsjT4",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{local}}/api/v1/locations/service-cities/1/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "locations",
+                    "service-cities",
+                    "1",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get All Service City",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQwMzMzLCJpYXQiOjE3ODI3Mzk0MzMsImp0aSI6ImU3NjU0MjRmNmJjZTQ5NTdiMmE2ZWUxODkzNWYxODQyIiwidXNlcl9pZCI6IjEifQ.ErfPrcOheLpoRtAnjqLqIcIHkmH95v5kbeJYyJPsjT4",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{local}}/api/v1/locations/service-cities/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "locations",
+                    "service-cities",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Get All Service City",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/locations/service-cities/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "locations",
+                        "service-cities",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Mon, 29 Jun 2026 13:28:19 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, POST, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "133"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "[\n    {\n        \"id\": 2,\n        \"name\": \"القاهرة\",\n        \"center_latitude\": \"36.7525000\",\n        \"center_longitude\": \"3.0420000\",\n        \"radius_km\": \"25.00\",\n        \"is_active\": true\n    }\n]"
+                }
+              ]
+            },
+            {
+              "name": "Get Service City Details",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQwMzMzLCJpYXQiOjE3ODI3Mzk0MzMsImp0aSI6ImU3NjU0MjRmNmJjZTQ5NTdiMmE2ZWUxODkzNWYxODQyIiwidXNlcl9pZCI6IjEifQ.ErfPrcOheLpoRtAnjqLqIcIHkmH95v5kbeJYyJPsjT4",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{local}}/api/v1/locations/service-cities/2/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "locations",
+                    "service-cities",
+                    "2",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Get Service City Details",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/locations/service-cities/2/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "locations",
+                        "service-cities",
+                        "2",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Mon, 29 Jun 2026 13:29:15 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, PUT, PATCH, DELETE, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "131"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"id\": 2,\n    \"name\": \"القاهرة\",\n    \"center_latitude\": \"36.7525000\",\n    \"center_longitude\": \"3.0420000\",\n    \"radius_km\": \"25.00\",\n    \"is_active\": true\n}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Delivery Areas Management",
+          "item": [
+            {
+              "name": "Create Delivery Area",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQwMzMzLCJpYXQiOjE3ODI3Mzk0MzMsImp0aSI6ImU3NjU0MjRmNmJjZTQ5NTdiMmE2ZWUxODkzNWYxODQyIiwidXNlcl9pZCI6IjEifQ.ErfPrcOheLpoRtAnjqLqIcIHkmH95v5kbeJYyJPsjT4",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"service_city_id\": 2,\n  \"name\": \"Algiers Center\",\n  \"center_latitude\": \"36.7525000\",\n  \"center_longitude\": \"3.0420000\",\n  \"radius_km\": \"8.00\",\n  \"delivery_price\": \"200.00\",\n  \"is_active\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{local}}/api/v1/locations/delivery-areas/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "locations",
+                    "delivery-areas",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Create Delivery Area",
+                  "originalRequest": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"service_city_id\": 2,\n  \"name\": \"Algiers Center\",\n  \"center_latitude\": \"36.7525000\",\n  \"center_longitude\": \"3.0420000\",\n  \"radius_km\": \"8.00\",\n  \"delivery_price\": \"200.00\",\n  \"is_active\": true\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{local}}/api/v1/locations/delivery-areas/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "locations",
+                        "delivery-areas",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "Created",
+                  "code": 201,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Mon, 29 Jun 2026 13:33:55 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, POST, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "176"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"id\": 1,\n    \"service_city_id\": 2,\n    \"name\": \"Algiers Center\",\n    \"center_latitude\": \"36.7525000\",\n    \"center_longitude\": \"3.0420000\",\n    \"radius_km\": \"8.00\",\n    \"delivery_price\": \"200.00\",\n    \"is_active\": true\n}"
+                }
+              ]
+            },
+            {
+              "name": "Update Delivery Area",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQwMzMzLCJpYXQiOjE3ODI3Mzk0MzMsImp0aSI6ImU3NjU0MjRmNmJjZTQ5NTdiMmE2ZWUxODkzNWYxODQyIiwidXNlcl9pZCI6IjEifQ.ErfPrcOheLpoRtAnjqLqIcIHkmH95v5kbeJYyJPsjT4",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"service_city_id\": 2,\n  \"name\": \"Algiers Center Updated\",\n  \"center_latitude\": \"36.7525000\",\n  \"center_longitude\": \"3.0420000\",\n  \"radius_km\": \"10.00\",\n  \"delivery_price\": \"250.00\",\n  \"is_active\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{local}}/api/v1/locations/delivery-areas/1/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "locations",
+                    "delivery-areas",
+                    "1",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Update Delivery Area",
+                  "originalRequest": {
+                    "method": "PUT",
+                    "header": [],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"service_city_id\": 2,\n  \"name\": \"Algiers Center Updated\",\n  \"center_latitude\": \"36.7525000\",\n  \"center_longitude\": \"3.0420000\",\n  \"radius_km\": \"10.00\",\n  \"delivery_price\": \"250.00\",\n  \"is_active\": true\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{local}}/api/v1/locations/delivery-areas/1/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "locations",
+                        "delivery-areas",
+                        "1",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Mon, 29 Jun 2026 13:36:12 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, PUT, PATCH, DELETE, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "185"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"id\": 1,\n    \"service_city_id\": 2,\n    \"name\": \"Algiers Center Updated\",\n    \"center_latitude\": \"36.7525000\",\n    \"center_longitude\": \"3.0420000\",\n    \"radius_km\": \"10.00\",\n    \"delivery_price\": \"250.00\",\n    \"is_active\": true\n}"
+                }
+              ]
+            },
+            {
+              "name": "Delete Delivery Area",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQwMzMzLCJpYXQiOjE3ODI3Mzk0MzMsImp0aSI6ImU3NjU0MjRmNmJjZTQ5NTdiMmE2ZWUxODkzNWYxODQyIiwidXNlcl9pZCI6IjEifQ.ErfPrcOheLpoRtAnjqLqIcIHkmH95v5kbeJYyJPsjT4",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{local}}/api/v1/locations/delivery-areas/1/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "locations",
+                    "delivery-areas",
+                    "1",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get All DElivery Areas",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQwMzMzLCJpYXQiOjE3ODI3Mzk0MzMsImp0aSI6ImU3NjU0MjRmNmJjZTQ5NTdiMmE2ZWUxODkzNWYxODQyIiwidXNlcl9pZCI6IjEifQ.ErfPrcOheLpoRtAnjqLqIcIHkmH95v5kbeJYyJPsjT4",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{local}}/api/v1/locations/delivery-areas/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "locations",
+                    "delivery-areas",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Get All DElivery Areas",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/locations/delivery-areas/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "locations",
+                        "delivery-areas",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Mon, 29 Jun 2026 13:38:23 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, POST, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "178"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "[\n    {\n        \"id\": 2,\n        \"service_city_id\": 2,\n        \"name\": \"Algiers Center\",\n        \"center_latitude\": \"36.7525000\",\n        \"center_longitude\": \"3.0420000\",\n        \"radius_km\": \"8.00\",\n        \"delivery_price\": \"200.00\",\n        \"is_active\": true\n    }\n]"
+                }
+              ]
+            },
+            {
+              "name": "Get DELIVERY Area Details",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzQxMjg4LCJpYXQiOjE3ODI3NDAzODgsImp0aSI6IjYxMzBjZWZhMDVhNzQ0ZGZhNmFkN2I1NjBjZDFmNWQ4IiwidXNlcl9pZCI6IjEifQ.GAHKIM43L_utsmacaW0ViS6L0JtYc_iar9qcpZ6zEmo",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{local}}/api/v1/locations/delivery-areas/2/",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "locations",
+                    "delivery-areas",
+                    "2",
+                    ""
+                  ]
+                }
+              },
+              "response": [
+                {
+                  "name": "Get DELIVERY Area Details",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{local}}/api/v1/locations/delivery-areas/2/",
+                      "host": [
+                        "{{local}}"
+                      ],
+                      "path": [
+                        "api",
+                        "v1",
+                        "locations",
+                        "delivery-areas",
+                        "2",
+                        ""
+                      ]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": null,
+                  "header": [
+                    {
+                      "key": "Date",
+                      "value": "Mon, 29 Jun 2026 13:40:03 GMT"
+                    },
+                    {
+                      "key": "Server",
+                      "value": "WSGIServer/0.2 CPython/3.14.5"
+                    },
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    },
+                    {
+                      "key": "Vary",
+                      "value": "Accept, origin"
+                    },
+                    {
+                      "key": "Allow",
+                      "value": "GET, PUT, PATCH, DELETE, HEAD, OPTIONS"
+                    },
+                    {
+                      "key": "X-Frame-Options",
+                      "value": "DENY"
+                    },
+                    {
+                      "key": "Content-Length",
+                      "value": "176"
+                    },
+                    {
+                      "key": "X-Content-Type-Options",
+                      "value": "nosniff"
+                    },
+                    {
+                      "key": "Referrer-Policy",
+                      "value": "same-origin"
+                    },
+                    {
+                      "key": "Cross-Origin-Opener-Policy",
+                      "value": "same-origin"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n    \"id\": 2,\n    \"service_city_id\": 2,\n    \"name\": \"Algiers Center\",\n    \"center_latitude\": \"36.7525000\",\n    \"center_longitude\": \"3.0420000\",\n    \"radius_km\": \"8.00\",\n    \"delivery_price\": \"200.00\",\n    \"is_active\": true\n}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Dashboard API",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgyNzYxMjY1LCJpYXQiOjE3ODI3NjAzNjUsImp0aSI6IjVmODdmNGY2YmE3YzRlMDRhMzQ1OWU3ZWM2ZjgyYzFiIiwidXNlcl9pZCI6IjEifQ.PndJEFnsd5lg4u8wzowrV_JZ-zfm_LnrSfRTIJJLSXc",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{local}}/api/v1/dashboard/overview/?from=2026-05-01&to=2026-05-22",
+              "host": [
+                "{{local}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dashboard",
+                "overview",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-05-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-05-22"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Dashboard API",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{local}}/api/v1/dashboard/overview/?from=2026-05-01&to=2026-05-22",
+                  "host": [
+                    "{{local}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "dashboard",
+                    "overview",
+                    ""
+                  ],
+                  "query": [
+                    {
+                      "key": "from",
+                      "value": "2026-05-01"
+                    },
+                    {
+                      "key": "to",
+                      "value": "2026-05-22"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Date",
+                  "value": "Mon, 29 Jun 2026 19:13:06 GMT"
+                },
+                {
+                  "key": "Server",
+                  "value": "WSGIServer/0.2 CPython/3.14.5"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Accept, origin"
+                },
+                {
+                  "key": "Allow",
+                  "value": "GET, HEAD, OPTIONS"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "DENY"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "305"
+                },
+                {
+                  "key": "X-Content-Type-Options",
+                  "value": "nosniff"
+                },
+                {
+                  "key": "Referrer-Policy",
+                  "value": "same-origin"
+                },
+                {
+                  "key": "Cross-Origin-Opener-Policy",
+                  "value": "same-origin"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"range\": {\n        \"from\": \"2026-05-01\",\n        \"to\": \"2026-05-22\",\n        \"timezone\": \"UTC\"\n    },\n    \"currency\": \"EGP\",\n    \"revenue\": {\n        \"total\": \"0.00\",\n        \"percentage\": 0\n    },\n    \"orders\": {\n        \"total\": 0,\n        \"completed\": 0,\n        \"incomplete\": 0,\n        \"completion_rate\": 0\n    },\n    \"customers\": {\n        \"new\": 0,\n        \"returning\": 0,\n        \"return_rate\": 0\n    },\n    \"top_products\": [],\n    \"active_orders\": [],\n    \"top_shops\": []\n}"
+            }
+          ]
         }
       ]
     }
