@@ -5,19 +5,28 @@ import { AlertCircle, Edit3, LoaderCircle, MapPin, Plus, Search, Store, Trash2, 
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { AppSelect, Badge, Button, Card, DataTable, Input, PageTitle, Switch } from "../primitives";
-import { useServiceCities, type ServiceCity } from "../cities-api";
+import { loadDeliveryAreaOptions, type DeliveryAreaOption } from "../markets-api";
 import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
 
 type Classification = { id: number; name: string };
+type MarketDeliveryArea = {
+  id?: number | string;
+  name?: string;
+  service_city_id?: number | string | null;
+  service_city?: { id?: number | string | null; name?: string } | null;
+  service_city_name?: string | null;
+  city_name?: string | null;
+};
 type Market = {
   id: number;
   name: string;
   branch: string;
   status: "active" | "inactive";
-  visibility_scope: "general" | "cities";
   classification: Classification;
-  service_cities?: ServiceCity[];
+  delivery_area_ids?: number[];
+  deliveryAreaIds?: number[];
+  delivery_areas?: Array<number | MarketDeliveryArea>;
 };
 
 async function json(response: Response) {
@@ -36,50 +45,156 @@ function errorMessage(value: unknown, fallback: string): string {
   return fallback;
 }
 
-function marketServiceCities(market: Market): ServiceCity[] {
-  return Array.isArray(market.service_cities) ? market.service_cities : [];
+function uniqueNumbers(values: unknown[]) {
+  const ids: number[] = [];
+  for (const value of values) {
+    const id = Number(value);
+    if (Number.isFinite(id) && !ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
+function marketDeliveryAreaIds(market: Market): number[] {
+  const values: unknown[] = [];
+
+  if (Array.isArray(market.delivery_area_ids)) values.push(...market.delivery_area_ids);
+  if (Array.isArray(market.deliveryAreaIds)) values.push(...market.deliveryAreaIds);
+  if (Array.isArray(market.delivery_areas)) {
+    for (const area of market.delivery_areas) {
+      if (area && typeof area === "object") {
+        values.push(area.id);
+      } else {
+        values.push(area);
+      }
+    }
+  }
+
+  return uniqueNumbers(values);
+}
+
+function labelFromDeliveryArea(area: MarketDeliveryArea) {
+  return (
+    area.name ||
+    area.service_city?.name ||
+    area.service_city_name ||
+    area.city_name ||
+    (area.id ? `منطقة رقم ${area.id}` : "")
+  );
+}
+
+function marketDeliveryAreaLabels(
+  market: Market,
+  deliveryAreaOptions: DeliveryAreaOption[],
+) {
+  const labels = new Map<number, string>();
+
+  if (Array.isArray(market.delivery_areas)) {
+    for (const area of market.delivery_areas) {
+      if (!area || typeof area !== "object") {
+        continue;
+      }
+      const id = Number(area.id);
+      const label = labelFromDeliveryArea(area);
+      if (Number.isFinite(id) && label) labels.set(id, label);
+    }
+  }
+
+  for (const option of deliveryAreaOptions) {
+    if (!labels.has(option.id)) labels.set(option.id, option.label);
+  }
+
+  const selectedIds = marketDeliveryAreaIds(market);
+  return selectedIds.map((id) => labels.get(id) || `منطقة رقم ${id}`);
+}
+
+function marketDeliveryAreasText(
+  market: Market,
+  deliveryAreaOptions: DeliveryAreaOption[],
+) {
+  const labels = marketDeliveryAreaLabels(market, deliveryAreaOptions);
+  return labels.length ? labels.join("، ") : "لا توجد مناطق محددة";
 }
 
 function MarketDialog({
   market,
-  cities,
+  deliveryAreaOptions,
   classifications,
   onClose,
   onSaved,
+  onDeliveryAreaOptionsLoaded,
 }: {
   market?: Market;
-  cities: ServiceCity[];
+  deliveryAreaOptions: DeliveryAreaOption[];
   classifications: Classification[];
   onClose: () => void;
   onSaved: (market: Market) => void;
+  onDeliveryAreaOptionsLoaded: (options: DeliveryAreaOption[]) => void;
 }) {
   const { apiFetch } = useAuth();
   const [name, setName] = useState(market?.name ?? "");
   const [branch, setBranch] = useState(market?.branch ?? "");
   const [classificationId, setClassificationId] = useState(String(market?.classification.id ?? classifications[0]?.id ?? ""));
-  const [general, setGeneral] = useState(market?.visibility_scope === "general");
-  const [cityIds, setCityIds] = useState<number[]>(market ? marketServiceCities(market).map((city) => city.id) : []);
+  const [deliveryAreaIds, setDeliveryAreaIds] = useState<number[]>(() => market ? marketDeliveryAreaIds(market) : []);
+  const [loadedDeliveryAreaOptions, setLoadedDeliveryAreaOptions] = useState<DeliveryAreaOption[]>(deliveryAreaOptions);
+  const [deliveryAreaLoading, setDeliveryAreaLoading] = useState(true);
+  const [deliveryAreaLoadError, setDeliveryAreaLoadError] = useState("");
   const [active, setActive] = useState(market?.status !== "inactive");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const valid = name.trim() && classificationId && (general || cityIds.length > 0);
+  const validBase = name.trim() && classificationId;
+
+  const loadDeliveryAreas = useCallback(async () => {
+    setDeliveryAreaLoading(true);
+    setDeliveryAreaLoadError("");
+    try {
+      const options = await loadDeliveryAreaOptions(apiFetch);
+      setLoadedDeliveryAreaOptions(options);
+      onDeliveryAreaOptionsLoaded(options);
+    } catch (reason) {
+      setDeliveryAreaLoadError(reason instanceof Error ? reason.message : "تعذر تحميل مناطق الظهور.");
+    } finally {
+      setDeliveryAreaLoading(false);
+    }
+  }, [apiFetch, onDeliveryAreaOptionsLoaded]);
+
+  useEffect(() => {
+    void Promise.resolve().then(loadDeliveryAreas);
+  }, [loadDeliveryAreas]);
+
+  const selectedDeliveryAreaText = deliveryAreaIds.length
+    ? deliveryAreaIds
+        .map((id) => loadedDeliveryAreaOptions.find((option) => option.id === id)?.label ?? `منطقة رقم ${id}`)
+        .join("، ")
+    : "اختر مناطق الظهور";
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (!valid || saving) return;
+    if (!validBase || saving) return;
+    if (deliveryAreaIds.length === 0) {
+      setError("اختر منطقة توصيل واحدة على الأقل.");
+      return;
+    }
+
     setSaving(true);
     setError("");
+    const draft = {
+      name,
+      branch,
+      classificationId,
+      status: active ? "active" as const : "inactive" as const,
+      deliveryAreaIds,
+    };
+
     try {
       const response = await apiFetch(market ? `home/markets/${market.id}/` : "home/markets/", {
         method: market ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: name.trim(),
-          branch: branch.trim(),
-          classification_id: Number(classificationId),
-          status: active ? "active" : "inactive",
-          visibility_scope: general ? "general" : "cities",
-          service_city_ids: general ? [] : cityIds,
+          name: draft.name.trim(),
+          branch: draft.branch.trim(),
+          classification_id: Number(draft.classificationId),
+          status: draft.status,
+          delivery_areas: draft.deliveryAreaIds,
         }),
       });
       const data = await json(response);
@@ -104,22 +219,31 @@ function MarketDialog({
             <label className="grid gap-2 text-sm font-semibold sm:col-span-2">اسم المحل *<Input value={name} onChange={(event) => setName(event.target.value)} /></label>
             <label className="grid gap-2 text-sm font-semibold">الفرع<Input value={branch} onChange={(event) => setBranch(event.target.value)} /></label>
             <label className="grid gap-2 text-sm font-semibold">التصنيف *<AppSelect value={classificationId} onValueChange={setClassificationId} options={classifications.map((item) => ({ value: String(item.id), label: item.name }))} /></label>
-            <div className="flex items-center justify-between rounded-lg border px-4 py-3 sm:col-span-2"><div><p className="text-sm font-semibold">محل عام</p><p className="text-xs text-muted-foreground">يظهر في كل المدن الحالية والمستقبلية.</p></div><Switch checked={general} onCheckedChange={setGeneral} /></div>
-            {!general ? (
-              <div className="grid gap-2 sm:col-span-2">
-                <p className="text-sm font-semibold">مدن الظهور *</p>
+            <div className="grid gap-2 sm:col-span-2">
+              <div>
+                <p className="text-sm font-semibold">مدن المناطق *</p>
+                <p className="mt-1 text-xs text-muted-foreground">اختر منطقة توصيل واحدة على الأقل ليظهر فيها المحل.</p>
+              </div>
+              <div className="rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground">{selectedDeliveryAreaText}</div>
+              {deliveryAreaLoading ? (
+                <div className="flex min-h-20 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground"><LoaderCircle className="me-2 size-4 animate-spin" />جاري تحميل مناطق الظهور...</div>
+              ) : deliveryAreaLoadError ? (
+                <div className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><span>{deliveryAreaLoadError}</span><Button type="button" variant="outline" size="sm" onClick={() => void loadDeliveryAreas()}>إعادة المحاولة</Button></div>
+              ) : loadedDeliveryAreaOptions.length ? (
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {cities.map((city) => {
-                    const selected = cityIds.includes(city.id);
-                    return <button key={city.id} type="button" onClick={() => setCityIds((current) => selected ? current.filter((id) => id !== city.id) : [...current, city.id])} className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm font-semibold ${selected ? "border-primary bg-primary/10 text-primary" : "hover:bg-accent"}`}><span>{city.name_ar || city.name}</span><span className="size-4 rounded border text-center text-[10px]">{selected ? "✓" : ""}</span></button>;
+                  {loadedDeliveryAreaOptions.map((area) => {
+                    const selected = deliveryAreaIds.includes(area.id);
+                    return <button key={area.id} type="button" onClick={() => setDeliveryAreaIds((current) => selected ? current.filter((id) => id !== area.id) : [...current, area.id])} className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm font-semibold ${selected ? "border-primary bg-primary/10 text-primary" : "hover:bg-accent"}`}><span>{area.label}</span><span className="size-4 rounded border text-center text-[10px]">{selected ? "✓" : ""}</span></button>;
                   })}
                 </div>
-              </div>
-            ) : null}
+              ) : (
+                <div className="rounded-md border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">لا توجد مناطق متاحة.</div>
+              )}
+            </div>
             <div className="flex items-center justify-between rounded-lg border px-4 py-3 sm:col-span-2"><div><p className="text-sm font-semibold">المحل مفعّل</p><p className="text-xs text-muted-foreground">المحلات المعطلة لا تظهر للعملاء.</p></div><Switch checked={active} onCheckedChange={setActive} /></div>
             {error ? <p className="flex gap-2 text-sm text-destructive sm:col-span-2"><AlertCircle className="size-4" />{error}</p> : null}
           </div>
-          <div className="flex justify-end gap-2 border-t px-6 py-4"><Button type="button" variant="outline" onClick={onClose}>إلغاء</Button><Button type="submit" disabled={!valid || saving}>{saving ? <LoaderCircle className="size-4 animate-spin" /> : <Plus className="size-4" />}{saving ? "جاري الحفظ..." : "حفظ المحل"}</Button></div>
+          <div className="flex justify-end gap-2 border-t px-6 py-4"><Button type="button" variant="outline" onClick={onClose}>إلغاء</Button><Button type="submit" disabled={!validBase || saving}>{saving ? <LoaderCircle className="size-4 animate-spin" /> : <Plus className="size-4" />}{saving ? "جاري الحفظ..." : "حفظ المحل"}</Button></div>
         </form>
       </section>
     </div>
@@ -130,9 +254,9 @@ export function ShopsPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const queueUndoableDelete = useUndoableDelete();
-  const { cities } = useServiceCities({ activeOnly: true });
   const [markets, setMarkets] = useState<Market[]>([]);
   const [classifications, setClassifications] = useState<Classification[]>([]);
+  const [deliveryAreaOptions, setDeliveryAreaOptions] = useState<DeliveryAreaOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -141,11 +265,17 @@ export function ShopsPage() {
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      const [marketsResponse, classificationsResponse] = await Promise.all([apiFetch("home/markets/"), apiFetch("home/market-classifications/")]);
+      const [marketsResponse, classificationsResponse, deliveryAreaOptionsResult] = await Promise.all([
+        apiFetch("home/markets/"),
+        apiFetch("home/market-classifications/"),
+        loadDeliveryAreaOptions(apiFetch).then((options) => ({ options })).catch(() => ({ options: [] as DeliveryAreaOption[] })),
+      ]);
       const [marketsData, classificationsData] = await Promise.all([json(marketsResponse), json(classificationsResponse)]);
       if (!marketsResponse.ok || !Array.isArray(marketsData)) throw new Error(errorMessage(marketsData, "تعذر تحميل المحلات."));
       if (!classificationsResponse.ok || !Array.isArray(classificationsData)) throw new Error(errorMessage(classificationsData, "تعذر تحميل التصنيفات."));
-      setMarkets(marketsData as Market[]); setClassifications(classificationsData as Classification[]);
+      setMarkets(marketsData as Market[]);
+      setClassifications(classificationsData as Classification[]);
+      setDeliveryAreaOptions(deliveryAreaOptionsResult.options);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "تعذر تحميل المحلات."); }
     finally { setLoading(false); }
   }, [apiFetch]);
@@ -193,13 +323,13 @@ export function ShopsPage() {
     <div className="px-6 py-6">
       <PageTitle title="المحلات" description="إدارة المحلات وربط ظهور منتجاتها بالمدن." actions={<Button size="sm" onClick={() => setDialogMarket(null)} disabled={!classifications.length}><Plus className="size-4" />إضافة محل</Button>} />
       <div className="mt-6 grid gap-3 md:grid-cols-3">
-        {[["إجمالي المحلات", markets.length, Store], ["المحلات النشطة", markets.filter((item) => item.status === "active").length, Store], ["المدن المغطاة", new Set(markets.flatMap((item) => marketServiceCities(item).map((city) => city.id))).size, MapPin]].map(([label, value, Icon]) => { const MetricIcon = Icon as typeof Store; return <Card key={label as string} className="h-[80px]"><div className="flex h-full items-center gap-3 px-5"><span className="rounded-full bg-primary/10 p-3 text-primary"><MetricIcon className="size-5" /></span><div><p className="text-xs text-muted-foreground">{label as string}</p><p className="text-xl font-bold">{value as number}</p></div></div></Card>; })}
+        {[["إجمالي المحلات", markets.length, Store], ["المحلات النشطة", markets.filter((item) => item.status === "active").length, Store], ["مناطق الظهور", new Set(markets.flatMap((item) => marketDeliveryAreaIds(item))).size, MapPin]].map(([label, value, Icon]) => { const MetricIcon = Icon as typeof Store; return <Card key={label as string} className="h-[80px]"><div className="flex h-full items-center gap-3 px-5"><span className="rounded-full bg-primary/10 p-3 text-primary"><MetricIcon className="size-5" /></span><div><p className="text-xs text-muted-foreground">{label as string}</p><p className="text-xl font-bold">{value as number}</p></div></div></Card>; })}
       </div>
       <Card className="mt-6 overflow-hidden">
         <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold">كل المحلات</h2><p className="text-xs text-muted-foreground">المنتجات ترث نطاق الظهور من المحل.</p></div><div className="relative sm:w-72"><Search className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} className="pr-9" placeholder="ابحث عن محل..." /></div></div>
-        {loading ? <div className="flex min-h-56 items-center justify-center text-sm text-muted-foreground"><LoaderCircle className="me-2 size-5 animate-spin" />جاري التحميل...</div> : error ? <div className="flex min-h-56 flex-col items-center justify-center gap-3"><AlertCircle className="size-8 text-destructive" /><p>{error}</p><Button variant="outline" onClick={() => void load()}>إعادة المحاولة</Button></div> : <DataTable minWidth={900} columnWidths={[220, 150, 260, 100, 150]} headers={["المحل", "التصنيف", "مدن الظهور", "الحالة", <span key="actions" className="block text-center">الإجراءات</span>]} rows={filtered.map((market) => [<div key="name" className="px-2"><p className="font-semibold">{market.name}</p><p className="text-xs text-muted-foreground">{market.branch || "بدون فرع"}</p></div>, <Badge key="classification">{market.classification.name}</Badge>, <span key="cities" className="text-sm text-muted-foreground">{market.visibility_scope === "general" ? "كل المدن" : marketServiceCities(market).map((city) => city.name_ar || city.name).join("، ") || "لا توجد مدن محددة"}</span>, <Badge key="status" tone={market.status === "active" ? "green" : "red"}>{market.status === "active" ? "نشط" : "معطل"}</Badge>, <div key="actions" className="flex justify-center gap-1"><Button size="icon" variant="ghost" onClick={() => setDialogMarket(market)}><Edit3 className="size-4" /></Button><Button size="icon" variant="ghost" onClick={() => void remove(market)}><Trash2 className="size-4 text-destructive" /></Button></div>])} />}
+        {loading ? <div className="flex min-h-56 items-center justify-center text-sm text-muted-foreground"><LoaderCircle className="me-2 size-5 animate-spin" />جاري التحميل...</div> : error ? <div className="flex min-h-56 flex-col items-center justify-center gap-3"><AlertCircle className="size-8 text-destructive" /><p>{error}</p><Button variant="outline" onClick={() => void load()}>إعادة المحاولة</Button></div> : <DataTable minWidth={900} columnWidths={[220, 150, 260, 100, 150]} headers={["المحل", "التصنيف", "مدن الظهور", "الحالة", <span key="actions" className="block text-center">الإجراءات</span>]} rows={filtered.map((market) => [<div key="name" className="px-2"><p className="font-semibold">{market.name}</p><p className="text-xs text-muted-foreground">{market.branch || "بدون فرع"}</p></div>, <Badge key="classification">{market.classification.name}</Badge>, <span key="cities" className="text-sm text-muted-foreground">{marketDeliveryAreasText(market, deliveryAreaOptions)}</span>, <Badge key="status" tone={market.status === "active" ? "green" : "red"}>{market.status === "active" ? "نشط" : "معطل"}</Badge>, <div key="actions" className="flex justify-center gap-1"><Button size="icon" variant="ghost" onClick={() => setDialogMarket(market)}><Edit3 className="size-4" /></Button><Button size="icon" variant="ghost" onClick={() => void remove(market)}><Trash2 className="size-4 text-destructive" /></Button></div>])} />}
       </Card>
-      {dialogMarket !== undefined ? <MarketDialog market={dialogMarket ?? undefined} cities={cities} classifications={classifications} onClose={() => setDialogMarket(undefined)} onSaved={(saved) => { setMarkets((current) => current.some((item) => item.id === saved.id) ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current]); setDialogMarket(undefined); showSnackbar({ message: "تم حفظ المحل وربطه بالمدن." }); }} /> : null}
+      {dialogMarket !== undefined ? <MarketDialog market={dialogMarket ?? undefined} deliveryAreaOptions={deliveryAreaOptions} classifications={classifications} onDeliveryAreaOptionsLoaded={setDeliveryAreaOptions} onClose={() => setDialogMarket(undefined)} onSaved={(saved) => { setMarkets((current) => current.some((item) => item.id === saved.id) ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current]); setDialogMarket(undefined); showSnackbar({ message: "تم حفظ المحل وربطه بمناطق الظهور." }); }} /> : null}
     </div>
   );
 }

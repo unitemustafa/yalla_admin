@@ -22,6 +22,7 @@ const pageKeys: Record<PageKey, TranslationKey> = {
   items: "page.items",
   "create-item": "page.createItem",
   shops: "page.shops",
+  "market-classifications": "page.marketClassifications",
   categories: "page.categories",
   addons: "page.addons",
   orders: "page.orders",

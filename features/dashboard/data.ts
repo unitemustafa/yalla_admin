@@ -33,6 +33,11 @@ export const navGroups: NavGroup[] = [
           { label: "إضافة منتج", href: "/items/create", page: "create-item" },
           { label: "المحلات", href: "/items/shops", page: "shops" },
           {
+            label: "تصنيفات المحلات",
+            href: "/items/market-classifications",
+            page: "market-classifications",
+          },
+          {
             label: "الفئات والتصنيفات",
             href: "/items/categories",
             page: "categories",
@@ -111,6 +116,11 @@ export const breadcrumbByPage: Record<PageKey, BreadcrumbItem[]> = {
     { label: "المنتجات", href: "/items" },
     { label: "المحلات" },
   ],
+  "market-classifications": [
+    dashboardCrumb,
+    { label: "المنتجات", href: "/items" },
+    { label: "تصنيفات المحلات" },
+  ],
   categories: [
     dashboardCrumb,
     { label: "المنتجات", href: "/items" },
@@ -171,6 +181,7 @@ export function pageFromPathname(pathname: string): PageKey {
   if (pathname === "/items") return "items";
   if (pathname === "/items/create") return "create-item";
   if (pathname === "/items/shops") return "shops";
+  if (pathname === "/items/market-classifications") return "market-classifications";
   if (pathname === "/items/categories") return "categories";
   if (pathname === "/items/addons") return "addons";
   if (pathname.startsWith("/items/edit")) return "items";
@@ -829,5 +840,4 @@ export const topItems = [
   { name: "موز", revenue: 1280, sold: 34, orders: 23 },
   { name: "فراخ الامهات الحمرا", revenue: 1280, sold: 8, orders: 3 },
 ];
-
 
