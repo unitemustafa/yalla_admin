@@ -50,6 +50,10 @@ type BackendAddress = {
 
 type BackendOrder = {
   id: number;
+  user_id?: number | string | null;
+  delivery_address_id?: number | string | null;
+  assigned_representative_id?: number | string | null;
+  market_id?: number | string | null;
   order_number?: string | null;
   market?: { id: number; name?: string | null; branch?: string | null } | null;
   customer?: {
@@ -79,10 +83,12 @@ type BackendOrder = {
   created_at?: string | null;
   updated_at?: string | null;
   items?: BackendOrderItem[];
+  offers?: BackendOrderOffer[];
 };
 
 type BackendOrderItem = {
   id: number;
+  variant_id?: number | string | null;
   quantity: number;
   unit_price: string;
   variant?: {
@@ -95,6 +101,14 @@ type BackendOrderItem = {
       market?: { id: number; name?: string };
     };
   } | null;
+};
+
+type BackendOrderOffer = {
+  id?: number | string | null;
+  offer_id?: number | string | null;
+  title?: string | null;
+  discount_amount?: string | null;
+  created_at?: string | null;
 };
 
 type BackendProduct = {
@@ -203,11 +217,43 @@ function customerName(order: BackendOrder) {
   return [order.customer?.first_name, order.customer?.last_name]
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)
-    .join(" ") || `عميل #${order.customer?.id ?? "-"}`;
+    .join(" ") || `User #${order.user_id ?? order.customer?.id ?? "-"}`;
 }
 
 function orderNumber(order: BackendOrder) {
   return order.order_number || `YM-${order.id}`;
+}
+
+function apiListData(value: unknown): BackendOrder[] {
+  if (Array.isArray(value)) return value as BackendOrder[];
+  if (!value || typeof value !== "object") return [];
+
+  const record = value as { results?: unknown; data?: unknown };
+  if (Array.isArray(record.results)) return record.results as BackendOrder[];
+  if (Array.isArray(record.data)) return record.data as BackendOrder[];
+  if (record.data && typeof record.data === "object") {
+    const nested = record.data as { results?: unknown };
+    if (Array.isArray(nested.results)) return nested.results as BackendOrder[];
+  }
+
+  return [];
+}
+
+function apiOrderData(value: unknown): BackendOrder | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as { data?: unknown };
+  if (record.data && typeof record.data === "object" && !Array.isArray(record.data)) {
+    return record.data as BackendOrder;
+  }
+  return value as BackendOrder;
+}
+
+function marketName(order: BackendOrder) {
+  return order.market?.name?.trim() || `Market #${order.market_id ?? "-"}`;
+}
+
+function assignedRepresentativeId(order: BackendOrder) {
+  return order.assigned_representative?.id ?? order.assigned_representative_id ?? null;
 }
 
 function apiError(value: unknown, fallback: string) {
@@ -228,7 +274,9 @@ function canMoveToStatus(currentStatus: BackendOrderStatus, nextStatus: BackendO
 
 function representativeName(order: BackendOrder) {
   const representative = order.assigned_representative;
-  if (!representative) return "";
+  if (!representative) {
+    return order.assigned_representative_id ? `Representative #${order.assigned_representative_id}` : "Unassigned";
+  }
   return [representative.first_name, representative.last_name]
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)
@@ -241,8 +289,9 @@ function courierFilterName(courier: BackendDashboardUser) {
 
 function representativeHref(order: BackendOrder) {
   const representative = order.assigned_representative;
-  if (!representative) return "/delivery/couriers";
-  return `/delivery/couriers/${representative.id}`;
+  const representativeId = representative?.id ?? order.assigned_representative_id;
+  if (!representativeId) return "/delivery/couriers";
+  return `/delivery/couriers/${representativeId}`;
 }
 
 async function copyText(value: string) {
@@ -268,7 +317,7 @@ export function BackendOrdersPage() {
     setError(null);
     try {
       const [ordersResponse, usersResponse] = await Promise.all([
-        apiFetch("auth/representatives/"),
+        apiFetch("orders/"),
         apiFetch("auth/users/"),
       ]);
       const [ordersData, usersData] = await Promise.all([
@@ -277,7 +326,7 @@ export function BackendOrdersPage() {
       ]);
       if (!ordersResponse.ok) throw new Error(apiError(ordersData, "تعذر تحميل الطلبات."));
       if (!usersResponse.ok) throw new Error(apiError(usersData, "تعذر تحميل المندوبين."));
-      setOrders(Array.isArray(ordersData) ? (ordersData as BackendOrder[]) : []);
+      setOrders(apiListData(ordersData));
       setCouriers(
         Array.isArray(usersData)
           ? usersData.filter(isBackendDashboardUser).filter((user) => user.role === "representative")
@@ -303,14 +352,15 @@ export function BackendOrdersPage() {
     return orders.filter((order) => {
       const matchesStatus = status === "all" || order.status === status;
       const matchesDeliveryType = deliveryType === "all" || order.delivery_type === deliveryType;
-      const isAssigned = Boolean(order.assigned_representative);
+      const representativeId = assignedRepresentativeId(order);
+      const isAssigned = Boolean(representativeId);
       const matchesAssignment =
         assignment === "all" ||
         (assignment === "ready_unassigned" && order.status === "ready" && !isAssigned) ||
         (assignment === "assigned" && isAssigned) ||
         (assignment === "unassigned" && !isAssigned);
       const matchesCourier =
-        courierId === "all" || String(order.assigned_representative?.id ?? "") === courierId;
+        courierId === "all" || String(representativeId ?? "") === courierId;
       const matchesQuery =
         !normalized ||
         [
@@ -318,8 +368,11 @@ export function BackendOrdersPage() {
           orderNumber(order),
           customerName(order),
           order.customer?.phone,
-          order.market?.name,
+          marketName(order),
           representativeName(order),
+          order.payment_method,
+          order.delivery_price,
+          order.total_price,
         ]
           .join(" ")
           .toLowerCase()
@@ -333,8 +386,8 @@ export function BackendOrdersPage() {
   const pageStartIndex = (safeCurrentPage - 1) * ordersPageSize;
   const pagedOrders = visibleOrders.slice(pageStartIndex, pageStartIndex + ordersPageSize);
 
-  const readyCount = orders.filter((order) => order.status === "ready" && !order.assigned_representative).length;
-  const assignedCount = orders.filter((order) => Boolean(order.assigned_representative)).length;
+  const readyCount = orders.filter((order) => order.status === "ready" && !assignedRepresentativeId(order)).length;
+  const assignedCount = orders.filter((order) => Boolean(assignedRepresentativeId(order))).length;
   const deliveredCount = orders.filter((order) => order.status === "delivered").length;
 
   async function copyOrderNumberFromList(order: BackendOrder) {
@@ -524,26 +577,26 @@ export function BackendOrdersPage() {
                   <div className="min-w-0">
                     <div className="truncate font-bold">{customerName(order)}</div>
                     <div className="mt-1 inline-block max-w-full truncate text-start text-xs text-muted-foreground [unicode-bidi:plaintext]" dir="ltr">
-                      {order.customer?.phone ?? "-"}
+                      {order.customer?.phone ?? `user_id: ${order.user_id ?? "-"}`}
                     </div>
                   </div>
 
                   <div className="min-w-0">
                     <div className="text-xs font-bold text-muted-foreground">المحل</div>
-                    <div className="mt-1 truncate font-semibold">{order.market?.name ?? "-"}</div>
+                    <div className="mt-1 truncate font-semibold">{marketName(order)}</div>
                   </div>
 
                   <div className="min-w-0">
                     <div className="text-xs font-bold text-muted-foreground">المندوب</div>
                     <div className="mt-1">
-                      {order.assigned_representative ? (
+                      {assignedRepresentativeId(order) ? (
                         <Link
                           href={representativeHref(order)}
                           className="inline-grid max-w-full gap-0.5 font-semibold text-primary hover:underline"
                         >
                           <span className="truncate">{representativeName(order)}</span>
                           <span className="truncate text-start text-[11px] font-normal text-muted-foreground [unicode-bidi:plaintext]" dir="ltr">
-                            {order.assigned_representative.phone ?? `#${order.assigned_representative.id}`}
+                            {order.assigned_representative?.phone ?? `#${assignedRepresentativeId(order)}`}
                           </span>
                         </Link>
                       ) : (
@@ -558,6 +611,9 @@ export function BackendOrdersPage() {
                     <CurrencyText className="block text-base font-extrabold tabular-nums">
                       {money(order.total_price)}
                     </CurrencyText>
+                    <div className="mt-1 truncate text-xs text-muted-foreground">
+                      {order.payment_method ?? "-"} · {money(order.delivery_price)}
+                    </div>
                     <div className="mt-1 truncate text-xs text-muted-foreground">{dateTime(order.created_at)}</div>
                   </div>
 
@@ -1248,10 +1304,11 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
     setLoading(true);
     setError(null);
     try {
-      const response = await apiFetch(`auth/representatives/${encodeURIComponent(orderId)}/`);
+      const response = await apiFetch(`orders/${encodeURIComponent(orderId)}/`);
       const data = await apiResponseData(response);
       if (!response.ok) throw new Error(apiError(data, "تعذر تحميل تفاصيل الطلب."));
-      const nextOrder = data as BackendOrder;
+      const nextOrder = apiOrderData(data);
+      if (!nextOrder) throw new Error("تعذر قراءة تفاصيل الطلب من استجابة الباك.");
       setOrder(nextOrder);
       setQuoteDraft(String(nextOrder.delivery_price ?? ""));
     } catch (reason) {
@@ -1269,14 +1326,14 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
     }
     setSavingStatus(true);
     try {
-      const response = await apiFetch(`auth/representatives/${order.id}/status/`, {
+      const response = await apiFetch(`orders/${order.id}/status/`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: nextStatus }),
       });
       const data = await apiResponseData(response);
       if (!response.ok) throw new Error(apiError(data, "تعذر تحديث حالة الطلب."));
-      setOrder(data as BackendOrder);
+      setOrder(apiOrderData(data) ?? (data as BackendOrder));
       showSnackbar({ message: "تم تحديث حالة الطلب.", tone: "success" });
     } catch (reason) {
       showSnackbar({
@@ -1314,7 +1371,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
   }
 
   async function unassignRepresentative() {
-    if (!order?.assigned_representative || order.status !== "ready") return;
+    if (!order || !assignedRepresentativeId(order) || order.status !== "ready") return;
     setSavingAssignment(true);
     try {
       const response = await apiFetch(`orders/${order.id}/assignment/`, {
@@ -1377,7 +1434,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
             </span>
           </h1>
           <p className="mt-1 text-sm leading-5 text-muted-foreground">
-            {customerName(order)} - {dateTime(order.created_at)}
+            {customerName(order)} - {marketName(order)} - {dateTime(order.created_at)}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -1415,7 +1472,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                 {(order.items ?? []).map((item, index) => (
                   <tr key={item.id} className="border-b last:border-0">
                     <td className="px-4 py-4 text-muted-foreground">{index + 1}</td>
-                    <td className="px-4 py-4 font-medium">{item.variant?.product?.name ?? "منتج"}</td>
+                    <td className="px-4 py-4 font-medium">{item.variant?.product?.name ?? `Variant #${item.variant_id ?? item.variant?.id ?? item.id}`}</td>
                     <td className="px-4 py-4"><CurrencyText>{money(item.unit_price)}</CurrencyText></td>
                     <td className="px-4 py-4">{item.quantity}</td>
                     <td className="px-4 py-4"><CurrencyText>{money(Number(item.unit_price) * item.quantity)}</CurrencyText></td>
@@ -1425,6 +1482,19 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
             </table>
           </div>
           <FinancialSummaryCard order={order} />
+          {order.offers?.length ? (
+            <div className="mx-5 mb-5 rounded-lg border bg-muted/10 p-5 text-sm">
+              <div className="mb-3 font-semibold">العروض</div>
+              <div className="grid gap-2">
+                {order.offers.map((offer, index) => (
+                  <div key={`${offer.id ?? offer.offer_id ?? index}`} className="flex items-center justify-between gap-3 rounded-md bg-background/60 px-3 py-2">
+                    <span className="font-medium">{offer.title ?? `Offer #${offer.offer_id ?? offer.id ?? index + 1}`}</span>
+                    <span className="text-muted-foreground">{money(offer.discount_amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </Card>
 
         <div className="grid gap-4">
@@ -1476,11 +1546,24 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
             </button>
             {orderDetailsOpen ? (
               <div className="mt-3">
+                <SummaryRow label="رقم الطلب" value={orderNumber(order)} />
+                <SummaryRow label="ID" value={String(order.id)} />
+                <SummaryRow label="user_id" value={String(order.user_id ?? "-")} />
+                <SummaryRow label="market_id" value={String(order.market_id ?? order.market?.id ?? "-")} />
+                <SummaryRow label="delivery_address_id" value={String(order.delivery_address_id ?? order.delivery_address?.id ?? "-")} />
+                <SummaryRow label="assigned_representative_id" value={String(assignedRepresentativeId(order) ?? "Unassigned")} />
+                <SummaryRow label="status" value={order.status} />
+                <SummaryRow label="payment_method" value={order.payment_method ?? "-"} />
                 <SummaryRow label="العميل" value={customerName(order)} />
                 <SummaryRow label="الهاتف" value={order.customer?.phone ?? "-"} />
-                <SummaryRow label="المحل" value={order.market?.name ?? "-"} />
-                <SummaryRow label="العنوان" value={order.delivery_address?.name ?? "-"} />
+                <SummaryRow label="المحل" value={marketName(order)} />
+                <SummaryRow label="العنوان" value={order.delivery_address?.name ?? `Address #${order.delivery_address_id ?? "-"}`} />
                 <SummaryRow label="نوع الطلب" value={deliveryTypeLabel(order)} />
+                <SummaryRow label="subtotal_price" value={money(order.subtotal_price)} />
+                <SummaryRow label="delivery_price" value={money(order.delivery_price)} />
+                <SummaryRow label="discount" value={money(order.discount)} />
+                <SummaryRow label="total_price" value={money(order.total_price)} strong />
+                <SummaryRow label="created_at" value={dateTime(order.created_at)} />
                 {order.custom_delivery_area ? (
                   <SummaryRow label="منطقة الدليفري" value={order.custom_delivery_area} />
                 ) : null}
@@ -1497,10 +1580,10 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                     <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", representativeOpen && "rotate-180")} />
                   </button>
                   {representativeOpen ? (
-                    order.assigned_representative ? (
+                    assignedRepresentativeId(order) ? (
                       <div className="grid gap-3">
                         <AssignedRepresentativeDetails order={order} />
-                        {order.status === "ready" ? (
+                        {order.assigned_representative && order.status === "ready" ? (
                           <Button
                             type="button"
                             variant="outline"
@@ -1564,8 +1647,8 @@ function FinancialSummaryCard({ order }: { order: BackendOrder }) {
 }
 
 function AssignedRepresentativeDetails({ order }: { order: BackendOrder }) {
-  const representative = order.assigned_representative;
-  if (!representative) return null;
+  const representativeId = assignedRepresentativeId(order);
+  if (!representativeId) return null;
 
   return (
     <Link

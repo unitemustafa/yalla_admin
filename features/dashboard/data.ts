@@ -231,6 +231,7 @@ export type AddonRow = {
   nameAr: string;
   price: string;
   category: string;
+  productIds: string[];
 };
 
 export const addonRows: AddonRow[] = [
@@ -242,6 +243,7 @@ export const addonRows: AddonRow[] = [
     name: "Extra Cheese",
     nameAr: "جبنة زيادة",
     price: "15 EGP",
+    productIds: [],
     category: "جبن",
   },
   {
@@ -252,6 +254,7 @@ export const addonRows: AddonRow[] = [
     name: "Sauce Mix",
     nameAr: "مكس صوصات",
     price: "8 EGP",
+    productIds: [],
     category: "صوصات",
   },
   {
@@ -262,6 +265,7 @@ export const addonRows: AddonRow[] = [
     name: "Cola Can",
     nameAr: "كانز كولا",
     price: "25 EGP",
+    productIds: [],
     category: "مشروبات",
   },
   {
@@ -272,6 +276,7 @@ export const addonRows: AddonRow[] = [
     name: "Seafood Rice",
     nameAr: "طبق أرز سي فود",
     price: "30 EGP",
+    productIds: [],
     category: "أطباق جانبية",
   },
   {
@@ -282,6 +287,7 @@ export const addonRows: AddonRow[] = [
     name: "Tahini & Salad",
     nameAr: "طحينة وسلطة",
     price: "12 EGP",
+    productIds: [],
     category: "سلطات وصوصات",
   },
   {
@@ -292,6 +298,7 @@ export const addonRows: AddonRow[] = [
     name: "Extra Bread",
     nameAr: "عيش زيادة",
     price: "5 EGP",
+    productIds: [],
     category: "مخبوزات",
   },
   {
@@ -302,6 +309,7 @@ export const addonRows: AddonRow[] = [
     name: "Grilling",
     nameAr: "شوي",
     price: "20 EGP",
+    productIds: [],
     category: "طريقة التحضير",
   },
   {
@@ -312,6 +320,7 @@ export const addonRows: AddonRow[] = [
     name: "Family Packaging",
     nameAr: "تغليف عائلي",
     price: "10 EGP",
+    productIds: [],
     category: "تغليف",
   },
 ];

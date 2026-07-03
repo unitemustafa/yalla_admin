@@ -750,6 +750,7 @@ export function DataTable({
   onRowClick,
   columnWidths,
   getRowProps,
+  getCellProps,
 }: {
   headers: React.ReactNode[];
   rows: React.ReactNode[][];
@@ -759,7 +760,13 @@ export function DataTable({
   columnWidths?: number[];
   getRowProps?: (
     rowIndex: number,
+    row: React.ReactNode[],
   ) => ComponentPropsWithoutRef<"tr"> | undefined;
+  getCellProps?: (
+    rowIndex: number,
+    cellIndex: number,
+    row: React.ReactNode[],
+  ) => ComponentPropsWithoutRef<"td"> | undefined;
 }) {
   const rowClass =
     rowHeight === "compact"
@@ -795,7 +802,7 @@ export function DataTable({
         </thead>
         <tbody>
           {rows.map((row, rowIndex) => {
-            const rowProps = getRowProps?.(rowIndex);
+            const rowProps = getRowProps?.(rowIndex, row);
 
             return (
               <tr
@@ -809,17 +816,27 @@ export function DataTable({
                   rowProps?.className,
                 )}
               >
-                {row.map((cell, cellIndex) => (
-                  <td
-                    key={cellIndex}
-                    className={cn(
-                      "p-2 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
-                      cellIndex === 0 && "p-0",
-                    )}
-                  >
-                    {cell}
-                  </td>
-                ))}
+                {row.map((cell, cellIndex) => {
+                  if (cell === null) {
+                    return null;
+                  }
+
+                  const cellProps = getCellProps?.(rowIndex, cellIndex, row);
+
+                  return (
+                    <td
+                      key={cellIndex}
+                      {...cellProps}
+                      className={cn(
+                        "p-2 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+                        cellIndex === 0 && "p-0",
+                        cellProps?.className,
+                      )}
+                    >
+                      {cell}
+                    </td>
+                  );
+                })}
               </tr>
             );
           })}

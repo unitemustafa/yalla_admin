@@ -51,6 +51,7 @@ import {
   Button,
   Card,
   CurrencyText,
+  DataTable,
   Field,
   FormCard,
   Input,
@@ -533,6 +534,7 @@ function AddonActionsMenu({
 function AddonEditPanel({
   draft,
   categoryOptions,
+  productOptions,
   onChange,
   onImageChange,
   onCancel,
@@ -540,6 +542,7 @@ function AddonEditPanel({
 }: {
   draft: AddonRow;
   categoryOptions: string[];
+  productOptions: AddonProductOption[];
   onChange: (draft: AddonRow) => void;
   onImageChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onCancel: () => void;
@@ -579,14 +582,6 @@ function AddonEditPanel({
           </span>
         </label>
         <div className="grid gap-3 md:grid-cols-4">
-          <Field label="الاسم بالإنجليزي">
-            <Input
-              dir="ltr"
-              value={draft.name}
-              className="h-9"
-              onChange={(event) => onChange({ ...draft, name: event.target.value })}
-            />
-          </Field>
           <Field label="الاسم بالعربي">
             <Input
               value={draft.nameAr}
@@ -616,6 +611,20 @@ function AddonEditPanel({
               }))}
             />
           </Field>
+          <Field label="المنتجات">
+            <AppSelect
+              value={productScopeValue(draft.productIds, productOptions)}
+              onValueChange={(scope) =>
+                onChange({
+                  ...draft,
+                  productIds: productIdsForScope(scope, productOptions),
+                })
+              }
+              ariaLabel="اختيار منتجات الإضافة"
+              className="h-9 bg-input"
+              options={productSelectOptions(productOptions, draft.productIds)}
+            />
+          </Field>
         </div>
         <div className="flex gap-2 lg:pb-0">
           <Button type="button" variant="outline" className="h-9" onClick={onCancel}>
@@ -627,6 +636,130 @@ function AddonEditPanel({
         </div>
       </div>
     </form>
+  );
+}
+
+function splitAddonPrice(price: string) {
+  const normalizedPrice = price.trim();
+  const match = normalizedPrice.match(/^(.*?)(?:\s*(EGP|جنيه|جنية))$/i);
+
+  if (!match) {
+    return { amount: normalizedPrice, currency: "" };
+  }
+
+  return {
+    amount: match[1].trim(),
+    currency: match[2],
+  };
+}
+
+type AddonProductOption = {
+  value: string;
+  label: string;
+};
+
+function addonProductOptions(rows: ItemRow[]): AddonProductOption[] {
+  return rows.map((row) => ({
+    value: row.id,
+    label: row.name,
+  }));
+}
+
+function productScopeValue(productIds: string[] | undefined, productOptions: AddonProductOption[]) {
+  const safeProductIds = productIds ?? [];
+
+  if (!safeProductIds.length) return "all";
+
+  const availableIds = productOptions.map((product) => product.value);
+  if (
+    availableIds.length &&
+    safeProductIds.length >= availableIds.length &&
+    availableIds.every((id) => safeProductIds.includes(id))
+  ) {
+    return "all";
+  }
+
+  return safeProductIds.length === 1 ? safeProductIds[0] : "custom";
+}
+
+function productIdsForScope(scope: string, productOptions: AddonProductOption[]) {
+  if (scope === "all") return productOptions.map((product) => product.value);
+  if (!scope || scope === "custom") return [];
+  return [scope];
+}
+
+function addonProductLabel(addon: AddonRow, productOptions: AddonProductOption[]) {
+  const scope = productScopeValue(addon.productIds, productOptions);
+
+  if (scope === "all") return "كل المنتجات";
+  if (scope !== "custom") {
+    return productOptions.find((product) => product.value === scope)?.label ?? "منتج محدد";
+  }
+
+  return `${addon.productIds.length} منتجات`;
+}
+
+function productSelectOptions(
+  productOptions: AddonProductOption[],
+  selectedIds: string[] = [],
+) {
+  const scope = productScopeValue(selectedIds, productOptions);
+
+  return [
+    { value: "all", label: "كل المنتجات" },
+    ...(scope === "custom"
+      ? [{ value: "custom", label: `${selectedIds.length} منتجات`, disabled: true }]
+      : []),
+    ...productOptions,
+  ];
+}
+
+function AddonIdentity({
+  addon,
+  productOptions,
+}: {
+  addon: AddonRow;
+  productOptions: AddonProductOption[];
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2.5 py-1">
+      <DashboardImage
+        alt={addon.nameAr}
+        src={addon.image}
+        width={52}
+        height={52}
+        sizes="52px"
+        className="size-[52px] shrink-0 rounded-md border bg-muted/35 shadow-sm"
+        imageClassName="object-contain p-1"
+      />
+      <div className="min-w-0">
+        <h3 className="truncate text-[13px] font-black leading-5">{addon.nameAr}</h3>
+        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+          <span className="max-w-full truncate rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+            {addonProductLabel(addon, productOptions)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddonInfoPill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex max-w-full items-center rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 text-xs font-semibold text-foreground">
+      <span className="truncate">{children}</span>
+    </span>
+  );
+}
+
+function AddonPriceCell({ price }: { price: string }) {
+  const { amount, currency } = splitAddonPrice(price);
+
+  return (
+    <div className="inline-flex min-w-[78px] items-baseline justify-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-primary">
+      <span className="text-sm font-black leading-none">{amount}</span>
+      {currency ? <span className="currency-text text-[11px] font-bold">{currency}</span> : null}
+    </div>
   );
 }
 
@@ -1957,12 +2090,15 @@ export function AddonsPage() {
   const [addonSearch, setAddonSearch] = useState("");
   const [selectedAddonCategory, setSelectedAddonCategory] = useState("all");
   const [addonFormCategory, setAddonFormCategory] = useState(addonRows[0]?.category ?? "");
-  const [addonNameEn, setAddonNameEn] = useState("");
   const [addonNameAr, setAddonNameAr] = useState("");
   const [addonPrice, setAddonPrice] = useState("");
+  const [addonProductScope, setAddonProductScope] = useState("all");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
   const [rows, setRows] = useState<AddonRow[]>(() => addonRows);
+  const [productOptions, setProductOptions] = useState<AddonProductOption[]>(() =>
+    addonProductOptions(itemRows),
+  );
   const [categoryOptions, setCategoryOptions] = useState<string[]>(() =>
     uniqueAddonCategories(addonRows),
   );
@@ -2003,18 +2139,24 @@ export function AddonsPage() {
 
     async function loadAddons() {
       try {
-        const [addons, classificationsResponse] = await Promise.all([
+        const [addons, classificationsResponse, products] = await Promise.all([
           fetchAdminRows(
             apiFetch,
             adminApiPaths.productAdditions,
             addonRowFromApi,
           ),
           apiFetch(adminApiPaths.additionClassifications),
+          fetchAdminRows(
+            apiFetch,
+            adminApiPaths.products,
+            productRowFromApi,
+          ).catch(() => itemRows),
         ]);
         const classificationsData = await readApiData(classificationsResponse);
 
         if (!active) return;
         setRows(addons);
+        setProductOptions(addonProductOptions(products));
 
         if (classificationsResponse.ok) {
           const classifications = apiList(classificationsData)
@@ -2097,9 +2239,9 @@ export function AddonsPage() {
   function closeAddonModal() {
     setModalOpen(false);
     setAddonFormCategory(categoryOptions[0] ?? "");
-    setAddonNameEn("");
     setAddonNameAr("");
     setAddonPrice("");
+    setAddonProductScope("all");
     resetAddonImage();
   }
 
@@ -2132,8 +2274,11 @@ export function AddonsPage() {
           body: JSON.stringify({
             classification_id: classificationIdByName(nextCategory),
             name_ar: editingAddon.nameAr,
-            name_en: editingAddon.name,
+            name_en: editingAddon.nameAr,
             price: editingAddon.price.replace(/\s*EGP\s*$/i, ""),
+            products: editingAddon.productIds.length
+              ? editingAddon.productIds
+              : productIdsForScope("all", productOptions),
             is_active: true,
           }),
         },
@@ -2245,8 +2390,11 @@ export function AddonsPage() {
         String(classificationIdByName(currentAddonFormCategory)),
       );
       formData.set("name_ar", addonNameAr.trim());
-      formData.set("name_en", addonNameEn.trim());
+      formData.set("name_en", addonNameAr.trim());
       formData.set("price", addonPrice.trim());
+      productIdsForScope(addonProductScope, productOptions).forEach((productId) => {
+        formData.append("products", productId);
+      });
       if (addonImageFile) formData.set("image", addonImageFile);
 
       const response = await apiFetch(adminApiPaths.productAdditions, {
@@ -2356,122 +2504,83 @@ export function AddonsPage() {
           </div>
           <div className="mt-4">
             {visibleAddons.length ? (
-              <div className="rounded-md border">
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[980px] table-fixed text-sm">
-                    <colgroup>
-                      <col style={{ width: "6%" }} />
-                      <col style={{ width: "9%" }} />
-                      <col style={{ width: "20%" }} />
-                      <col style={{ width: "20%" }} />
-                      <col style={{ width: "17%" }} />
-                      <col style={{ width: "16%" }} />
-                      <col style={{ width: "12%" }} />
-                    </colgroup>
-                    <thead>
-                      <tr className="h-10 border-b transition-colors hover:bg-muted/50">
-                        <th className="h-10 px-4 text-center align-middle text-xs font-medium text-muted-foreground">
-                          #
-                        </th>
-                        <th className="h-10 px-4 text-center align-middle text-xs font-medium text-muted-foreground">
-                          الصورة
-                        </th>
-                        <th dir="ltr" className="h-10 px-4 text-left align-middle text-xs font-medium text-muted-foreground">
-                          الاسم بالإنجليزي
-                        </th>
-                        <th className="h-10 px-4 text-right align-middle text-xs font-medium text-muted-foreground">
-                          الاسم بالعربي
-                        </th>
-                        <th className="h-10 px-4 text-right align-middle text-xs font-medium text-muted-foreground">
-                          تصنيف الإضافة
-                        </th>
-                        <th dir="ltr" className="h-10 px-4 text-left align-middle text-xs font-medium text-muted-foreground">
-                          سعر الإضافة
-                        </th>
-                        <th className="h-10 px-4 text-center align-middle text-xs font-medium text-muted-foreground">
-                          إجراءات
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pagedAddons.map((addon, addonIndex) => (
-                        <Fragment key={addon.id}>
-                          <tr className="h-14 border-b transition-colors hover:bg-muted/40">
-                            <td className="px-4 py-2 text-center align-middle">
-                              {pageStartIndex + addonIndex + 1}
-                            </td>
-                            <td className="px-4 py-2 align-middle">
-                              <div className="flex justify-center">
-                                <DashboardImage
-                                  alt={addon.nameAr}
-                                  src={addon.image}
-                                  width={40}
-                                  height={40}
-                                  sizes="40px"
-                                  className="size-10 rounded-sm"
-                                  imageClassName="object-contain"
-                                />
-                              </div>
-                            </td>
-                            <td dir="ltr" className="truncate px-4 py-2 text-left align-middle font-medium">
-                              {addon.name}
-                            </td>
-                            <td className="truncate px-4 py-2 align-middle font-medium">
-                              {addon.nameAr}
-                            </td>
-                            <td className="px-4 py-2 align-middle">
-                              <span className="inline-flex max-w-full rounded-md bg-muted/45 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                                <span className="truncate">{addon.category}</span>
-                              </span>
-                            </td>
-                            <td dir="ltr" className="px-4 py-2 text-left align-middle font-semibold">
-                              {addon.price}
-                            </td>
-                            <td className="px-4 py-2 align-middle">
-                              <AddonActionsMenu
-                                addon={addon}
-                                open={openActionMenu === addon.id}
-                                onToggle={() =>
-                                  setOpenActionMenu((current) =>
-                                    current === addon.id ? null : addon.id,
-                                  )
-                                }
-                                onEdit={() => startEditingAddon(addon)}
-                                onDelete={() => void deleteAddon(addon)}
-                              />
-                            </td>
-                          </tr>
-                          {editingAddon?.id === addon.id ? (
-                            <tr className="border-b bg-primary/5">
-                              <td colSpan={7} className="p-2.5">
-                                <AddonEditPanel
-                                  draft={editingAddon}
-                                  categoryOptions={categoryOptions}
-                                  onChange={setEditingAddon}
-                                  onImageChange={handleEditAddonImageChange}
-                                  onCancel={cancelEditingAddon}
-                                  onSave={saveEditingAddon}
-                                />
-                              </td>
-                            </tr>
-                          ) : null}
-                        </Fragment>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+              <div className="overflow-hidden rounded-md border transition-opacity duration-200">
+                <DataTable
+                  minWidth={860}
+                  columnWidths={[54, 350, 210, 160, 90]}
+                  rowHeight="tall"
+                  headers={["#", "الإضافة", "تصنيف الإضافة", "سعر الإضافة", ""]}
+                  rows={pagedAddons.flatMap((addon, addonIndex) => {
+                    const baseRow = [
+                      <span key={`index-${addon.id}`} className="text-sm font-bold text-muted-foreground">
+                        {pageStartIndex + addonIndex + 1}
+                      </span>,
+                      <AddonIdentity
+                        key={`identity-${addon.id}`}
+                        addon={addon}
+                        productOptions={productOptions}
+                      />,
+                      <AddonInfoPill key={`category-${addon.id}`}>{addon.category}</AddonInfoPill>,
+                      <AddonPriceCell key={`price-${addon.id}`} price={addon.price} />,
+                      <div key={`actions-${addon.id}`} className="flex items-center justify-center">
+                        <AddonActionsMenu
+                          addon={addon}
+                          open={openActionMenu === addon.id}
+                          onToggle={() =>
+                            setOpenActionMenu((current) =>
+                              current === addon.id ? null : addon.id,
+                            )
+                          }
+                          onEdit={() => startEditingAddon(addon)}
+                          onDelete={() => void deleteAddon(addon)}
+                        />
+                      </div>,
+                    ];
+
+                    if (editingAddon?.id !== addon.id) {
+                      return [baseRow];
+                    }
+
+                    return [
+                      baseRow,
+                      [
+                        <div key={`edit-${addon.id}`} className="p-1">
+                          <AddonEditPanel
+                            draft={editingAddon}
+                            categoryOptions={categoryOptions}
+                            productOptions={productOptions}
+                            onChange={setEditingAddon}
+                            onImageChange={handleEditAddonImageChange}
+                            onCancel={cancelEditingAddon}
+                            onSave={saveEditingAddon}
+                          />
+                        </div>,
+                        null,
+                        null,
+                        null,
+                        null,
+                      ],
+                    ];
+                  })}
+                  getRowProps={(_rowIndex, row) =>
+                    row[1] === null ? { className: "bg-primary/5 hover:bg-primary/5" } : undefined
+                  }
+                  getCellProps={(_rowIndex, cellIndex, row) =>
+                    row[1] === null && cellIndex === 0
+                      ? { colSpan: 5, className: "p-2.5" }
+                      : undefined
+                  }
+                />
               </div>
             ) : (
               <EmptyStateTable
-                minWidth={980}
+                minWidth={860}
                 headers={[
                   "#",
-                  "الصورة",
-                  "الاسم بالإنجليزي",
-                  "الاسم بالعربي",
+                  "الإضافة",
                   "تصنيف الإضافة",
                   "سعر الإضافة",
-                  "إجراءات",
+                  "",
                 ]}
               />
             )}
@@ -2619,15 +2728,7 @@ export function AddonsPage() {
                   </div>
                 </div>
               </Field>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="الاسم بالإنجليزي">
-                  <Input
-                    dir="ltr"
-                    value={addonNameEn}
-                    onChange={(event) => setAddonNameEn(event.target.value)}
-                    placeholder="Extra Cheese"
-                  />
-                </Field>
+              <div className="grid gap-4">
                 <Field label="الاسم بالعربي">
                   <Input
                     value={addonNameAr}
@@ -2635,8 +2736,17 @@ export function AddonsPage() {
                     placeholder="جبنة زيادة"
                   />
                 </Field>
+                <Field label="المنتجات">
+                  <AppSelect
+                    value={addonProductScope}
+                    onValueChange={setAddonProductScope}
+                    ariaLabel="اختيار منتجات الإضافة"
+                    className="h-9 bg-input"
+                    options={productSelectOptions(productOptions)}
+                  />
+                </Field>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <Field label="تصنيف الإضافة">
                   <AppSelect
                     value={currentAddonFormCategory}
@@ -2657,12 +2767,21 @@ export function AddonsPage() {
                     placeholder="EGP 0.00"
                   />
                 </Field>
+                <Field label="المنتجات">
+                  <AppSelect
+                    value={addonProductScope}
+                    onValueChange={setAddonProductScope}
+                    ariaLabel="اختيار منتجات الإضافة"
+                    className="h-9 bg-input"
+                    options={productSelectOptions(productOptions)}
+                  />
+                </Field>
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={closeAddonModal}>إلغاء</Button>
                 <Button
                   onClick={() => void createAddon()}
-                  disabled={!addonNameAr.trim() || !addonNameEn.trim() || !addonPrice.trim()}
+                  disabled={!addonNameAr.trim() || !addonPrice.trim()}
                 >
                   إنشاء
                 </Button>
