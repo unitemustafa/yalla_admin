@@ -9,7 +9,6 @@ import {
   Copy,
   Edit,
   MapPin,
-  Minus,
   Package,
   Plus,
   RotateCcw,
@@ -448,9 +447,6 @@ function ProductIdentity({ row, compact = false }: { row: ItemRow; compact?: boo
       <div className="min-w-0">
         <h3 className="truncate text-[13px] font-black leading-5">{row.name}</h3>
         <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
-          <span className="max-w-full truncate rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary">
-            {row.code ?? row.id}
-          </span>
           <span
             className={cn(
               "rounded-md px-2 py-0.5 text-[11px] font-bold",
@@ -670,20 +666,6 @@ export function ItemsPage() {
     filters.shop !== defaultFilters.shop ||
     filters.region !== defaultFilters.region ||
     filters.status !== defaultFilters.status;
-  const selectedState = useMemo(() => {
-    if (
-      pagedRows.length > 0 &&
-      pagedRows.every((row) => selectedRows.has(row.index))
-    ) {
-      return "checked";
-    }
-
-    if (selectedRows.size > 0) {
-      return "indeterminate";
-    }
-
-    return "unchecked";
-  }, [pagedRows, selectedRows]);
   const deleteRow = rows.find((row) => row.id === deleteId);
 
   useEffect(() => {
@@ -720,16 +702,6 @@ export function ItemsPage() {
       active = false;
     };
   }, [apiFetch]);
-
-  function toggleAllRows() {
-    setSelectedRows((currentRows) =>
-      pagedRows.every((row) => currentRows.has(row.index))
-        ? new Set([...currentRows].filter(
-            (rowIndex) => !pagedRows.some((row) => row.index === rowIndex),
-          ))
-        : new Set([...currentRows, ...pagedRows.map((row) => row.index)]),
-    );
-  }
 
   function toggleSelectedRow(rowIndex: string) {
     setSelectedRows((currentRows) => {
@@ -885,35 +857,13 @@ export function ItemsPage() {
         )}
         <div className="mt-4 hidden overflow-hidden rounded-md border transition-opacity duration-200 lg:block">
           <DataTable
-            minWidth={1180}
+            minWidth={1162}
             columnWidths={[
-              48, 48, 300, 210, 110, 120, 130, 112, 70,
+              78, 300, 210, 110, 120, 130, 112, 70,
             ]}
             rowHeight="normal"
             headers={[
-              <div key="select-all" className="ps-4">
-                <button
-                  type="button"
-                  role="checkbox"
-                  aria-checked={
-                    selectedState === "indeterminate"
-                      ? "mixed"
-                      : selectedState === "checked"
-                  }
-                  data-state={selectedState}
-                  value="on"
-                  aria-label="تحديد الكل"
-                  className={checkboxClass}
-                  onClick={toggleAllRows}
-                >
-                  {selectedState === "checked" ? (
-                    <Check className="size-3" />
-                  ) : selectedState === "indeterminate" ? (
-                    <Minus className="size-3" />
-                  ) : null}
-                </button>
-              </div>,
-              "#",
+              "",
               "المنتج",
               "الوصف",
               "الفئة",
@@ -924,24 +874,7 @@ export function ItemsPage() {
               "",
             ]}
             rows={(loading ? [] : pagedRows).map((row, rowPosition) => [
-              <div key={`check-wrap-${row.index}`} className="flex items-center ps-4 py-2">
-                <button
-                  type="button"
-                  role="checkbox"
-                  aria-checked={selectedRows.has(row.index)}
-                  data-state={selectedRows.has(row.index) ? "checked" : "unchecked"}
-                  value="on"
-                  aria-label="تحديد الصف"
-                  className={checkboxClass}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    toggleSelectedRow(row.index);
-                  }}
-                >
-                  {selectedRows.has(row.index) ? <Check className="size-3" /> : null}
-                </button>
-              </div>,
-              <span key={`index-${row.index}`} className="text-sm font-bold text-muted-foreground">
+              <span key={`index-${row.index}`} className="mx-auto flex size-10 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">
                 {pageStartIndex + rowPosition + 1}
               </span>,
               <div

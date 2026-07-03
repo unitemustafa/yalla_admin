@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft,
   Check,
   ChevronDown,
+  ChevronRight,
   ClipboardList,
   Copy,
   Loader2,
@@ -226,11 +226,29 @@ function DeliveryTypeBadge({ order }: { order: BackendOrder }) {
 
   return (
     <Badge tone={deliveryTypeTone(order)}>
-      <span className="inline-flex items-center gap-1.5">
+      <span className="inline-flex flex-row-reverse items-center gap-1.5">
         <Icon className="size-3.5" />
         {deliveryTypeLabel(order)}
       </span>
     </Badge>
+  );
+}
+
+function OrderDeliveryIcon({ order }: { order: BackendOrder }) {
+  const isDeliveryOrder = order.delivery_type === "manual_quote";
+  const Icon = isDeliveryOrder ? Truck : MapPin;
+
+  return (
+    <span
+      className={cn(
+        "flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary",
+        isDeliveryOrder && "bg-red-500/10 text-red-600 dark:text-red-300",
+      )}
+      title={deliveryTypeLabel(order)}
+      aria-label={deliveryTypeLabel(order)}
+    >
+      <Icon className="size-5" />
+    </span>
   );
 }
 
@@ -510,13 +528,11 @@ export function BackendOrdersPage() {
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <span
-                      className={cn(
-                        "flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary",
-                        isDeliveryOrder && "bg-red-500/10 text-red-600 dark:text-red-300",
-                      )}
+                      className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary"
                     >
                       {pageStartIndex + index + 1}
                     </span>
+                    <OrderDeliveryIcon order={order} />
                     <div className="min-w-0">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <Link
@@ -585,10 +601,6 @@ export function BackendOrdersPage() {
                     <CurrencyText className="block text-base font-extrabold tabular-nums">
                       {money(order.total_price)}
                     </CurrencyText>
-                    <div className="mt-1 truncate text-xs text-muted-foreground">
-                      {order.payment_method ?? "-"} · {money(order.delivery_price)}
-                    </div>
-                    <div className="mt-1 truncate text-xs text-muted-foreground">{dateTime(order.created_at)}</div>
                   </div>
 
                   <Link
@@ -907,10 +919,10 @@ export function BackendCreateOrderPage() {
         actions={
           <Link
             href="/orders"
-            className="inline-flex h-9 items-center gap-2 rounded-md border px-4 text-sm font-medium hover:bg-accent"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border bg-background px-3 text-sm font-medium text-muted-foreground shadow-sm transition hover:bg-accent hover:text-foreground"
           >
-            <ArrowLeft className="size-4" />
-            الرجوع
+            <ChevronRight className="size-4" />
+            الرجوع للطلبات
           </Link>
         }
       />
@@ -922,7 +934,7 @@ export function BackendCreateOrderPage() {
       ) : error ? (
         <Card className="mt-6 p-6 text-sm text-destructive">{error}</Card>
       ) : (
-        <form onSubmit={submitOrder} className="mt-6 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <form onSubmit={submitOrder} className="mt-6 grid items-stretch gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
           <Card className="p-5 xl:sticky xl:top-6">
             <div className="grid gap-4">
               <Field label="العميل">
@@ -1143,17 +1155,19 @@ export function BackendCreateOrderPage() {
             </div>
           </Card>
 
-          <Card className="p-5">
+          <Card className="flex h-full flex-col p-5">
             <div className="mb-4 flex items-center gap-2 font-semibold">
               <ShoppingCart className="size-4 text-primary" />
               ملخص الطلب
             </div>
-            <SummaryRow label="إجمالي المنتجات" value={money(subtotal)} />
-            <SummaryRow label="نوع التوصيل" value={orderDeliveryType === "manual_quote" ? "دليفري" : "توصيل"} />
-            <SummaryRow label="رسوم التوصيل" value={money(effectiveDeliveryPrice)} />
-            <SummaryRow label="الخصم" value={money(discount)} />
-            <div className="mt-4 border-t pt-4">
-              <SummaryRow label="الإجمالي" value={money(total)} strong />
+            <div className="flex flex-1 flex-col">
+              <SummaryRow label="إجمالي المنتجات" value={money(subtotal)} />
+              <SummaryRow label="نوع التوصيل" value={orderDeliveryType === "manual_quote" ? "دليفري" : "توصيل"} />
+              <SummaryRow label="رسوم التوصيل" value={money(effectiveDeliveryPrice)} />
+              <SummaryRow label="الخصم" value={money(discount)} />
+              <div className="mt-auto border-t pt-4">
+                <SummaryRow label="الإجمالي" value={money(total)} strong />
+              </div>
             </div>
             <Button
               className="mt-5 w-full"
@@ -1719,10 +1733,10 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
             </Button>
             <Link
               href="/orders"
-              className="inline-flex h-9 items-center gap-2 rounded-md border px-4 text-sm font-medium hover:bg-accent"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border bg-background px-3 text-sm font-medium text-muted-foreground shadow-sm transition hover:bg-accent hover:text-foreground"
             >
-              <ArrowLeft className="size-4" />
-              الرجوع
+              <ChevronRight className="size-4" />
+              الرجوع للطلبات
             </Link>
         </div>
       </div>

@@ -652,11 +652,6 @@ function AddonIdentity({ addon }: { addon: AddonRow }) {
       />
       <div className="min-w-0">
         <h3 className="truncate text-[13px] font-black leading-5">{addon.nameAr}</h3>
-        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
-          <span className="max-w-full truncate rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary">
-            {addon.id}
-          </span>
-        </div>
       </div>
     </div>
   );
@@ -2407,13 +2402,13 @@ export function AddonsPage() {
             {visibleAddons.length ? (
               <div className="overflow-hidden rounded-md border transition-opacity duration-200">
                 <DataTable
-                  minWidth={860}
-                  columnWidths={[54, 350, 210, 160, 90]}
+                  minWidth={885}
+                  columnWidths={[80, 350, 210, 160, 90]}
                   rowHeight="tall"
-                  headers={["#", "الإضافة", "تصنيف الإضافة", "سعر الإضافة", ""]}
+                  headers={["", "الإضافة", "تصنيف الإضافة", "سعر الإضافة", ""]}
                   rows={pagedAddons.flatMap((addon, addonIndex) => {
                     const baseRow = [
-                      <span key={`index-${addon.id}`} className="text-sm font-bold text-muted-foreground">
+                      <span key={`index-${addon.id}`} className="mx-auto flex size-10 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">
                         {pageStartIndex + addonIndex + 1}
                       </span>,
                       <AddonIdentity key={`identity-${addon.id}`} addon={addon} />,
@@ -2472,7 +2467,7 @@ export function AddonsPage() {
               <EmptyStateTable
                 minWidth={860}
                 headers={[
-                  "#",
+                  "",
                   "الإضافة",
                   "تصنيف الإضافة",
                   "سعر الإضافة",
@@ -4306,6 +4301,7 @@ export function CreateOfferPage() {
   const [offerStatus, setOfferStatus] = useState("active");
   const [offerTitle, setOfferTitle] = useState(editingOffer?.title ?? "");
   const [offerDescription, setOfferDescription] = useState("");
+  const [selectedOfferCityId, setSelectedOfferCityId] = useState("all");
   const offerImageObjectUrlRef = useRef<string | null>(null);
   const [offerImagePreview, setOfferImagePreview] = useState(editingOffer?.image ?? "");
   const [offerImageName, setOfferImageName] = useState(
@@ -4746,6 +4742,21 @@ export function CreateOfferPage() {
                   />
                 </Field>
               </div>
+              <Field label="المدينة">
+                <AppSelect
+                  ariaLabel="المدينة"
+                  className="h-11 bg-input"
+                  onValueChange={setSelectedOfferCityId}
+                  options={[
+                    { value: "all", label: serviceCitiesLoading ? "جاري تحميل المدن..." : "كل المدن" },
+                    ...serviceCities.map((city) => ({
+                      value: String(city.id),
+                      label: city.name_ar || city.name,
+                    })),
+                  ]}
+                  value={selectedOfferCityId}
+                />
+              </Field>
 
               <div className="hidden">
               <Field label="السوق *">

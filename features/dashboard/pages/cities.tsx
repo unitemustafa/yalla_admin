@@ -469,11 +469,11 @@ export function CitiesPage() {
         description="إدارة المدن التي تحدد ظهور المحلات والمنتجات والعروض داخل تطبيق العميل."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => void reload()} disabled={loading}>
+            <Button type="button" variant="outline" onClick={() => void reload()} disabled={loading} className="h-9 px-4 text-sm">
               <RefreshCw className="size-4" />
               تحديث
             </Button>
-          <Button size="sm" onClick={() => setEditingCity(null)}>
+          <Button onClick={() => setEditingCity(null)} className="h-9 px-4 text-sm">
             <Plus className="size-4" />
             إضافة مدينة
           </Button>
@@ -535,8 +535,8 @@ export function CitiesPage() {
                     <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">
                       {pageStartIndex + index + 1}
                     </span>
-                    <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <MapPinned className="size-7" />
+                    <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <MapPinned className="size-5" />
                     </span>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">

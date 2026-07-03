@@ -27,10 +27,10 @@ import { DashboardImage } from "../dashboard-image";
 import {
   ActionMenu,
   AppSelect,
-  Badge,
   Button,
   Card,
   DataTable,
+  Field,
   Input,
   Pagination,
   Switch,
@@ -39,10 +39,9 @@ import { useDisclosure } from "../hooks";
 import { useSnackbar } from "../snackbar";
 
 type CategoryStatusFilter = "all" | "active" | "inactive";
-type CategoryTypeFilter = "all" | "popular" | "featured";
+type CategoryTypeFilter = "all" | "popular";
 type CategorySectionFilter = string;
 
-const popularCategoryMinTotal = 20;
 const initialCategorySectionOptions: CategorySectionFilter[] = [
   "all",
   "الطازج",
@@ -53,20 +52,14 @@ const initialCategorySectionOptions: CategorySectionFilter[] = [
   "الخدمات",
 ];
 
-const categoryTypeOptions = [
-  { value: "popular", label: "فئات شائعة" },
-  { value: "featured", label: "فئات مميزة" },
-];
 const categoriesPageSize = 10;
 
 function CategoryDrawer({
   category,
-  sectionOptions,
   onClose,
   onSubmit,
 }: {
   category?: CategoryRow | null;
-  sectionOptions: CategorySectionFilter[];
   onClose: () => void;
   onSubmit: (draft: {
     name: string;
@@ -77,13 +70,11 @@ function CategoryDrawer({
 }) {
   const isEditing = Boolean(category);
   const selectedSection = category?.sections[0] ?? "الطازج";
-  const selectedType = category?.featured === "نعم" ? "featured" : "popular";
   const categoryImageObjectUrlRef = useRef<string | null>(null);
   const [categoryImagePreview, setCategoryImagePreview] = useState(category?.image ?? "");
   const [categoryImageName, setCategoryImageName] = useState("");
   const [name, setName] = useState(category?.name ?? "");
-  const [classificationName, setClassificationName] = useState(selectedSection);
-  const [type, setType] = useState(selectedType);
+  const [isPopular, setIsPopular] = useState(category?.featured !== "نعم");
   const [description, setDescription] = useState("");
 
   function revokeCategoryImageObjectUrl() {
@@ -153,7 +144,7 @@ function CategoryDrawer({
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {isEditing
-                ? "عدّل بيانات الفئة والتصنيف والنوع الخاص بها."
+                ? "عدّل بيانات الفئة وحالة ظهورها الشائعة."
                 : "أنشئ فئة جديدة تظهر داخل القسم المناسب في تطبيق العملاء."}
             </p>
           </div>
@@ -237,31 +228,10 @@ function CategoryDrawer({
                 placeholder="مثلاً: طيور، أسماك، لحوم فريش..."
               />
             </label>
-            <label className="flex h-[76px] flex-col gap-3 text-sm font-medium">
-              <span className="leading-5">تصنيف</span>
-              <AppSelect
-                value={classificationName}
-                onValueChange={setClassificationName}
-                options={sectionOptions
-                  .filter((section) => section !== "all")
-                  .map((section) => ({
-                    value: section,
-                    label: section,
-                  }))}
-                ariaLabel="تصنيف"
-                className="h-11"
-              />
-            </label>
-            <label className="flex h-[76px] flex-col gap-3 text-sm font-medium">
-              <span className="leading-5">النوع</span>
-              <AppSelect
-                value={type}
-                onValueChange={setType}
-                options={categoryTypeOptions}
-                ariaLabel="النوع"
-                className="h-11"
-              />
-            </label>
+            <div className="flex h-[76px] items-center justify-between gap-4 rounded-md border bg-muted/15 px-4 text-sm font-medium sm:col-span-2">
+              <span className="leading-5">تصنيف الفئة</span>
+              <Switch checked={isPopular} onCheckedChange={setIsPopular} />
+            </div>
             <label className="flex min-h-[124px] flex-col gap-3 text-sm font-medium sm:col-span-2">
               <span className="leading-5">وصف الفئة</span>
               <textarea
@@ -281,8 +251,8 @@ function CategoryDrawer({
             onClick={() =>
               onSubmit({
                 name,
-                classificationName,
-                type,
+                classificationName: selectedSection,
+                type: isPopular ? "popular" : "featured",
                 description,
               })
             }
@@ -293,97 +263,6 @@ function CategoryDrawer({
               <Plus className="size-4" />
             )}
             {isEditing ? "حفظ التعديلات" : "إنشاء"}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CategorySectionDrawer({
-  existingSections,
-  onClose,
-  onSubmit,
-}: {
-  existingSections: CategorySectionFilter[];
-  onClose: () => void;
-  onSubmit: (sectionName: string) => void;
-}) {
-  const [sectionName, setSectionName] = useState("");
-  const trimmedName = sectionName.trim();
-  const sectionExists = existingSections.some(
-    (section) =>
-      section !== "all" &&
-      section.toLocaleLowerCase("ar-EG") ===
-        trimmedName.toLocaleLowerCase("ar-EG"),
-  );
-  const visibleSections = existingSections.filter((section) => section !== "all");
-  const canSubmit = trimmedName.length > 0 && !sectionExists;
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="add-category-section-title"
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4"
-    >
-      <div className="relative flex w-full max-w-[420px] flex-col rounded-xl border bg-background shadow-2xl">
-        <button
-          onClick={onClose}
-          className="absolute left-4 top-4 inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          aria-label="إغلاق"
-        >
-          <X className="size-4" />
-        </button>
-        <div className="px-6 pt-6">
-          <h2 id="add-category-section-title" className="text-lg font-semibold">
-            إضافة تصنيف جديد
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            أضف تصنيف يظهر في قائمة التصنيفات عند إنشاء أو تعديل الفئات.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 p-6">
-          <label className="flex flex-col gap-3 text-sm font-medium">
-            <span className="leading-5">اسم التصنيف</span>
-            <Input
-              autoFocus
-              className="h-11"
-              value={sectionName}
-              onChange={(event) => setSectionName(event.target.value)}
-              placeholder="مثلاً: العروض، الأطفال، المستلزمات..."
-            />
-          </label>
-          {sectionExists ? (
-            <p className="text-xs font-medium text-destructive">
-              التصنيف موجود بالفعل.
-            </p>
-          ) : null}
-          <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <span className="text-sm font-medium">التصنيفات الموجودة</span>
-              <span className="text-xs text-muted-foreground">
-                {visibleSections.length} تصنيفات
-              </span>
-            </div>
-            <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto pr-0.5">
-              {visibleSections.map((section) => (
-                <Badge key={section} tone="secondary">
-                  {section}
-                </Badge>
-              ))}
-            </div>
-          </div>
-          <Button
-            className="mt-2 h-11 w-full"
-            disabled={!canSubmit}
-            onClick={() => {
-              if (!canSubmit) return;
-              onSubmit(trimmedName);
-            }}
-          >
-            <Plus className="size-4" />
-            إنشاء التصنيف
           </Button>
         </div>
       </div>
@@ -423,11 +302,118 @@ function CategoryActionsMenu({
   );
 }
 
+function CategoryInlineEditPanel({
+  category,
+  onCancel,
+  onSave,
+}: {
+  category: CategoryRow;
+  onCancel: () => void;
+  onSave: (draft: {
+    name: string;
+    classificationName: string;
+    type: string;
+    description: string;
+  }) => void;
+}) {
+  const [name, setName] = useState(category.name);
+  const [isPopular, setIsPopular] = useState(category.featured !== "نعم");
+  const categoryImageObjectUrlRef = useRef<string | null>(null);
+  const [imagePreview, setImagePreview] = useState(category.image);
+
+  function revokeCategoryImageObjectUrl() {
+    if (categoryImageObjectUrlRef.current) {
+      URL.revokeObjectURL(categoryImageObjectUrlRef.current);
+      categoryImageObjectUrlRef.current = null;
+    }
+  }
+
+  function handleImageChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    revokeCategoryImageObjectUrl();
+    const nextPreview = URL.createObjectURL(file);
+    categoryImageObjectUrlRef.current = nextPreview;
+    setImagePreview(nextPreview);
+    event.target.value = "";
+  }
+
+  useEffect(() => revokeCategoryImageObjectUrl, []);
+
+  return (
+    <form
+      className="rounded-md border border-primary/25 bg-primary/5 p-3 shadow-sm"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave({
+          name,
+          classificationName: category.sections[0] ?? "الطازج",
+          type: isPopular ? "popular" : "featured",
+          description: "",
+        });
+      }}
+    >
+      <div className="grid gap-3 lg:grid-cols-[76px_minmax(0,1fr)_auto] lg:items-end">
+        <label className="grid gap-2 text-sm font-medium leading-none">
+          الصورة
+          <span className="group relative flex size-16 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-background text-center transition hover:border-primary/50 hover:bg-accent/40">
+            <input
+              accept="image/*"
+              className="sr-only"
+              onChange={handleImageChange}
+              type="file"
+            />
+            <DashboardImage
+              alt={category.name}
+              src={imagePreview}
+              width={96}
+              height={96}
+              sizes="64px"
+              className="absolute inset-0 size-full"
+              imageClassName="object-contain"
+            />
+            <span className="absolute inset-0 z-20 bg-black/0 transition group-hover:bg-black/30" />
+            <span className="relative z-30 rounded-md bg-background/95 px-2 py-1 text-[11px] font-semibold opacity-0 shadow-sm transition group-hover:opacity-100">
+              تغيير
+            </span>
+          </span>
+        </label>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field label="اسم الفئة">
+            <Input
+              value={name}
+              className="h-9"
+              onChange={(event) => setName(event.target.value)}
+            />
+          </Field>
+          <Field label="تصنيف الفئة">
+            <div className="flex h-9 items-center justify-between gap-3 rounded-md border bg-input px-3 text-sm font-medium">
+              <span>{isPopular ? "فئة شائعة" : "الكل"}</span>
+              <Switch checked={isPopular} onCheckedChange={setIsPopular} />
+            </div>
+          </Field>
+        </div>
+        <div className="flex gap-2 lg:pb-0">
+          <Button type="button" variant="outline" className="h-9" onClick={onCancel}>
+            إلغاء
+          </Button>
+          <Button type="submit" className="h-9">
+            حفظ
+          </Button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
 export function CategoriesPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const categoryDrawer = useDisclosure(false);
-  const categorySectionDrawer = useDisclosure(false);
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
   const [orderedRows, setOrderedRows] = useState(() => categoryRows);
   const [categorySectionOptions, setCategorySectionOptions] = useState(
@@ -439,6 +425,7 @@ export function CategoriesPage() {
   const [editingCategory, setEditingCategory] = useState<CategoryRow | null>(
     null,
   );
+  const [inlineEditingCategory, setInlineEditingCategory] = useState<CategoryRow | null>(null);
   const [draggingRowIndex, setDraggingRowIndex] = useState<string | null>(null);
   const [dragOverRowIndex, setDragOverRowIndex] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -506,13 +493,7 @@ export function CategoriesPage() {
     const matchesStatus =
       statusFilter === "all" ||
       (statusFilter === "active" ? row.active : !row.active);
-    const categoryTotal = Number.parseInt(row.total, 10);
-    const matchesType =
-      typeFilter === "all" ||
-      (typeFilter === "featured"
-        ? row.featured === "نعم"
-        : Number.isFinite(categoryTotal) &&
-          categoryTotal >= popularCategoryMinTotal);
+    const matchesType = typeFilter === "all" || row.featured !== "نعم";
 
     return matchesSearch && matchesStatus && matchesType;
   });
@@ -575,13 +556,14 @@ export function CategoriesPage() {
 
   function openCreateDrawer() {
     setEditingCategory(null);
+    setInlineEditingCategory(null);
     categoryDrawer.open();
   }
 
   function openEditDrawer(category: CategoryRow) {
     setEditingCategory(category);
+    setInlineEditingCategory(category);
     setOpenActionMenu(null);
-    categoryDrawer.open();
   }
 
   function closeCategoryDrawer() {
@@ -689,6 +671,7 @@ export function CategoriesPage() {
           : [nextRow, ...currentRows],
       );
       closeCategoryDrawer();
+      setInlineEditingCategory(null);
       showSnackbar({
         message: editingCategory
           ? "تم حفظ تعديلات الفئة في الباك."
@@ -703,43 +686,99 @@ export function CategoriesPage() {
     }
   }
 
-  async function createCategorySection(sectionName: string) {
-    try {
-      const data = await sendAdminJson(apiFetch, adminApiPaths.categoryClassifications, {
-        method: "POST",
-        body: JSON.stringify({ name: sectionName }),
-      });
-      const record = data as BackendRecord;
-      const name = String(record?.name ?? sectionName).trim();
-      setCategorySectionOptions((currentSections) =>
-        currentSections.includes(name) ? currentSections : [...currentSections, name],
-      );
-      if (typeof record?.id === "string" || typeof record?.id === "number") {
-        setCategoryClassificationIds((currentIds) => ({
-          ...currentIds,
-          [name]: record.id as string | number,
-        }));
-      }
-      categorySectionDrawer.close();
-      showSnackbar({ message: "تم إنشاء التصنيف في الباك." });
-    } catch (error) {
-      showSnackbar({
-        message:
-          error instanceof Error ? error.message : "تعذر إنشاء التصنيف في الباك.",
-        tone: "danger",
-      });
+  const rowsForCategoriesTable = pagedRows.flatMap((row, visibleIndex) => {
+    const baseRow = [
+      <div
+        key={`order-${row.index}`}
+        className="flex items-center justify-center gap-3 px-3"
+      >
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">
+          {pageStartIndex + visibleIndex + 1}
+        </span>
+        <span
+          className="inline-flex size-8 cursor-grab items-center justify-center rounded-md border bg-background text-muted-foreground active:cursor-grabbing"
+          aria-label={`تحريك ${row.name}`}
+          title="اسحب لتغيير الترتيب"
+        >
+          <GripVertical className="size-4" />
+        </span>
+      </div>,
+      <div key={`image-${row.index}`} className="flex justify-center">
+        <DashboardImage
+          alt={row.name}
+          src={row.image}
+          width={40}
+          height={40}
+          sizes="40px"
+          className="size-10 rounded-sm"
+        />
+      </div>,
+      <div key={`name-${row.index}`} className="min-w-0">
+        <p className="truncate font-semibold">{row.name}</p>
+        {row.featured !== "نعم" ? (
+          <p className="mt-1">
+            <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+              فئة شائعة
+            </span>
+          </p>
+        ) : null}
+      </div>,
+      <div key={`status-${row.index}`} className="flex justify-center">
+        <Switch
+          checked={row.active}
+          onCheckedChange={(checked) => toggleCategoryStatus(row.index, checked)}
+        />
+      </div>,
+      <CategoryActionsMenu
+        key={`actions-${row.index}`}
+        name={row.name}
+        open={openActionMenu === row.index}
+        onToggle={() =>
+          setOpenActionMenu((current) =>
+            current === row.index ? null : row.index,
+          )
+        }
+        onEdit={() => openEditDrawer(row)}
+        onDelete={() => {
+          setOpenActionMenu(null);
+          void deleteCategory(row);
+        }}
+      />,
+    ];
+
+    if (inlineEditingCategory?.index !== row.index) {
+      return [baseRow];
     }
-  }
+
+    return [
+      baseRow,
+      [
+        <CategoryInlineEditPanel
+          key={`edit-${row.index}`}
+          category={inlineEditingCategory}
+          onCancel={() => {
+            setInlineEditingCategory(null);
+            setEditingCategory(null);
+          }}
+          onSave={(draft) => void saveCategoryDraft(draft)}
+        />,
+        null,
+        null,
+        null,
+        null,
+      ],
+    ];
+  });
 
   return (
     <div className="px-6 py-6">
       <div className="flex min-h-[57px] items-start">
         <div>
           <h1 className="text-2xl font-semibold leading-8">
-            الفئات والتصنيفات
+            الفئات
           </h1>
           <p className="mt-1 text-sm leading-[21px] text-muted-foreground">
-            إدارة فئات المنتجات وتصنيفاتها حسب أقسام تطبيق العملاء مثل الطازج والأكل والتسوق.
+            إدارة فئات المنتجات وحالة ظهورها داخل تطبيق العملاء.
           </p>
         </div>
       </div>
@@ -747,20 +786,12 @@ export function CategoriesPage() {
       <Card className="mt-8">
         <div className="flex min-h-[76px] flex-col items-start justify-between gap-4 border-b px-6 py-4 sm:flex-row sm:items-center">
           <div>
-            <div className="text-base font-semibold">كل الفئات والتصنيفات</div>
+            <div className="text-base font-semibold">كل الفئات</div>
             <div className="mt-1 text-xs text-muted-foreground">
               أنشئ فئة جديدة لتنظيم المنتجات.
             </div>
           </div>
           <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={categorySectionDrawer.open}
-            >
-              <Plus className="size-4" />
-              إضافة تصنيف جديد
-            </Button>
             <Button size="sm" onClick={openCreateDrawer}>
               <Plus className="size-4" />
               إضافة فئة جديدة
@@ -804,7 +835,7 @@ export function CategoriesPage() {
               />
             </label>
             <label className="flex flex-col gap-2 md:w-[170px]">
-              <span className="text-sm leading-5">النوع</span>
+              <span className="text-sm leading-5">تصنيف الفئة</span>
               <AppSelect
                 value={typeFilter}
                 onValueChange={(value) => {
@@ -813,13 +844,12 @@ export function CategoriesPage() {
                   resetToFirstPage();
                 }}
                 options={[
-                  { value: "all", label: "كل الفئات" },
-                  { value: "popular", label: "فئات شائعة" },
-                  { value: "featured", label: "فئات مميزة" },
+                  { value: "all", label: "الكل" },
+                  { value: "popular", label: "فئة شائعة" },
                 ]}
                 className="h-9"
                 contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl"
-                ariaLabel="النوع"
+                ariaLabel="تصنيف الفئة"
               />
             </label>
           </div>
@@ -827,7 +857,7 @@ export function CategoriesPage() {
             <DataTable
               minWidth={1120}
               rowHeight="tall"
-              columnWidths={[110, 120, 330, 220, 150, 140]}
+              columnWidths={[110, 120, 430, 150, 140]}
               headers={[
                 <span key="order" className="block text-center">
                   الترتيب
@@ -836,7 +866,6 @@ export function CategoriesPage() {
                   الصورة
                 </span>,
                 "الاسم",
-                "التصنيف",
                 <span key="status" className="block text-center">
                   الحالة
                 </span>,
@@ -845,7 +874,23 @@ export function CategoriesPage() {
                 </span>,
               ]}
               getRowProps={(rowIndex) => {
-                const row = pagedRows[rowIndex];
+                const tableRow = rowsForCategoriesTable[rowIndex];
+                if (!tableRow || tableRow[1] === null) {
+                  return undefined;
+                }
+                let row: CategoryRow | null = null;
+                let tableIndex = 0;
+                for (const pagedRow of pagedRows) {
+                  if (tableIndex === rowIndex) {
+                    row = pagedRow;
+                    break;
+                  }
+                  tableIndex += 1;
+                  if (inlineEditingCategory?.index === pagedRow.index) {
+                    tableIndex += 1;
+                  }
+                }
+                if (!row) return undefined;
 
                 return {
                   draggable: true,
@@ -889,60 +934,12 @@ export function CategoriesPage() {
                         : undefined,
                 };
               }}
-              rows={pagedRows.map((row, visibleIndex) => [
-                <div
-                  key={`order-${row.index}`}
-                  className="flex items-center justify-center gap-2 px-2"
-                >
-                  <span className="min-w-5 text-center font-medium">
-                    {pageStartIndex + visibleIndex + 1}
-                  </span>
-                  <span
-                    className="inline-flex size-8 cursor-grab items-center justify-center rounded-md border bg-background text-muted-foreground active:cursor-grabbing"
-                    aria-label={`تحريك ${row.name}`}
-                    title="اسحب لتغيير الترتيب"
-                  >
-                    <GripVertical className="size-4" />
-                  </span>
-                </div>,
-                <div key={`image-${row.index}`} className="flex justify-center">
-                  <DashboardImage
-                    alt={row.name}
-                    src={row.image}
-                    width={40}
-                    height={40}
-                    sizes="40px"
-                    className="size-10 rounded-sm"
-                  />
-                </div>,
-                row.name,
-                <span key={`sections-${row.index}`} className="text-muted-foreground">
-                  {row.sections.join("، ")}
-                </span>,
-                <div key={`status-${row.index}`} className="flex justify-center">
-                  <Switch
-                    checked={row.active}
-                    onCheckedChange={(checked) =>
-                      toggleCategoryStatus(row.index, checked)
-                    }
-                  />
-                </div>,
-                <CategoryActionsMenu
-                  key={`actions-${row.index}`}
-                  name={row.name}
-                  open={openActionMenu === row.index}
-                  onToggle={() =>
-                    setOpenActionMenu((current) =>
-                      current === row.index ? null : row.index,
-                    )
-                  }
-                  onEdit={() => openEditDrawer(row)}
-                  onDelete={() => {
-                    setOpenActionMenu(null);
-                    void deleteCategory(row);
-                  }}
-                />,
-              ])}
+              rows={rowsForCategoriesTable}
+              getCellProps={(_rowIndex, cellIndex, row) =>
+                row[1] === null && cellIndex === 0
+                  ? { colSpan: 5, className: "p-3" }
+                  : undefined
+              }
             />
           </div>
           <Pagination
@@ -967,16 +964,8 @@ export function CategoriesPage() {
       {categoryDrawer.isOpen ? (
         <CategoryDrawer
           category={editingCategory}
-          sectionOptions={categorySectionOptions}
           onClose={closeCategoryDrawer}
           onSubmit={(draft) => void saveCategoryDraft(draft)}
-        />
-      ) : null}
-      {categorySectionDrawer.isOpen ? (
-        <CategorySectionDrawer
-          existingSections={categorySectionOptions}
-          onClose={categorySectionDrawer.close}
-          onSubmit={(sectionName) => void createCategorySection(sectionName)}
         />
       ) : null}
     </div>

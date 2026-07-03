@@ -5,9 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
-  ArrowRight,
   Camera,
   ChevronDown,
+  ChevronRight,
   CheckCircle2,
   Eye,
   EyeOff,
@@ -225,16 +225,15 @@ function CourierForm({
   const update = (key: keyof Draft, value: string) => {
     setDraft((current) => ({ ...current, [key]: value }));
     setError(null);
+    setSubmitted(false);
   };
   const errorFor = (key: keyof Draft) => (submitted ? errors[key] : undefined);
   const usernameReady = draft.username.trim().length > 0 && courierUsernameValid(draft.username) && !errorFor("username");
   const passwordRules = [
     { label: "8 أحرف", done: draft.password.length >= 8 },
     { label: "حرف كبير", done: /[A-Z]/.test(draft.password) },
-    { label: "رقم", done: /\d/.test(draft.password) },
-    { label: "رمز خاص", done: /[^A-Za-z0-9]/.test(draft.password) },
+    { label: "رقم ورمز خاص", done: /\d/.test(draft.password) && /[^A-Za-z0-9]/.test(draft.password) },
   ];
-
   function uploadAvatar(file: File | undefined) {
     if (!file) return;
     const reader = new FileReader();
@@ -318,8 +317,8 @@ function CourierForm({
               </p>
             </div>
           </div>
-          <Button type="button" variant="outline" onClick={onClose} className="h-9 self-start rounded-md px-4 lg:self-auto">
-            <ArrowRight className="size-4" />
+          <Button type="button" variant="outline" onClick={onClose} className="h-10 self-start rounded-md px-3 lg:self-auto">
+            <ChevronRight className="size-4" />
             الرجوع إلى المندوبين
           </Button>
         </header>
@@ -335,24 +334,23 @@ function CourierForm({
               <div className="grid gap-x-5 gap-y-5 md:grid-cols-2">
                 <Field label="الاسم الأول"><Input required autoComplete="given-name" placeholder="مثال: أحمد" value={draft.firstName} onChange={(e) => update("firstName", e.target.value)} className="h-12 rounded-xl" /></Field>
                 <Field label="اسم العائلة"><Input required autoComplete="family-name" placeholder="مثال: محمد" value={draft.lastName} onChange={(e) => update("lastName", e.target.value)} className="h-12 rounded-xl" /></Field>
-                <Field label="اسم المستخدم"><div className="space-y-2"><div className="relative"><IdCard className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoComplete="username" dir="rtl" placeholder="اسم فريد لتسجيل الدخول" value={draft.username} onChange={(e) => update("username", e.target.value)} className="h-12 rounded-xl pe-11 ps-11 text-right" />{usernameReady ? <CheckCircle2 className="absolute start-4 top-1/2 size-4 -translate-y-1/2 text-emerald-500" /> : null}</div>{errorFor("username") ? <span className="text-xs font-semibold text-destructive">{errorFor("username")}</span> : usernameReady ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-500"><CheckCircle2 className="size-3.5" />اسم المستخدم صحيح</span> : null}</div></Field>
+                <Field label="اسم المستخدم"><div className="space-y-2"><div className="relative"><IdCard className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoComplete="username" dir="rtl" placeholder="اسم فريد لتسجيل الدخول" value={draft.username} onChange={(e) => update("username", e.target.value)} className="h-12 rounded-xl pe-11 ps-11 text-right" />{usernameReady ? <CheckCircle2 className="absolute start-4 top-1/2 size-4 -translate-y-1/2 text-emerald-500" /> : null}</div>{errorFor("username") ? <span className="text-xs font-semibold text-destructive">{errorFor("username")}</span> : null}</div></Field>
                 <Field label="رقم الهاتف"><div className="space-y-2"><div className="relative"><Phone className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoComplete="tel" inputMode="tel" dir="rtl" placeholder="01xxxxxxxxx" value={draft.phone} onChange={(e) => update("phone", e.target.value)} className="h-12 rounded-xl pe-11 text-right" /></div>{errorFor("phone") ? <span className="text-xs font-semibold text-destructive">{errorFor("phone")}</span> : null}</div></Field>
                 <Field label="البريد الإلكتروني"><div className="relative"><Mail className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required autoComplete="email" type="email" dir="rtl" placeholder="name@example.com" value={draft.email} onChange={(e) => update("email", e.target.value)} className="h-12 rounded-xl pe-11 text-right" /></div></Field>
                 <Field label={isEditing ? "كلمة المرور الجديدة (اختياري)" : "كلمة المرور"}>
                   <div className="space-y-3"><div className="relative"><KeyRound className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required={!isEditing} autoComplete="new-password" type={showPassword ? "text" : "password"} dir="rtl" minLength={8} placeholder="8 أحرف على الأقل" value={draft.password} onChange={(e) => update("password", e.target.value)} className="h-12 rounded-xl pe-11 ps-12 text-right" /><button type="button" aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"} title={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"} onClick={() => setShowPassword((visible) => !visible)} className="absolute start-2 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{showPassword ? <Eye className="size-4" /> : <EyeOff className="size-4" />}</button></div>
                     <div className="flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">{passwordRules.map((rule) => <span key={rule.label} className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 font-bold transition ${rule.done ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300" : "border-border bg-muted/30"}`}><CheckCircle2 className="size-3" />{rule.label}</span>)}</div>
-                    {errorFor("password") ? <span className="text-xs font-semibold text-destructive">{errorFor("password")}</span> : null}
                   </div>
                 </Field>
               </div>
               </section>
             </Card>
 
-            <Card className="flex h-full min-h-[520px] flex-col overflow-hidden border-border/70 shadow-lg shadow-black/5">
-              <div className="h-32 rounded-t-[12px] bg-gradient-to-l from-primary via-primary/80 to-primary/50" />
+            <Card className="flex h-full flex-col overflow-hidden border-border/70 shadow-lg shadow-black/5">
+              <div className="h-36 rounded-t-[12px] bg-gradient-to-l from-primary via-primary/80 to-primary/50" />
               <div className="flex flex-1 flex-col px-5 pb-5">
                 <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 text-start">
-                  <div className="relative -mt-11 size-24"><DashboardImage src={draft.avatarUrl || "/default-user-avatar.svg"} alt="صورة المندوب" width={96} height={96} className="size-24 overflow-hidden rounded-2xl border-4 border-card bg-background shadow-lg" imageClassName="object-cover" /><span className="absolute -bottom-1 -start-1 flex size-6 items-center justify-center rounded-full border-2 border-card bg-emerald-500 text-white"><CheckCircle2 className="size-3.5" /></span></div>
+                  <div className="relative -mt-12 size-24"><DashboardImage src={draft.avatarUrl || "/default-user-avatar.svg"} alt="صورة المندوب" width={96} height={96} className="size-24 overflow-hidden rounded-2xl border-4 border-card bg-background shadow-lg" imageClassName="object-cover" /><span className="absolute -bottom-1 -start-1 flex size-6 items-center justify-center rounded-full border-2 border-card bg-emerald-500 text-white"><CheckCircle2 className="size-3.5" /></span></div>
                   <div className="min-w-0">
                     <h3 className="truncate text-lg font-extrabold">{[draft.firstName, draft.lastName].filter(Boolean).join(" ") || "اسم المندوب"}</h3>
                     <p className="mt-1 truncate text-xs text-muted-foreground">{draft.phone || "رقم الهاتف سيظهر هنا"}</p>
@@ -725,15 +723,11 @@ export function CouriersPage() {
         size="compact"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
+            <Button type="button" variant="outline" onClick={() => void load()} className="h-9 px-4 text-sm">
               <RefreshCw className="size-4" />
               تحديث
             </Button>
-            <Link href="/cities" className="inline-flex h-8 items-center justify-center gap-2 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90">
-              <Plus className="size-4" />
-              إضافة مدينة
-            </Link>
-            <Link href="/delivery/couriers/new" className="inline-flex h-8 items-center justify-center gap-2 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90">
+            <Link href="/delivery/couriers/new" className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90">
               <Plus className="size-4" />
               إضافة مندوب
             </Link>

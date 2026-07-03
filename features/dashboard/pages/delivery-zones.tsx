@@ -827,8 +827,8 @@ function ZonesMobileList({
             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">
               {startIndex + index + 1}
             </span>
-            <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <MapPin className="size-7" />
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <MapPin className="size-5" />
             </span>
             <div className="min-w-0">
               <div className="grid gap-2">
