@@ -11,6 +11,7 @@ import {
   MapPin,
   MapPinned,
   Plus,
+  RefreshCw,
   Search,
   Tag,
   Trash2,
@@ -467,10 +468,16 @@ export function CitiesPage() {
         title="المدن"
         description="إدارة المدن التي تحدد ظهور المحلات والمنتجات والعروض داخل تطبيق العميل."
         actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => void reload()} disabled={loading}>
+              <RefreshCw className="size-4" />
+              تحديث
+            </Button>
           <Button size="sm" onClick={() => setEditingCity(null)}>
             <Plus className="size-4" />
             إضافة مدينة
           </Button>
+          </div>
         }
       />
 

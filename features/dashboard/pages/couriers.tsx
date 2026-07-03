@@ -153,6 +153,55 @@ function draftFromCourier(user: BackendDashboardUser | null, areas: DeliveryArea
   };
 }
 
+type CourierFormErrors = Partial<Record<keyof Draft, string>>;
+
+function normalizedPhone(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function courierUsernameValid(username: string) {
+  return /^[a-zA-Z][a-zA-Z0-9._-]{2,149}$/.test(username.trim());
+}
+
+function validateCourierDraft(draft: Draft, isEditing: boolean) {
+  const errors: CourierFormErrors = {};
+  const email = draft.email.trim().toLowerCase();
+  const password = draft.password;
+
+  if (!draft.firstName.trim()) errors.firstName = "اكتب الاسم الأول.";
+  if (!draft.lastName.trim()) errors.lastName = "اكتب اسم العائلة.";
+  if (!draft.username.trim()) {
+    errors.username = "اكتب اسم المستخدم.";
+  } else if (!courierUsernameValid(draft.username)) {
+    errors.username = "اسم المستخدم يبدأ بحرف ويكون من 3 إلى 150 حرف.";
+  }
+  if (!draft.phone.trim()) {
+    errors.phone = "اكتب رقم الهاتف.";
+  } else if (normalizedPhone(draft.phone).length < 10) {
+    errors.phone = "رقم الهاتف قصير.";
+  }
+  if (!email) {
+    errors.email = "اكتب البريد الإلكتروني.";
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    errors.email = "البريد الإلكتروني غير صحيح.";
+  }
+  if (!isEditing || password) {
+    if (!password) {
+      errors.password = "اكتب كلمة المرور.";
+    } else if (password.length < 8 || !/[A-Z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+      errors.password = "كلمة المرور 8 أحرف على الأقل وبها حرف كبير ورقم ورمز خاص.";
+    }
+  }
+  if (!draft.vehicleType.trim()) errors.vehicleType = "اكتب نوع المركبة.";
+  if (!draft.plateNumber.trim()) errors.plateNumber = "اكتب رقم اللوحة.";
+  if (!draft.deliveryArea) errors.deliveryArea = "اختر مدينة التوصيل.";
+  if (!Number.isFinite(Number(draft.maxActiveOrders)) || Number(draft.maxActiveOrders) < 1) {
+    errors.maxActiveOrders = "اكتب رقمًا صحيحًا أكبر من صفر.";
+  }
+
+  return errors;
+}
+
 function CourierForm({
   areas,
   courier,
@@ -169,10 +218,16 @@ function CourierForm({
   const [draft, setDraft] = useState<Draft>(() => draftFromCourier(courier ?? null, areas));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [deliveryOpen, setDeliveryOpen] = useState(true);
-  const update = (key: keyof Draft, value: string) =>
+  const errors = useMemo(() => validateCourierDraft(draft, isEditing), [draft, isEditing]);
+  const update = (key: keyof Draft, value: string) => {
     setDraft((current) => ({ ...current, [key]: value }));
+    setError(null);
+  };
+  const errorFor = (key: keyof Draft) => (submitted ? errors[key] : undefined);
+  const usernameReady = draft.username.trim().length > 0 && courierUsernameValid(draft.username) && !errorFor("username");
   const passwordRules = [
     { label: "8 أحرف", done: draft.password.length >= 8 },
     { label: "حرف كبير", done: /[A-Z]/.test(draft.password) },
@@ -191,6 +246,11 @@ function CourierForm({
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setSubmitted(true);
+    if (Object.keys(errors).length > 0) {
+      setError("راجع البيانات المطلوبة ثم حاول مرة أخرى.");
+      return;
+    }
     setSaving(true);
     setError(null);
 
@@ -258,13 +318,13 @@ function CourierForm({
               </p>
             </div>
           </div>
-          <Button type="button" variant="outline" onClick={onClose} className="h-11 self-start rounded-xl px-4 lg:self-auto">
+          <Button type="button" variant="outline" onClick={onClose} className="h-9 self-start rounded-md px-4 lg:self-auto">
             <ArrowRight className="size-4" />
             الرجوع إلى المندوبين
           </Button>
         </header>
 
-        <form onSubmit={submit} className="grid items-start gap-6">
+        <form onSubmit={submit} noValidate className="grid items-start gap-6">
           <div className="grid items-stretch gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
             <Card className="h-full overflow-hidden border-border/70 shadow-xl shadow-black/5">
               <section className="p-5 sm:p-7 lg:p-8">
@@ -275,29 +335,30 @@ function CourierForm({
               <div className="grid gap-x-5 gap-y-5 md:grid-cols-2">
                 <Field label="الاسم الأول"><Input required autoComplete="given-name" placeholder="مثال: أحمد" value={draft.firstName} onChange={(e) => update("firstName", e.target.value)} className="h-12 rounded-xl" /></Field>
                 <Field label="اسم العائلة"><Input required autoComplete="family-name" placeholder="مثال: محمد" value={draft.lastName} onChange={(e) => update("lastName", e.target.value)} className="h-12 rounded-xl" /></Field>
-                <Field label="اسم المستخدم"><div className="relative"><IdCard className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required autoComplete="username" dir="rtl" placeholder="اسم فريد لتسجيل الدخول" value={draft.username} onChange={(e) => update("username", e.target.value)} className="h-12 rounded-xl pe-11 text-right" /></div></Field>
-                <Field label="رقم الهاتف"><div className="relative"><Phone className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required autoComplete="tel" inputMode="tel" dir="rtl" placeholder="01xxxxxxxxx" value={draft.phone} onChange={(e) => update("phone", e.target.value)} className="h-12 rounded-xl pe-11 text-right" /></div></Field>
+                <Field label="اسم المستخدم"><div className="space-y-2"><div className="relative"><IdCard className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoComplete="username" dir="rtl" placeholder="اسم فريد لتسجيل الدخول" value={draft.username} onChange={(e) => update("username", e.target.value)} className="h-12 rounded-xl pe-11 ps-11 text-right" />{usernameReady ? <CheckCircle2 className="absolute start-4 top-1/2 size-4 -translate-y-1/2 text-emerald-500" /> : null}</div>{errorFor("username") ? <span className="text-xs font-semibold text-destructive">{errorFor("username")}</span> : usernameReady ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-500"><CheckCircle2 className="size-3.5" />اسم المستخدم صحيح</span> : null}</div></Field>
+                <Field label="رقم الهاتف"><div className="space-y-2"><div className="relative"><Phone className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoComplete="tel" inputMode="tel" dir="rtl" placeholder="01xxxxxxxxx" value={draft.phone} onChange={(e) => update("phone", e.target.value)} className="h-12 rounded-xl pe-11 text-right" /></div>{errorFor("phone") ? <span className="text-xs font-semibold text-destructive">{errorFor("phone")}</span> : null}</div></Field>
                 <Field label="البريد الإلكتروني"><div className="relative"><Mail className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required autoComplete="email" type="email" dir="rtl" placeholder="name@example.com" value={draft.email} onChange={(e) => update("email", e.target.value)} className="h-12 rounded-xl pe-11 text-right" /></div></Field>
                 <Field label={isEditing ? "كلمة المرور الجديدة (اختياري)" : "كلمة المرور"}>
                   <div className="space-y-3"><div className="relative"><KeyRound className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required={!isEditing} autoComplete="new-password" type={showPassword ? "text" : "password"} dir="rtl" minLength={8} placeholder="8 أحرف على الأقل" value={draft.password} onChange={(e) => update("password", e.target.value)} className="h-12 rounded-xl pe-11 ps-12 text-right" /><button type="button" aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"} title={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"} onClick={() => setShowPassword((visible) => !visible)} className="absolute start-2 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{showPassword ? <Eye className="size-4" /> : <EyeOff className="size-4" />}</button></div>
                     <div className="flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">{passwordRules.map((rule) => <span key={rule.label} className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 font-bold transition ${rule.done ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300" : "border-border bg-muted/30"}`}><CheckCircle2 className="size-3" />{rule.label}</span>)}</div>
+                    {errorFor("password") ? <span className="text-xs font-semibold text-destructive">{errorFor("password")}</span> : null}
                   </div>
                 </Field>
               </div>
               </section>
             </Card>
 
-            <Card className="flex h-full flex-col overflow-hidden border-border/70 shadow-lg shadow-black/5">
-              <div className="h-16 bg-gradient-to-l from-primary via-primary/80 to-primary/50" />
+            <Card className="flex h-full min-h-[520px] flex-col overflow-hidden border-border/70 shadow-lg shadow-black/5">
+              <div className="h-32 rounded-t-[12px] bg-gradient-to-l from-primary via-primary/80 to-primary/50" />
               <div className="flex flex-1 flex-col px-5 pb-5">
                 <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 text-start">
-                  <div className="relative -mt-10 size-20"><DashboardImage src={draft.avatarUrl || "/default-user-avatar.svg"} alt="صورة المندوب" width={80} height={80} className="size-20 overflow-hidden rounded-2xl border-4 border-card bg-background shadow-lg" imageClassName="object-cover" /><span className="absolute -bottom-1 -start-1 flex size-6 items-center justify-center rounded-full border-2 border-card bg-emerald-500 text-white"><CheckCircle2 className="size-3.5" /></span></div>
+                  <div className="relative -mt-11 size-24"><DashboardImage src={draft.avatarUrl || "/default-user-avatar.svg"} alt="صورة المندوب" width={96} height={96} className="size-24 overflow-hidden rounded-2xl border-4 border-card bg-background shadow-lg" imageClassName="object-cover" /><span className="absolute -bottom-1 -start-1 flex size-6 items-center justify-center rounded-full border-2 border-card bg-emerald-500 text-white"><CheckCircle2 className="size-3.5" /></span></div>
                   <div className="min-w-0">
                     <h3 className="truncate text-lg font-extrabold">{[draft.firstName, draft.lastName].filter(Boolean).join(" ") || "اسم المندوب"}</h3>
                     <p className="mt-1 truncate text-xs text-muted-foreground">{draft.phone || "رقم الهاتف سيظهر هنا"}</p>
                   </div>
                 </div>
-                <div className="mt-4 rounded-xl border border-dashed bg-muted/20 p-3 text-start"><div className="mb-3 flex items-center gap-2 text-xs font-bold"><Camera className="size-4 text-primary" />صورة المندوب</div><Input type="text" dir="rtl" value={draft.avatarUrl} onChange={(e) => update("avatarUrl", e.target.value)} placeholder="رابط الصورة" className="h-12 rounded-lg text-right text-sm" /><label className="mt-3 inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border bg-background px-3 text-sm font-bold text-muted-foreground transition hover:bg-accent hover:text-foreground"><Upload className="size-4" />رفع صورة من الجهاز<input type="file" accept="image/*" className="sr-only" onChange={(event) => uploadAvatar(event.target.files?.[0])} /></label></div>
+                <div className="mt-auto rounded-xl border border-dashed bg-muted/20 p-4 text-start"><div className="mb-3 flex items-center gap-2 text-xs font-bold"><Camera className="size-4 text-primary" />صورة المندوب</div><Input type="text" dir="rtl" value={draft.avatarUrl} onChange={(e) => update("avatarUrl", e.target.value)} placeholder="رابط الصورة" className="h-12 rounded-lg text-right text-sm" /><label className="mt-3 inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border bg-background px-3 text-sm font-bold text-muted-foreground transition hover:bg-accent hover:text-foreground"><Upload className="size-4" />رفع صورة من الجهاز<input type="file" accept="image/*" className="sr-only" onChange={(event) => uploadAvatar(event.target.files?.[0])} /></label></div>
               </div>
             </Card>
           </div>
@@ -327,8 +388,8 @@ function CourierForm({
 
             {error ? <div role="alert" className="flex items-center gap-2 border-t border-destructive/20 bg-destructive/10 px-5 py-4 text-sm font-semibold text-destructive sm:px-8"><AlertCircle className="size-4 shrink-0" />{error}</div> : null}
             <div className="flex flex-col-reverse gap-3 border-t border-border/70 bg-card px-5 py-5 sm:flex-row sm:justify-end sm:px-8">
-              <Button type="button" variant="outline" onClick={onClose} disabled={saving} className="h-11 rounded-xl sm:min-w-28">إلغاء</Button>
-              <Button disabled={saving || !draft.deliveryArea} className="h-11 rounded-xl px-6 sm:min-w-44">{saving ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}{isEditing ? "حفظ التعديلات" : "إنشاء حساب المندوب"}</Button>
+              <Button type="button" variant="outline" onClick={onClose} disabled={saving} className="h-9 rounded-md sm:min-w-28">إلغاء</Button>
+              <Button disabled={saving} className="h-9 rounded-md px-6 sm:min-w-44">{saving ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}{isEditing ? "حفظ التعديلات" : "إنشاء حساب المندوب"}</Button>
             </div>
           </Card>
         </form>
@@ -662,7 +723,22 @@ export function CouriersPage() {
         title="المندوبين"
         description="حسابات المندوبين وإسناد طلبات Yalla Home"
         size="compact"
-        actions={<><Button variant="outline" onClick={() => void load()}><RefreshCw className="size-4" />تحديث</Button><Link href="/delivery/couriers/new" className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90"><Plus className="size-4" />إضافة مندوب</Link></>}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
+              <RefreshCw className="size-4" />
+              تحديث
+            </Button>
+            <Link href="/cities" className="inline-flex h-8 items-center justify-center gap-2 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90">
+              <Plus className="size-4" />
+              إضافة مدينة
+            </Link>
+            <Link href="/delivery/couriers/new" className="inline-flex h-8 items-center justify-center gap-2 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90">
+              <Plus className="size-4" />
+              إضافة مندوب
+            </Link>
+          </div>
+        }
       />
 
       <Card className="mt-6 p-4">
