@@ -66,6 +66,7 @@ import {
   dashboardOrders,
   type DashboardOrder,
 } from "../static-data";
+import { useServiceCities, type ServiceCity } from "../cities-api";
 
 const currency = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -3185,7 +3186,17 @@ const weekDayApiValues: Record<string, string> = {
   الأحد: "sunday",
 };
 const selectableItems = itemRows;
-const OfferProductsContext = createContext<ItemRow[]>(selectableItems);
+type OfferProductsContextValue = {
+  products: ItemRow[];
+  cities: ServiceCity[];
+  citiesLoading: boolean;
+};
+
+const OfferProductsContext = createContext<OfferProductsContextValue>({
+  products: selectableItems,
+  cities: [],
+  citiesLoading: false,
+});
 const activeSelectableItems = selectableItems.filter((item) => item.active);
 const defaultSelectableItems =
   activeSelectableItems.length > 0 ? activeSelectableItems : selectableItems;
@@ -3261,10 +3272,32 @@ function itemMatchesProductSearch(item: ItemRow, normalizedQuery: string) {
   return searchable.includes(normalizedQuery);
 }
 
-function uniqueProductCategories(rows: ItemRow[]) {
-  return Array.from(new Set(rows.map((item) => item.category).filter(Boolean))).sort((first, second) =>
+function uniqueProductShops(rows: ItemRow[]) {
+  return Array.from(
+    new Set(rows.map((item) => item.shopName).filter((shopName): shopName is string => Boolean(shopName))),
+  ).sort((first, second) =>
     first.localeCompare(second, "ar", { numeric: true, sensitivity: "base" }),
   );
+}
+
+function normalizeFilterText(value: string) {
+  return value.trim().toLocaleLowerCase();
+}
+
+function itemMatchesCityFilter(item: ItemRow, cityId: string, cities: ServiceCity[]) {
+  if (cityId === "all") return true;
+
+  const selectedCity = cities.find((city) => String(city.id) === cityId);
+  if (!selectedCity) return true;
+
+  const cityTokens = [selectedCity.name, selectedCity.name_ar, selectedCity.slug]
+    .map(normalizeFilterText)
+    .filter(Boolean);
+  const itemTokens = [...(item.regionNames ?? []), ...(item.regionSlugs ?? [])]
+    .map(normalizeFilterText)
+    .filter(Boolean);
+
+  return itemTokens.some((token) => cityTokens.includes(token));
 }
 
 function ProductPicker({
@@ -3276,7 +3309,7 @@ function ProductPicker({
   value: string;
   onChange: (itemId: string) => void;
 }) {
-  const products = useContext(OfferProductsContext);
+  const { products } = useContext(OfferProductsContext);
   const [pickerOpen, setPickerOpen] = useState(false);
   const selectedItem = selectedItemFrom(products, value);
 
@@ -3357,23 +3390,25 @@ function PackageProductSearchModal({
   onClose: () => void;
   onSelect: (itemId: string) => void;
 }) {
-  const products = useContext(OfferProductsContext);
+  const { products, cities, citiesLoading } = useContext(OfferProductsContext);
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("all");
+  const [shop, setShop] = useState("all");
+  const [city, setCity] = useState("all");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
-  const categories = useMemo(() => uniqueProductCategories(products), [products]);
+  const shops = useMemo(() => uniqueProductShops(products), [products]);
   const normalizedQuery = normalizeProductSearch(query);
   const filteredItems = useMemo(
     () =>
       products.filter((item) => {
         const matchesSearch = itemMatchesProductSearch(item, normalizedQuery);
-        const matchesCategory = category === "all" || item.category === category;
+        const matchesShop = shop === "all" || item.shopName === shop;
+        const matchesCity = itemMatchesCityFilter(item, city, cities);
         const matchesStatus =
           status === "all" || (status === "active" ? item.active : !item.active);
 
-        return matchesSearch && matchesCategory && matchesStatus;
+        return matchesSearch && matchesShop && matchesCity && matchesStatus;
       }),
-    [category, normalizedQuery, products, status],
+    [cities, city, normalizedQuery, products, shop, status],
   );
 
   useEffect(() => {
@@ -3414,7 +3449,7 @@ function PackageProductSearchModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="package-product-search-title"
-        className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg border bg-background shadow-2xl"
+        className="flex max-h-[82vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg border bg-background shadow-2xl"
       >
         <div className="flex flex-wrap items-center justify-between gap-4 border-b px-5 py-4">
           <div>
@@ -3429,13 +3464,13 @@ function PackageProductSearchModal({
             type="button"
             aria-label="إغلاق اختيار المنتج"
             onClick={onClose}
-            className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"
+            className="inline-flex size-9 items-center justify-center rounded-md border bg-background text-muted-foreground shadow-sm transition hover:bg-accent hover:text-foreground"
           >
             <X className="size-4" />
           </button>
         </div>
 
-        <div className="grid gap-3 border-b bg-muted/15 p-4 lg:grid-cols-[minmax(280px,1fr)_220px_170px]">
+        <div className="grid gap-3 border-b bg-muted/15 p-4 lg:grid-cols-[minmax(260px,1fr)_210px_210px_160px]">
           <label className="grid gap-2 text-sm font-medium">
             بحث
             <div className="relative">
@@ -3451,17 +3486,34 @@ function PackageProductSearchModal({
           </label>
 
           <label className="grid gap-2 text-sm font-medium">
-            التصنيف
+            المحل
             <AppSelect
-              value={category}
-              onValueChange={setCategory}
-              ariaLabel="تصنيف المنتج"
+              value={shop}
+              onValueChange={setShop}
+              ariaLabel="فلتر المحل"
               className="h-10 bg-input"
               options={[
-                { value: "all", label: "كل التصنيفات" },
-                ...categories.map((categoryName) => ({
-                  value: categoryName,
-                  label: categoryName,
+                { value: "all", label: "كل المحلات" },
+                ...shops.map((shopName) => ({
+                  value: shopName,
+                  label: shopName,
+                })),
+              ]}
+            />
+          </label>
+
+          <label className="grid gap-2 text-sm font-medium">
+            المدينة
+            <AppSelect
+              value={city}
+              onValueChange={setCity}
+              ariaLabel="فلتر المدينة"
+              className="h-10 bg-input"
+              options={[
+                { value: "all", label: citiesLoading ? "جاري تحميل المدن..." : "كل المدن" },
+                ...cities.map((cityOption) => ({
+                  value: String(cityOption.id),
+                  label: cityOption.name_ar || cityOption.name,
                 })),
               ]}
             />
@@ -3499,7 +3551,7 @@ function PackageProductSearchModal({
                     type="button"
                     onClick={() => onSelect(item.id)}
                     className={cn(
-                      "group grid min-h-[132px] grid-cols-[64px_minmax(0,1fr)] gap-3 rounded-md border bg-card p-3 text-start shadow-sm transition hover:border-primary/45 hover:bg-accent/45",
+                      "group grid min-h-[112px] grid-cols-[56px_minmax(0,1fr)] gap-3 rounded-md border bg-card p-3 text-start shadow-sm transition hover:border-primary/45 hover:bg-accent/45",
                       selected && "border-primary/45 bg-primary/10",
                     )}
                   >
@@ -3508,8 +3560,8 @@ function PackageProductSearchModal({
                       alt=""
                       width={128}
                       height={128}
-                      sizes="64px"
-                      className="size-16 rounded-md"
+                      sizes="56px"
+                      className="size-14 rounded-md"
                       imageClassName="object-cover"
                     />
                     <span className="min-w-0">
@@ -3524,8 +3576,6 @@ function PackageProductSearchModal({
                         {code}
                       </span>
                       <span className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
-                        <span className="rounded-md bg-muted/50 px-2 py-1">{item.category}</span>
-                        <span className="rounded-md bg-muted/50 px-2 py-1">{item.subcategory}</span>
                         <span className="rounded-md bg-muted/50 px-2 py-1 font-semibold text-foreground">
                           {price}
                         </span>
@@ -3576,7 +3626,7 @@ function SingleOfferProductPanel({
   discountPercent?: number;
   contextLabel?: string;
 }) {
-  const products = useContext(OfferProductsContext);
+  const { products } = useContext(OfferProductsContext);
   const [productsOpen, setProductsOpen] = useState(false);
   const [productSearchOpen, setProductSearchOpen] = useState(false);
   const [quantity, setQuantity] = useState(1);
@@ -4245,6 +4295,7 @@ export function CreateOfferPage() {
   const { apiFetch } = useAuth();
   const router = useRouter();
   const { showSnackbar } = useSnackbar();
+  const { cities: serviceCities, loading: serviceCitiesLoading } = useServiceCities({ activeOnly: true });
   const [editingOfferId, setEditingOfferId] = useState("");
   const [editingOffer, setEditingOffer] = useState<OfferCard | null>(null);
   const formMode = editingOfferId ? "edit" : "create";
@@ -4628,7 +4679,13 @@ export function CreateOfferPage() {
   }, [apiFetch, showSnackbar]);
 
   return (
-    <OfferProductsContext.Provider value={offerProducts}>
+    <OfferProductsContext.Provider
+      value={{
+        products: offerProducts,
+        cities: serviceCities,
+        citiesLoading: serviceCitiesLoading,
+      }}
+    >
     <div className="px-6 py-8">
       <PageTitle
         title={formMode === "edit" ? "تعديل العرض" : "إنشاء عرض"}
@@ -4644,9 +4701,10 @@ export function CreateOfferPage() {
           <>
             <Link
               href="/offers"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border bg-background px-3 text-sm font-medium text-muted-foreground shadow-sm transition hover:bg-accent hover:text-foreground"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border bg-background px-3 text-[0px] font-medium text-muted-foreground shadow-sm transition hover:bg-accent hover:text-foreground"
             >
-              <X className="size-4" />
+              <ChevronRight className="size-4" />
+              <span className="text-sm">الرجوع للعروض</span>
               الرجوع
             </Link>
             <Button
@@ -4689,7 +4747,7 @@ export function CreateOfferPage() {
                 </Field>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="hidden">
               <Field label="السوق *">
                 <AppSelect
                   ariaLabel="السوق"

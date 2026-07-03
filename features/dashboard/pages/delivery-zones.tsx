@@ -42,6 +42,7 @@ import {
   loadDeliveryZones,
   saveDeliveryZone,
 } from "../delivery-zones-api";
+import { useServiceCities, type ServiceCity } from "../cities-api";
 import {
   calculateDeliveryFee,
   initialDeliverySettings,
@@ -53,11 +54,12 @@ import {
 } from "../delivery-pricing";
 import { cn } from "@/lib/utils";
 
-const deliveryListPageSize = 10;
+const deliveryListPageSize = 5;
 
 type DeliveryTab = "zones" | "settings" | "tester";
 
 type ZoneDraft = {
+  cityId: string;
   name: string;
   pricingType: DeliveryPricingType;
   fixedDeliveryPrice: string;
@@ -164,6 +166,7 @@ function useLockedPageScroll() {
 
 function createZoneDraft(zone?: DeliveryZone): ZoneDraft {
   return {
+    cityId: zone?.cityId ?? "",
     name: zone?.name ?? "",
     pricingType: zone?.pricingType ?? "fixed",
     fixedDeliveryPrice: numberToDraftValue(zone?.fixedDeliveryPrice ?? 0),
@@ -188,6 +191,10 @@ function validateZoneDraft(draft: ZoneDraft) {
   const pricePerExtraKm = parseNumber(draft.pricePerExtraKm);
   const minOrderAmount = parseNumber(draft.minOrderAmount);
   const maxDistanceKm = parseNumber(draft.maxDistanceKm);
+
+  if (!draft.cityId) {
+    errors.cityId = "مدينة التوصيل مطلوبة.";
+  }
 
   if (!draft.name.trim()) {
     errors.name = "اسم المنطقة مطلوب.";
@@ -234,6 +241,8 @@ function zoneFromDraft(draft: ZoneDraft, currentZone?: DeliveryZone): DeliveryZo
 
   return {
     id: currentZone?.id ?? createZoneId(draft.name),
+    cityId: draft.cityId,
+    cityName: currentZone?.cityName ?? "",
     name: draft.name.trim(),
     pricingType: draft.pricingType,
     fixedDeliveryPrice:
@@ -342,10 +351,12 @@ function NumberField({
 
 function ZoneFormDialog({
   zone,
+  cities,
   onClose,
   onSave,
 }: {
   zone?: DeliveryZone;
+  cities: ServiceCity[];
   onClose: () => void;
   onSave: (zone: DeliveryZone) => void;
 }) {
@@ -369,7 +380,11 @@ function ZoneFormDialog({
       return;
     }
 
-    onSave(zoneFromDraft(draft, zone));
+    const selectedCity = cities.find((city) => String(city.id) === draft.cityId);
+    onSave({
+      ...zoneFromDraft(draft, zone),
+      cityName: selectedCity?.name_ar || selectedCity?.name || zone?.cityName || "",
+    });
   }
 
   return (
@@ -399,7 +414,7 @@ function ZoneFormDialog({
         </div>
 
         <form onSubmit={submitZone}>
-          <div className="grid max-h-[calc(100vh-220px)] gap-5 overflow-y-auto p-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="grid max-h-[calc(100vh-170px)] items-start gap-5 overflow-y-auto p-6 lg:grid-cols-[minmax(0,1fr)_280px]">
             <div className="rounded-lg border bg-card">
               <div className="border-b px-4 py-3 text-sm font-bold">
                 بيانات المنطقة
@@ -414,6 +429,21 @@ function ZoneFormDialog({
                     placeholder="مثلًا: القاهرة الجديدة"
                   />
                   <FieldError>{errors.name}</FieldError>
+                </Field>
+
+                <Field label="مدينة التوصيل *">
+                  <AppSelect
+                    value={draft.cityId}
+                    onValueChange={(value) => updateDraft("cityId", value)}
+                    options={cities.map((city) => ({
+                      value: String(city.id),
+                      label: city.name_ar || city.name,
+                    }))}
+                    placeholder="اختر مدينة التوصيل"
+                    ariaLabel="مدينة التوصيل"
+                    dir="rtl"
+                  />
+                  <FieldError>{errors.cityId}</FieldError>
                 </Field>
 
                 <Field label="نوع التسعير">
@@ -504,17 +534,19 @@ function ZoneFormDialog({
                   error={errors.maxDistanceKm}
                   placeholder="15"
                 />
-                <Field label="الحالة">
-                  <AppSelect
-                    value={draft.status}
-                    onValueChange={(value) =>
-                      updateDraft("status", value as DeliveryZoneStatus)
-                    }
-                    options={statusOptions}
-                    ariaLabel="الحالة"
-                    dir="rtl"
-                  />
-                </Field>
+                <div className="md:col-span-2">
+                  <Field label="الحالة">
+                    <AppSelect
+                      value={draft.status}
+                      onValueChange={(value) =>
+                        updateDraft("status", value as DeliveryZoneStatus)
+                      }
+                      options={statusOptions}
+                      ariaLabel="الحالة"
+                      dir="rtl"
+                    />
+                  </Field>
+                </div>
                 <label className="flex min-h-[132px] flex-col gap-3 text-sm font-medium md:col-span-2">
                   <span className="leading-5">ملاحظات اختيارية</span>
                   <textarea
@@ -532,6 +564,14 @@ function ZoneFormDialog({
                 معاينة التسعير
               </div>
               <div className="space-y-4 p-4 text-sm">
+                <PreviewRow
+                  label="مدينة التوصيل"
+                  value={
+                    cities.find((city) => String(city.id) === draft.cityId)?.name_ar ||
+                    cities.find((city) => String(city.id) === draft.cityId)?.name ||
+                    "-"
+                  }
+                />
                 <PreviewRow label="المنطقة" value={draft.name || "منطقة جديدة"} />
                 <PreviewRow
                   label="نوع التسعير"
@@ -549,9 +589,6 @@ function ZoneFormDialog({
                         }`
                   }
                 />
-                <div className="rounded-md bg-muted/35 p-3 text-xs leading-5 text-muted-foreground">
-                  يتم استخدام هذه القيم مباشرة في أداة اختبار سعر التوصيل.
-                </div>
               </div>
             </div>
           </div>
@@ -715,9 +752,6 @@ function ZonesTable({
               <td className="p-2 align-middle">
                 <div>
                   <div className="font-semibold">{zone.name}</div>
-                  <div className="mt-1 truncate text-xs text-muted-foreground">
-                    {zone.notes || "منطقة توصيل"}
-                  </div>
                 </div>
               </td>
               <td className="p-2 align-middle">
@@ -797,17 +831,13 @@ function ZonesMobileList({
               <MapPin className="size-7" />
             </span>
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="grid gap-2">
                 <h3 className="font-bold text-foreground">{zone.name}</h3>
+                <div className="flex flex-wrap items-center gap-2">
                 <PricingBadge type={zone.pricingType} />
                 <StatusBadge status={zone.status} />
+                </div>
               </div>
-              <p className="mt-1 truncate text-sm text-muted-foreground">
-                {zone.notes || "منطقة توصيل"}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                أُنشئت في {formatDate(zone.createdAt)}
-              </p>
             </div>
           </div>
 
@@ -1074,6 +1104,7 @@ export function DeliveryZonesPage() {
   const [editingZone, setEditingZone] = useState<DeliveryZone | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleteZone, setDeleteZone] = useState<DeliveryZone | null>(null);
+  const { cities, loading: citiesLoading, error: citiesError } = useServiceCities();
 
   const loadZones = useCallback(async () => {
     setLoading(true);
@@ -1103,7 +1134,7 @@ export function DeliveryZonesPage() {
     }
 
     return zones.filter((zone) =>
-      [zone.name, pricingTypeLabels[zone.pricingType], statusLabels[zone.status]]
+      [zone.name, zone.cityName, pricingTypeLabels[zone.pricingType], statusLabels[zone.status]]
         .join(" ")
         .toLocaleLowerCase("ar-EG")
         .includes(normalizedSearch),
@@ -1202,7 +1233,7 @@ export function DeliveryZonesPage() {
               <RefreshCw className={cn("size-4", loading && "animate-spin")} />
               تحديث
             </Button>
-            <Button onClick={() => setCreating(true)}>
+            <Button onClick={() => setCreating(true)} disabled={citiesLoading || Boolean(citiesError)}>
               <Plus className="size-4" />
               منطقة جديدة
             </Button>
@@ -1243,21 +1274,23 @@ export function DeliveryZonesPage() {
 
       {activeTab === "zones" ? (
         <section className="mt-6">
-          <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 md:flex-row md:items-end md:justify-between">
-            <Field label="بحث">
-              <div className="relative min-w-0 md:w-[360px]">
-                <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  className="h-10 ps-9"
-                  value={searchQuery}
-                  onChange={(event) => {
-                    setSearchQuery(event.target.value);
-                    setCurrentPage(1);
-                  }}
-                  placeholder="ابحث عن منطقة أو حالة..."
-                />
-              </div>
-            </Field>
+          <div className="grid gap-4 rounded-lg border bg-card p-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,440px)] lg:items-end">
+            <div>
+              <h2 className="font-semibold">كل مناطق التوصيل</h2>
+              <p className="text-xs text-muted-foreground">ابحث وراجع الحالة والتسعير لكل منطقة.</p>
+            </div>
+            <div className="relative w-full min-w-0">
+              <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="h-11 ps-9"
+                value={searchQuery}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="ابحث عن منطقة أو حالة..."
+              />
+            </div>
           </div>
 
           {loading ? (
@@ -1339,6 +1372,7 @@ export function DeliveryZonesPage() {
 
       {creating ? (
         <ZoneFormDialog
+          cities={cities}
           onClose={() => setCreating(false)}
           onSave={saveZone}
         />
@@ -1346,6 +1380,7 @@ export function DeliveryZonesPage() {
       {editingZone ? (
         <ZoneFormDialog
           zone={editingZone}
+          cities={cities}
           onClose={() => setEditingZone(null)}
           onSave={saveZone}
         />

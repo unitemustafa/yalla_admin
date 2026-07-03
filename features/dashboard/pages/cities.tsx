@@ -1,10 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   Building2,
+  Globe2,
   Edit3,
   LoaderCircle,
   MapPin,
@@ -20,9 +21,9 @@ import {
   Badge,
   Button,
   Card,
-  DataTable,
   Input,
   PageTitle,
+  Pagination,
   Switch,
 } from "../primitives";
 import {
@@ -46,8 +47,9 @@ const CityCoverageMap = dynamic(() => import("../city-coverage-map"), {
   ),
 });
 
+const citiesPageSize = 5;
+
 type CityDraft = {
-  name: string;
   nameAr: string;
   latitude: string;
   longitude: string;
@@ -56,7 +58,6 @@ type CityDraft = {
 };
 
 const defaultDraft: CityDraft = {
-  name: "",
   nameAr: "",
   latitude: "30.0444000",
   longitude: "31.2357000",
@@ -67,8 +68,7 @@ const defaultDraft: CityDraft = {
 function cityDraft(city?: ServiceCity): CityDraft {
   const coverage = city?.coverages[0];
   return {
-    name: city?.name ?? defaultDraft.name,
-    nameAr: city?.name_ar ?? defaultDraft.nameAr,
+    nameAr: city?.name_ar || city?.name || defaultDraft.nameAr,
     latitude: coverage?.center_latitude ?? defaultDraft.latitude,
     longitude: coverage?.center_longitude ?? defaultDraft.longitude,
     radiusKm: coverage?.radius_km ?? defaultDraft.radiusKm,
@@ -78,18 +78,73 @@ function cityDraft(city?: ServiceCity): CityDraft {
 
 function payloadFromDraft(draft: CityDraft): ServiceCityPayload {
   return {
-    name: draft.name.trim(),
-    name_ar: draft.nameAr.trim(),
+    name: draft.nameAr.trim(),
+    center_latitude: Number(draft.latitude).toFixed(7),
+    center_longitude: Number(draft.longitude).toFixed(7),
+    radius_km: Number(draft.radiusKm).toFixed(2),
     is_active: draft.active,
-    coverages: [
-      {
-        center_latitude: Number(draft.latitude).toFixed(7),
-        center_longitude: Number(draft.longitude).toFixed(7),
-        radius_km: Number(draft.radiusKm).toFixed(2),
-        is_active: true,
-      },
-    ],
   };
+}
+
+function useLockedPageScroll() {
+  useEffect(() => {
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, []);
+}
+
+function CityDeleteDialog({
+  city,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  city: ServiceCity;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  useLockedPageScroll();
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 px-4 py-6 backdrop-blur-sm">
+      <section
+        dir="rtl"
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-md rounded-xl border bg-background p-5 shadow-2xl"
+      >
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg bg-destructive/10 p-2 text-destructive">
+            <Trash2 className="size-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">حذف المدينة</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              هل تريد حذف مدينة {city.name_ar || city.name}؟ لا يمكن التراجع عن هذا الإجراء.
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+            إلغاء
+          </Button>
+          <Button type="button" variant="danger" onClick={onConfirm} disabled={busy}>
+            {busy ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+            حذف
+          </Button>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function CityDialog({
@@ -102,6 +157,8 @@ function CityDialog({
   onSaved: (city: ServiceCity) => void;
 }) {
   const { apiFetch } = useAuth();
+  useLockedPageScroll();
+
   const [draft, setDraft] = useState(() => cityDraft(city));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,7 +166,6 @@ function CityDialog({
   const longitude = Number(draft.longitude);
   const radiusKm = Number(draft.radiusKm);
   const valid =
-    draft.name.trim().length > 1 &&
     draft.nameAr.trim().length > 1 &&
     Number.isFinite(latitude) &&
     latitude >= -90 &&
@@ -157,13 +213,13 @@ function CityDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-foreground/60 px-4 py-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-foreground/60 px-4 py-4 backdrop-blur-sm">
       <section
         dir="rtl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="city-dialog-title"
-        className="mx-auto w-full max-w-5xl overflow-hidden rounded-xl border bg-background shadow-2xl"
+        className="mx-auto max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-xl border bg-background shadow-2xl"
       >
         <div className="flex items-start justify-between border-b bg-muted/20 px-6 py-5">
           <div>
@@ -185,118 +241,128 @@ function CityDialog({
         </div>
 
         <form onSubmit={submit}>
-          <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
-            <div className="grid content-start gap-4">
-              <label className="grid gap-2 text-sm font-semibold">
-                الاسم بالعربية *
-                <Input
-                  autoFocus
-                  dir="rtl"
-                  className="text-right"
-                  value={draft.nameAr}
-                  onChange={(event) => update("nameAr", event.target.value)}
-                  placeholder="مثال: القاهرة"
-                />
-              </label>
-              <label className="grid gap-2 text-sm font-semibold">
-                الاسم بالإنجليزية *
-                <Input
-                  dir="rtl"
-                  className="text-right"
-                  value={draft.name}
-                  onChange={(event) => update("name", event.target.value)}
-                  placeholder="Example: Cairo"
-                />
-              </label>
-              {city ? (
-                <label className="grid gap-2 text-sm font-semibold">
-                  المعرّف الثابت
-                  <Input dir="rtl" className="text-right" value={city.slug} disabled />
-                </label>
-              ) : null}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="grid gap-2 text-sm font-semibold">
-                  خط العرض
-                  <Input
-                    dir="ltr"
-                    className="text-right"
-                    inputMode="decimal"
-                    value={draft.latitude}
-                    onChange={(event) => update("latitude", event.target.value)}
-                  />
-                </label>
-                <label className="grid gap-2 text-sm font-semibold">
-                  خط الطول
-                  <Input
-                    dir="ltr"
-                    className="text-right"
-                    inputMode="decimal"
-                    value={draft.longitude}
-                    onChange={(event) => update("longitude", event.target.value)}
-                  />
-                </label>
-              </div>
-              <label className="grid gap-2 text-sm font-semibold">
-                نصف قطر التغطية (كم)
-                <Input
-                  dir="ltr"
-                  className="text-right"
-                  inputMode="decimal"
-                  min="0.1"
-                  step="0.1"
-                  type="number"
-                  value={draft.radiusKm}
-                  onChange={(event) => update("radiusKm", event.target.value)}
-                />
-              </label>
-              <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+          <div className="grid gap-4 p-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <Card className="overflow-hidden">
+              <div className="flex items-center gap-3 border-b px-5 py-4">
+                <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Globe2 className="size-4" />
+                </span>
                 <div>
-                  <p className="text-sm font-semibold">المدينة مفعّلة</p>
-                  <p className="text-xs text-muted-foreground">تظهر داخل تطبيق العميل والاختيارات.</p>
+                  <h3 className="font-bold">بيانات المدينة</h3>
+                  <p className="text-xs text-muted-foreground">الاسم وحالة الظهور داخل التطبيق.</p>
                 </div>
-                <Switch
-                  checked={draft.active}
-                  onCheckedChange={(checked) => update("active", checked)}
-                />
               </div>
-              <Button type="button" variant="outline" onClick={useCurrentLocation}>
-                <MapPin className="size-4" />
-                استخدام موقعي الحالي
-              </Button>
-              {error ? (
-                <div className="flex gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-                  <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                  {error}
+              <div className="grid gap-4 p-5">
+                <label className="grid gap-2 text-sm font-semibold">
+                  اسم المدينة *
+                  <Input
+                    autoFocus
+                    dir="rtl"
+                    className="h-11 text-right"
+                    value={draft.nameAr}
+                    onChange={(event) => update("nameAr", event.target.value)}
+                    placeholder="مثال: القاهرة"
+                  />
+                </label>
+                {city ? (
+                  <label className="grid gap-2 text-sm font-semibold">
+                    المعرّف الثابت
+                    <Input dir="rtl" className="h-11 text-right" value={city.slug} disabled />
+                  </label>
+                ) : null}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="grid gap-2 text-sm font-semibold">
+                    خط العرض
+                    <Input
+                      dir="ltr"
+                      className="h-11 text-right"
+                      inputMode="decimal"
+                      value={draft.latitude}
+                      onChange={(event) => update("latitude", event.target.value)}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold">
+                    خط الطول
+                    <Input
+                      dir="ltr"
+                      className="h-11 text-right"
+                      inputMode="decimal"
+                      value={draft.longitude}
+                      onChange={(event) => update("longitude", event.target.value)}
+                    />
+                  </label>
                 </div>
-              ) : null}
-            </div>
-
-            <div>
-              <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-                <span className="font-semibold">نطاق التغطية على الخريطة</span>
-                <span className="text-xs text-muted-foreground">اضغط على الخريطة لتغيير المركز</span>
-              </div>
-              {Number.isFinite(latitude) && Number.isFinite(longitude) ? (
-                <div className="overflow-hidden rounded-lg border p-1">
-                  <CityCoverageMap
-                    latitude={latitude}
-                    longitude={longitude}
-                    radiusKm={Number.isFinite(radiusKm) ? radiusKm : 1}
-                    onCenterChange={(nextLatitude, nextLongitude) => {
-                      setDraft((current) => ({
-                        ...current,
-                        latitude: nextLatitude.toFixed(7),
-                        longitude: nextLongitude.toFixed(7),
-                      }));
-                    }}
+                <label className="grid gap-2 text-sm font-semibold">
+                  نصف قطر التغطية (كم)
+                  <Input
+                    dir="ltr"
+                    className="h-11 text-right"
+                    inputMode="decimal"
+                    min="0.1"
+                    step="0.1"
+                    type="number"
+                    value={draft.radiusKm}
+                    onChange={(event) => update("radiusKm", event.target.value)}
+                  />
+                </label>
+                <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                  <div>
+                    <p className="text-sm font-semibold">المدينة مفعّلة</p>
+                    <p className="text-xs text-muted-foreground">تظهر داخل تطبيق العميل والاختيارات.</p>
+                  </div>
+                  <Switch
+                    checked={draft.active}
+                    onCheckedChange={(checked) => update("active", checked)}
                   />
                 </div>
-              ) : (
-                <div className="flex h-[320px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
-                  أدخل إحداثيات صحيحة لعرض الخريطة.
+                <Button type="button" variant="outline" onClick={useCurrentLocation} className="h-11">
+                  <MapPin className="size-4" />
+                  استخدام موقعي الحالي
+                </Button>
+                {error ? (
+                  <div className="flex gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                    <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                    {error}
+                  </div>
+                ) : null}
+              </div>
+            </Card>
+
+            <Card className="overflow-hidden">
+              <div className="flex items-center justify-between gap-3 border-b px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <MapPinned className="size-4" />
+                  </span>
+                  <div>
+                    <h3 className="font-bold">نطاق التغطية</h3>
+                    <p className="text-xs text-muted-foreground">اضغط على الخريطة لتغيير المركز.</p>
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+              <div className="p-5">
+                {Number.isFinite(latitude) && Number.isFinite(longitude) ? (
+                  <div className="overflow-hidden rounded-lg border p-1">
+                    <CityCoverageMap
+                      latitude={latitude}
+                      longitude={longitude}
+                      radiusKm={Number.isFinite(radiusKm) ? radiusKm : 1}
+                      onCenterChange={(nextLatitude, nextLongitude) => {
+                        setDraft((current) => ({
+                          ...current,
+                          latitude: nextLatitude.toFixed(7),
+                          longitude: nextLongitude.toFixed(7),
+                        }));
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-[260px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+                    أدخل إحداثيات صحيحة لعرض الخريطة.
+                  </div>
+                )}
+              </div>
+            </Card>
           </div>
 
           <div className="flex justify-end gap-2 border-t px-6 py-4">
@@ -319,7 +385,9 @@ export function CitiesPage() {
   const { cities, setCities, loading, error, reload } = useServiceCities();
   const [query, setQuery] = useState("");
   const [editingCity, setEditingCity] = useState<ServiceCity | null | undefined>();
+  const [deleteCity, setDeleteCity] = useState<ServiceCity | null>(null);
   const [busyCityId, setBusyCityId] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const filteredCities = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -330,6 +398,10 @@ export function CitiesPage() {
       ),
     );
   }, [cities, query]);
+  const totalPages = Math.max(1, Math.ceil(filteredCities.length / citiesPageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStartIndex = (safeCurrentPage - 1) * citiesPageSize;
+  const pagedCities = filteredCities.slice(pageStartIndex, pageStartIndex + citiesPageSize);
 
   async function toggleCity(city: ServiceCity, checked: boolean) {
     setBusyCityId(city.id);
@@ -361,10 +433,10 @@ export function CitiesPage() {
   }
 
   function removeCity(city: ServiceCity) {
-    if (!window.confirm(`هل تريد حذف مدينة ${city.name_ar || city.name}؟`)) return;
     const cityIndex = cities.findIndex((item) => item.id === city.id);
 
     setBusyCityId(city.id);
+    setDeleteCity(null);
     queueUndoableDelete({
       message: `تم حذف ${city.name_ar || city.name}.`,
       onDelete: () => setCities((current) => current.filter((item) => item.id !== city.id)),
@@ -421,14 +493,22 @@ export function CitiesPage() {
       </div>
 
       <Card className="mt-6 overflow-hidden">
-        <div className="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid gap-4 border-b px-5 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,440px)] lg:items-end">
           <div>
             <h2 className="font-semibold">كل المدن</h2>
             <p className="text-xs text-muted-foreground">راجع النطاق الجغرافي والارتباطات وحالة كل مدينة.</p>
           </div>
-          <div className="relative w-full sm:w-72">
+          <div className="relative w-full">
             <Search className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث باسم المدينة..." className="pr-9" />
+            <Input
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder="ابحث باسم المدينة..."
+              className="h-11 pr-9"
+            />
           </div>
         </div>
 
@@ -439,25 +519,78 @@ export function CitiesPage() {
         ) : filteredCities.length === 0 ? (
           <div className="flex min-h-56 flex-col items-center justify-center gap-2 text-center"><MapPinned className="size-9 text-muted-foreground" /><p className="font-semibold">لا توجد مدن مطابقة</p><p className="text-sm text-muted-foreground">أضف أول مدينة أو غيّر عبارة البحث.</p></div>
         ) : (
-          <DataTable
-            minWidth={880}
-            columnWidths={[240, 145, 130, 110, 100, 155]}
-            headers={["المدينة", "نطاق التغطية", "المحلات", "العروض", "الحالة", <span key="actions" className="block text-center">الإجراءات</span>]}
-            rows={filteredCities.map((city) => {
+          <div className="grid gap-3 p-4">
+            {pagedCities.map((city, index) => {
               const coverage = city.coverages[0];
-              return [
-                <div key="city" className="px-2"><p className="font-semibold">{city.name_ar || city.name}</p><p dir="ltr" className="text-xs text-muted-foreground">{city.name} · {city.slug}</p></div>,
-                <span key="coverage" className="text-muted-foreground">{coverage ? `${Number(coverage.radius_km).toLocaleString("ar-EG-u-nu-latn")} كم` : "غير محدد"}</span>,
-                <Badge key="markets" tone="blue">{city.market_count}</Badge>,
-                <Badge key="offers" tone="secondary">{city.offer_count}</Badge>,
-                <div key="status" className="flex items-center gap-2"><Switch checked={city.is_active} disabled={busyCityId === city.id} onCheckedChange={(checked) => void toggleCity(city, checked)} /><span className="text-xs">{city.is_active ? "مفعّلة" : "معطلة"}</span></div>,
-                <div key="actions" className="flex justify-center gap-1">
-                  <Button size="icon" variant="ghost" title="تعديل" onClick={() => setEditingCity(city)}><Edit3 className="size-4" /></Button>
-                  <Button size="icon" variant="ghost" title="حذف" disabled={busyCityId === city.id} onClick={() => void removeCity(city)}><Trash2 className="size-4 text-destructive" /></Button>
-                </div>,
-              ];
+              return (
+                <Card key={city.id} className="grid gap-4 p-4 xl:grid-cols-[minmax(280px,1fr)_320px_220px] xl:items-center">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">
+                      {pageStartIndex + index + 1}
+                    </span>
+                    <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <MapPinned className="size-7" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-bold">{city.name_ar || city.name}</h3>
+                        <Badge tone={city.is_active ? "green" : "red"}>
+                          {city.is_active ? "مفعلة" : "معطلة"}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 truncate text-sm text-muted-foreground">
+                        نطاق التغطية {coverage ? `${Number(coverage.radius_km).toLocaleString("ar-EG-u-nu-latn")} كم` : "غير محدد"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                    <div className="rounded-md bg-muted px-3 py-2">
+                      <div className="font-bold">{coverage ? `${Number(coverage.radius_km).toLocaleString("ar-EG-u-nu-latn")} كم` : "-"}</div>
+                      <div className="text-xs text-muted-foreground">النطاق</div>
+                    </div>
+                    <div className="rounded-md bg-muted px-3 py-2">
+                      <div className="font-bold">{city.market_count}</div>
+                      <div className="text-xs text-muted-foreground">المحلات</div>
+                    </div>
+                    <div className="rounded-md bg-muted px-3 py-2">
+                      <div className="font-bold">{city.offer_count}</div>
+                      <div className="text-xs text-muted-foreground">العروض</div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-start gap-2 xl:justify-end">
+                    <div className="flex h-9 items-center gap-2 rounded-md border bg-background px-3">
+                      <Switch checked={city.is_active} disabled={busyCityId === city.id} onCheckedChange={(checked) => void toggleCity(city, checked)} />
+                      <span className="text-xs font-semibold">{city.is_active ? "مفعّلة" : "معطلة"}</span>
+                    </div>
+                    <Button size="icon" variant="outline" title="تعديل" onClick={() => setEditingCity(city)} aria-label={`تعديل ${city.name_ar || city.name}`}>
+                      <Edit3 className="size-4" />
+                    </Button>
+                    <Button size="icon" variant="outline" title="حذف" disabled={busyCityId === city.id} onClick={() => setDeleteCity(city)} aria-label={`حذف ${city.name_ar || city.name}`} className="text-destructive hover:bg-destructive/10 hover:text-destructive">
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                </Card>
+              );
             })}
-          />
+            <Pagination
+              text={`عرض ${pagedCities.length} من ${filteredCities.length} نتيجة`}
+              pages={`${safeCurrentPage} / ${totalPages}`}
+              previousDisabled={safeCurrentPage === 1}
+              nextDisabled={safeCurrentPage === totalPages}
+              onPrevious={() =>
+                setCurrentPage((page) =>
+                  Math.max(1, Math.min(page, totalPages) - 1),
+                )
+              }
+              onNext={() =>
+                setCurrentPage((page) =>
+                  Math.min(totalPages, Math.min(page, totalPages) + 1),
+                )
+              }
+            />
+          </div>
         )}
       </Card>
 
@@ -475,6 +608,14 @@ export function CitiesPage() {
             setEditingCity(undefined);
             showSnackbar({ message: editingCity ? "تم تحديث المدينة." : "تمت إضافة المدينة." });
           }}
+        />
+      ) : null}
+      {deleteCity ? (
+        <CityDeleteDialog
+          city={deleteCity}
+          busy={busyCityId === deleteCity.id}
+          onCancel={() => setDeleteCity(null)}
+          onConfirm={() => removeCity(deleteCity)}
         />
       ) : null}
     </div>

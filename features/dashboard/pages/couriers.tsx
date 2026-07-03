@@ -149,7 +149,7 @@ function draftFromCourier(user: BackendDashboardUser | null, areas: DeliveryArea
     vehicleType: user.courier_profile?.vehicle_type ?? "",
     plateNumber: user.courier_profile?.plate_number ?? "",
     deliveryArea: String(user.courier_profile?.delivery_area ?? areas[0]?.id ?? ""),
-    maxActiveOrders: "1",
+    maxActiveOrders: String(user.courier_profile?.max_active_orders ?? 1),
   };
 }
 
@@ -265,8 +265,8 @@ function CourierForm({
         </header>
 
         <form onSubmit={submit} className="grid items-start gap-6">
-          <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <Card className="overflow-hidden border-border/70 shadow-xl shadow-black/5">
+          <div className="grid items-stretch gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <Card className="h-full overflow-hidden border-border/70 shadow-xl shadow-black/5">
               <section className="p-5 sm:p-7 lg:p-8">
               <div className="mb-6 flex items-start gap-3 border-b border-border/70 pb-5">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><UserRound className="size-5" /></span>
@@ -287,9 +287,9 @@ function CourierForm({
               </section>
             </Card>
 
-            <Card className="overflow-hidden border-border/70 shadow-lg shadow-black/5">
+            <Card className="flex h-full flex-col overflow-hidden border-border/70 shadow-lg shadow-black/5">
               <div className="h-16 bg-gradient-to-l from-primary via-primary/80 to-primary/50" />
-              <div className="px-5 pb-5">
+              <div className="flex flex-1 flex-col px-5 pb-5">
                 <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 text-start">
                   <div className="relative -mt-10 size-20"><DashboardImage src={draft.avatarUrl || "/default-user-avatar.svg"} alt="صورة المندوب" width={80} height={80} className="size-20 overflow-hidden rounded-2xl border-4 border-card bg-background shadow-lg" imageClassName="object-cover" /><span className="absolute -bottom-1 -start-1 flex size-6 items-center justify-center rounded-full border-2 border-card bg-emerald-500 text-white"><CheckCircle2 className="size-3.5" /></span></div>
                   <div className="min-w-0">
@@ -297,8 +297,7 @@ function CourierForm({
                     <p className="mt-1 truncate text-xs text-muted-foreground">{draft.phone || "رقم الهاتف سيظهر هنا"}</p>
                   </div>
                 </div>
-                <div className="mt-4 rounded-xl border border-dashed bg-muted/20 p-3 text-start"><div className="mb-2 flex items-center gap-2 text-xs font-bold"><Camera className="size-4 text-primary" />صورة المندوب</div><Input type="text" dir="rtl" value={draft.avatarUrl} onChange={(e) => update("avatarUrl", e.target.value)} placeholder="رابط الصورة" className="h-10 rounded-lg text-right text-xs" /><label className="mt-2 inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border bg-background px-3 text-xs font-bold text-muted-foreground transition hover:bg-accent hover:text-foreground"><Upload className="size-4" />رفع صورة من الجهاز<input type="file" accept="image/*" className="sr-only" onChange={(event) => uploadAvatar(event.target.files?.[0])} /></label></div>
-                <div className="mt-4 inline-flex max-w-full items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-start text-xs font-bold leading-5 text-emerald-800 dark:text-emerald-200"><ShieldCheck className="size-4 shrink-0" /><span className="truncate">جاهز للانضمام واستقبال الطلبات في المنطقة المحددة</span></div>
+                <div className="mt-4 rounded-xl border border-dashed bg-muted/20 p-3 text-start"><div className="mb-3 flex items-center gap-2 text-xs font-bold"><Camera className="size-4 text-primary" />صورة المندوب</div><Input type="text" dir="rtl" value={draft.avatarUrl} onChange={(e) => update("avatarUrl", e.target.value)} placeholder="رابط الصورة" className="h-12 rounded-lg text-right text-sm" /><label className="mt-3 inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border bg-background px-3 text-sm font-bold text-muted-foreground transition hover:bg-accent hover:text-foreground"><Upload className="size-4" />رفع صورة من الجهاز<input type="file" accept="image/*" className="sr-only" onChange={(event) => uploadAvatar(event.target.files?.[0])} /></label></div>
               </div>
             </Card>
           </div>
@@ -320,8 +319,8 @@ function CourierForm({
                 <div className="grid gap-x-5 gap-y-5 md:grid-cols-2">
                   <Field label="نوع المركبة"><Input required placeholder="مثال: دراجة نارية" value={draft.vehicleType} onChange={(e) => update("vehicleType", e.target.value)} className="h-12 rounded-xl" /></Field>
                   <Field label="رقم اللوحة"><Input required placeholder="مثال: أ ب ج 1234" value={draft.plateNumber} onChange={(e) => update("plateNumber", e.target.value)} className="h-12 rounded-xl" /></Field>
-                  <Field label="منطقة التوصيل"><AppSelect value={draft.deliveryArea} onValueChange={(value) => update("deliveryArea", value)} options={areas.filter((area) => area.is_active).map((area) => ({ value: String(area.id), label: area.name }))} placeholder="اختر منطقة التوصيل" icon={<MapPin className="size-4" />} className="h-12 rounded-xl bg-input" contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl" ariaLabel="منطقة التوصيل" /></Field>
-                  <Field label="الحد الأقصى للطلبات"><Input readOnly type="number" value="1" className="h-12 cursor-not-allowed rounded-xl bg-muted/50 opacity-70" /></Field>
+                  <Field label="مدينة التوصيل"><AppSelect value={draft.deliveryArea} onValueChange={(value) => update("deliveryArea", value)} options={areas.filter((area) => area.is_active).map((area) => ({ value: String(area.id), label: area.name }))} placeholder="اختر مدينة التوصيل" icon={<MapPin className="size-4" />} className="h-12 rounded-xl bg-input" contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl" ariaLabel="مدينة التوصيل" /></Field>
+                  <Field label="الحد الأقصى للطلبات"><Input required min={1} type="number" value={draft.maxActiveOrders} onChange={(e) => update("maxActiveOrders", e.target.value)} className="h-12 rounded-xl" /></Field>
                 </div>
               ) : null}
             </section>
@@ -675,7 +674,7 @@ export function CouriersPage() {
                 ? "تفاصيل المندوب المحدد من الطلب"
                 : areaFilter === "all"
                   ? "كل المندوبين"
-                  : "مندوبين حسب المنطقة"}
+                  : "مندوبين حسب المدينة"}
             </div>
           </div>
           <div className="w-full md:w-72">
@@ -686,12 +685,12 @@ export function CouriersPage() {
                 setCurrentPage(1);
               }}
               options={[
-                { value: "all", label: "كل المناطق" },
+                { value: "all", label: "كل المدن" },
                 ...areas.map((area) => ({ value: String(area.id), label: area.name })),
               ]}
               className="h-10 bg-input"
               contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl"
-              ariaLabel="فلتر المنطقة"
+              ariaLabel="فلتر المدينة"
             />
           </div>
         </div>

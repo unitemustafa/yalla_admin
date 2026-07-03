@@ -183,10 +183,38 @@ export function productRowFromApi(record: BackendRecord, index: number): ItemRow
     nestedName(record.product_category) ||
     nestedName(record.classification) ||
     text(record, ["category_name", "product_category_name"], "غير مصنف");
+  const market =
+    record.market && typeof record.market === "object"
+      ? (record.market as BackendRecord)
+      : null;
   const shopName =
-    nestedName(record.market) ||
+    nestedName(market) ||
     nestedName(record.shop) ||
     text(record, ["market_name", "shop_name"], "");
+  const rawRegionNames =
+    Array.isArray(record.region_names)
+      ? record.region_names
+      : Array.isArray(record.city_names)
+        ? record.city_names
+        : Array.isArray(record.service_city_names)
+          ? record.service_city_names
+          : Array.isArray(market?.city_names)
+            ? market.city_names
+            : Array.isArray(market?.service_city_names)
+              ? market.service_city_names
+              : [];
+  const rawRegionSlugs =
+    Array.isArray(record.region_slugs)
+      ? record.region_slugs
+      : Array.isArray(record.city_slugs)
+        ? record.city_slugs
+        : Array.isArray(record.service_city_slugs)
+          ? record.service_city_slugs
+          : Array.isArray(market?.city_slugs)
+            ? market.city_slugs
+            : Array.isArray(market?.service_city_slugs)
+              ? market.service_city_slugs
+              : [];
 
   return {
     index: String(index + 1),
@@ -199,6 +227,8 @@ export function productRowFromApi(record: BackendRecord, index: number): ItemRow
     subcategory: text(record, ["subcategory", "subcategory_name"], category),
     shopName,
     calories: text(record, ["stock", "quantity", "calories"], ""),
+    regionSlugs: rawRegionSlugs.map(String).filter(Boolean),
+    regionNames: rawRegionNames.map(String).filter(Boolean),
     price: price(record),
     featured: bool(record, ["is_featured", "featured"], false) ? "نعم" : "لا",
     active: bool(record, ["is_active", "active", "available", "status"], true),

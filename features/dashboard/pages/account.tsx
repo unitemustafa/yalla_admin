@@ -366,12 +366,8 @@ export function AccountPage() {
                 البريد الإلكتروني
                 <Input dir="ltr" className="text-right" value={email} readOnly />
               </label>
-              <label className="grid gap-2 text-sm font-medium">
-                الصلاحية
-                <Input value={user?.role ?? "admin"} readOnly />
-              </label>
-              <div className="flex items-end gap-2">
-                <Button type="submit" disabled={profileSaving}>
+              <div className="flex items-end gap-2 md:col-span-2">
+                <Button type="submit" disabled={profileSaving} className="w-full">
                   {profileSaving ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (

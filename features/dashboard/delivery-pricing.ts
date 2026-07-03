@@ -4,6 +4,8 @@ export type DeliveryZoneStatus = "active" | "paused" | "unavailable";
 
 export type DeliveryZone = {
   id: string;
+  cityId: string;
+  cityName: string;
   name: string;
   pricingType: DeliveryPricingType;
   fixedDeliveryPrice: number;

@@ -40,7 +40,7 @@ export default function CityCoverageMap({
       center={[latitude, longitude]}
       zoom={10}
       scrollWheelZoom
-      className="h-[320px] w-full rounded-lg"
+      className="h-[260px] w-full rounded-lg"
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'

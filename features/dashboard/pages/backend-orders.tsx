@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Copy,
   Loader2,
+  MapPin,
   PackageCheck,
   Plus,
   RefreshCw,
@@ -217,6 +218,20 @@ function customerName(order: BackendOrder) {
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)
     .join(" ") || `User #${order.user_id ?? order.customer?.id ?? "-"}`;
+}
+
+function DeliveryTypeBadge({ order }: { order: BackendOrder }) {
+  const isDeliveryOrder = order.delivery_type === "manual_quote";
+  const Icon = isDeliveryOrder ? Truck : MapPin;
+
+  return (
+    <Badge tone={deliveryTypeTone(order)}>
+      <span className="inline-flex items-center gap-1.5">
+        <Icon className="size-3.5" />
+        {deliveryTypeLabel(order)}
+      </span>
+    </Badge>
+  );
 }
 
 function orderNumber(order: BackendOrder) {
@@ -528,7 +543,7 @@ export function BackendOrdersPage() {
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <Badge tone={statusTone(order.status)}>{statusLabels[order.status]}</Badge>
-                        <Badge tone={deliveryTypeTone(order)}>{deliveryTypeLabel(order)}</Badge>
+                        <DeliveryTypeBadge order={order} />
                       </div>
                     </div>
                   </div>

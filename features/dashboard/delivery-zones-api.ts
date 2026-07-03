@@ -5,6 +5,9 @@ type ApiFetch = (path: string, init?: RequestInit) => Promise<Response>;
 
 type DeliveryAreaResponse = {
   id: number | string;
+  service_city_id?: number | string | null;
+  service_city?: number | string | { id?: number | string; name?: string | null; name_ar?: string | null } | null;
+  service_city_name?: string | null;
   name: string;
   delivery_price: string | number;
   pricing_type: DeliveryZone["pricingType"];
@@ -34,8 +37,14 @@ function isDeliveryAreaResponse(value: unknown): value is DeliveryAreaResponse {
 }
 
 function deliveryZoneFromResponse(area: DeliveryAreaResponse): DeliveryZone {
+  const cityObject =
+    area.service_city && typeof area.service_city === "object" ? area.service_city : null;
+  const cityId = area.service_city_id ?? cityObject?.id ?? "";
+
   return {
     id: String(area.id),
+    cityId: String(cityId),
+    cityName: area.service_city_name ?? cityObject?.name_ar ?? cityObject?.name ?? "",
     name: area.name,
     pricingType: area.pricing_type ?? "fixed",
     fixedDeliveryPrice: numberValue(area.delivery_price),
@@ -54,6 +63,7 @@ function deliveryZoneFromResponse(area: DeliveryAreaResponse): DeliveryZone {
 
 function payloadFromDeliveryZone(zone: DeliveryZone) {
   return {
+    service_city_id: Number(zone.cityId),
     name: zone.name,
     delivery_price: zone.fixedDeliveryPrice,
     pricing_type: zone.pricingType,
