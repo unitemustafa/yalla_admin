@@ -534,7 +534,6 @@ function AddonActionsMenu({
 function AddonEditPanel({
   draft,
   categoryOptions,
-  productOptions,
   onChange,
   onImageChange,
   onCancel,
@@ -542,7 +541,6 @@ function AddonEditPanel({
 }: {
   draft: AddonRow;
   categoryOptions: string[];
-  productOptions: AddonProductOption[];
   onChange: (draft: AddonRow) => void;
   onImageChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onCancel: () => void;
@@ -581,7 +579,7 @@ function AddonEditPanel({
             </span>
           </span>
         </label>
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-3">
           <Field label="الاسم بالعربي">
             <Input
               value={draft.nameAr}
@@ -609,20 +607,6 @@ function AddonEditPanel({
                 value: category,
                 label: category,
               }))}
-            />
-          </Field>
-          <Field label="المنتجات">
-            <AppSelect
-              value={productScopeValue(draft.productIds, productOptions)}
-              onValueChange={(scope) =>
-                onChange({
-                  ...draft,
-                  productIds: productIdsForScope(scope, productOptions),
-                })
-              }
-              ariaLabel="اختيار منتجات الإضافة"
-              className="h-9 bg-input"
-              options={productSelectOptions(productOptions, draft.productIds)}
             />
           </Field>
         </div>
@@ -653,74 +637,7 @@ function splitAddonPrice(price: string) {
   };
 }
 
-type AddonProductOption = {
-  value: string;
-  label: string;
-};
-
-function addonProductOptions(rows: ItemRow[]): AddonProductOption[] {
-  return rows.map((row) => ({
-    value: row.id,
-    label: row.name,
-  }));
-}
-
-function productScopeValue(productIds: string[] | undefined, productOptions: AddonProductOption[]) {
-  const safeProductIds = productIds ?? [];
-
-  if (!safeProductIds.length) return "all";
-
-  const availableIds = productOptions.map((product) => product.value);
-  if (
-    availableIds.length &&
-    safeProductIds.length >= availableIds.length &&
-    availableIds.every((id) => safeProductIds.includes(id))
-  ) {
-    return "all";
-  }
-
-  return safeProductIds.length === 1 ? safeProductIds[0] : "custom";
-}
-
-function productIdsForScope(scope: string, productOptions: AddonProductOption[]) {
-  if (scope === "all") return productOptions.map((product) => product.value);
-  if (!scope || scope === "custom") return [];
-  return [scope];
-}
-
-function addonProductLabel(addon: AddonRow, productOptions: AddonProductOption[]) {
-  const scope = productScopeValue(addon.productIds, productOptions);
-
-  if (scope === "all") return "كل المنتجات";
-  if (scope !== "custom") {
-    return productOptions.find((product) => product.value === scope)?.label ?? "منتج محدد";
-  }
-
-  return `${addon.productIds.length} منتجات`;
-}
-
-function productSelectOptions(
-  productOptions: AddonProductOption[],
-  selectedIds: string[] = [],
-) {
-  const scope = productScopeValue(selectedIds, productOptions);
-
-  return [
-    { value: "all", label: "كل المنتجات" },
-    ...(scope === "custom"
-      ? [{ value: "custom", label: `${selectedIds.length} منتجات`, disabled: true }]
-      : []),
-    ...productOptions,
-  ];
-}
-
-function AddonIdentity({
-  addon,
-  productOptions,
-}: {
-  addon: AddonRow;
-  productOptions: AddonProductOption[];
-}) {
+function AddonIdentity({ addon }: { addon: AddonRow }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5 py-1">
       <DashboardImage
@@ -735,8 +652,8 @@ function AddonIdentity({
       <div className="min-w-0">
         <h3 className="truncate text-[13px] font-black leading-5">{addon.nameAr}</h3>
         <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
-          <span className="max-w-full truncate rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-            {addonProductLabel(addon, productOptions)}
+          <span className="max-w-full truncate rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary">
+            {addon.id}
           </span>
         </div>
       </div>
@@ -2092,13 +2009,9 @@ export function AddonsPage() {
   const [addonFormCategory, setAddonFormCategory] = useState(addonRows[0]?.category ?? "");
   const [addonNameAr, setAddonNameAr] = useState("");
   const [addonPrice, setAddonPrice] = useState("");
-  const [addonProductScope, setAddonProductScope] = useState("all");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
   const [rows, setRows] = useState<AddonRow[]>(() => addonRows);
-  const [productOptions, setProductOptions] = useState<AddonProductOption[]>(() =>
-    addonProductOptions(itemRows),
-  );
   const [categoryOptions, setCategoryOptions] = useState<string[]>(() =>
     uniqueAddonCategories(addonRows),
   );
@@ -2139,24 +2052,18 @@ export function AddonsPage() {
 
     async function loadAddons() {
       try {
-        const [addons, classificationsResponse, products] = await Promise.all([
+        const [addons, classificationsResponse] = await Promise.all([
           fetchAdminRows(
             apiFetch,
             adminApiPaths.productAdditions,
             addonRowFromApi,
           ),
           apiFetch(adminApiPaths.additionClassifications),
-          fetchAdminRows(
-            apiFetch,
-            adminApiPaths.products,
-            productRowFromApi,
-          ).catch(() => itemRows),
         ]);
         const classificationsData = await readApiData(classificationsResponse);
 
         if (!active) return;
         setRows(addons);
-        setProductOptions(addonProductOptions(products));
 
         if (classificationsResponse.ok) {
           const classifications = apiList(classificationsData)
@@ -2241,7 +2148,6 @@ export function AddonsPage() {
     setAddonFormCategory(categoryOptions[0] ?? "");
     setAddonNameAr("");
     setAddonPrice("");
-    setAddonProductScope("all");
     resetAddonImage();
   }
 
@@ -2276,9 +2182,6 @@ export function AddonsPage() {
             name_ar: editingAddon.nameAr,
             name_en: editingAddon.nameAr,
             price: editingAddon.price.replace(/\s*EGP\s*$/i, ""),
-            products: editingAddon.productIds.length
-              ? editingAddon.productIds
-              : productIdsForScope("all", productOptions),
             is_active: true,
           }),
         },
@@ -2392,9 +2295,6 @@ export function AddonsPage() {
       formData.set("name_ar", addonNameAr.trim());
       formData.set("name_en", addonNameAr.trim());
       formData.set("price", addonPrice.trim());
-      productIdsForScope(addonProductScope, productOptions).forEach((productId) => {
-        formData.append("products", productId);
-      });
       if (addonImageFile) formData.set("image", addonImageFile);
 
       const response = await apiFetch(adminApiPaths.productAdditions, {
@@ -2515,11 +2415,7 @@ export function AddonsPage() {
                       <span key={`index-${addon.id}`} className="text-sm font-bold text-muted-foreground">
                         {pageStartIndex + addonIndex + 1}
                       </span>,
-                      <AddonIdentity
-                        key={`identity-${addon.id}`}
-                        addon={addon}
-                        productOptions={productOptions}
-                      />,
+                      <AddonIdentity key={`identity-${addon.id}`} addon={addon} />,
                       <AddonInfoPill key={`category-${addon.id}`}>{addon.category}</AddonInfoPill>,
                       <AddonPriceCell key={`price-${addon.id}`} price={addon.price} />,
                       <div key={`actions-${addon.id}`} className="flex items-center justify-center">
@@ -2548,7 +2444,6 @@ export function AddonsPage() {
                           <AddonEditPanel
                             draft={editingAddon}
                             categoryOptions={categoryOptions}
-                            productOptions={productOptions}
                             onChange={setEditingAddon}
                             onImageChange={handleEditAddonImageChange}
                             onCancel={cancelEditingAddon}
@@ -2736,17 +2631,8 @@ export function AddonsPage() {
                     placeholder="جبنة زيادة"
                   />
                 </Field>
-                <Field label="المنتجات">
-                  <AppSelect
-                    value={addonProductScope}
-                    onValueChange={setAddonProductScope}
-                    ariaLabel="اختيار منتجات الإضافة"
-                    className="h-9 bg-input"
-                    options={productSelectOptions(productOptions)}
-                  />
-                </Field>
               </div>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="تصنيف الإضافة">
                   <AppSelect
                     value={currentAddonFormCategory}
@@ -2765,15 +2651,6 @@ export function AddonsPage() {
                     value={addonPrice}
                     onChange={(event) => setAddonPrice(event.target.value)}
                     placeholder="EGP 0.00"
-                  />
-                </Field>
-                <Field label="المنتجات">
-                  <AppSelect
-                    value={addonProductScope}
-                    onValueChange={setAddonProductScope}
-                    ariaLabel="اختيار منتجات الإضافة"
-                    className="h-9 bg-input"
-                    options={productSelectOptions(productOptions)}
                   />
                 </Field>
               </div>

@@ -164,18 +164,6 @@ function image(record: BackendRecord) {
   return text(record, ["image", "image_url", "thumbnail", "thumbnail_url", "avatar_url"], fallbackImage);
 }
 
-function idList(value: unknown) {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .map((item) => {
-      if (typeof item === "string" || typeof item === "number") return String(item);
-      if (item && typeof item === "object") return id(item as BackendRecord, 0);
-      return "";
-    })
-    .filter(Boolean);
-}
-
 function price(record: BackendRecord) {
   const value = text(record, ["price", "amount"], "0");
   return /\bEGP\b/i.test(value) ? value : `${value} EGP`;
@@ -244,7 +232,6 @@ export function addonRowFromApi(record: BackendRecord, index: number): AddonRow 
     name: text(record, ["name_en", "name"], nameAr),
     nameAr,
     price: price(record),
-    productIds: idList(record.products),
     category:
       nestedName(record.classification) ||
       text(record, ["classification_name", "category"], "غير مصنف"),
