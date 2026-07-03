@@ -46,6 +46,7 @@ type BackendAddress = {
   name?: string | null;
   latitude?: string | null;
   longitude?: string | null;
+  is_default?: boolean | null;
 };
 
 type BackendOrder = {
@@ -138,8 +139,6 @@ type ProductVariantOption = {
   price: number;
   available: boolean;
 };
-
-type AssignmentFilter = "all" | "ready_unassigned" | "assigned" | "unassigned";
 
 const statusOptions: BackendOrderStatus[] = [
   "pending",
@@ -283,8 +282,25 @@ function representativeName(order: BackendOrder) {
     .join(" ") || `مندوب #${representative.id}`;
 }
 
-function courierFilterName(courier: BackendDashboardUser) {
-  return fullNameFromBackendUser(courier) || `مندوب #${courier.id}`;
+function customerDisplayName(user: BackendDashboardUser) {
+  return fullNameFromBackendUser(user) || `عميل #${user.id}`;
+}
+
+function customerSearchText(user: BackendDashboardUser) {
+  return [
+    customerDisplayName(user),
+    user.username,
+    user.email,
+    user.phone,
+    user.id,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function addressLabel(address: BackendAddress) {
+  return address.name?.trim() || `عنوان #${address.id}`;
 }
 
 function representativeHref(order: BackendOrder) {
@@ -302,12 +318,9 @@ export function BackendOrdersPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const [orders, setOrders] = useState<BackendOrder[]>([]);
-  const [couriers, setCouriers] = useState<BackendDashboardUser[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | BackendOrderStatus>("all");
   const [deliveryType, setDeliveryType] = useState<"all" | "fixed_area" | "manual_quote">("all");
-  const [assignment, setAssignment] = useState<AssignmentFilter>("all");
-  const [courierId, setCourierId] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -316,22 +329,10 @@ export function BackendOrdersPage() {
     setLoading(true);
     setError(null);
     try {
-      const [ordersResponse, usersResponse] = await Promise.all([
-        apiFetch("orders/"),
-        apiFetch("auth/users/"),
-      ]);
-      const [ordersData, usersData] = await Promise.all([
-        apiResponseData(ordersResponse),
-        apiResponseData(usersResponse),
-      ]);
+      const ordersResponse = await apiFetch("orders/");
+      const ordersData = await apiResponseData(ordersResponse);
       if (!ordersResponse.ok) throw new Error(apiError(ordersData, "تعذر تحميل الطلبات."));
-      if (!usersResponse.ok) throw new Error(apiError(usersData, "تعذر تحميل المندوبين."));
       setOrders(apiListData(ordersData));
-      setCouriers(
-        Array.isArray(usersData)
-          ? usersData.filter(isBackendDashboardUser).filter((user) => user.role === "representative")
-          : [],
-      );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر تحميل الطلبات.");
     } finally {
@@ -352,15 +353,6 @@ export function BackendOrdersPage() {
     return orders.filter((order) => {
       const matchesStatus = status === "all" || order.status === status;
       const matchesDeliveryType = deliveryType === "all" || order.delivery_type === deliveryType;
-      const representativeId = assignedRepresentativeId(order);
-      const isAssigned = Boolean(representativeId);
-      const matchesAssignment =
-        assignment === "all" ||
-        (assignment === "ready_unassigned" && order.status === "ready" && !isAssigned) ||
-        (assignment === "assigned" && isAssigned) ||
-        (assignment === "unassigned" && !isAssigned);
-      const matchesCourier =
-        courierId === "all" || String(representativeId ?? "") === courierId;
       const matchesQuery =
         !normalized ||
         [
@@ -377,9 +369,9 @@ export function BackendOrdersPage() {
           .join(" ")
           .toLowerCase()
           .includes(normalized);
-      return matchesStatus && matchesDeliveryType && matchesAssignment && matchesCourier && matchesQuery;
+      return matchesStatus && matchesDeliveryType && matchesQuery;
     });
-  }, [assignment, courierId, orders, query, status, deliveryType]);
+  }, [orders, query, status, deliveryType]);
 
   const totalPages = Math.max(1, Math.ceil(visibleOrders.length / ordersPageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -430,7 +422,7 @@ export function BackendOrdersPage() {
       </div>
 
       <Card className="mt-6 overflow-hidden">
-        <div className="grid gap-3 border-b p-4 md:grid-cols-[minmax(0,1fr)_190px_170px_190px_220px]">
+        <div className="grid gap-3 border-b p-4 md:grid-cols-[minmax(0,1fr)_190px_220px]">
           <label className="relative">
             <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -457,39 +449,6 @@ export function BackendOrdersPage() {
               })),
             ]}
             ariaLabel="فلترة حالة الطلب"
-            dir="rtl"
-            className="h-9"
-          />
-          <AppSelect
-            value={assignment}
-            onValueChange={(value) => {
-              setAssignment(value as AssignmentFilter);
-              setCurrentPage(1);
-            }}
-            options={[
-              { value: "all", label: "كل الإسنادات" },
-              { value: "ready_unassigned", label: "جاهزة للإسناد" },
-              { value: "assigned", label: "مسندة لمندوب" },
-              { value: "unassigned", label: "غير مسندة" },
-            ]}
-            ariaLabel="فلترة الإسناد"
-            dir="rtl"
-            className="h-9"
-          />
-          <AppSelect
-            value={courierId}
-            onValueChange={(value) => {
-              setCourierId(value);
-              setCurrentPage(1);
-            }}
-            options={[
-              { value: "all", label: "كل المندوبين" },
-              ...couriers.map((courier) => ({
-                value: String(courier.id),
-                label: courierFilterName(courier),
-              })),
-            ]}
-            ariaLabel="فلترة المندوب"
             dir="rtl"
             className="h-9"
           />
@@ -667,6 +626,14 @@ export function BackendCreateOrderPage() {
   const [addresses, setAddresses] = useState<BackendAddress[]>([]);
   const [selectedUser, setSelectedUser] = useState("");
   const [selectedAddress, setSelectedAddress] = useState("");
+  const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [createAddressOpen, setCreateAddressOpen] = useState(false);
+  const [addressName, setAddressName] = useState("");
+  const [addressLatitude, setAddressLatitude] = useState("");
+  const [addressLongitude, setAddressLongitude] = useState("");
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [orderDeliveryType, setOrderDeliveryType] = useState<"fixed_area" | "manual_quote">("fixed_area");
   const [paymentMethod, setPaymentMethod] = useState("cash_on_delivery");
   const [deliveryPrice, setDeliveryPrice] = useState("0");
   const [discount, setDiscount] = useState("0");
@@ -725,6 +692,58 @@ export function BackendCreateOrderPage() {
     setSelectedAddress(rows[0]?.id ? String(rows[0].id) : "");
   }
 
+  function resetAddressDraft() {
+    setAddressName("");
+    setAddressLatitude("");
+    setAddressLongitude("");
+  }
+
+  function selectCustomer(userId: string) {
+    setSelectedUser(userId);
+    setCustomerPickerOpen(false);
+    setCustomerQuery("");
+    setCreateAddressOpen(false);
+    resetAddressDraft();
+    void loadAddresses(userId);
+  }
+
+  async function createAddress() {
+    if (!selectedUser || !addressName.trim()) return;
+
+    setSavingAddress(true);
+    try {
+      const body: Record<string, string | number | boolean> = {
+        user_id: Number(selectedUser),
+        name: addressName.trim(),
+        isDefault: addresses.length === 0,
+      };
+      if (addressLatitude.trim()) body.latitude = addressLatitude.trim();
+      if (addressLongitude.trim()) body.longitude = addressLongitude.trim();
+
+      const response = await apiFetch("addresses/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await apiResponseData(response);
+      if (!response.ok) throw new Error(apiError(data, "تعذر إضافة عنوان العميل."));
+
+      const rows = Array.isArray(data) ? (data as BackendAddress[]) : [];
+      setAddresses(rows);
+      setSelectedAddress(rows[0]?.id ? String(rows[0].id) : "");
+      setCreateAddressOpen(false);
+      resetAddressDraft();
+      showSnackbar({ message: "تمت إضافة عنوان العميل.", tone: "success" });
+    } catch (reason) {
+      showSnackbar({
+        message: reason instanceof Error ? reason.message : "تعذر إضافة عنوان العميل.",
+        tone: "danger",
+      });
+    } finally {
+      setSavingAddress(false);
+    }
+  }
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadInitialData();
@@ -763,6 +782,18 @@ export function BackendCreateOrderPage() {
       .filter(Boolean)
       .sort((first, second) => first.localeCompare(second, "ar"));
   }, [variants]);
+
+  const selectedCustomer = useMemo(
+    () => users.find((user) => String(user.id) === selectedUser) ?? null,
+    [selectedUser, users],
+  );
+
+  const filteredCustomers = useMemo(() => {
+    const normalizedQuery = customerQuery.trim().toLowerCase();
+    if (!normalizedQuery) return users;
+
+    return users.filter((user) => customerSearchText(user).includes(normalizedQuery));
+  }, [customerQuery, users]);
 
   const filteredVariants = useMemo(() => {
     const normalizedQuery = productQuery.trim().toLowerCase();
@@ -881,40 +912,108 @@ export function BackendCreateOrderPage() {
             <div className="grid gap-4">
               <Field label="العميل">
                 <input required type="hidden" value={selectedUser} readOnly />
-                <AppSelect
-                  value={selectedUser}
-                  onValueChange={(value) => {
-                    setSelectedUser(value);
-                    void loadAddresses(value);
-                  }}
-                  placeholder="اختر العميل"
-                  ariaLabel="اختيار العميل"
-                  className="h-10 bg-input"
-                  contentClassName="max-h-[360px]"
-                  options={users.map((user) => ({
-                    value: String(user.id),
-                    label: `${fullNameFromBackendUser(user)} - ${user.phone}`,
-                  }))}
-                />
+                <button
+                  type="button"
+                  onClick={() => setCustomerPickerOpen(true)}
+                  className={cn(
+                    "flex h-11 w-full items-center justify-between gap-3 rounded-md border bg-input px-3 py-2 text-start text-sm shadow-sm transition hover:border-primary/45 hover:bg-accent/60",
+                    !selectedCustomer && "text-muted-foreground",
+                  )}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold">
+                      {selectedCustomer ? customerDisplayName(selectedCustomer) : "اختر العميل"}
+                    </span>
+                    <span className="mt-1 block truncate text-xs text-muted-foreground">
+                      {selectedCustomer
+                        ? [selectedCustomer.username ? `@${selectedCustomer.username}` : "", selectedCustomer.phone]
+                            .filter(Boolean)
+                            .join(" - ")
+                        : "ابحث بالاسم أو اسم المستخدم"}
+                    </span>
+                  </span>
+                  <Search className="size-4 shrink-0 text-primary" />
+                </button>
               </Field>
 
               <Field label="عنوان التوصيل">
                 <input required type="hidden" value={selectedAddress} readOnly />
-                <AppSelect
-                  value={selectedAddress}
-                  onValueChange={setSelectedAddress}
-                  placeholder="اختر العنوان"
-                  ariaLabel="اختيار عنوان التوصيل"
-                  className="h-10 bg-input"
-                  disabled={!selectedUser}
-                  options={addresses.map((address) => ({
-                    value: String(address.id),
-                    label: address.name ?? `عنوان #${address.id}`,
-                  }))}
-                />
+                <div className="grid gap-2">
+                  <div className="flex gap-2">
+                    <AppSelect
+                      value={selectedAddress}
+                      onValueChange={setSelectedAddress}
+                      placeholder="اختر العنوان"
+                      ariaLabel="اختيار عنوان التوصيل"
+                      className="h-10 bg-input"
+                      disabled={!selectedUser}
+                      options={addresses.map((address) => ({
+                        value: String(address.id),
+                        label: addressLabel(address),
+                      }))}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 shrink-0"
+                      disabled={!selectedUser}
+                      onClick={() => setCreateAddressOpen((open) => !open)}
+                    >
+                      <Plus className="size-4" />
+                      عنوان
+                    </Button>
+                  </div>
+                  {createAddressOpen ? (
+                    <div className="grid gap-2 rounded-md border bg-muted/15 p-3">
+                      <Input
+                        value={addressName}
+                        onChange={(event) => setAddressName(event.target.value)}
+                        placeholder="عنوان التوصيل"
+                        className="h-10"
+                      />
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <Input
+                          value={addressLatitude}
+                          onChange={(event) => setAddressLatitude(event.target.value)}
+                          placeholder="Latitude"
+                          dir="ltr"
+                          className="h-10"
+                        />
+                        <Input
+                          value={addressLongitude}
+                          onChange={(event) => setAddressLongitude(event.target.value)}
+                          placeholder="Longitude"
+                          dir="ltr"
+                          className="h-10"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={savingAddress}
+                          onClick={() => {
+                            setCreateAddressOpen(false);
+                            resetAddressDraft();
+                          }}
+                        >
+                          إلغاء
+                        </Button>
+                        <Button
+                          type="button"
+                          disabled={savingAddress || !addressName.trim()}
+                          onClick={() => void createAddress()}
+                        >
+                          {savingAddress ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+                          إضافة
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </Field>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
                 <Field label="طريقة الدفع">
                   <AppSelect
                     value={paymentMethod}
@@ -924,6 +1023,18 @@ export function BackendCreateOrderPage() {
                     className="h-11 bg-input"
                     options={[
                       { value: "cash_on_delivery", label: "الدفع عند الاستلام" },
+                    ]}
+                  />
+                </Field>
+                <Field label="نوع التوصيل">
+                  <AppSelect
+                    value={orderDeliveryType}
+                    onValueChange={(value) => setOrderDeliveryType(value as "fixed_area" | "manual_quote")}
+                    ariaLabel="نوع التوصيل"
+                    className="h-11 bg-input"
+                    options={[
+                      { value: "fixed_area", label: "توصيل" },
+                      { value: "manual_quote", label: "دليفري" },
                     ]}
                   />
                 </Field>
@@ -1023,6 +1134,7 @@ export function BackendCreateOrderPage() {
               ملخص الطلب
             </div>
             <SummaryRow label="إجمالي المنتجات" value={money(subtotal)} />
+            <SummaryRow label="نوع التوصيل" value={orderDeliveryType === "manual_quote" ? "دليفري" : "توصيل"} />
             <SummaryRow label="رسوم التوصيل" value={money(effectiveDeliveryPrice)} />
             <SummaryRow label="الخصم" value={money(discount)} />
             <div className="mt-4 border-t pt-4">
@@ -1063,8 +1175,156 @@ export function BackendCreateOrderPage() {
               setPickerLineId(null);
             }}
           />
+          <CustomerPicker
+            open={customerPickerOpen}
+            customers={filteredCustomers}
+            allCustomersCount={users.length}
+            selectedCustomerId={selectedUser}
+            query={customerQuery}
+            onQueryChange={setCustomerQuery}
+            onClose={() => setCustomerPickerOpen(false)}
+            onSelect={selectCustomer}
+          />
         </form>
       )}
+    </div>
+  );
+}
+
+function CustomerPicker({
+  open,
+  customers,
+  allCustomersCount,
+  selectedCustomerId,
+  query,
+  onQueryChange,
+  onClose,
+  onSelect,
+}: {
+  open: boolean;
+  customers: BackendDashboardUser[];
+  allCustomersCount: number;
+  selectedCustomerId: string;
+  query: string;
+  onQueryChange: (value: string) => void;
+  onClose: () => void;
+  onSelect: (customerId: string) => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+
+    const scrollY = window.scrollY;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousOverflow = document.body.style.overflow;
+    const previousPosition = document.body.style.position;
+    const previousTop = document.body.style.top;
+    const previousWidth = document.body.style.width;
+
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+
+    return () => {
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.overflow = previousOverflow;
+      document.body.style.position = previousPosition;
+      document.body.style.top = previousTop;
+      document.body.style.width = previousWidth;
+      window.scrollTo(0, scrollY);
+    };
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/45 px-4 py-6 backdrop-blur-sm">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="customer-picker-title"
+        className="flex max-h-[86vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border bg-background shadow-2xl"
+      >
+        <div className="flex items-start justify-between gap-4 border-b px-5 py-4">
+          <div>
+            <h2 id="customer-picker-title" className="text-base font-bold">
+              اختيار العميل
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              ابحث بالاسم أو اسم المستخدم أو رقم الهاتف.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={onClose}
+            aria-label="إغلاق اختيار العميل"
+            className="size-9 rounded-full bg-muted/30"
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+
+        <div className="border-b bg-muted/15 p-4">
+          <label className="relative block">
+            <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="اسم العميل أو اسم المستخدم..."
+              className="h-11 ps-9"
+              autoFocus
+            />
+          </label>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          {customers.length > 0 ? (
+            <div className="grid gap-2">
+              {customers.map((customer) => {
+                const selected = String(customer.id) === selectedCustomerId;
+
+                return (
+                  <button
+                    key={customer.id}
+                    type="button"
+                    onClick={() => onSelect(String(customer.id))}
+                    className={cn(
+                      "flex min-h-20 items-center justify-between gap-3 rounded-md border bg-card p-4 text-start shadow-sm transition hover:border-primary/45 hover:bg-accent/45",
+                      selected && "border-primary/55 bg-primary/10",
+                    )}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-bold">{customerDisplayName(customer)}</span>
+                      <span className="mt-1 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
+                        {customer.username ? <span dir="ltr">@{customer.username}</span> : null}
+                        {customer.phone ? <span dir="ltr">{customer.phone}</span> : null}
+                        {customer.email ? <span dir="ltr">{customer.email}</span> : null}
+                      </span>
+                    </span>
+                    {selected ? (
+                      <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+                        <Check className="size-4" />
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex min-h-48 flex-col items-center justify-center rounded-lg border bg-muted/10 px-4 text-center">
+              <Search className="mb-3 size-8 text-muted-foreground" />
+              <div className="text-sm font-semibold">لا يوجد عملاء مطابقون</div>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t bg-muted/10 px-5 py-3 text-xs text-muted-foreground">
+          ظاهر {customers.length} من {allCustomersCount} عميل
+        </div>
+      </div>
     </div>
   );
 }
