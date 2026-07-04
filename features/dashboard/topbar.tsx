@@ -6,6 +6,7 @@ import { Bell, ChevronLeft, PanelRight } from "lucide-react";
 
 import type { BreadcrumbItem } from "./types";
 import { useDashboardI18n } from "./i18n";
+import { useDashboardNotifications } from "./notifications-context";
 import { Button } from "./primitives";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ export function Topbar({
   onToggleCollapsed: () => void;
 }) {
   const { t } = useDashboardI18n();
+  const { unreadCount } = useDashboardNotifications();
   const lastScrollYRef = useRef(0);
   const [hidden, setHidden] = useState(false);
 
@@ -97,9 +99,14 @@ export function Topbar({
           href="/notifications"
           aria-label={t("profile.notifications")}
           title={t("profile.notifications")}
-          className="inline-flex size-9 items-center justify-center rounded-md border border-border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+          className="relative inline-flex size-9 items-center justify-center rounded-md border border-border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
         >
           <Bell className="size-4" />
+          {unreadCount > 0 ? (
+            <span className="absolute -end-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold leading-none text-primary-foreground">
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          ) : null}
         </Link>
       </div>
     </header>

@@ -11,13 +11,17 @@ import {
 import { useDashboardCustomization } from "./customization";
 import { DashboardOfflineBanner } from "./offline-banner";
 import { SnackbarProvider } from "./snackbar";
+import { AdminOrderReviewBlocker } from "./admin-order-review-blocker";
+import { DashboardNotificationsProvider } from "./notifications-context";
 import { cn } from "@/lib/utils";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <DashboardI18nProvider>
       <SnackbarProvider>
-        <DashboardLayoutContent>{children}</DashboardLayoutContent>
+        <DashboardNotificationsProvider>
+          <DashboardLayoutContent>{children}</DashboardLayoutContent>
+        </DashboardNotificationsProvider>
       </SnackbarProvider>
     </DashboardI18nProvider>
   );
@@ -40,6 +44,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     <DashboardAutoTranslate>
       <div className="min-h-screen w-full bg-background text-foreground">
         <DashboardOfflineBanner />
+        <AdminOrderReviewBlocker />
         {mobileNavOpen ? (
           <button
             className="fixed inset-0 z-20 bg-foreground/30 backdrop-blur-[1px] lg:hidden"

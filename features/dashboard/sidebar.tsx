@@ -23,6 +23,7 @@ import { DashboardImage } from "./dashboard-image";
 import { useDashboardCustomization } from "./customization";
 import { useSidebarGroups } from "./hooks";
 import { useDashboardI18n } from "./i18n";
+import { useDashboardNotifications } from "./notifications-context";
 import { currentUser } from "./profile-data";
 import { branchOptions } from "./reference-data";
 import type { PageKey } from "./types";
@@ -87,6 +88,7 @@ export function Sidebar({
   const { logout: endSession } = useAuth();
   const { isGroupOpen, toggleGroup } = useSidebarGroups();
   const { direction, language, pageTitle, t } = useDashboardI18n();
+  const { unreadCount } = useDashboardNotifications();
   const { customization } = useDashboardCustomization();
   const iconOnly = collapsed && !mobileOpen;
   const branchMenuRef = useRef<HTMLDivElement>(null);
@@ -643,9 +645,11 @@ export function Sidebar({
               <span className="min-w-0 flex-1 truncate text-start">
                 {t("profile.notifications")}
               </span>
-              <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
-                2
-              </span>
+              {unreadCount > 0 ? (
+                <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              ) : null}
             </Link>
 
             <div className="my-1 h-px bg-sidebar-border" />
