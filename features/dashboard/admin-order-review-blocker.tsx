@@ -17,6 +17,24 @@ import {
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { cn } from "@/lib/utils";
+import {
+  deliveryLaterLabel,
+  getDeliveryAreaName as orderDeliveryAreaName,
+  getDeliveryDestination,
+  getDeliveryPriceLabel,
+  getDeliveryTypeLabel,
+  getManualArea,
+  getManualCity,
+  getMarketCount,
+  getOrderMarketsSummary,
+  getOrderScopeLabel,
+  getServiceCityName as orderServiceCityName,
+  isGeneralOrder,
+  isMultiMarket,
+  isServiceCityOrder,
+  type DashboardOrderLike,
+} from "./order-display";
+import { useDashboardNotifications } from "./notifications-context";
 import { Badge, Button, CurrencyText } from "./primitives";
 import { useSnackbar } from "./snackbar";
 import { apiResponseData, firstApiError } from "./users/api-users";
@@ -139,6 +157,10 @@ function orderId(order: ApiRecord | null) {
   return textAt(order, [["id"], ["order_id"], ["orderId"]], "");
 }
 
+function orderLike(order: ApiRecord): DashboardOrderLike {
+  return order as DashboardOrderLike;
+}
+
 function customerName(order: ApiRecord) {
   const customer = recordAt(order, ["customer"]);
   if (customer) {
@@ -158,7 +180,7 @@ function customerName(order: ApiRecord) {
 }
 
 function marketName(order: ApiRecord) {
-  return textAt(order, [["market", "name"], ["market_name"], ["shop", "name"], ["shop_name"]]);
+  return getOrderMarketsSummary(orderLike(order));
 }
 
 function marketBranch(order: ApiRecord) {
@@ -166,26 +188,11 @@ function marketBranch(order: ApiRecord) {
 }
 
 function serviceCityName(order: ApiRecord) {
-  return textAt(order, [
-    ["service_city", "name"],
-    ["serviceCity", "name"],
-    ["service_city_name"],
-    ["city", "name"],
-    ["city_name"],
-  ]);
+  return orderServiceCityName(orderLike(order)) || "-";
 }
 
 function deliveryAreaName(order: ApiRecord) {
-  return textAt(order, [
-    ["delivery_area", "name"],
-    ["deliveryArea", "name"],
-    ["delivery_area_name"],
-    ["custom_delivery_area"],
-  ], "");
-}
-
-function hasDeliveryArea(order: ApiRecord) {
-  return Boolean(recordAt(order, ["delivery_area"]) || deliveryAreaName(order));
+  return orderDeliveryAreaName(orderLike(order)) || getManualArea(orderLike(order)) || "";
 }
 
 function moneyLabel(value: unknown, missing = "-") {
@@ -215,28 +222,38 @@ function dateTimeLabel(value: unknown) {
 }
 
 function deliveryDetails(order: ApiRecord) {
-  const rawType = textAt(order, [["delivery_type"], ["deliveryType"]], "")
-    .trim()
-    .toLowerCase();
-  const areaExists = hasDeliveryArea(order);
-  const fixedArea = areaExists && (rawType === "fixed_area" || rawType === "");
+  const typedOrder = orderLike(order);
+  const fixedArea = isServiceCityOrder(typedOrder) && Boolean(orderDeliveryAreaName(typedOrder));
+
+  if (isGeneralOrder(typedOrder)) {
+    return {
+      type: "دليفري يدوي",
+      city: getManualCity(typedOrder),
+      area: getManualArea(typedOrder),
+      price: deliveryLaterLabel,
+      destination: getDeliveryDestination(typedOrder),
+      tone: "blue" as const,
+    };
+  }
 
   if (fixedArea) {
     return {
       type: "توصيل ثابت",
       city: serviceCityName(order),
       area: deliveryAreaName(order) || "-",
-      price: moneyLabel(valueAt(order, ["delivery_price"])),
+      price: getDeliveryPriceLabel(typedOrder),
+      destination: getDeliveryDestination(typedOrder),
       tone: "green" as const,
     };
   }
 
   return {
-    type: "دليفري / أخرى",
+    type: isServiceCityOrder(typedOrder) ? "دليفري يدوي داخل مدينة خدمة" : getDeliveryTypeLabel(typedOrder),
     city: serviceCityName(order),
-    area: "أخرى",
-    price: "يحدد لاحقًا",
-    tone: "red" as const,
+    area: deliveryAreaName(order) || "-",
+    price: deliveryLaterLabel,
+    destination: getDeliveryDestination(typedOrder),
+    tone: "blue" as const,
   };
 }
 
@@ -462,6 +479,7 @@ function InlineError({
 }
 
 function OrderDetails({ order }: { order: ApiRecord }) {
+  const typedOrder = orderLike(order);
   const delivery = deliveryDetails(order);
   const total = moneyLabel(valueAt(order, ["total_price"]));
 
@@ -478,18 +496,18 @@ function OrderDetails({ order }: { order: ApiRecord }) {
             </span>
           }
         />
-        <DetailItem label="المحل" value={marketName(order)} />
-        <DetailItem label="الفرع" value={marketBranch(order)} />
-        <DetailItem label="مدينة الخدمة" value={serviceCityName(order)} />
+        <DetailItem label="نوع الطلب" value={getOrderScopeLabel(typedOrder)} />
+        <DetailItem label="محلات الطلب" value={marketName(order)} />
+        <DetailItem label="عدد المحلات" value={String(getMarketCount(typedOrder) || "-")} />
+        <DetailItem label="نوع التجميع" value={isMultiMarket(typedOrder) ? "متعدد المحلات" : "محل واحد"} />
+        <DetailItem label="مدينة الخدمة" value={isGeneralOrder(typedOrder) ? "-" : serviceCityName(order)} />
+        <DetailItem label={isGeneralOrder(typedOrder) ? "المدينة اليدوية" : "المنطقة"} value={isGeneralOrder(typedOrder) ? getManualCity(typedOrder) : deliveryAreaName(order) || "-"} />
+        <DetailItem label={isGeneralOrder(typedOrder) ? "المنطقة اليدوية" : "الفرع"} value={isGeneralOrder(typedOrder) ? getManualArea(typedOrder) : marketBranch(order)} />
         <DetailItem
-          label="العنوان"
-          value={textAt(order, [
-            ["delivery_address", "name"],
-            ["delivery_address"],
-            ["deliveryAddress"],
-            ["address"],
-          ])}
+          label="عنوان التوصيل"
+          value={delivery.destination}
         />
+        <DetailItem label="review_status" value={textAt(order, [["review_status"], ["reviewStatus"]])} />
         <DetailItem
           label="الإجمالي"
           value={
@@ -577,6 +595,7 @@ function RepresentativeCard({
 export function AdminOrderReviewBlocker() {
   const { apiFetch, status, user } = useAuth();
   const { showSnackbar } = useSnackbar();
+  const { refreshUnreadCount } = useDashboardNotifications();
   const [phase, setPhase] = useState<BlockerPhase>("idle");
   const [blocked, setBlocked] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -591,6 +610,7 @@ export function AdminOrderReviewBlocker() {
 
   const currentOrder = orders[0] ?? null;
   const currentOrderId = orderId(currentOrder);
+  const currentOrderIsGeneral = currentOrder ? isGeneralOrder(orderLike(currentOrder)) : false;
   const shouldRun = status === "authenticated" && user?.role === "admin";
   const actionBusy =
     phase === "approving" ||
@@ -814,11 +834,12 @@ export function AdminOrderReviewBlocker() {
       setRepresentatives(nextRepresentatives);
       setError(representativesError);
       setPhase("selecting_representative");
+      void refreshUnreadCount();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر قبول الطلب.");
       setPhase("blocked");
     }
-  }, [apiFetch, currentOrderId, fetchRepresentatives]);
+  }, [apiFetch, currentOrderId, fetchRepresentatives, refreshUnreadCount]);
 
   const refreshRepresentatives = useCallback(async () => {
     if (!currentOrderId) {
@@ -832,7 +853,11 @@ export function AdminOrderReviewBlocker() {
       const nextRepresentatives = await fetchRepresentatives(currentOrderId);
       setRepresentatives(nextRepresentatives);
       if (nextRepresentatives.length === 0) {
-        setError("لا يوجد مندوبين متاحين لهذه المدينة حاليًا.");
+        setError(
+          currentOrderIsGeneral
+            ? "لا يوجد مندوبين متاحين حاليًا."
+            : "لا يوجد مندوبين متاحين لهذه المدينة حاليًا.",
+        );
       }
     } catch (reason) {
       setError(
@@ -841,7 +866,7 @@ export function AdminOrderReviewBlocker() {
     } finally {
       setRepresentativesLoading(false);
     }
-  }, [currentOrderId, fetchRepresentatives]);
+  }, [currentOrderId, currentOrderIsGeneral, fetchRepresentatives]);
 
   const assignRepresentative = useCallback(async () => {
     if (!currentOrderId) {
@@ -871,7 +896,10 @@ export function AdminOrderReviewBlocker() {
         message: "تم قبول الطلب وإرساله للمندوب.",
         tone: "success",
       });
-      await loadBlocker({ silent: true, ignoreBusy: true });
+      await Promise.all([
+        loadBlocker({ silent: true, ignoreBusy: true }),
+        refreshUnreadCount(),
+      ]);
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "تعذر إسناد الطلب للمندوب.",
@@ -882,6 +910,7 @@ export function AdminOrderReviewBlocker() {
     apiFetch,
     currentOrderId,
     loadBlocker,
+    refreshUnreadCount,
     selectedRepresentativeId,
     showSnackbar,
   ]);
@@ -909,12 +938,15 @@ export function AdminOrderReviewBlocker() {
         message: "تم رفض الطلب.",
         tone: "success",
       });
-      await loadBlocker({ silent: true, ignoreBusy: true });
+      await Promise.all([
+        loadBlocker({ silent: true, ignoreBusy: true }),
+        refreshUnreadCount(),
+      ]);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر رفض الطلب.");
       setPhase("blocked");
     }
-  }, [apiFetch, currentOrderId, loadBlocker, showSnackbar]);
+  }, [apiFetch, currentOrderId, loadBlocker, refreshUnreadCount, showSnackbar]);
 
   const orderSummary = useMemo(() => {
     if (!currentOrder) return null;
@@ -924,6 +956,9 @@ export function AdminOrderReviewBlocker() {
       id: orderId(currentOrder),
       customer: customerName(currentOrder),
       market: marketName(currentOrder),
+      scope: getOrderScopeLabel(orderLike(currentOrder)),
+      marketCount: getMarketCount(orderLike(currentOrder)),
+      marketMode: isMultiMarket(orderLike(currentOrder)) ? "متعدد المحلات" : "محل واحد",
       total: moneyLabel(valueAt(currentOrder, ["total_price"])),
       delivery,
     };
@@ -1012,7 +1047,17 @@ export function AdminOrderReviewBlocker() {
                       <span className="text-muted-foreground">
                         {orderSummary.customer} - {orderSummary.market}
                       </span>
+                      <Badge tone="secondary">{orderSummary.scope}</Badge>
+                      <Badge tone={orderSummary.marketMode === "متعدد المحلات" ? "green" : "secondary"}>
+                        {orderSummary.marketMode}
+                      </Badge>
+                      <span className="text-muted-foreground">
+                        عدد المحلات: {orderSummary.marketCount || "-"}
+                      </span>
                       <Badge tone={orderSummary.delivery.tone}>{orderSummary.delivery.type}</Badge>
+                      <span className="text-muted-foreground">
+                        {orderSummary.delivery.destination}
+                      </span>
                     </div>
                   </div>
                 ) : null}
@@ -1022,7 +1067,9 @@ export function AdminOrderReviewBlocker() {
                     <div>
                       <h3 className="text-lg font-bold">اختيار المندوب</h3>
                       <p className="text-sm text-muted-foreground">
-                        اختر مندوبًا من نفس مدينة الخدمة لإرسال الطلب.
+                        {currentOrderIsGeneral
+                          ? "طلب عام - اختر أي مندوب متاح يدوياً"
+                          : "اختر مندوبًا من نفس مدينة الخدمة لإرسال الطلب."}
                       </p>
                     </div>
                     <Button
@@ -1042,7 +1089,9 @@ export function AdminOrderReviewBlocker() {
 
                   {representatives.length === 0 ? (
                     <div className="rounded-md border border-dashed bg-muted/20 px-4 py-8 text-center text-sm font-semibold text-muted-foreground">
-                      لا يوجد مندوبين متاحين لهذه المدينة حاليًا.
+                      {currentOrderIsGeneral
+                        ? "لا يوجد مندوبين متاحين حاليًا."
+                        : "لا يوجد مندوبين متاحين لهذه المدينة حاليًا."}
                     </div>
                   ) : (
                     <div className="grid gap-3 md:grid-cols-2">

@@ -34,6 +34,14 @@ import {
 import { useAuth } from "@/features/auth/auth-provider";
 import { cn } from "@/lib/utils";
 import { DashboardImage } from "../dashboard-image";
+import {
+  getDeliveryDestination,
+  getMarketCount,
+  getOrderMarketsSummary,
+  getOrderScopeLabel,
+  isMultiMarket,
+  type DashboardOrderLike,
+} from "../order-display";
 import { AppSelect, Badge, Button, Card, Field, Input, PageTitle, Pagination } from "../primitives";
 import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
@@ -46,12 +54,11 @@ import {
 } from "../users/api-users";
 
 type DeliveryArea = { id: number; name: string; is_active: boolean };
-type AdminOrder = {
+type AdminOrder = DashboardOrderLike & {
   id: number;
   status: string;
   total_price: string;
   customer?: { first_name?: string; last_name?: string; phone?: string };
-  delivery_address?: { name?: string } | null;
   assigned_representative?: { id: number } | null;
 };
 type Draft = {
@@ -93,7 +100,17 @@ function orderCustomerName(order: AdminOrder) {
 }
 
 function orderLabel(order: AdminOrder) {
-  return `#${order.id} - ${orderCustomerName(order)} - ${order.delivery_address?.name ?? "بدون عنوان"} - EGP ${order.total_price}`;
+  const marketCount = getMarketCount(order);
+  const marketMode = isMultiMarket(order) ? "متعدد المحلات" : "محل واحد";
+  return [
+    `#${order.id}`,
+    orderCustomerName(order),
+    getOrderScopeLabel(order),
+    getOrderMarketsSummary(order),
+    marketCount ? `${marketCount} محلات` : marketMode,
+    getDeliveryDestination(order),
+    `EGP ${order.total_price}`,
+  ].filter(Boolean).join(" - ");
 }
 
 function normalizeSearch(value: string) {

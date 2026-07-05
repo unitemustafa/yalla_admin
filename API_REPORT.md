@@ -1,80 +1,236 @@
-# Complete API Report
+# Yalla Backend API Report
 
-## 1. Summary
+آخر تحقق: 2026-07-05  
+مصدر التحقق: الكود الحالي في هذا المستودع مع `config.test_settings` وبيانات `seed_demo_data --reset --yes-delete-all --no-media`.  
+الهدف من هذا الملف: مرجع ربط واضح للعميل، لوحة الإدارة، والمندوب. الأمثلة مأخوذة من استجابات فعلية، لكن قيم `id` والتواريخ أمثلة seed وقد تختلف بعد إعادة إنشاء البيانات.
 
-- Total endpoints found: 82 functional URL groups, about 124 unique method-level operations.
-- Apps scanned: `accounts`, `locations`, `markets`, `catalog`, `offers`, `orders`, `notifications`, `dashboard`, `config`.
-- URL style: explicit `path(...)`; no DRF routers found.
-- Auth registers slash/no-slash aliases for most auth/account endpoints.
-- Addresses are exposed under both `/api/v1/locations/addresses/` and `/api/v1/addresses/`.
-- This report was generated from actual URL, view, serializer, model, and test code.
+## قواعد عامة
 
-## 2. APIs by App
+- كل المسارات تحت `/api/v1/`.
+- استخدم `Content-Type: application/json` إلا في رفع الصور والملفات.
+- المصادقة: `Authorization: Bearer <accessToken>`.
+- مبالغ المال ترجع غالباً كنص عشري مثل `"180.00"`، وبعض حقول المدن القديمة ترجع رقم مثل `45.0` في اختيار المنطقة.
+- قيم `null` مهمة في الربط، خصوصاً `service_city`, `delivery_area`, `delivery_price` في الطلب العام.
+- بعض endpoints ترجع Array مباشرة، وبعضها يرجع object، وبعض البحث يرجع pagination `{count,next,previous,results}`.
+- `/api/v1/orders/create/` للعميل يرجع **قائمة تحتوي طلب أب واحد** حتى لو فيه أكثر من محل: `[{ ...order }]`.
+- النظام الحالي مصري في seed demo: أرقام `+20`، مدن مثل القاهرة والجيزة والإسكندرية. لا تعتمد على أي أمثلة قديمة تخص دول أخرى.
 
-## 1. Auth APIs
+## بيانات دخول Demo
 
-### API: Signup
+| الدور | Endpoint | Email | Password |
+|---|---|---|---|
+| Admin | `/api/v1/auth/login/admin/` | `seed.admin@yalla.seed` | `SeedPass1!` |
+| Client service-city | `/api/v1/auth/login/client/` | `seed.amina@yalla.seed` | `SeedPass1!` |
+| Client general | `/api/v1/auth/login/client/` | `seed.karim@yalla.seed` | `SeedPass1!` |
+| Courier | `/api/v1/auth/login/representative/` | `seed.courier1@yalla.seed` | `SeedPass1!` |
 
-Method: `POST`  
-URL: `/api/v1/auth/signup` and `/api/v1/auth/signup/`  
-Auth: No auth  
-View: `RegisterView`  
-Serializer: `RegisterSerializer`
+## أهم القواعد للربط
+
+- يجب اختيار `market_region` قبل عرض home/offers/search/checkout للعميل.
+- `mode=general` يعني السوق العام فقط، حتى لو `manual_city` مكتوبة `القاهرة`.
+- طلب `general` دائماً يطبّع التوصيل هكذا: `service_city=null`, `delivery_area=null`, `delivery_type=delivery`, `delivery_price=null`.
+- عنوان طلب `general` يجب أن يكون عنواناً يدوياً عاماً: `service_city_id=null`, `delivery_area_id=null`, مع `manual_city` و`manual_area` كنص.
+- طلب `service_city` يحتاج `service_city`. يستخدم `fixed_area` فقط إذا كان العنوان مربوطاً بـ `delivery_area` نشطة وتابعة لنفس المدينة، وإلا يكون `delivery_type=delivery` و`delivery_area=null`.
+- سعر توصيل المنطقة الثابتة يضاف مرة واحدة على الطلب الأب، وليس مرة لكل محل داخل multi-market.
+- المندوبون للطلب العام: أي مندوب نشط لديه courier profile. طلب المدينة: المطابقة حسب `Order.service_city` فقط.
+
+## قيم ثابتة مهمة
+
+| الحقل | القيم |
+|---|---|
+| `role` | `client`, `admin`, `representative` |
+| `market_region.mode` | `general`, `service_city`, أو `null` لمسح الاختيار |
+| `market.scope` / `offer.scope` / `order_scope` | `general`, `service_city` |
+| `delivery_type` | `delivery`, `fixed_area` |
+| `order.status` | `pending`, `confirmed`, `under_preparation`, `ready`, `picked_up`, `on_the_way`, `delivered`, `failed_delivery`, `cancelled` |
+| `review_status` | `pending_review`, `approved`, `rejected` |
+| `offer.type` | `package`, `flash`, `discount`, `announcement`, `delivery` |
+| `offer.status` | `active`, `inactive`, `expired` |
+
+## رسائل رفض Scope كما هي
+
+استخدم هذه الرسائل كما هي في عرض الأخطاء:
+
+```text
+لا يمكن دمج محلات عامة مع محلات مدينة في نفس الطلب
+لا يمكن استخدام عرض مدينة داخل طلب عام
+لا يمكن استخدام عرض عام داخل طلب مدينة
+لا يمكن دمج منتجات من مدن مختلفة في نفس الطلب
+```
+
+## فهرس Endpoints
+
+### Auth
+
+| Method | Path | Auth | ملاحظات |
+|---|---|---|---|
+| POST | `/api/v1/auth/signup/` | عام | تسجيل وإرسال OTP |
+| POST | `/api/v1/auth/verify-email/` | عام | تفعيل التسجيل بالـ OTP |
+| POST | `/api/v1/auth/resend-verification/` | عام | إعادة إرسال OTP |
+| POST | `/api/v1/auth/login/` | عام | تسجيل دخول عام |
+| POST | `/api/v1/auth/login/client/` | عام | دخول عميل فقط |
+| POST | `/api/v1/auth/login/representative/` | عام | دخول مندوب فقط |
+| POST | `/api/v1/auth/login/admin/` | عام | دخول إدارة فقط |
+| POST | `/api/v1/auth/refresh/` | عام | تحديث access token |
+| POST | `/api/v1/auth/logout/` | مستخدم | خروج |
+| GET/PATCH | `/api/v1/auth/me/` | مستخدم | بيانات المستخدم الحالي |
+| GET/PATCH | `/api/v1/auth/client/profile/` | Client | ملف العميل |
+| GET/POST | `/api/v1/auth/users/` | Admin | إدارة المستخدمين |
+| GET/PATCH/DELETE | `/api/v1/auth/users/{user_id}/` | Admin | مستخدم محدد |
+| GET | `/api/v1/auth/representatives/` | Admin | المندوبون |
+| GET | `/api/v1/auth/check-username/` | عام | فحص username |
+| GET | `/api/v1/auth/check-email/` | عام | فحص email |
+| GET | `/api/v1/auth/check-phone/` | عام | فحص phone |
+| POST | `/api/v1/auth/forgot-password/` | عام | طلب إعادة كلمة المرور |
+| POST | `/api/v1/auth/reset-password/` | عام | إعادة كلمة المرور |
+
+مسارات auth تعمل مع slash وبدون slash.
+
+### Market Region
+
+| Method | Path | Auth | ملاحظات |
+|---|---|---|---|
+| GET | `/api/v1/market-region/options/` | مستخدم | الخيارات المتاحة مع الاختيار الحالي |
+| GET/PATCH | `/api/v1/market-region/me/` | مستخدم | قراءة/تعديل اختيار السوق |
+| POST | `/api/v1/market-region/detect/` | مستخدم | اقتراح مدينة حسب latitude/longitude |
+
+### Locations / Addresses
+
+| Method | Path | Auth | ملاحظات |
+|---|---|---|---|
+| GET/POST | `/api/v1/locations/service-cities/` | Admin | مدن الخدمة |
+| GET/PATCH/DELETE | `/api/v1/locations/service-cities/{city_id}/` | Admin | مدينة خدمة |
+| GET/POST | `/api/v1/locations/delivery-areas/` | مستخدم حسب الصلاحية | مناطق التوصيل |
+| GET/PATCH/DELETE | `/api/v1/locations/delivery-areas/{area_id}/` | مستخدم حسب الصلاحية | منطقة توصيل |
+| GET/POST | `/api/v1/locations/addresses/` | مستخدم | عناوين المستخدم، Admin يرسل `user_id` |
+| GET | `/api/v1/locations/addresses/default/` | مستخدم | العنوان الافتراضي |
+| GET/PATCH/DELETE | `/api/v1/locations/addresses/{address_id}/` | مستخدم | عنوان محدد |
+| POST | `/api/v1/locations/addresses/{address_id}/default/` | مستخدم | جعل العنوان افتراضياً |
+| GET/POST | `/api/v1/addresses/` | مستخدم | alias لنفس عناوين locations |
+
+### Home / Markets / Catalog / Offers
+
+| Method | Path | Auth | ملاحظات |
+|---|---|---|---|
+| GET | `/api/v1/home/` | مستخدم | Home حسب `market_region` |
+| GET | `/api/v1/home/search/` | مستخدم | بحث منتجات |
+| GET | `/api/v1/home/products/` | Client | منتجات حسب عنوان/منطقة العميل، paginated |
+| GET | `/api/v1/home/products/{product_id}/` | مستخدم | تفاصيل منتج للعرض |
+| GET | `/api/v1/home/classifications/` | مستخدم | تصنيفات وأسواق حسب المنطقة |
+| GET | `/api/v1/home/classifications/featured/` | مستخدم | featured فقط |
+| GET | `/api/v1/home/classifications/popular/` | مستخدم | popular فقط |
+| GET | `/api/v1/home/classifications/normal/` | مستخدم | normal فقط |
+| GET | `/api/v1/home/classifications/{classification_id}/markets/` | مستخدم | أسواق تصنيف |
+| GET/POST | `/api/v1/home/market-classifications/` | Admin | إدارة تصنيفات المحلات |
+| GET/PATCH/DELETE | `/api/v1/home/market-classifications/{classification_id}/` | Admin | تصنيف محل |
+| GET/POST | `/api/v1/home/markets/` | Admin | إدارة المحلات |
+| GET/PATCH/DELETE | `/api/v1/home/markets/{market_id}/` | Admin | محل محدد |
+| GET/POST | `/api/v1/offers/` | مستخدم | Admin يرى الكل وينشئ، Client يرى المتاح حسب المنطقة |
+| GET/PATCH/DELETE | `/api/v1/offers/{offer_id}/` | مستخدم | Admin يدير، Client يقرأ المتاح فقط |
+| GET/POST | `/api/v1/catalog/products/` | Admin | إدارة المنتجات |
+| GET/PATCH/DELETE | `/api/v1/catalog/products/{product_id}/` | Admin | منتج محدد |
+| GET | `/api/v1/catalog/products/likes/` | Client | المنتجات المعجب بها |
+| POST | `/api/v1/catalog/products/{product_id}/like/` | Client | إعجاب |
+| DELETE | `/api/v1/catalog/products/{product_id}/unlike/` | Client | إلغاء إعجاب |
+
+باقي مسارات `/api/v1/catalog/` الإدارية: `addition-classifications`, `category-classifications`, `product-categories`, `category-attributes`, `category-options`, `product-additions` بنفس نمط `GET/POST` للقائمة و`GET/PATCH/DELETE` للتفاصيل.
+
+### Orders
+
+| Method | Path | Auth | ملاحظات |
+|---|---|---|---|
+| GET | `/api/v1/orders/my/` | Client | طلبات العميل، يدعم `?status=` |
+| POST | `/api/v1/orders/preview/` | Client | معاينة السعر والتجميع قبل الإنشاء |
+| POST | `/api/v1/orders/create/` | Client | إنشاء طلب، يرجع `[order]` |
+| GET/POST | `/api/v1/orders/` | Admin | قائمة/إنشاء إداري |
+| GET/PATCH/DELETE | `/api/v1/orders/{order_id}/` | Admin | تفاصيل/تعديل/إلغاء |
+| PATCH | `/api/v1/orders/{order_id}/status/` | Admin | تحديث الحالة |
+| PATCH | `/api/v1/orders/{order_id}/assignment/` | Admin | إسناد مندوب |
+| GET | `/api/v1/admin/order-review/blocker/` | Admin | هل يوجد طلبات مراجعة عالقة |
+| POST | `/api/v1/admin/orders/{order_id}/approve/` | Admin | اعتماد الطلب وإرجاع المندوبين المتاحين |
+| POST | `/api/v1/admin/orders/{order_id}/reject/` | Admin | رفض الطلب |
+| GET | `/api/v1/admin/orders/{order_id}/service-city-representatives/` | Admin | مندوبون مؤهلون للطلب |
+
+### Courier / Notifications / Dashboard
+
+| Method | Path | Auth | ملاحظات |
+|---|---|---|---|
+| GET | `/api/v1/courier/orders/` | Courier | طلبات المندوب، يدعم `?status=` |
+| GET | `/api/v1/courier/orders/{order_id}/` | Courier | تفاصيل طلب مسند للمندوب |
+| PATCH | `/api/v1/courier/orders/{order_id}/status/` | Courier | انتقال الحالة |
+| GET | `/api/v1/notifications/` | مستخدم | إشعارات المستخدم، فلاتر: `unread`, `type`, `audience`, `is_blocking`, `is_resolved` |
+| PATCH | `/api/v1/notifications/{notification_id}/read/` | مستخدم | تعليم إشعار كمقروء |
+| POST | `/api/v1/notifications/mark-all-read/` | مستخدم | تعليم الكل كمقروء |
+| GET | `/api/v1/notifications/unread-count/` | مستخدم | عدد غير المقروء |
+| GET | `/api/v1/dashboard/overview/?from=YYYY-MM-DD&to=YYYY-MM-DD` | Admin | ملخص لوحة التحكم |
+
+## Auth Examples
+
+### Admin login
 
 Request:
 
 ```json
 {
-  "first_name": "Ali",
-  "last_name": "Hassan",
-  "username": "ali",
-  "email": "ali@example.com",
-  "phone": "01012345678",
-  "password": "Strong@123",
-  "password_confirm": "Strong@123",
-  "terms_accepted": true
+  "email": "seed.admin@yalla.seed",
+  "password": "SeedPass1!"
 }
 ```
 
-Success:
+Response `200`:
 
 ```json
 {
-  "detail": "Registration OTP sent.",
-  "email": "ali@example.com"
-}
-```
-
-Notes: creates inactive client user and sends registration OTP. Phone accepts Egypt/Algeria formats. Password requires length, uppercase, number, special char.
-
-### API: Verify Email
-
-Method: `POST`  
-URL: `/api/v1/auth/verify-email` and `/api/v1/auth/verify-email/`  
-Auth: No auth  
-View: `VerifyRegistrationOTPView`  
-Serializer: `EmailOTPSerializer`
-
-Request:
-
-```json
-{"email": "ali@example.com", "otp": "123456"}
-```
-
-Success:
-
-```json
-{
-  "accessToken": "...",
-  "refreshToken": "...",
-  "expiresIn": 300,
+  "accessToken": "<accessToken>",
+  "refreshToken": "<refreshToken>",
+  "expiresIn": 900,
   "user": {
     "id": "1",
-    "first_name": "Ali",
-    "last_name": "Hassan",
-    "username": "ali",
-    "email": "ali@example.com",
-    "phone": "+201012345678",
+    "first_name": "مدير",
+    "last_name": "يلا",
+    "username": "seed_admin",
+    "email": "seed.admin@yalla.seed",
+    "phone": "+201001000001",
+    "gender": "",
+    "birth_date": null,
+    "avatar_url": null,
+    "username_changed_at": null,
+    "role": "admin",
+    "has_password": true,
+    "courier_profile": null
+  }
+}
+```
+
+### Client login
+
+Request:
+
+```json
+{
+  "email": "seed.amina@yalla.seed",
+  "password": "SeedPass1!"
+}
+```
+
+Response `200`:
+
+```json
+{
+  "accessToken": "<accessToken>",
+  "refreshToken": "<refreshToken>",
+  "expiresIn": 900,
+  "user": {
+    "id": "2",
+    "first_name": "أمينة",
+    "last_name": "حسن",
+    "username": "seed_amina",
+    "email": "seed.amina@yalla.seed",
+    "phone": "+201001000002",
+    "gender": "",
+    "birth_date": null,
+    "avatar_url": null,
+    "username_changed_at": null,
     "role": "client",
     "has_password": true,
     "courier_profile": null
@@ -82,1755 +238,1334 @@ Success:
 }
 ```
 
-Errors:
+### Courier login
 
-```json
-{"otp": ["Invalid verification code."]}
-```
-
-### API: Resend Verification
-
-Method: `POST`  
-URL: `/api/v1/auth/resend-verification` and `/api/v1/auth/resend-verification/`  
-Auth: No auth  
-View: `ResendRegistrationOTPView`  
-Serializer: `ForgotPasswordSerializer`
-
-Request:
-
-```json
-{"email": "ali@example.com"}
-```
-
-Success:
-
-```json
-{"detail": "A new registration OTP has been sent."}
-```
-
-### API: Login
-
-Method: `POST`  
-URL: `/api/v1/auth/login` and `/api/v1/auth/login/`  
-Auth: No auth  
-View: `LoginView`  
-Serializer: `LoginSerializer`
-
-Request:
-
-```json
-{"identifier": "ali@example.com", "password": "Strong@123"}
-```
-
-Success: same token payload as verify email.
-
-Notes: `identifier` can be email, username, or phone. `email` is also accepted.
-
-### API: Client Login
-
-Method: `POST`  
-URL: `/api/v1/auth/login/client` and `/api/v1/auth/login/client/`  
-Auth: No auth  
-View: `ClientLoginView`  
-Serializer: `LoginSerializer`
-
-Notes: rejects non-client users.
-
-### API: Representative Login
-
-Method: `POST`  
-URL: `/api/v1/auth/login/representative` and `/api/v1/auth/login/representative/`  
-Auth: No auth  
-View: `RepresentativeLoginView`  
-Serializer: `LoginSerializer`
-
-Notes: courier users are stored as `role=representative`.
-
-### API: Admin Login
-
-Method: `POST`  
-URL: `/api/v1/auth/login/admin` and `/api/v1/auth/login/admin/`  
-Auth: No auth  
-View: `AdminLoginView`  
-Serializer: `LoginSerializer`
-
-### API: Refresh Token
-
-Method: `POST`  
-URL: `/api/v1/auth/refresh` and `/api/v1/auth/refresh/`  
-Auth: No auth  
-View: `RefreshTokenView`  
-Serializer: `EmailTokenRefreshSerializer`
-
-Request:
-
-```json
-{"refreshToken": "..."}
-```
-
-Success:
-
-```json
-{"accessToken": "...", "refreshToken": "..."}
-```
-
-### API: Logout
-
-Method: `POST`  
-URL: `/api/v1/auth/logout` and `/api/v1/auth/logout/`  
-Auth: Any authenticated user  
-View: `LogoutView`  
-Serializer: `LogoutSerializer`
-
-Request:
-
-```json
-{"refreshToken": "..."}
-```
-
-Success:
-
-```json
-{"detail": "Logout successful."}
-```
-
-### API: Forgot Password
-
-Method: `POST`  
-URL: `/api/v1/auth/forgot-password` and `/api/v1/auth/forgot-password/`  
-Auth: No auth  
-View: `ForgotPasswordView`  
-Serializer: `ForgotPasswordSerializer`
-
-Request:
-
-```json
-{"email": "ali@example.com"}
-```
-
-Success:
-
-```json
-{"detail": "If an active account exists, a password reset OTP has been sent."}
-```
-
-### API: Reset Password
-
-Method: `POST`  
-URL: `/api/v1/auth/reset-password` and `/api/v1/auth/reset-password/`  
-Auth: No auth  
-View: `ResetPasswordView`  
-Serializer: `ResetPasswordSerializer`
-
-Request:
+Response يحتوي `courier_profile` لأن الدور `representative`:
 
 ```json
 {
-  "email": "ali@example.com",
-  "otp": "123456",
-  "password": "NewStrong@123",
-  "password_confirm": "NewStrong@123"
-}
-```
-
-Success:
-
-```json
-{"detail": "Password reset successfully."}
-```
-
-## 2. Account/User APIs
-
-### API: Me
-
-Method: `GET`, `PATCH`, `DELETE`  
-URL: `/api/v1/auth/me` and `/api/v1/auth/me/`  
-Auth: Any authenticated user  
-View: `MeView`  
-Serializer: `UserSerializer`, `UserUpdateSerializer`, `DeleteAccountSerializer`
-
-PATCH request:
-
-```json
-{"first_name": "Ali", "username": "ali2", "phone": "01012345678"}
-```
-
-DELETE request:
-
-```json
-{"password": "Strong@123"}
-```
-
-Success:
-
-```json
-{
-  "id": "1",
-  "first_name": "Ali",
-  "last_name": "Hassan",
-  "username": "ali2",
-  "email": "ali@example.com",
-  "phone": "+201012345678",
-  "gender": "",
-  "birth_date": null,
-  "avatar_url": null,
-  "username_changed_at": "2026-07-03T...",
-  "role": "client",
-  "has_password": true,
-  "courier_profile": null
-}
-```
-
-Notes: DELETE soft-deletes user and blacklists outstanding tokens.
-
-### API: Client Profile
-
-Method: `PATCH`, `PUT`  
-URL: `/api/v1/auth/client/profile` and `/api/v1/auth/client/profile/`  
-Auth: Client token  
-View: `ClientProfileView`  
-Serializer: `UserUpdateSerializer`
-
-Notes: same update fields as `/me`, client-only.
-
-### API: Admin Users
-
-Method: `GET`, `POST`  
-URL: `/api/v1/auth/users` and `/api/v1/auth/users/`  
-Auth: Admin token  
-View: `AdminUserListCreateView`  
-Serializer: `AdminUserSerializer`, `AdminUserWriteSerializer`
-
-POST request:
-
-```json
-{
-  "first_name": "Courier",
-  "last_name": "One",
-  "username": "courier1",
-  "email": "courier@example.com",
-  "phone": "01022222222",
-  "password": "Strong@123",
-  "role": "representative",
-  "is_active": true,
-  "courier_profile": {
-    "vehicle_type": "bike",
-    "plate_number": "ABC123",
-    "service_city": 1,
-    "delivery_area": 2,
-    "max_active_orders": 3,
-    "is_available": true
-  }
-}
-```
-
-Success includes admin fields:
-
-```json
-{
-  "id": "2",
-  "username": "courier1",
-  "role": "representative",
-  "is_active": true,
-  "is_staff": false,
-  "is_superuser": false,
-  "courier_profile": {
-    "vehicle_type": "bike",
-    "plate_number": "ABC123",
-    "delivery_area": 2,
-    "delivery_area_name": "Nasr City",
-    "service_city": 1,
-    "service_city_name": "Cairo",
-    "max_active_orders": 3,
-    "is_available": true
-  }
-}
-```
-
-### API: Admin Representatives
-
-Method: `GET`  
-URL: `/api/v1/auth/representatives/`  
-Auth: Admin token  
-View: `AdminRepresentativeListView`  
-Serializer: `AdminUserSerializer`
-
-Notes: no no-slash alias found for this endpoint.
-
-### API: Admin User Detail
-
-Method: `GET`, `PATCH`, `DELETE`  
-URL: `/api/v1/auth/users/{user_id}` and `/api/v1/auth/users/{user_id}/`  
-Auth: Admin token  
-View: `AdminUserDetailView`  
-Serializer: `AdminUserSerializer`, `AdminUserWriteSerializer`
-
-Notes: DELETE soft-deletes. Courier with ready assigned orders cannot be deleted/disabled.
-
-### API: Availability Checks
-
-Method: `GET`  
-URLs:
-
-- `/api/v1/auth/check-username?username=ali`
-- `/api/v1/auth/check-email?email=ali@example.com`
-- `/api/v1/auth/check-phone?phone=01012345678`
-
-Auth: No auth  
-Views: `CheckUsernameView`, `CheckEmailView`, `CheckPhoneView`
-
-Success:
-
-```json
-{"available": true, "registered": false}
-```
-
-## 3. Market Region APIs
-
-### API: Region Options
-
-Method: `GET`  
-URL: `/api/v1/market-region/options/`  
-Auth: Any authenticated user  
-View: `MarketRegionOptionsView`  
-Serializer: direct response
-
-Success:
-
-```json
-{
-  "options": [
-    {"mode": "general", "label": "General", "service_city": null},
-    {
-      "mode": "service_city",
-      "label": "Cairo",
-      "service_city": {
-        "id": 1,
-        "name": "Cairo",
-        "delivery_price": "0.00",
-        "is_active": true
-      }
+  "accessToken": "<accessToken>",
+  "refreshToken": "<refreshToken>",
+  "expiresIn": 900,
+  "user": {
+    "id": "5",
+    "first_name": "أحمد",
+    "last_name": "مندوب",
+    "username": "seed_courier1",
+    "email": "seed.courier1@yalla.seed",
+    "phone": "+201001000004",
+    "gender": "",
+    "birth_date": null,
+    "avatar_url": null,
+    "username_changed_at": null,
+    "role": "representative",
+    "has_password": true,
+    "courier_profile": {
+      "vehicle_type": "دراجة نارية",
+      "plate_number": "س ي د 1234",
+      "delivery_area": 1,
+      "delivery_area_name": "مدينة نصر",
+      "service_city": 1,
+      "service_city_name": "القاهرة",
+      "max_active_orders": 4,
+      "is_available": true
     }
-  ],
-  "current_selection": null
+  }
 }
 ```
 
-### API: My Market Region
+### Signup
 
-Method: `GET`, `PATCH`  
-URL: `/api/v1/market-region/me/`  
-Auth: Any authenticated user  
-View: `MarketRegionMeView`  
-Serializer: `MarketRegionUpdateSerializer`
-
-PATCH general:
+Request:
 
 ```json
-{"mode": "general"}
+{
+  "first_name": "Report",
+  "last_name": "User",
+  "username": "report_user",
+  "email": "report.user@yalla.test",
+  "phone": "+201009999999",
+  "password": "StrongPass1!",
+  "password_confirm": "StrongPass1!"
+}
 ```
 
-PATCH service city:
+Response `201`:
 
 ```json
-{"mode": "service_city", "service_city_id": 1}
+{
+  "detail": "Registration OTP sent.",
+  "email": "report.user@yalla.test",
+  "dev_otp": "<dev_otp>"
+}
 ```
 
-PATCH clear:
+في بيئة التطوير قد يظهر `dev_otp`. في الإنتاج لا تعتمد عليه كقيمة ثابتة.
+
+## Market Region
+
+اختيار المنطقة هو فلتر السوق والطلبات. بدون اختيار قد ترجع endpoints العميل خطأ مثل:
 
 ```json
-{"mode": null}
+{
+  "detail": "Select a market browsing region before loading market content.",
+  "requires_market_region_selection": true
+}
 ```
 
-Success:
+تغيير الاختيار:
+
+```http
+PATCH /api/v1/market-region/me/
+```
+
+General:
+
+```json
+{
+  "mode": "general",
+  "service_city_id": null
+}
+```
+
+Service city:
+
+```json
+{
+  "mode": "service_city",
+  "service_city_id": 1
+}
+```
+
+مسح الاختيار:
+
+```json
+{
+  "mode": null,
+  "service_city_id": null
+}
+```
+
+Response example:
 
 ```json
 {
   "current_selection": {
     "mode": "service_city",
-    "label": "Cairo",
+    "label": "القاهرة",
     "service_city": {
       "id": 1,
-      "name": "Cairo",
-      "delivery_price": "0.00",
+      "name": "القاهرة",
+      "delivery_price": 45.0,
       "is_active": true
     },
-    "updated_at": "2026-07-03T..."
+    "updated_at": "2026-07-05T15:42:34.729502Z"
   }
 }
 ```
 
-Errors: inactive city rejected; general must not include service city; service-city mode requires service city.
+## Locations And Addresses
 
-## 4. GPS Detection APIs
+### Service city example
 
-### API: Detect Market Region From GPS
+```json
+{
+  "id": 3,
+  "name": "الإسكندرية",
+  "center_latitude": "31.2001000",
+  "center_longitude": "29.9187000",
+  "radius_km": "24.00",
+  "delivery_price": "55.00",
+  "is_active": true
+}
+```
 
-Method: `POST`  
-URL: `/api/v1/market-region/detect/`  
-Auth: Any authenticated user  
-View: `MarketRegionDetectView`  
-Serializer: `MarketRegionDetectSerializer`
+### Delivery area example
+
+```json
+{
+  "id": 5,
+  "service_city_id": 2,
+  "name": "الدقي",
+  "center_latitude": "30.0384000",
+  "center_longitude": "31.2123000",
+  "radius_km": "6.50",
+  "delivery_price": "50.00",
+  "is_active": true
+}
+```
+
+### General manual address
+
+يستخدم فقط عندما اختيار المستخدم `market_region.mode=general`:
+
+```http
+POST /api/v1/locations/addresses/
+```
 
 Request:
 
 ```json
-{"latitude": 30.0444, "longitude": 31.2357}
+{
+  "name": "عنوان عام",
+  "line1": "شارع الثورة بجوار بنزينة التعاون",
+  "manual_city": "القاهرة",
+  "manual_area": "مصر الجديدة",
+  "service_city_id": null,
+  "delivery_area_id": null,
+  "latitude": "30.0860000",
+  "longitude": "31.3300000",
+  "isDefault": true
+}
 ```
 
-Success examples:
+Response shape:
 
 ```json
 {
-  "action": "same_region",
-  "current_selection": {
-    "mode": "service_city",
-    "service_city": {"id": 1, "name": "Cairo"}
+  "id": 4,
+  "name": "عنوان عام",
+  "fullName": "عنوان عام",
+  "phone": "+201001000003",
+  "phoneNumber": "+201001000003",
+  "line1": "شارع الثورة بجوار بنزينة التعاون",
+  "street": "شارع الثورة بجوار بنزينة التعاون",
+  "city": "",
+  "state": "",
+  "country": "Egypt",
+  "postalCode": "",
+  "latitude": "30.0860000",
+  "longitude": "31.3300000",
+  "details": "شارع الثورة بجوار بنزينة التعاون",
+  "manual_city": "القاهرة",
+  "manual_area": "مصر الجديدة",
+  "service_city": null,
+  "service_city_id": null,
+  "service_city_name": null,
+  "delivery_area": null,
+  "delivery_area_id": null,
+  "delivery_area_name": null,
+  "delivery_area_price": null,
+  "delivery_type": "delivery",
+  "delivery_price_preview": null,
+  "is_default": true,
+  "isDefault": true,
+  "created_at": "2026-07-05T15:42:38.609944Z"
+}
+```
+
+### Service-city fixed-area address
+
+Request:
+
+```json
+{
+  "name": "عنوان السلام",
+  "line1": "السلام، شارع رئيسي",
+  "service_city_id": 1,
+  "delivery_area_id": 4,
+  "manual_city": null,
+  "manual_area": null,
+  "isDefault": false
+}
+```
+
+النظام يجعل `delivery_type=fixed_area` ويعرض `delivery_price_preview` من سعر `delivery_area`.
+
+### Service-city unsupported/manual area address
+
+Request:
+
+```json
+{
+  "name": "عنوان آخر",
+  "line1": "القاهرة، منطقة غير مضافة، قرب الطريق الرئيسي",
+  "service_city_id": 1,
+  "delivery_area_id": null,
+  "manual_city": null,
+  "manual_area": "منطقة غير مضافة",
+  "latitude": "30.0130000",
+  "longitude": "31.4280000"
+}
+```
+
+النظام يجعل `delivery_type=delivery`, `delivery_area=null`, `delivery_price_preview=null`.
+
+## Catalog / Home / Offers
+
+- Admin endpoints تحت `/api/v1/catalog/` و`/api/v1/home/markets/` ترجع بيانات إدارية كاملة.
+- Client home/offers/search ترجع فقط المحلات والمنتجات والعروض المطابقة لاختيار `market_region`.
+- Product variants هي التي تُرسل في الطلبات عبر `variant_id`، وليس `product_id`.
+
+Product example:
+
+```json
+{
+  "id": 6,
+  "market": {
+    "id": 1,
+    "name": "سوق يلا العام",
+    "branch": "",
+    "status": "active",
+    "classification_id": 1
   },
-  "detected_region": {
-    "mode": "service_city",
-    "service_city": {"id": 1, "name": "Cairo"}
-  },
-  "message": "You are already in your selected market region."
-}
-```
-
-```json
-{
-  "action": "suggest_switch",
-  "current_selection": {"mode": "general", "label": "General", "service_city": null},
-  "detected_region": {
-    "mode": "service_city",
-    "service_city": {"id": 1, "name": "Cairo"}
-  },
-  "message": "It looks like you are in Cairo. Do you want to switch your market region?"
-}
-```
-
-```json
-{
-  "action": "same_region",
-  "current_selection": {"mode": "general", "label": "General", "service_city": null},
-  "detected_region": {"mode": "general", "label": "General", "service_city": null},
-  "message": "You are already in your selected market region."
-}
-```
-
-```json
-{
-  "action": "unsupported_location",
-  "current_selection": null,
-  "detected_region": null,
-  "message": "Your current location is outside available service cities. Please choose a region manually."
-}
-```
-
-Notes: uses active `ServiceCity` rows with `center_latitude`, `center_longitude`, `radius_km`; nearest matching city wins. It does not update saved region. Unsupported coordinates return `same_region` with a general `detected_region` when the user already selected the General market region; otherwise they return `unsupported_location`.
-
-## 5. Home APIs
-
-### API: Home
-
-Method: `GET`  
-URL: `/api/v1/home/`  
-Auth: Any authenticated user  
-View: `HomeView`  
-Serializer: `HomeOfferSerializer`, `HomeMarketClassificationSerializer`, `HomeProductSerializer`
-
-Success:
-
-```json
-{
-  "current_selection": {"mode": "general", "label": "General", "service_city": null},
-  "location": {
-    "address_id": 1,
-    "name": "Home",
-    "latitude": "30.0000000",
-    "longitude": "31.0000000"
-  },
-  "offers": [],
-  "market_classifications": [],
-  "products": []
-}
-```
-
-Error when no region:
-
-```json
-{
-  "requires_region_selection": true,
-  "message": "Select a market browsing region before loading market content.",
-  "current_selection": null
-}
-```
-
-Notes: region-filtered; uses saved Market Region only, not `DeliveryArea`.
-
-### API: Home Search
-
-Method: `GET`  
-URL: `/api/v1/home/search/?q=milk&page=1`  
-Auth: Any authenticated user  
-View: `ProductSearchView`  
-Serializer: `HomeProductSerializer`
-
-Success: DRF paginated response:
-
-```json
-{
-  "count": 1,
-  "next": null,
-  "previous": null,
-  "results": [
-    {
-      "id": 1,
-      "name": "Milk",
-      "description": "",
-      "image": null,
-      "discount": "0.00",
-      "category": {"id": 1, "name": "Dairy", "type": "food"},
-      "market": {"id": 1, "name": "Market", "scope": "general"},
-      "variants": [{"id": 1, "price": "20.00", "sku": "MILK-1"}]
+  "category": {
+    "id": 3,
+    "name": "منتجات بقالة",
+    "classification": {
+      "id": 2,
+      "name": "منتجات غذائية"
     }
-  ]
-}
-```
-
-Notes: searches product, category, category classification, market, market classification.
-
-### API: Home Products
-
-Method: `GET`  
-URL: `/api/v1/home/products/`  
-Auth: Client token  
-View: `AddressProductListView`  
-Serializer: `HomeProductSerializer`
-
-Query params:
-
-- `page`
-- one of `order_by_name=true`, `order_by_high_price=true`, `order_by_low_price=true`, `order_by_latest=true`
-
-Error:
-
-```json
-{"detail": "Use only one order parameter at a time."}
-```
-
-### API: Home Product Detail
-
-Method: `GET`  
-URL: `/api/v1/home/products/{product_id}/`  
-Auth: Any authenticated user  
-View: `ProductDetailView`  
-Serializer: `ProductDetailSerializer`
-
-Success includes product fields plus `attribute_values`, detailed variant attributes, `additions`, `created_at`, `updated_at`.
-
-## 6. Classification APIs
-
-### API: All Market Classifications
-
-Method: `GET`  
-URL: `/api/v1/home/classifications/`  
-Auth: Any authenticated user  
-View: `MarketClassificationSummaryView`  
-Serializer: `MarketClassificationCountSerializer`, `StoreMarketClassificationSerializer`
-
-Success:
-
-```json
-{
-  "common_market_classifications": [
+  },
+  "is_available": true,
+  "name": "أرز مصري",
+  "description": "أرز أبيض درجة أولى.",
+  "image": null,
+  "discount": "0.00",
+  "variants": [
     {
-      "id": 1,
-      "name": "Restaurants",
-      "classification_type": "featured",
-      "product_count": 12
-    }
-  ],
-  "market_classifications": [
-    {
-      "id": 1,
-      "name": "Restaurants",
-      "classification_type": "featured",
-      "product_count": 12,
-      "markets": [
+      "id": 11,
+      "price": "55.00",
+      "sku": "SEED-0006-1",
+      "attribute_values": [
         {
-          "id": 1,
-          "name": "Market",
-          "branch": "Main",
-          "status": "active",
-          "classification_id": 1,
-          "product_count": 3,
-          "products": []
+          "id": 7,
+          "attribute": {
+            "id": 8,
+            "name": "العبوة",
+            "options": [
+              {
+                "id": 20,
+                "value": "عبوة"
+              },
+              {
+                "id": 21,
+                "value": "كرتونة"
+              }
+            ]
+          },
+          "option": {
+            "id": 20,
+            "value": "عبوة"
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "price": "105.00",
+      "sku": "SEED-0006-2",
+      "attribute_values": [
+        {
+          "id": 8,
+          "attribute": {
+            "id": 8,
+            "name": "العبوة",
+            "options": [
+              {
+                "id": 20,
+                "value": "عبوة"
+              },
+              {
+                "id": 21,
+                "value": "كرتونة"
+              }
+            ]
+          },
+          "option": {
+            "id": 21,
+            "value": "كرتونة"
+          }
         }
       ]
     }
-  ]
-}
-```
-
-Notes: requires saved Market Region; excludes classifications without visible markets.
-
-### API: Featured Classifications
-
-Method: `GET`  
-URL: `/api/v1/home/classifications/featured/`  
-Auth: Any authenticated user  
-View: `FeaturedMarketClassificationSummaryView`  
-Serializer: `StoreMarketClassificationSerializer`
-
-Success:
-
-```json
-{
-  "current_selection": {"mode": "service_city", "label": "Cairo"},
-  "classifications": [
-    {
-      "id": 1,
-      "name": "Restaurants",
-      "classification_type": "featured",
-      "product_count": 12,
-      "markets": []
-    }
-  ]
-}
-```
-
-### API: Popular Classifications
-
-Method: `GET`  
-URL: `/api/v1/home/classifications/popular/`  
-Auth: Any authenticated user  
-View: `PopularMarketClassificationSummaryView`
-
-Notes: same shape as featured, filtered to `classification_type=popular`.
-
-### API: Normal Classifications
-
-Method: `GET`  
-URL: `/api/v1/home/classifications/normal/`  
-Auth: Any authenticated user  
-View: `NormalMarketClassificationSummaryView`
-
-Notes: same shape as featured, filtered to `classification_type=normal`.
-
-### API: Classification Markets
-
-Method: `GET`  
-URL: `/api/v1/home/classifications/{classification_id}/markets/`  
-Auth: Any authenticated user  
-View: `MarketClassificationMarketsView`  
-Serializer: `MarketWithCommonProductsSerializer`
-
-Success:
-
-```json
-{
-  "classification": {
-    "id": 1,
-    "name": "Restaurants",
-    "classification_type": "featured"
-  },
-  "markets": [
-    {
-      "id": 1,
-      "name": "Market",
-      "branch": "Main",
-      "scope": "service_city",
-      "status": "active",
-      "classification_id": 1,
-      "service_cities": [],
-      "delivery_areas": [],
-      "products": []
-    }
-  ]
-}
-```
-
-## 7. Market Classification Admin APIs
-
-### API: Admin Market Classifications
-
-Method: `GET`, `POST`  
-URL: `/api/v1/home/market-classifications/`  
-Auth: Admin token  
-View: `AdminMarketClassificationListCreateView`  
-Serializer: `AdminMarketClassificationSerializer`
-
-POST:
-
-```json
-{"name": "Restaurants", "classification_type": "featured"}
-```
-
-Success:
-
-```json
-{"id": 1, "name": "Restaurants", "classification_type": "featured"}
-```
-
-Notes: `classification_type` choices are `popular`, `featured`, `normal`; default is `normal`.
-
-### API: Admin Market Classification Detail
-
-Method: `GET`, `PATCH`, `DELETE`  
-URL: `/api/v1/home/market-classifications/{classification_id}/`  
-Auth: Admin token  
-View: `AdminMarketClassificationDetailView`  
-Serializer: `AdminMarketClassificationSerializer`
-
-PATCH:
-
-```json
-{"classification_type": "popular"}
-```
-
-Delete errors if markets use it:
-
-```json
-{"detail": "Cannot delete market classification while markets are using it."}
-```
-
-## 8. Market APIs
-
-### API: Admin Markets
-
-Method: `GET`, `POST`  
-URL: `/api/v1/home/markets/`  
-Auth: Admin token  
-View: `AdminMarketListCreateView`  
-Serializer: `AdminMarketSerializer`
-
-POST:
-
-```json
-{
-  "classification_id": 1,
-  "name": "Market",
-  "branch": "Main",
-  "scope": "service_city",
-  "status": "active",
-  "service_city_ids": [1],
-  "delivery_area_ids": [1]
-}
-```
-
-General market:
-
-```json
-{
-  "classification_id": 1,
-  "name": "General Market",
-  "scope": "general",
-  "status": "active"
-}
-```
-
-Success:
-
-```json
-{
-  "id": 1,
-  "classification": {"id": 1, "name": "Restaurants", "classification_type": "normal"},
-  "name": "Market",
-  "branch": "Main",
-  "scope": "service_city",
-  "status": "active",
-  "service_cities": [{"id": 1, "name": "Cairo"}],
-  "delivery_areas": [{"id": 1, "name": "Nasr City"}]
-}
-```
-
-Notes: service-city markets require at least one active service city. General markets do not.
-
-### API: Admin Market Detail
-
-Method: `GET`, `PATCH`, `DELETE`  
-URL: `/api/v1/home/markets/{market_id}/`  
-Auth: Admin token  
-View: `AdminMarketDetailView`  
-Serializer: `AdminMarketSerializer`
-
-Delete errors if orders use the market.
-
-## 9. Product APIs
-
-### API: Catalog Products
-
-Method: `GET`, `POST`  
-URL: `/api/v1/catalog/products/`  
-Auth: Admin token  
-View: `ProductListCreateView`  
-Serializer: `AdminProductSerializer`
-
-POST:
-
-```json
-{
-  "market_id": 1,
-  "category_id": 1,
-  "is_available": true,
-  "name": "Burger",
-  "description": "Beef burger",
-  "discount": "0.00",
-  "attribute_values": [{"attribute_id": 1, "option_id": 2}],
-  "variants": [
-    {
-      "price": "100.00",
-      "sku": "BURGER-1",
-      "attribute_values": [{"attribute_id": 1, "option_id": 2}]
-    }
   ],
-  "additions": [1]
+  "additions": [
+    5
+  ],
+  "created_at": "2026-07-05T15:42:38.649818Z",
+  "updated_at": "2026-07-05T15:42:38.649835Z"
 }
 ```
 
-Success includes nested `market`, `category`, `attribute_values`, `variants`, `additions`, timestamps.
-
-### API: Catalog Product Detail
-
-Method: `GET`, `PATCH`, `DELETE`  
-URL: `/api/v1/catalog/products/{product_id}/`  
-Auth: Admin token  
-View: `ProductDetailView`  
-Serializer: `AdminProductSerializer`
-
-Delete returns `204` with body in code:
-
-```json
-{"details": "Deleted Successfully"}
-```
-
-### API: Liked Products
-
-Method: `GET`  
-URL: `/api/v1/catalog/products/likes/`  
-Auth: Client token  
-View: `ProductLikeListView`  
-Serializer: `LikedProductSerializer`
-
-### API: Toggle Product Like
-
-Method: `POST`  
-URL: `/api/v1/catalog/products/{product_id}/like/`  
-Auth: Client token  
-View: `ProductLikeToggleView`
-
-Success:
-
-```json
-{"product_id": 1, "liked": true}
-```
-
-### API: Unlike Product
-
-Method: `DELETE`  
-URL: `/api/v1/catalog/products/{product_id}/unlike/`  
-Auth: Client token  
-View: `ProductUnlikeView`
-
-Success:
-
-```json
-{"product_id": 1, "liked": false}
-```
-
-## 10. Offer APIs
-
-### API: Offers
-
-Method: `GET`, `POST`  
-URL: `/api/v1/offers/`  
-Auth: Admin token for POST/admin list; Client token for region-filtered GET  
-View: `OfferListCreateView`  
-Serializer: `AdminOfferSerializer` for admin, `HomeOfferSerializer` for client
-
-Admin POST:
+Offer example:
 
 ```json
 {
-  "market_id": 1,
+  "id": 18,
+  "market_id": 5,
   "scope": "service_city",
-  "service_city_id": 1,
-  "product_ids": [1, 2],
-  "title": "Family Offer",
-  "description": "Discount bundle",
-  "type": "package",
-  "discount": "10.00",
-  "start_time": "2026-07-03T10:00:00Z",
-  "end_time": "2026-07-10T10:00:00Z",
-  "active_days": ["friday"],
-  "use_limits": 100,
-  "user_limit": 1,
-  "status": "active"
-}
-```
-
-General offer:
-
-```json
-{
-  "market_id": 2,
-  "scope": "general",
-  "service_city_id": null,
-  "product_ids": [3],
-  "title": "General Offer",
-  "discount": "5.00",
-  "start_time": "2026-07-03T10:00:00Z",
-  "end_time": "2026-07-10T10:00:00Z",
-  "active_days": [],
-  "status": "active"
-}
-```
-
-Client GET error without region:
-
-```json
-{
-  "requires_region_selection": true,
-  "message": "Select a market browsing region before loading market content.",
-  "current_selection": null
-}
-```
-
-Notes: admin can see all; client sees active, in-window offers matching saved Market Region.
-
-### API: Offer Detail
-
-Method: `GET`, `PATCH`, `DELETE`  
-URL: `/api/v1/offers/{offer_id}/`  
-Auth: Admin for PATCH/DELETE/admin detail; Client for region-filtered GET  
-View: `OfferDetailView`  
-Serializer: `AdminOfferSerializer` or `HomeOfferSerializer`
-
-Notes: client gets `404` for offers outside saved region. DELETE errors if orders use offer.
-
-## 11. Location APIs
-
-Location APIs are split into service cities, delivery areas, and addresses.
-
-## 12. ServiceCity APIs
-
-### API: Service Cities
-
-Method: `GET`, `POST`  
-URL: `/api/v1/locations/service-cities/`  
-Auth: Admin token  
-View: `ServiceCityListCreateView`  
-Serializer: `ServiceCitySerializer`
-
-POST:
-
-```json
-{
-  "name": "Cairo",
-  "center_latitude": "30.0444000",
-  "center_longitude": "31.2357000",
-  "radius_km": "25.00",
-  "delivery_price": "0.00",
-  "is_active": true
-}
-```
-
-Success:
-
-```json
-{
-  "id": 1,
-  "name": "Cairo",
-  "center_latitude": "30.0444000",
-  "center_longitude": "31.2357000",
-  "radius_km": "25.00",
-  "delivery_price": "0.00",
-  "is_active": true
-}
-```
-
-Notes: `delivery_price` still exists but fixed delivery pricing now uses `DeliveryArea.delivery_price`.
-
-### API: Service City Detail
-
-Method: `GET`, `PATCH`, `DELETE`  
-URL: `/api/v1/locations/service-cities/{city_id}/`  
-Auth: Admin token  
-View: `ServiceCityDetailView`  
-Serializer: `ServiceCitySerializer`
-
-Errors:
-
-```json
-{"detail": "Service city cannot be deleted while its delivery areas are in use."}
-```
-
-## 13. DeliveryArea APIs
-
-### API: Delivery Areas
-
-Method: `GET`, `POST`  
-URL: `/api/v1/locations/delivery-areas/`  
-Auth: GET any authenticated user; POST admin token  
-View: `DeliveryAreaListCreateView`  
-Serializer: `DeliveryAreaSerializer`
-
-Query params:
-
-- `service_city_id=1`
-
-POST:
-
-```json
-{
-  "service_city_id": 1,
-  "name": "Nasr City",
-  "delivery_price": "40.00",
-  "is_active": true
-}
-```
-
-Success:
-
-```json
-{
-  "id": 1,
-  "service_city_id": 1,
-  "name": "Nasr City",
-  "center_latitude": null,
-  "center_longitude": null,
-  "radius_km": null,
-  "delivery_price": "40.00",
-  "is_active": true
-}
-```
-
-Notes: non-admin GET returns only active areas in active cities. Admin GET can see inactive. Duplicate active area names in same city are rejected.
-
-### API: Delivery Area Detail
-
-Method: `GET`, `PATCH`, `DELETE`  
-URL: `/api/v1/locations/delivery-areas/{area_id}/`  
-Auth: GET any authenticated user; PATCH/DELETE admin token  
-View: `DeliveryAreaDetailView`  
-Serializer: `DeliveryAreaSerializer`
-
-## 14. Address APIs
-
-### API: Addresses
-
-Method: `GET`, `POST`  
-URLs:
-
-- `/api/v1/locations/addresses/`
-- `/api/v1/addresses/`
-
-Auth: Any authenticated user  
-View: `AddressListCreateView`  
-Serializer: `AddressSerializer`, `AddressWriteSerializer`
-
-Query params:
-
-- admin only: `user_id=1`
-
-POST fixed area:
-
-```json
-{
-  "line1": "Apartment 5",
-  "details": "Second floor",
-  "service_city_id": 1,
-  "delivery_area_id": 2,
-  "isDefault": true
-}
-```
-
-POST Other:
-
-```json
-{
-  "line1": "Custom neighborhood",
-  "details": "Near main square",
-  "service_city_id": 1,
-  "delivery_area_id": null,
-  "isDefault": true
-}
-```
-
-Success returns the user's full address list:
-
-```json
-[
-  {
-    "id": 1,
-    "name": "Apartment 5",
-    "fullName": "Apartment 5",
-    "phone": "+201012345678",
-    "city": "Cairo",
-    "details": "Second floor",
-    "service_city": {"id": 1, "name": "Cairo"},
-    "service_city_id": 1,
-    "delivery_area": {"id": 2, "name": "Nasr City", "delivery_price": "40.00"},
-    "delivery_area_id": 2,
-    "delivery_type": "fixed_area",
-    "delivery_price_preview": "40.00",
-    "is_default": true,
-    "isDefault": true,
-    "created_at": "2026-07-03T..."
-  }
-]
-```
-
-Notes: if `delivery_area_id` is absent/null, address becomes `delivery_type=delivery`, `delivery_area=null`, preview price `null`.
-
-### API: Default Address
-
-Method: `GET`  
-URLs:
-
-- `/api/v1/locations/addresses/default/`
-- `/api/v1/addresses/default/`
-
-Auth: Any authenticated user  
-View: `AddressDefaultView`  
-Serializer: `AddressSerializer`
-
-Success: address object or `null`.
-
-### API: Address Detail
-
-Method: `PATCH`, `DELETE`  
-URLs:
-
-- `/api/v1/locations/addresses/{address_id}/`
-- `/api/v1/addresses/{address_id}/`
-
-Auth: Any authenticated user  
-View: `AddressDetailView`  
-Serializer: `AddressWriteSerializer`, `AddressSerializer`
-
-Important: URL is registered, but this view has no `GET` method.
-
-### API: Set Default Address
-
-Method: `PATCH`  
-URLs:
-
-- `/api/v1/locations/addresses/{address_id}/default/`
-- `/api/v1/addresses/{address_id}/default/`
-
-Auth: Any authenticated user  
-View: `AddressSetDefaultView`  
-Serializer: `AddressSerializer`
-
-Success: full address list.
-
-## 15. Order APIs
-
-### API: My Orders
-
-Method: `GET`  
-URL: `/api/v1/orders/my/?status=pending`  
-Auth: Client token  
-View: `ClientOrderListView`  
-Serializer: `OrderSerializer`
-
-Success: list of orders with `customer`, `market`, `service_city`, `delivery_area`, `delivery_type`, `delivery_price`, `items`, `offers`.
-
-### API: Order Preview
-
-Method: `POST`  
-URL: `/api/v1/orders/preview/`  
-Auth: Client token  
-View: `OrderPreviewView`  
-Serializer: `OrderPreviewSerializer`
-
-Request:
-
-```json
-{
-  "address_id": 1,
-  "items": [{"variant_id": 1, "quantity": 2}],
-  "offers": [{"offer_id": 1}]
-}
-```
-
-General checkout may pass:
-
-```json
-{
-  "service_city_id": 1,
-  "items": [{"variant_id": 1, "quantity": 1}]
-}
-```
-
-Success:
-
-```json
-{
-  "addresses": [],
-  "selected_address": {
-    "id": 1,
-    "service_city": {"id": 1, "name": "Cairo"},
-    "delivery_area": {"id": 2, "name": "Nasr City", "delivery_price": "40.00"},
-    "delivery_type": "fixed_area",
-    "delivery_price_preview": "40.00"
+  "service_city_id": 3,
+  "service_city": {
+    "id": 3,
+    "name": "الإسكندرية",
+    "delivery_price": "55.00",
+    "is_active": true
   },
-  "service_city": {"id": 1, "name": "Cairo"},
+  "product_ids": [
+    31
+  ],
+  "title": "عرض مخبز منتهي",
+  "description": "عرض مخبز منتهي متاح ضمن بيانات العرض التجريبية.",
+  "image": null,
+  "type": "discount",
+  "discount": "15.00",
+  "start_time": "2026-06-15T15:42:34.729502Z",
+  "end_time": "2026-07-04T15:42:34.729502Z",
+  "active_days": [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday"
+  ],
+  "use_limits": null,
+  "user_limit": null,
+  "status": "expired"
+}
+```
+
+## Orders Client Flow
+
+الخطوات الموصى بها للعميل:
+
+1. Login.
+2. اختيار `/api/v1/market-region/me/`.
+3. إنشاء/اختيار address متوافق مع نفس المنطقة.
+4. استدعاء `/api/v1/orders/preview/`.
+5. إن كان preview مناسباً، استدعاء `/api/v1/orders/create/` بنفس `items/offers/address_id` مع `payment_method`.
+
+### Preview request shape
+
+```json
+{
+  "address_id": 4,
+  "items": [
+    {"variant_id": 5, "quantity": 2}
+  ],
+  "offers": [
+    {"offer_id": 1}
+  ]
+}
+```
+
+`items` أو `offers` واحد منهم على الأقل مطلوب.
+
+### Create request shape
+
+```json
+{
+  "address_id": 4,
+  "items": [
+    {"variant_id": 5, "quantity": 2}
+  ],
+  "offers": [
+    {"offer_id": 1}
+  ],
+  "payment_method": "cash",
+  "description": "",
+  "delivery_note": ""
+}
+```
+
+## General Multi-Market Order
+
+هذا المثال يثبت السلوك الصحيح لطلب عام بعنوان يدوي في القاهرة/مصر الجديدة: النص محفوظ، لكن الطلب يبقى `general` ولا يأخذ `service_city`.
+
+Preview request:
+
+```json
+{
+  "address_id": 4,
+  "items": [
+    {"variant_id": 5, "quantity": 2},
+    {"variant_id": 13, "quantity": 1}
+  ],
+  "offers": [
+    {"offer_id": 1}
+  ]
+}
+```
+
+Preview response `200`:
+
+```json
+{
+  "order_scope": "general",
+  "service_city": null,
+  "selected_address": {
+    "id": 4,
+    "name": "عنوان عام",
+    "manual_city": "القاهرة",
+    "manual_area": "مصر الجديدة",
+    "service_city": null,
+    "service_city_id": null,
+    "delivery_area": null,
+    "delivery_area_id": null,
+    "delivery_type": "delivery",
+    "delivery_price_preview": null,
+    "is_default": true
+  },
+  "market_count": 2,
+  "is_multi_market": true,
+  "market_names_summary": "سوق يلا العام, متجر العروض العامة",
   "market_groups": [
     {
-      "market": {"id": 1, "name": "Market", "branch": "Main"},
-      "service_city": {"id": 1, "name": "Cairo"},
-      "delivery_area": {"id": 2, "name": "Nasr City", "delivery_price": "40.00"},
-      "delivery_type": "fixed_area",
-      "delivery_price": "40.00",
-      "delivery_message": "",
+      "market": {
+        "id": 1,
+        "name": "سوق يلا العام",
+        "branch": ""
+      },
+      "service_city": null,
+      "delivery_area": null,
+      "delivery_type": "delivery",
+      "delivery_price": null,
+      "delivery_message": "Delivery price will be determined later.",
       "delivery_available": true,
-      "selected_products": [],
+      "selected_products": [
+        {
+          "variant_id": 5,
+          "product_id": 3,
+          "product_name": "مياه معدنية",
+          "image": null,
+          "quantity": 2,
+          "unit_price": "35.00",
+          "subtotal": "70.00"
+        }
+      ],
+      "selected_offers": [
+        {
+          "id": 1,
+          "title": "عرض الجمعة العام",
+          "type": "flash",
+          "discount_percentage": "15.00",
+          "discount_amount": "51.00",
+          "products_count": 3
+        }
+      ],
+      "pricing": {
+        "products_subtotal": "340.00",
+        "total_offer_discounts": "51.00",
+        "delivery_price": null,
+        "market_total": "289.00"
+      }
+    },
+    {
+      "market": {
+        "id": 2,
+        "name": "متجر العروض العامة",
+        "branch": ""
+      },
+      "service_city": null,
+      "delivery_area": null,
+      "delivery_type": "delivery",
+      "delivery_price": null,
+      "delivery_message": "Delivery price will be determined later.",
+      "delivery_available": true,
+      "selected_products": [
+        {
+          "variant_id": 13,
+          "product_id": 7,
+          "product_name": "كرتونة رمضان",
+          "image": null,
+          "quantity": 1,
+          "unit_price": "700.00",
+          "subtotal": "700.00"
+        }
+      ],
       "selected_offers": [],
       "pricing": {
-        "products_subtotal": "100.00",
+        "products_subtotal": "700.00",
         "total_offer_discounts": "0.00",
-        "delivery_price": "40.00",
-        "market_total": "140.00"
+        "delivery_price": null,
+        "market_total": "700.00"
       }
     }
   ],
   "summary": {
-    "subtotal": "100.00",
-    "discount_total": "0.00",
-    "delivery_total": "40.00",
-    "grand_total": "140.00"
+    "subtotal": "1040.00",
+    "discount_total": "51.00",
+    "delivery_total": "0.00",
+    "grand_total": "989.00"
   }
 }
 ```
 
-Other delivery response has:
+Create response `201`: لاحظ أنها قائمة بعنصر واحد.
+
+```json
+[
+  {
+    "id": 26,
+    "customer": {
+      "id": 3,
+      "name": "كريم محمود",
+      "phone": "+201001000003"
+    },
+    "order_scope": "general",
+    "service_city_id": null,
+    "service_city": null,
+    "delivery_area_id": null,
+    "delivery_area": null,
+    "delivery_type": "delivery",
+    "delivery_price": null,
+    "payment_method": "cash",
+    "status": "pending",
+    "review_status": "pending_review",
+    "subtotal_price": "1040.00",
+    "discount": "51.00",
+    "total_price": "989.00",
+    "delivery_address": {
+      "id": 4,
+      "name": "عنوان عام",
+      "details": "شارع الثورة بجوار بنزينة التعاون",
+      "manual_city": "القاهرة",
+      "manual_area": "مصر الجديدة",
+      "service_city": null,
+      "delivery_area": null,
+      "delivery_type": "delivery",
+      "delivery_price_preview": null
+    },
+    "is_multi_market": true,
+    "market_count": 2,
+    "market_names_summary": "سوق يلا العام, متجر العروض العامة",
+    "market_sections": [
+      {
+        "id": 29,
+        "market_id": 1,
+        "market": {
+          "id": 1,
+          "name": "سوق يلا العام",
+          "branch": "",
+          "status": "active"
+        },
+        "subtotal_price": "340.00",
+        "discount": "51.00",
+        "total_price": "289.00",
+        "pickup_status": "pending",
+        "sort_order": 0,
+        "items": [
+          {
+            "id": 45,
+            "section_id": 29,
+            "variant_id": 5,
+            "quantity": 2,
+            "unit_price": "35.00"
+          },
+          {
+            "id": 46,
+            "section_id": 29,
+            "variant_id": 7,
+            "quantity": 1,
+            "unit_price": "120.00"
+          },
+          {
+            "id": 47,
+            "section_id": 29,
+            "variant_id": 9,
+            "quantity": 1,
+            "unit_price": "150.00"
+          }
+        ],
+        "offers": [
+          {
+            "id": 15,
+            "section_id": 29,
+            "offer_id": 1,
+            "discount_amount": "51.00",
+            "created_at": "2026-07-05T15:42:43.514327Z"
+          }
+        ]
+      },
+      {
+        "id": 30,
+        "market_id": 2,
+        "market": {
+          "id": 2,
+          "name": "متجر العروض العامة",
+          "branch": "",
+          "status": "active"
+        },
+        "subtotal_price": "700.00",
+        "discount": "0.00",
+        "total_price": "700.00",
+        "pickup_status": "pending",
+        "sort_order": 1,
+        "items": [
+          {
+            "id": 48,
+            "section_id": 30,
+            "variant_id": 13,
+            "quantity": 1,
+            "unit_price": "700.00"
+          }
+        ],
+        "offers": []
+      }
+    ],
+    "pickup_stops": [
+      {
+        "market_id": 1,
+        "market": {
+          "id": 1,
+          "name": "سوق يلا العام",
+          "branch": "",
+          "status": "active"
+        },
+        "pickup_status": "pending",
+        "picked_up_at": null,
+        "sort_order": 0
+      },
+      {
+        "market_id": 2,
+        "market": {
+          "id": 2,
+          "name": "متجر العروض العامة",
+          "branch": "",
+          "status": "active"
+        },
+        "pickup_status": "pending",
+        "picked_up_at": null,
+        "sort_order": 1
+      }
+    ]
+  }
+]
+```
+
+الحقول المهمة في الربط:
+
+- `order_scope="general"`
+- `service_city_id=null`
+- `delivery_area_id=null`
+- `delivery_type="delivery"`
+- `delivery_price=null`
+- `market_sections` يحتوي كل محل داخل الطلب الأب.
+- `pickup_stops` يستخدم لتتبع استلام المندوب من كل محل.
+- `items` و`offers` ما زالت موجودة كتوافق قديم، لكن الربط الجديد الأفضل يعتمد على `market_sections` أو `grouped_items/grouped_offers`.
+
+## Service-City Fixed-Area Order
+
+Preview request:
 
 ```json
 {
-  "delivery_type": "delivery",
-  "delivery_area": null,
-  "delivery_price": null,
-  "delivery_message": "Delivery price is not fixed by the system and will be determined later."
+  "address_id": 3,
+  "items": [
+    {"variant_id": 25, "quantity": 1}
+  ],
+  "offers": [
+    {"offer_id": 4}
+  ]
 }
 ```
 
-Errors:
-
-```json
-{"service_city_id": "Service city is required."}
-```
+Preview response:
 
 ```json
 {
-  "requires_region_selection": true,
-  "message": "Select a market browsing region before checkout.",
-  "current_selection": null
-}
-```
-
-### API: Client Create Order
-
-Method: `POST`  
-URL: `/api/v1/orders/create/`  
-Auth: Client token  
-View: `ClientOrderCreateView`  
-Serializer: `ClientOrderCreateSerializer`
-
-Request:
-
-```json
-{
-  "address_id": 1,
-  "payment_method": "cash",
-  "description": "",
-  "delivery_note": "Call on arrival",
-  "items": [{"variant_id": 1, "quantity": 2}],
-  "offers": [{"offer_id": 1}]
-}
-```
-
-Success: `201`, list of created orders. One order is created per market group.
-
-Notes: order starts `status=pending`, `review_status=pending_review`; no auto courier assignment.
-
-### API: Admin Orders
-
-Method: `GET`, `POST`  
-URL: `/api/v1/orders/?status=pending`  
-Auth: Admin token  
-View: `OrderListCreateView`  
-Serializer: `OrderSerializer`
-
-POST:
-
-```json
-{
-  "user_id": 1,
-  "delivery_address_id": 1,
-  "market_id": 1,
-  "payment_method": "cash",
-  "items": [{"variant_id": 1, "quantity": 1, "unit_price": "100.00"}],
-  "offers": [{"offer_id": 1, "discount_amount": "10.00"}]
-}
-```
-
-Notes: serializer normalizes delivery fields from address when present.
-
-### API: Admin Order Detail
-
-Method: `GET`, `PATCH`, `DELETE`  
-URL: `/api/v1/orders/{order_id}/`  
-Auth: Admin token  
-View: `OrderDetailView`  
-Serializer: `OrderSerializer`
-
-Notes: DELETE cancels order and clears assignment; it does not physically delete.
-
-### API: Admin Order Status
-
-Method: `PATCH`  
-URL: `/api/v1/orders/{order_id}/status/`  
-Auth: Admin token  
-View: `OrderStatusView`  
-Serializer: `OrderStatusSerializer`
-
-Request:
-
-```json
-{"status": "under_preparation"}
-```
-
-### API: Admin Order Assignment
-
-Method: `PATCH`  
-URL: `/api/v1/orders/{order_id}/assignment/`  
-Auth: Admin token  
-View: `OrderAssignmentView`  
-Serializer: `OrderAssignmentSerializer`
-
-Request:
-
-```json
-{"representative_id": 3}
-```
-
-Success:
-
-```json
-{
-  "message": "Order assigned successfully.",
-  "order": {},
-  "representative": {
-    "representative_id": 3,
-    "user_id": 3,
-    "name": "Courier One",
-    "phone": "+2010...",
+  "order_scope": "service_city",
+  "service_city": {
+    "id": 1,
+    "name": "القاهرة",
+    "delivery_price": "45.00",
+    "is_active": true
+  },
+  "selected_address": {
+    "id": 3,
+    "name": "عنوان السلام",
+    "manual_city": null,
+    "manual_area": null,
+    "service_city": {
+      "id": 1,
+      "name": "القاهرة",
+      "delivery_price": "45.00",
+      "is_active": true
+    },
     "service_city_id": 1,
-    "service_city": "Cairo"
+    "delivery_area": {
+      "id": 4,
+      "service_city_id": 1,
+      "name": "السلام",
+      "delivery_price": "46.00",
+      "is_active": true
+    },
+    "delivery_area_id": 4,
+    "delivery_type": "fixed_area",
+    "delivery_price_preview": "46.00",
+    "is_default": false
+  },
+  "market_count": 1,
+  "is_multi_market": false,
+  "market_names_summary": "مطبخ النيل العائلي",
+  "market_groups": [
+    {
+      "market": {
+        "id": 3,
+        "name": "مطبخ النيل العائلي",
+        "branch": "مدينة نصر"
+      },
+      "service_city": {
+        "id": 1,
+        "name": "القاهرة",
+        "delivery_price": "45.00",
+        "is_active": true
+      },
+      "delivery_area": {
+        "id": 4,
+        "service_city_id": 1,
+        "name": "السلام",
+        "delivery_price": "46.00",
+        "is_active": true
+      },
+      "delivery_type": "fixed_area",
+      "delivery_price": "46.00",
+      "delivery_message": "",
+      "delivery_available": true,
+      "selected_products": [
+        {
+          "variant_id": 25,
+          "product_id": 13,
+          "product_name": "دجاج مشوي",
+          "image": null,
+          "quantity": 1,
+          "unit_price": "180.00",
+          "subtotal": "180.00"
+        }
+      ],
+      "selected_offers": [
+        {
+          "id": 4,
+          "title": "باقة العائلة",
+          "type": "package",
+          "discount_percentage": "18.00",
+          "discount_amount": "69.30",
+          "products_count": 3
+        }
+      ],
+      "pricing": {
+        "products_subtotal": "385.00",
+        "total_offer_discounts": "69.30",
+        "delivery_price": "46.00",
+        "market_total": "361.70"
+      }
+    }
+  ],
+  "summary": {
+    "subtotal": "385.00",
+    "discount_total": "69.30",
+    "delivery_total": "46.00",
+    "grand_total": "361.70"
   }
 }
 ```
 
-Errors: order must be approved; representative must have courier profile and same service city.
+في هذا المثال العنوان مربوط بمنطقة `السلام` داخل القاهرة، لذلك:
 
-## 16. Admin Order Review APIs
+- `order_scope="service_city"`
+- `delivery_type="fixed_area"`
+- `delivery_area.id=4`
+- `delivery_price="46.00"`
+- `summary.delivery_total="46.00"` مرة واحدة على الطلب الأب.
 
-### API: Order Review Blocker
+## Service-City Unsupported/Manual Area Order
 
-Method: `GET`  
-URL: `/api/v1/admin/order-review/blocker/`  
-Auth: Admin token  
-View: `AdminOrderReviewBlockerView`  
-Serializer: `OrderSerializer`
-
-Success:
+Create request:
 
 ```json
-{"blocked": true, "pending_count": 2, "orders": []}
+{
+  "address_id": 2,
+  "items": [
+    {"variant_id": 25, "quantity": 1}
+  ],
+  "payment_method": "cash"
+}
 ```
 
-### API: Approve Order
+Create response `201`:
 
-Method: `POST`  
-URL: `/api/v1/admin/orders/{order_id}/approve/`  
-Auth: Admin token  
-View: `AdminOrderApproveView`  
-Serializer: `OrderSerializer`, `RepresentativeSummarySerializer`
+```json
+[
+  {
+    "id": 27,
+    "customer": {
+      "id": 2,
+      "name": "أمينة حسن",
+      "phone": "+201001000002"
+    },
+    "order_scope": "service_city",
+    "service_city_id": 1,
+    "service_city": {
+      "id": 1,
+      "name": "القاهرة",
+      "delivery_price": "45.00",
+      "is_active": true
+    },
+    "delivery_area_id": null,
+    "delivery_area": null,
+    "delivery_type": "delivery",
+    "delivery_price": null,
+    "payment_method": "cash",
+    "status": "pending",
+    "review_status": "pending_review",
+    "subtotal_price": "180.00",
+    "discount": "0.00",
+    "total_price": "180.00",
+    "delivery_address": {
+      "id": 2,
+      "name": "عنوان آخر",
+      "details": "القاهرة، منطقة غير مضافة، قرب الطريق الرئيسي",
+      "manual_city": null,
+      "manual_area": "منطقة غير مضافة",
+      "service_city": {
+        "id": 1,
+        "name": "القاهرة",
+        "delivery_price": "45.00",
+        "is_active": true
+      },
+      "delivery_area": null,
+      "delivery_type": "delivery",
+      "delivery_price_preview": null
+    },
+    "is_multi_market": false,
+    "market_count": 1,
+    "market_names_summary": "مطبخ النيل العائلي",
+    "market_sections": [
+      {
+        "id": 31,
+        "market_id": 3,
+        "market": {
+          "id": 3,
+          "name": "مطبخ النيل العائلي",
+          "branch": "مدينة نصر",
+          "status": "active"
+        },
+        "subtotal_price": "180.00",
+        "discount": "0.00",
+        "total_price": "180.00",
+        "pickup_status": "pending",
+        "sort_order": 0,
+        "items": [
+          {
+            "id": 49,
+            "section_id": 31,
+            "variant_id": 25,
+            "quantity": 1,
+            "unit_price": "180.00"
+          }
+        ],
+        "offers": []
+      }
+    ],
+    "pickup_stops": [
+      {
+        "market_id": 3,
+        "market": {
+          "id": 3,
+          "name": "مطبخ النيل العائلي",
+          "branch": "مدينة نصر",
+          "status": "active"
+        },
+        "pickup_status": "pending",
+        "picked_up_at": null,
+        "sort_order": 0
+      }
+    ]
+  }
+]
+```
 
-Success:
+هذا هو السلوك المقصود عندما تكون المنطقة غير مضافة في `DeliveryArea`:
+
+- `service_city` تبقى القاهرة.
+- `delivery_area=null`.
+- `delivery_type="delivery"`.
+- `delivery_price=null`.
+- `delivery_address.manual_area` يظهر للمندوب والإدارة.
+- إسناد المندوب يطابق `Order.service_city` وليس `delivery_area`.
+
+## Order Response Contract
+
+أهم الحقول في `OrderSerializer`:
+
+| الحقل | النوع | ملاحظات |
+|---|---|---|
+| `id` | number | رقم الطلب |
+| `customer` | object | `id`, `name`, `phone` |
+| `delivery_address` | object/null | يحتوي `manual_city`, `manual_area`, `delivery_area`, `delivery_type` |
+| `assigned_representative_id` | number/null | المندوب المسند |
+| `market` | object | أول محل للتوافق القديم |
+| `order_scope` | string | `general` أو `service_city` |
+| `service_city` | object/null | null في الطلب العام |
+| `delivery_area` | object/null | null في العام أو المنطقة اليدوية |
+| `delivery_type` | string | `delivery` أو `fixed_area` |
+| `delivery_price` | string/null | null عندما السعر يحدد لاحقاً |
+| `subtotal_price` | string | مجموع المنتجات قبل الخصم والتوصيل |
+| `discount` | string | خصم العروض |
+| `total_price` | string | النهائي |
+| `review_status` | string | يبدأ `pending_review` |
+| `market_sections` | array | المصدر الأساسي لتجميع المحلات |
+| `grouped_items` | array | توافق للعرض حسب المحل |
+| `grouped_offers` | array | توافق للعروض حسب المحل |
+| `pickup_stops` | array | نقاط الاستلام للمندوب |
+| `items` | array | توافق قديم، لا يكفي وحده للـ multi-market |
+| `offers` | array | توافق قديم |
+
+## Admin Order Flow
+
+### Review blocker
+
+```http
+GET /api/v1/admin/order-review/blocker/
+```
+
+Response fields:
+
+- `blocked`: boolean، تكون `true` إذا يوجد طلبات `pending_review`.
+- `pending_count`: عدد الطلبات التي تنتظر مراجعة الإدارة.
+- `orders`: قائمة `OrderSerializer[]` لنفس الطلبات العالقة.
+
+### Approve
+
+```http
+POST /api/v1/admin/orders/{order_id}/approve/
+```
+
+Response example:
 
 ```json
 {
   "message": "Order approved successfully.",
-  "order": {},
-  "service_city": {"id": 1, "name": "Cairo"},
-  "available_representatives": []
+  "order": {
+    "id": 27,
+    "order_scope": "service_city",
+    "service_city_id": 1,
+    "delivery_area_id": null,
+    "delivery_type": "delivery",
+    "status": "under_preparation",
+    "review_status": "approved",
+    "assigned_representative_id": null
+  },
+  "service_city": {
+    "id": 1,
+    "name": "القاهرة"
+  },
+  "available_representatives": [
+    {
+      "representative_id": 5,
+      "user_id": 5,
+      "name": "أحمد مندوب",
+      "phone": "+201001000004",
+      "service_city_id": 1,
+      "service_city": "القاهرة"
+    },
+    {
+      "representative_id": 6,
+      "user_id": 6,
+      "name": "محمود مندوب",
+      "phone": "+201001000005",
+      "service_city_id": 1,
+      "service_city": "القاهرة"
+    }
+  ]
 }
 ```
 
-Notes: sets `review_status=approved`, `status=under_preparation`.
+للطلب العام `service_city` في هذه الاستجابة يكون `null`، و`available_representatives` يرجع أي مندوب نشط لديه `courier_profile`.
 
-### API: Reject Order
+### Representatives for order
 
-Method: `POST`  
-URL: `/api/v1/admin/orders/{order_id}/reject/`  
-Auth: Admin token  
-View: `AdminOrderRejectView`  
-Serializer: `OrderReviewActionSerializer`
+```http
+GET /api/v1/admin/orders/{order_id}/service-city-representatives/
+```
+
+- طلب `service_city`: يرجع مندوبين نفس `Order.service_city`.
+- طلب `general`: يرجع كل المندوبين النشطين المتاحين أصحاب profile، و`service_city=null`.
+
+### Assign courier
+
+```http
+PATCH /api/v1/orders/{order_id}/assignment/
+```
 
 Request:
 
 ```json
-{"rejection_reason": "Out of stock"}
-```
-
-Success:
-
-```json
 {
-  "message": "Order rejected successfully.",
-  "order_id": 1,
-  "status": "cancelled",
-  "review_status": "rejected",
-  "rejection_reason": "Out of stock"
+  "representative_id": 5
 }
 ```
 
-### API: Service-City Representatives For Order
-
-Method: `GET`  
-URL: `/api/v1/admin/orders/{order_id}/service-city-representatives/`  
-Auth: Admin token  
-View: `AdminOrderServiceCityRepresentativesView`  
-Serializer: `RepresentativeSummarySerializer`
-
-Success:
+Response example:
 
 ```json
 {
-  "order_id": 1,
-  "service_city": {"id": 1, "name": "Cairo"},
-  "representatives": []
+  "message": "Order assigned successfully.",
+  "order": {
+    "id": 27,
+    "status": "ready",
+    "review_status": "approved",
+    "assigned_representative_id": 5
+  },
+  "representative": {
+    "representative_id": 5,
+    "user_id": 5,
+    "name": "أحمد مندوب",
+    "phone": "+201001000004",
+    "service_city_id": 1,
+    "service_city": "القاهرة"
+  }
 }
 ```
 
-## 17. Courier APIs
+بعد الإسناد يصبح `status="ready"` ويُملأ `assigned_at`.
 
-### API: Courier Orders
+### Admin create order
 
-Method: `GET`  
-URL: `/api/v1/courier/orders/?status=ready`  
-Auth: Courier token  
-View: `CourierOrderListView`  
-Serializer: `CourierOrderListSerializer`
+```http
+POST /api/v1/orders/
+```
 
-Success:
+Request minimum:
+
+```json
+{
+  "user_id": 2,
+  "delivery_address_id": 2,
+  "market_id": 3,
+  "payment_method": "cash",
+  "description": "",
+  "delivery_note": "",
+  "items": [
+    {"variant_id": 25, "quantity": 1, "unit_price": "0.00"}
+  ],
+  "offers": []
+}
+```
+
+ملاحظة مهمة: عند الإنشاء الإداري لا ترسل الحقول التالية لأنها system-controlled وسيتم رفضها لو كانت موجودة: `order_scope`, `delivery_area_id`, `delivery_type`, `delivery_price`, `discount`, `subtotal_price`, `total_price`, `status`, `review_status`, `assigned_representative_id`, `assigned_at`, `delivered_at`, `approved_by`, `approved_at`, `rejected_by`, `rejected_at`, `rejection_reason`, `image`, `delivery_proof`.
+
+## Courier Flow
+
+### List assigned orders
+
+```http
+GET /api/v1/courier/orders/
+```
+
+Response example:
 
 ```json
 [
   {
-    "id": 1,
+    "id": 27,
     "status": "ready",
-    "service_city": {"id": 1, "name": "Cairo"},
+    "order_scope": "service_city",
+    "service_city": {
+      "id": 1,
+      "name": "القاهرة",
+      "delivery_price": "45.00",
+      "is_active": true
+    },
     "delivery_area": null,
     "delivery_type": "delivery",
-    "market": {"id": 1, "name": "Market", "branch": "Main", "status": "active"},
-    "customer": {"id": 1, "name": "Ali", "phone": "+2010..."},
+    "market": {
+      "id": 3,
+      "name": "مطبخ النيل العائلي",
+      "branch": "مدينة نصر",
+      "status": "active"
+    },
+    "market_count": 1,
+    "customer": {
+      "id": 2,
+      "name": "أمينة حسن",
+      "phone": "+201001000002"
+    },
     "delivery_address": {
-      "id": 1,
-      "name": "Other area",
-      "details": "",
+      "id": 2,
+      "name": "عنوان آخر",
+      "details": "القاهرة، منطقة غير مضافة، قرب الطريق الرئيسي",
+      "manual_city": null,
+      "manual_area": "منطقة غير مضافة",
       "delivery_area": null,
       "delivery_type": "delivery"
     },
-    "total_price": "100.00",
+    "total_price": "180.00",
     "delivery_price": null,
-    "created_at": "2026-07-03T...",
-    "assigned_at": "2026-07-03T..."
+    "created_at": "2026-07-05T15:42:43.566728Z",
+    "assigned_at": "2026-07-05T15:42:43.626821Z"
   }
 ]
 ```
 
-Errors:
+`delivery_address` في courier response يحتوي `manual_city` و`manual_area` حتى تظهر المناطق اليدوية للمندوب.
 
-```json
-{"status": "Unsupported status filter."}
-```
+### Status transitions
 
-### API: Courier Order Detail
-
-Method: `GET`  
-URL: `/api/v1/courier/orders/{order_id}/`  
-Auth: Courier token  
-View: `CourierOrderDetailView`  
-Serializer: `CourierOrderDetailSerializer`
-
-Success includes list fields plus `items`, `offers`, `subtotal_price`, `discount`, `delivery_note`, `delivery_proof`, `delivered_at`.
-
-### API: Courier Order Status
-
-Method: `PATCH`  
-URL: `/api/v1/courier/orders/{order_id}/status/`  
-Auth: Courier token  
-View: `CourierOrderStatusView`  
-Serializer: `CourierOrderStatusSerializer`
-
-Request:
-
-```json
-{"status": "picked_up"}
+```http
+PATCH /api/v1/courier/orders/{order_id}/status/
 ```
 
 Allowed transitions:
 
-- `ready` -> `picked_up`
-- `picked_up` -> `on_the_way`
-- `on_the_way` -> `delivered` or `failed_delivery`
+| الحالي | التالي المسموح |
+|---|---|
+| `ready` | `picked_up` |
+| `picked_up` | `on_the_way` |
+| `on_the_way` | `delivered`, `failed_delivery` |
 
-## 18. Notifications APIs
-
-### API: Notifications
-
-Method: `GET`  
-URL: `/api/v1/notifications/`  
-Auth: Any authenticated user  
-View: `NotificationListView`  
-Serializer: `NotificationSerializer`
-
-Query params:
-
-- `unread=true|false`
-- `type=...`
-- `audience=...`
-- `is_blocking=true|false`
-- `is_resolved=true|false`
-
-Success:
-
-```json
-[
-  {
-    "id": 1,
-    "audience": "admin",
-    "type": "order_review",
-    "title": "New order",
-    "message": "Order needs review",
-    "order_id": 1,
-    "is_read": false,
-    "is_blocking": true,
-    "is_resolved": false,
-    "created_at": "2026-07-03T..."
-  }
-]
-```
-
-Notes: admins see admin-audience notifications; couriers and clients see their own recipient notifications.
-
-### API: Mark Notification Read
-
-Method: `PATCH`  
-URL: `/api/v1/notifications/{notification_id}/read/`  
-Auth: Any authenticated user  
-View: `NotificationReadView`  
-Serializer: `NotificationSerializer`
-
-### API: Mark All Notifications Read
-
-Method: `POST`  
-URL: `/api/v1/notifications/mark-all-read/`  
-Auth: Any authenticated user  
-View: `NotificationMarkAllReadView`
-
-Success:
-
-```json
-{"marked_read": 3}
-```
-
-### API: Unread Count
-
-Method: `GET`  
-URL: `/api/v1/notifications/unread-count/`  
-Auth: Any authenticated user  
-View: `NotificationUnreadCountView`
-
-Success:
-
-```json
-{"unread_count": 2}
-```
-
-## 19. Other APIs
-
-### API: Dashboard Overview
-
-Method: `GET`  
-URL: `/api/v1/dashboard/overview/?from=2026-07-01&to=2026-07-03`  
-Auth: Admin token  
-View: `DashboardOverviewView`  
-Serializer: `DashboardRangeQuerySerializer`, `DashboardOverviewSerializer`
-
-Success:
+Request:
 
 ```json
 {
-  "range": {"from": "2026-07-01", "to": "2026-07-03", "timezone": "Africa/Tripoli"},
+  "status": "picked_up"
+}
+```
+
+إذا أرسل المندوب انتقالاً غير مسموح يرجع:
+
+```json
+{
+  "status": "Invalid status transition."
+}
+```
+
+## Notifications
+
+List:
+
+```http
+GET /api/v1/notifications/?unread=true&type=new_order_review&is_blocking=true
+```
+
+Notification shape:
+
+```json
+{
+  "id": 20,
+  "audience": "admin",
+  "type": "new_order_review",
+  "title": "New order requires review",
+  "message": "Order #27 requires admin review.",
+  "order_id": 27,
+  "is_read": true,
+  "is_blocking": true,
+  "is_resolved": true,
+  "created_at": "2026-07-05T15:42:43.568514Z"
+}
+```
+
+Unread count:
+
+```json
+{
+  "unread_count": 9
+}
+```
+
+## Dashboard
+
+```http
+GET /api/v1/dashboard/overview/?from=2026-01-01&to=2026-12-31
+```
+
+Response shape:
+
+```json
+{
+  "range": {
+    "from": "2026-01-01",
+    "to": "2026-12-31",
+    "timezone": "UTC"
+  },
   "currency": "EGP",
-  "revenue": {"total": "1000.00", "percentage": 12.5},
-  "orders": {"total": 10, "completed": 7, "incomplete": 3, "completion_rate": 70.0},
-  "customers": {"new": 2, "returning": 5, "return_rate": 50.0},
-  "top_products": [],
-  "active_orders": [],
-  "top_shops": []
+  "revenue": {
+    "total": "793.35",
+    "percentage": 11.4
+  },
+  "orders": {
+    "total": 27,
+    "completed": 5,
+    "incomplete": 22,
+    "completion_rate": 18.5
+  },
+  "customers": {
+    "new": 3,
+    "returning": 0,
+    "return_rate": 0.0
+  },
+  "top_products": [
+    {
+      "product_id": 8,
+      "name": "عرض مدارس",
+      "revenue": "150.00",
+      "quantity_sold": 1,
+      "orders_count": 1
+    },
+    {
+      "product_id": 41,
+      "name": "فيتامين C",
+      "revenue": "120.00",
+      "quantity_sold": 1,
+      "orders_count": 1
+    }
+  ],
+  "active_orders": [
+    {
+      "id": 27,
+      "number": "YM-20260705-000027",
+      "customer": {
+        "id": 2,
+        "name": "أمينة حسن"
+      },
+      "total": "180.00",
+      "status": "ready",
+      "created_at": "2026-07-05T15:42:43.566728Z"
+    },
+    {
+      "id": 26,
+      "number": "YM-20260705-000026",
+      "customer": {
+        "id": 3,
+        "name": "كريم محمود"
+      },
+      "total": "989.00",
+      "status": "pending",
+      "created_at": "2026-07-05T15:42:43.512571Z"
+    }
+  ],
+  "top_shops": [
+    {
+      "market_id": 2,
+      "name": "متجر العروض العامة",
+      "zone": "",
+      "orders_count": 1,
+      "average_items_per_order": 3.0,
+      "revenue": "226.00"
+    },
+    {
+      "market_id": 7,
+      "name": "صيدلية الحياة - الدقي",
+      "zone": "الجيزة",
+      "orders_count": 1,
+      "average_items_per_order": 2.0,
+      "revenue": "205.10"
+    }
+  ]
 }
 ```
 
-Error:
+## Integration Checklist
 
-```json
-{"to": "The to date must be on or after the from date."}
-```
-
-## Catalog Admin APIs
-
-These are all admin-only CRUD APIs using the listed serializers:
-
-| API | Methods | URL | View | Serializer |
-|---|---:|---|---|---|
-| Addition classifications | GET, POST | `/api/v1/catalog/addition-classifications/` | `AdditionClassificationListCreateView` | `AdditionClassificationSerializer` |
-| Addition classification detail | GET, PATCH, DELETE | `/api/v1/catalog/addition-classifications/{classification_id}/` | `AdditionClassificationDetailView` | `AdditionClassificationSerializer` |
-| Category classifications | GET, POST | `/api/v1/catalog/category-classifications/` | `CategoryClassificationListCreateView` | `CategoryClassificationSerializer` |
-| Category classification detail | GET, PATCH, DELETE | `/api/v1/catalog/category-classifications/{classification_id}/` | `CategoryClassificationDetailView` | `CategoryClassificationSerializer` |
-| Product categories | GET, POST | `/api/v1/catalog/product-categories/` | `ProductCategoryListCreateView` | `ProductCategorySerializer` |
-| Product category detail | GET, PATCH, DELETE | `/api/v1/catalog/product-categories/{category_id}/` | `ProductCategoryDetailView` | `ProductCategorySerializer` |
-| Category attributes | GET, POST | `/api/v1/catalog/category-attributes/` | `CategoryAttributeListCreateView` | `AdminCategoryAttributeSerializer` |
-| Category attribute detail | GET, PATCH, DELETE | `/api/v1/catalog/category-attributes/{attribute_id}/` | `CategoryAttributeDetailView` | `AdminCategoryAttributeSerializer` |
-| Category options | GET, POST | `/api/v1/catalog/category-options/` | `CategoryOptionListCreateView` | `AdminCategoryOptionSerializer` |
-| Category option detail | GET, PATCH, DELETE | `/api/v1/catalog/category-options/{option_id}/` | `CategoryOptionDetailView` | `AdminCategoryOptionSerializer` |
-| Product additions | GET, POST | `/api/v1/catalog/product-additions/` | `ProductAdditionListCreateView` | `ProductAdditionSerializer` |
-| Product addition detail | GET, PATCH, DELETE | `/api/v1/catalog/product-additions/{addition_id}/` | `ProductAdditionDetailView` | `ProductAdditionSerializer` |
-
-Common create examples:
-
-```json
-{"name": "Food"}
-```
-
-```json
-{"classification_id": 1, "name": "Meals", "type": "food", "description": "", "image": null}
-```
-
-```json
-{"category_id": 1, "name": "Size"}
-```
-
-```json
-{"attribute_id": 1, "value": "Large"}
-```
-
-```json
-{
-  "classification_id": 1,
-  "image": null,
-  "name_ar": "Cheese",
-  "name_en": "Cheese",
-  "price": "10.00",
-  "is_active": true
-}
-```
-
-Common delete protected errors:
-
-```json
-{"detail": "Cannot delete product category while products are using it."}
-```
-
-## Analysis
-
-### A. URLs Registered But Missing From Tests
-
-Based on string searches in test files:
-
-- Auth slash aliases are mostly not directly tested: `/signup/`, `/login/`, `/me/`, etc.
-- `/api/v1/locations/addresses/` and `/api/v1/locations/addresses/default/` appear less covered than the root alias `/api/v1/addresses/`.
-- `/api/v1/addresses/{id}/default/` and `/api/v1/locations/addresses/{id}/default/` are registered; tests did not visibly reference them.
-- `/api/v1/admin/orders/{order_id}/reject/` and `/api/v1/admin/orders/{order_id}/service-city-representatives/` are registered; direct test references were not visible in the search output.
-- Dashboard, market-region detect, classification type endpoints, offers, catalog CRUD, service cities, delivery areas, notifications, and core order/courier flows do have visible test references.
-
-### B. Views That Exist But Are Not Registered
-
-- `locations.views.DeliveryAreaListView` exists as a backward-compatible read-only alias but is not registered in `locations/urls.py` or `locations/address_urls.py`.
-
-### C. URLs Supporting POST/PATCH/DELETE But Not GET
-
-- `POST /api/v1/auth/signup`
-- `POST /api/v1/auth/verify-email`
-- `POST /api/v1/auth/resend-verification`
-- `POST /api/v1/auth/login*`
-- `POST /api/v1/auth/refresh`
-- `POST /api/v1/auth/logout`
-- `POST /api/v1/auth/forgot-password`
-- `POST /api/v1/auth/reset-password`
-- `PATCH/DELETE /api/v1/locations/addresses/{id}/` and `/api/v1/addresses/{id}/` have no GET implementation.
-- `PATCH /api/v1/locations/addresses/{id}/default/` and `/api/v1/addresses/{id}/default/`
-- `POST /api/v1/orders/preview/`
-- `POST /api/v1/orders/create/`
-- `PATCH /api/v1/orders/{id}/status/`
-- `PATCH /api/v1/orders/{id}/assignment/`
-- `POST /api/v1/admin/orders/{id}/approve/`
-- `POST /api/v1/admin/orders/{id}/reject/`
-- `PATCH /api/v1/courier/orders/{id}/status/`
-- `PATCH /api/v1/notifications/{id}/read/`
-- `POST /api/v1/notifications/mark-all-read/`
-- `POST /api/v1/catalog/products/{id}/like/`
-- `DELETE /api/v1/catalog/products/{id}/unlike/`
-
-### D. Duplicate Or Conflicting URL Patterns
-
-- `accounts/urls.py` intentionally registers no-slash and slash versions for most auth/account endpoints.
-- Addresses are duplicated under both `/api/v1/locations/addresses/` and `/api/v1/addresses/`.
-- No DRF router conflicts found.
-- Typed classification routes are safe because `{classification_id}` uses `int`, so `featured`, `popular`, `normal` do not conflict.
-
-### E. APIs That Require Market Region Selection
-
-- `GET /api/v1/home/`
-- `GET /api/v1/home/search/`
-- `GET /api/v1/home/products/`
-- `GET /api/v1/home/products/{id}/`
-- `GET /api/v1/home/classifications/`
-- `GET /api/v1/home/classifications/featured/`
-- `GET /api/v1/home/classifications/popular/`
-- `GET /api/v1/home/classifications/normal/`
-- `GET /api/v1/home/classifications/{id}/markets/`
-- Client `GET /api/v1/offers/`
-- Client `GET /api/v1/offers/{id}/`
-- `POST /api/v1/orders/preview/`
-- `POST /api/v1/orders/create/`
-
-### F. APIs Affected By DeliveryArea Pricing
-
-- `GET/POST/PATCH/DELETE /api/v1/locations/delivery-areas/`
-- Address create/update/list/default APIs
-- `POST /api/v1/orders/preview/`
-- `POST /api/v1/orders/create/`
-- Order serializers used by `/api/v1/orders/*`, admin review responses, and courier responses
-
-Rules in code: fixed-area address/order uses `DeliveryArea.delivery_price`; Other uses `delivery_type=delivery`, `delivery_area=null`, `delivery_price=null`.
-
-### G. APIs Affected By GPS Detection
-
-- Only `POST /api/v1/market-region/detect/`.
-- `ServiceCity` admin APIs expose/update `center_latitude`, `center_longitude`, and `radius_km`, which detection uses.
-- Unsupported coordinates are treated as the same General region only when the current saved market region is `general`; this API returns `action=same_region` and does not create or update service cities.
-
-### H. APIs Affected By `classification_type`
-
-- Admin market classification CRUD
-- `GET /api/v1/home/`
-- `GET /api/v1/home/classifications/`
-- `GET /api/v1/home/classifications/featured/`
-- `GET /api/v1/home/classifications/popular/`
-- `GET /api/v1/home/classifications/normal/`
-- `GET /api/v1/home/classifications/{id}/markets/`
+- خزّن `accessToken` وابعثه في `Authorization` لكل endpoint محمي.
+- لا تعرض Home أو Offers للعميل قبل اختيار `market_region`.
+- عند `general` أنشئ/استخدم عنواناً عاماً يدوياً فقط، ولا ترسل `service_city_id` في preview/create.
+- لا تعتبر `manual_city="القاهرة"` مدينة خدمة؛ هي نص فقط في الطلب العام.
+- عند `service_city` استخدم عنواناً بنفس المدينة المختارة.
+- اعتمد على `preview` لحساب السعر، ثم نفذ `create` بنفس السلة.
+- بعد `create` اقرأ الطلب من العنصر الأول في القائمة: `response[0]`.
+- في عرض multi-market اعتمد على `market_sections` و`pickup_stops`، لا على `market` فقط.
+- في courier UI اعرض `manual_city` و`manual_area` من `delivery_address`.
+- تعامل مع `delivery_price=null` كـ “السعر يحدد لاحقاً”، وليس كخطأ.

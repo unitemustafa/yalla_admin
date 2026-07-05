@@ -27,6 +27,29 @@ import { cn } from "@/lib/utils";
 import { AppSelect, Badge, Button, Card, CurrencyText, Field, Input, PageTitle, Pagination } from "../primitives";
 import { useSnackbar } from "../snackbar";
 import {
+  cleanText,
+  deliveryLaterLabel,
+  formatOrderMoney,
+  getDeliveryAreaName as orderDeliveryAreaName,
+  getDeliveryDestination,
+  getDeliveryPriceLabel,
+  getDeliveryTypeLabel,
+  getManualArea,
+  getManualCity,
+  getMarketCount,
+  getMarketSections,
+  getOrderMarketsSummary,
+  getOrderScopeLabel,
+  getPickupStatusLabel,
+  getPickupStops,
+  getServiceCityName as orderServiceCityName,
+  isGeneralOrder,
+  isMultiMarket,
+  numberValue,
+  objectName,
+  type OrderMarketSectionLike,
+} from "../order-display";
+import {
   apiResponseData,
   firstApiError,
   fullNameFromBackendUser,
@@ -53,7 +76,10 @@ type BackendAddress = {
   id: number;
   name?: string | null;
   line1?: string | null;
+  street?: string | null;
   details?: string | null;
+  manual_city?: string | null;
+  manual_area?: string | null;
   service_city?: { id: number; name?: string | null; name_ar?: string | null } | null;
   service_city_id?: number | string | null;
   delivery_area?: { id: number; name?: string | null; delivery_price?: string | null } | null;
@@ -75,6 +101,7 @@ type BackendOrder = {
   market?: { id: number; name?: string | null; branch?: string | null } | null;
   customer?: {
     id: number;
+    name?: string | null;
     first_name?: string | null;
     last_name?: string | null;
     phone?: string | null;
@@ -95,6 +122,20 @@ type BackendOrder = {
   delivery_area_id?: number | string | null;
   custom_delivery_area?: string | null;
   delivery_label?: string | null;
+  order_scope?: "general" | "service_city" | string | null;
+  is_multi_market?: boolean | null;
+  market_count?: number | string | null;
+  market_names_summary?: string | null;
+  market_sections?: OrderMarketSectionLike[] | null;
+  grouped_items?: unknown;
+  grouped_offers?: unknown;
+  pickup_stops?: Array<{
+    market_id?: number | string | null;
+    market?: { id?: number | string | null; name?: string | null; branch?: string | null; status?: string | null } | null;
+    pickup_status?: string | null;
+    picked_up_at?: string | null;
+    sort_order?: number | string | null;
+  }> | null;
   discount?: string | null;
   description?: string | null;
   delivery_note?: string | null;
@@ -111,9 +152,18 @@ type BackendOrder = {
 
 type BackendOrderItem = {
   id: number;
+  section_id?: number | string | null;
   variant_id?: number | string | null;
   quantity: number;
   unit_price: string;
+  subtotal?: string | number | null;
+  product_name?: string | null;
+  product?: {
+    id?: number | string | null;
+    name?: string | null;
+    description?: string | null;
+    image?: string | null;
+  } | null;
   variant?: {
     id: number;
     price?: string;
@@ -128,10 +178,18 @@ type BackendOrderItem = {
 
 type BackendOrderOffer = {
   id?: number | string | null;
+  section_id?: number | string | null;
   offer_id?: number | string | null;
   title?: string | null;
   discount_amount?: string | null;
   created_at?: string | null;
+  offer?: {
+    id?: number | string | null;
+    title?: string | null;
+    description?: string | null;
+    type?: string | null;
+    discount?: string | number | null;
+  } | null;
 };
 
 type BackendProduct = {
@@ -244,27 +302,19 @@ function reviewStatusTone(status: string | null | undefined): "blue" | "green" |
 }
 
 function deliveryTypeLabel(order: BackendOrder) {
-  if (order.delivery_type === "delivery" || order.delivery_type === "manual_quote") {
-    return "دليفري / أخرى";
-  }
-  return "منطقة ثابتة";
+  return getDeliveryTypeLabel(order);
 }
 
 function deliveryTypeTone(order: BackendOrder): "blue" | "green" | "red" | "secondary" {
-  if (order.delivery_type === "delivery" || order.delivery_type === "manual_quote") return "red";
+  if (order.delivery_type === "fixed_area") return "green";
+  if (order.delivery_type === "delivery" || order.delivery_type === "manual_quote") return "blue";
   if (order.delivery_price_status === "fixed") return "green";
   return "secondary";
 }
 
 function deliveryFeeLabel(order: BackendOrder) {
   if (order.delivery_label?.trim()) return order.delivery_label;
-  if (
-    (order.delivery_type === "delivery" || order.delivery_type === "manual_quote") &&
-    (order.delivery_price_status === "pending_quote" || order.delivery_price == null)
-  ) {
-    return "يحدد لاحقاً";
-  }
-  return money(order.delivery_price);
+  return getDeliveryPriceLabel(order);
 }
 
 function draftLineId() {
@@ -291,6 +341,7 @@ function dateTime(value: string | null | undefined) {
 }
 
 function customerName(order: BackendOrder) {
+  if (order.customer?.name?.trim()) return order.customer.name.trim();
   return [order.customer?.first_name, order.customer?.last_name]
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)
@@ -349,6 +400,10 @@ function apiListData<T>(value: unknown): T[] {
 }
 
 function apiOrderData(value: unknown): BackendOrder | null {
+  if (Array.isArray(value)) {
+    const first = value[0];
+    return first && typeof first === "object" ? first as BackendOrder : null;
+  }
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as { data?: unknown };
   if (record.data && typeof record.data === "object" && !Array.isArray(record.data)) {
@@ -358,24 +413,16 @@ function apiOrderData(value: unknown): BackendOrder | null {
 }
 
 function marketName(order: BackendOrder) {
-  return order.market?.name?.trim() || `Market #${order.market_id ?? "-"}`;
+  return getOrderMarketsSummary(order);
 }
 
 function serviceCityName(order: BackendOrder) {
-  return (
-    order.service_city?.name_ar?.trim() ||
-    order.service_city?.name?.trim() ||
-    order.delivery_address?.service_city?.name_ar?.trim() ||
-    order.delivery_address?.service_city?.name?.trim() ||
-    (order.service_city_id ? `City #${order.service_city_id}` : "-")
-  );
+  return orderServiceCityName(order) || "-";
 }
 
 function deliveryAreaName(order: BackendOrder) {
-  if (order.delivery_area?.name?.trim()) return order.delivery_area.name;
-  if (order.delivery_address?.delivery_area?.name?.trim()) return order.delivery_address.delivery_area.name;
-  if (order.delivery_type === "delivery" || order.delivery_type === "manual_quote") return "أخرى";
-  return order.delivery_area_id ? `Area #${order.delivery_area_id}` : "-";
+  if (isGeneralOrder(order)) return getManualArea(order);
+  return orderDeliveryAreaName(order) || cleanText(order.delivery_address?.manual_area) || "-";
 }
 
 function reviewStatusLabel(status: string | null | undefined) {
@@ -501,6 +548,9 @@ export function BackendOrdersPage() {
           customerName(order),
           order.customer?.phone,
           marketName(order),
+          getOrderScopeLabel(order),
+          getDeliveryDestination(order),
+          getMarketCount(order),
           representativeName(order),
           order.payment_method,
           order.delivery_price,
@@ -671,6 +721,12 @@ export function BackendOrdersPage() {
                         <Badge tone={reviewStatusTone(order.review_status)}>
                           {reviewStatusLabel(order.review_status)}
                         </Badge>
+                        <Badge tone={isGeneralOrder(order) ? "secondary" : "blue"}>
+                          {getOrderScopeLabel(order)}
+                        </Badge>
+                        <Badge tone={isMultiMarket(order) ? "green" : "secondary"}>
+                          {isMultiMarket(order) ? "متعدد المحلات" : "محل واحد"}
+                        </Badge>
                         <DeliveryTypeBadge order={order} />
                       </div>
                     </div>
@@ -684,8 +740,11 @@ export function BackendOrdersPage() {
                   </div>
 
                   <div className="min-w-0">
-                    <div className="text-xs font-bold text-muted-foreground">المحل</div>
+                    <div className="text-xs font-bold text-muted-foreground">محلات الطلب</div>
                     <div className="mt-1 truncate font-semibold">{marketName(order)}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {getMarketCount(order).toLocaleString("en-US")} {getMarketCount(order) > 1 ? "محلات" : "محل"}
+                    </div>
                   </div>
 
                   <div className="min-w-0">
@@ -717,10 +776,12 @@ export function BackendOrdersPage() {
                   </div>
 
                   <div className="grid gap-2 rounded-md border bg-muted/10 p-3 text-xs xl:col-span-6 md:grid-cols-2 xl:grid-cols-4">
-                    <SummaryPill label="المدينة" value={serviceCityName(order)} />
-                    <SummaryPill label="المنطقة" value={deliveryAreaName(order)} />
-                    <SummaryPill label="التوصيل" value={deliveryFeeLabel(order)} />
+                    <SummaryPill label="نوع الطلب" value={getOrderScopeLabel(order)} />
+                    <SummaryPill label="وجهة التوصيل" value={getDeliveryDestination(order)} />
+                    <SummaryPill label="نوع التوصيل" value={deliveryTypeLabel(order)} />
+                    <SummaryPill label="سعر التوصيل" value={deliveryFeeLabel(order)} />
                     <SummaryPill label="تاريخ الإنشاء" value={dateTime(order.created_at)} />
+                    <SummaryPill label="محلات الطلب" value={marketName(order)} />
                     <SummaryPill label="المنتجات" value={money(order.subtotal_price)} />
                     <SummaryPill label="الخصم" value={money(order.discount)} />
                     <SummaryPill label="ملاحظات الطلب" value={order.description?.trim() || "-"} />
@@ -988,17 +1049,15 @@ export function BackendCreateOrderPage() {
           .some((value) => String(value).toLowerCase().includes(normalizedQuery));
       const matchesMarket =
         productMarketFilter === "all" || String(variant.marketId ?? "") === productMarketFilter;
-      const matchesSelectedMarket =
-        !selectedMarketId || String(variant.marketId ?? "") === selectedMarketId;
       const matchesCategory =
         productCategoryFilter === "all" || variant.categoryName === productCategoryFilter;
       const matchesAvailability =
         productAvailabilityFilter === "all" ||
         (productAvailabilityFilter === "available" ? variant.available : !variant.available);
 
-      return matchesQuery && matchesSelectedMarket && matchesMarket && matchesCategory && matchesAvailability;
+      return matchesQuery && matchesMarket && matchesCategory && matchesAvailability;
     });
-  }, [productAvailabilityFilter, productCategoryFilter, productMarketFilter, productQuery, selectedMarketId, variants]);
+  }, [productAvailabilityFilter, productCategoryFilter, productMarketFilter, productQuery, variants]);
 
   const subtotal = lines.reduce((sum, line) => {
     const variant = variants.find((item) => item.id === line.variantId);
@@ -1006,19 +1065,31 @@ export function BackendCreateOrderPage() {
     return sum + unitPrice * Math.max(1, Number(line.quantity) || 1);
   }, 0);
   const selectedVariants = lines.map((line) => line.variantId).filter(Boolean);
-  const hasMixedMarkets =
-    new Set(
-      lines
-        .map((line) => variants.find((variant) => variant.id === line.variantId)?.marketId)
-        .filter(Boolean),
-    ).size > 1;
-  const selectedVariantMarketId = lines
+  const selectedVariantMarketIds = lines
     .map((line) => variants.find((variant) => variant.id === line.variantId)?.marketId)
-    .find(Boolean);
-  const hasMarketMismatch =
-    Boolean(selectedMarketId && selectedVariantMarketId) &&
-    String(selectedVariantMarketId) !== selectedMarketId;
-
+    .filter((marketId): marketId is number => typeof marketId === "number");
+  const selectedVariantMarketId = selectedVariantMarketIds[0];
+  const selectedVariantMarketCount = new Set(selectedVariantMarketIds).size;
+  const selectedMarketInOrder =
+    selectedMarketId && selectedVariantMarketIds.some((marketId) => String(marketId) === selectedMarketId);
+  const primaryMarketId =
+    selectedVariantMarketIds.length > 0
+      ? selectedMarketInOrder
+        ? selectedMarketId
+        : selectedVariantMarketId
+          ? String(selectedVariantMarketId)
+          : ""
+      : selectedMarketId;
+  const primaryMarket = useMemo(
+    () => markets.find((market) => String(market.id) === primaryMarketId) ?? selectedMarket,
+    [markets, primaryMarketId, selectedMarket],
+  );
+  const hasMixedMarkets = selectedVariantMarketCount > 1;
+  const selectedVariantMarketSummary = Array.from(new Set(
+    lines
+      .map((line) => variants.find((variant) => variant.id === line.variantId)?.marketName)
+      .filter((name): name is string => Boolean(name)),
+  )).join(", ");
   function updateLine(id: string, patch: Partial<OrderLineDraft>) {
     setLines((current) =>
       current.map((line) => (line.id === id ? { ...line, ...patch } : line)),
@@ -1034,11 +1105,9 @@ export function BackendCreateOrderPage() {
     if (
       !selectedUser ||
       !selectedAddress ||
-      !selectedMarketId ||
+      !primaryMarketId ||
       !paymentMethod.trim() ||
-      !selectedVariants.length ||
-      hasMixedMarkets ||
-      hasMarketMismatch
+      !selectedVariants.length
     ) return;
 
     const items = lines
@@ -1079,10 +1148,7 @@ export function BackendCreateOrderPage() {
         body: JSON.stringify({
           user_id: Number(selectedUser),
           delivery_address_id: Number(selectedAddress),
-          market_id: Number(selectedMarketId),
-          service_city_id: selectedAddressRecord?.service_city_id
-            ? Number(selectedAddressRecord.service_city_id)
-            : undefined,
+          market_id: Number(primaryMarketId),
           payment_method: paymentMethod.trim(),
           description: description.trim(),
           delivery_note: deliveryNote.trim(),
@@ -1241,20 +1307,34 @@ export function BackendCreateOrderPage() {
               {selectedAddressRecord ? (
                 <div className="grid gap-2 rounded-md border bg-muted/10 p-3 text-sm md:grid-cols-2 xl:grid-cols-4">
                   <SummaryPill
-                    label="المدينة"
+                    label="نوع الطلب"
                     value={
-                      selectedAddressRecord.service_city?.name_ar?.trim() ||
-                      selectedAddressRecord.service_city?.name?.trim() ||
-                      (selectedAddressRecord.service_city_id ? `City #${selectedAddressRecord.service_city_id}` : "-")
+                      selectedAddressRecord.service_city_id || selectedAddressRecord.service_city
+                        ? "مدينة خدمة"
+                        : "عام"
                     }
                   />
                   <SummaryPill
+                    label="وجهة التوصيل"
+                    value={[
+                      selectedAddressRecord.service_city?.name_ar?.trim() ||
+                        selectedAddressRecord.service_city?.name?.trim() ||
+                        selectedAddressRecord.manual_city?.trim(),
+                      selectedAddressRecord.delivery_area?.name?.trim() ||
+                        selectedAddressRecord.manual_area?.trim(),
+                      selectedAddressRecord.details?.trim() ||
+                        selectedAddressRecord.line1?.trim() ||
+                        selectedAddressRecord.street?.trim() ||
+                        selectedAddressRecord.name?.trim(),
+                    ].filter(Boolean).join(" - ") || "-"}
+                  />
+                  <SummaryPill
                     label="المنطقة"
-                    value={selectedAddressRecord.delivery_area?.name?.trim() || "أخرى"}
+                    value={selectedAddressRecord.delivery_area?.name?.trim() || selectedAddressRecord.manual_area?.trim() || "-"}
                   />
                   <SummaryPill
                     label="نوع التوصيل"
-                    value={selectedAddressRecord.delivery_type === "fixed_area" ? "منطقة ثابتة" : "دليفري / أخرى"}
+                    value={selectedAddressRecord.delivery_type === "fixed_area" ? "توصيل ثابت" : "دليفري يدوي"}
                   />
                   <SummaryPill
                     label={selectedAddressRecord.delivery_type === "fixed_area" ? "سعر التوصيل المتوقع" : "سعر التوصيل"}
@@ -1268,23 +1348,15 @@ export function BackendCreateOrderPage() {
               ) : null}
 
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="المحل">
+                <Field label="المحل الأساسي">
                   <AppSelect
                     value={selectedMarketId}
                     onValueChange={(marketId) => {
                       setSelectedMarketId(marketId);
                       setProductMarketFilter("all");
-                      setLines((current) =>
-                        current.map((line) => {
-                          const variant = variants.find((item) => item.id === line.variantId);
-                          return variant?.marketId && String(variant.marketId) !== marketId
-                            ? { ...line, variantId: "", unitPrice: "" }
-                            : line;
-                        }),
-                      );
                     }}
                     placeholder="اختر المحل"
-                    ariaLabel="اختيار المحل"
+                    ariaLabel="اختيار المحل الأساسي"
                     className="h-11 bg-input"
                     options={markets.map((market) => ({
                       value: String(market.id),
@@ -1378,10 +1450,9 @@ export function BackendCreateOrderPage() {
                   );
                 })}
                 {hasMixedMarkets ? (
-                  <p className="text-sm text-destructive">كل منتجات الطلب يجب أن تكون من نفس المحل.</p>
-                ) : null}
-                {hasMarketMismatch ? (
-                  <p className="text-sm text-destructive">منتجات الطلب يجب أن تكون من المحل المختار.</p>
+                  <p className="text-sm font-semibold text-primary">
+                    سيتم إنشاء طلب متعدد المحلات: {selectedVariantMarketSummary}
+                  </p>
                 ) : null}
               </div>
 
@@ -1491,15 +1562,16 @@ export function BackendCreateOrderPage() {
               ملخص الطلب
             </div>
             <div className="flex flex-1 flex-col">
-              <SummaryRow label="المحل" value={selectedMarket?.name?.trim() || "-"} />
+              <SummaryRow label="المحل الأساسي" value={primaryMarket?.name?.trim() || "-"} />
+              <SummaryRow label="محلات المنتجات" value={selectedVariantMarketSummary || "-"} />
               <SummaryRow label="إجمالي المنتجات" value={money(subtotal)} />
               <SummaryRow
                 label="نوع التوصيل"
                 value={
                   selectedAddressRecord?.delivery_type === "fixed_area"
-                    ? "منطقة ثابتة"
+                    ? "توصيل ثابت"
                     : selectedAddressRecord
-                      ? "دليفري / أخرى"
+                      ? "دليفري يدوي"
                       : "-"
                 }
               />
@@ -1522,11 +1594,9 @@ export function BackendCreateOrderPage() {
                 saving ||
                 !selectedUser ||
                 !selectedAddress ||
-                !selectedMarketId ||
+                !primaryMarketId ||
                 !paymentMethod.trim() ||
-                !selectedVariants.length ||
-                hasMixedMarkets ||
-                hasMarketMismatch
+                !selectedVariants.length
               }
             >
               {saving ? <Loader2 className="size-4 animate-spin" /> : <ClipboardList className="size-4" />}
@@ -1551,7 +1621,11 @@ export function BackendCreateOrderPage() {
             onClose={() => setPickerLineId(null)}
             onSelect={(variantId) => {
               const variant = variants.find((item) => item.id === variantId);
-              if (variant?.marketId && !selectedMarketId) {
+              const otherSelectedMarketIds = lines
+                .filter((line) => line.id !== pickerLineId)
+                .map((line) => variants.find((item) => item.id === line.variantId)?.marketId)
+                .filter((marketId): marketId is number => typeof marketId === "number");
+              if (variant?.marketId && (!selectedMarketId || otherSelectedMarketIds.length === 0)) {
                 setSelectedMarketId(String(variant.marketId));
               }
               if (pickerLineId) {
@@ -1935,15 +2009,216 @@ function SummaryRow({ label, value, strong }: { label: string; value: string; st
   );
 }
 
+function sectionMarketName(section: OrderMarketSectionLike) {
+  return objectName(section.market) || (section.market_id ? `Market #${section.market_id}` : "محل غير محدد");
+}
+
+function sectionTotal(section: OrderMarketSectionLike) {
+  const explicitTotal = numberValue(section.total_price);
+  if (explicitTotal !== null) return money(explicitTotal);
+
+  const subtotal = numberValue(section.subtotal_price) ?? 0;
+  const discount = numberValue(section.discount) ?? 0;
+  return money(Math.max(0, subtotal - discount));
+}
+
+function orderItemName(item: BackendOrderItem) {
+  return (
+    cleanText(item.product?.name) ||
+    cleanText(item.product_name) ||
+    cleanText(item.variant?.product?.name) ||
+    `Variant #${item.variant_id ?? item.variant?.id ?? item.id}`
+  );
+}
+
+function orderItemSubtotal(item: BackendOrderItem) {
+  if (item.subtotal !== null && item.subtotal !== undefined && item.subtotal !== "") {
+    return formatOrderMoney(item.subtotal, money(0));
+  }
+  const unitPrice = numberValue(item.unit_price) ?? 0;
+  const quantity = numberValue(item.quantity) ?? 0;
+  return money(unitPrice * quantity);
+}
+
+function orderOfferTitle(offer: BackendOrderOffer, index: number) {
+  return (
+    cleanText(offer.offer?.title) ||
+    cleanText(offer.title) ||
+    `Offer #${offer.offer_id ?? offer.offer?.id ?? offer.id ?? index + 1}`
+  );
+}
+
+function PickupStopsCard({ order }: { order: BackendOrder }) {
+  const stops = getPickupStops(order).slice().sort((first, second) => {
+    const firstOrder = numberValue(first.sort_order) ?? 0;
+    const secondOrder = numberValue(second.sort_order) ?? 0;
+    return firstOrder - secondOrder;
+  });
+  if (stops.length === 0) return null;
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b bg-muted/25 px-5 py-4">
+        <div>
+          <div className="font-semibold">نقاط الاستلام</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            طلب أب واحد مع {stops.length.toLocaleString("en-US")} نقطة استلام
+          </div>
+        </div>
+        <Badge tone={isMultiMarket(order) ? "green" : "secondary"}>
+          {isMultiMarket(order) ? "متعدد المحلات" : "محل واحد"}
+        </Badge>
+      </div>
+      <div className="grid gap-3 p-5 md:grid-cols-2">
+        {stops.map((stop, index) => (
+          <div key={`${stop.market_id ?? index}-${stop.sort_order ?? index}`} className="rounded-md border bg-muted/10 p-4 text-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate font-bold">
+                  {objectName(stop.market) || (stop.market_id ? `Market #${stop.market_id}` : "محل غير محدد")}
+                </div>
+                {cleanText(stop.market?.branch) ? (
+                  <div className="mt-1 text-xs text-muted-foreground">{cleanText(stop.market?.branch)}</div>
+                ) : null}
+              </div>
+              <Badge tone={cleanText(stop.pickup_status) === "picked_up" ? "green" : "secondary"}>
+                {getPickupStatusLabel(stop.pickup_status)}
+              </Badge>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+              <span>الترتيب: {cleanText(stop.sort_order) || index + 1}</span>
+              <span>وقت الاستلام: {dateTime(cleanText(stop.picked_up_at) || null)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function MarketSectionsCard({ order }: { order: BackendOrder }) {
+  const sections = getMarketSections(order);
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b bg-muted/25 px-5 py-4">
+        <div>
+          <div className="font-semibold">محلات الطلب</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            {getOrderMarketsSummary(order)}
+          </div>
+        </div>
+        <Badge tone={isMultiMarket(order) ? "green" : "secondary"}>
+          {isMultiMarket(order) ? "متعدد المحلات" : "محل واحد"}
+        </Badge>
+      </div>
+
+      {sections.length === 0 ? (
+        <div className="p-6 text-center text-sm text-muted-foreground">
+          لا توجد منتجات أو محلات في استجابة الطلب.
+        </div>
+      ) : (
+        <div className="grid gap-4 p-5">
+          {sections.map((section, sectionIndex) => {
+            const items = (section.items ?? []) as BackendOrderItem[];
+            const offers = (section.offers ?? []) as BackendOrderOffer[];
+
+            return (
+              <section key={`${section.id ?? section.market_id ?? sectionIndex}`} className="overflow-hidden rounded-lg border bg-card">
+                <div className="border-b bg-muted/15 p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="truncate text-base font-bold">{sectionMarketName(section)}</h3>
+                        {cleanText(section.market?.branch) ? (
+                          <Badge tone="secondary">{cleanText(section.market?.branch)}</Badge>
+                        ) : null}
+                        <Badge tone={cleanText(section.pickup_status) === "picked_up" ? "green" : "secondary"}>
+                          {getPickupStatusLabel(section.pickup_status)}
+                        </Badge>
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        market_id: {cleanText(section.market_id) || section.market?.id || "-"}
+                      </div>
+                    </div>
+                    <div className="grid gap-2 text-xs sm:grid-cols-3">
+                      <SummaryPill label="إجمالي المنتجات" value={money(section.subtotal_price)} />
+                      <SummaryPill label="الخصم" value={money(section.discount)} />
+                      <SummaryPill label="الإجمالي النهائي" value={sectionTotal(section)} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[680px] text-sm">
+                    <thead>
+                      <tr className="border-b text-xs text-muted-foreground">
+                        <th className="w-16 px-4 py-3 text-start">#</th>
+                        <th className="px-4 py-3 text-start">المنتج</th>
+                        <th className="px-4 py-3 text-start">variant_id</th>
+                        <th className="px-4 py-3 text-start">السعر</th>
+                        <th className="px-4 py-3 text-start">الكمية</th>
+                        <th className="px-4 py-3 text-start">الإجمالي</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-5 text-center text-muted-foreground">
+                            لا توجد منتجات مباشرة لهذا المحل.
+                          </td>
+                        </tr>
+                      ) : (
+                        items.map((item, index) => (
+                          <tr key={`${item.id ?? item.variant_id ?? index}`} className="border-b last:border-0">
+                            <td className="px-4 py-4 text-muted-foreground">{index + 1}</td>
+                            <td className="px-4 py-4 font-medium">{orderItemName(item)}</td>
+                            <td className="px-4 py-4">{cleanText(item.variant_id) || item.variant?.id || "-"}</td>
+                            <td className="px-4 py-4"><CurrencyText>{money(item.unit_price)}</CurrencyText></td>
+                            <td className="px-4 py-4">{cleanText(item.quantity) || "-"}</td>
+                            <td className="px-4 py-4"><CurrencyText>{orderItemSubtotal(item)}</CurrencyText></td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="border-t p-4">
+                  <div className="mb-3 font-semibold">عروض الطلب</div>
+                  {offers.length === 0 ? (
+                    <div className="rounded-md border bg-muted/10 px-3 py-3 text-sm text-muted-foreground">
+                      لا توجد عروض لهذا المحل.
+                    </div>
+                  ) : (
+                    <div className="grid gap-2">
+                      {offers.map((offer, index) => (
+                        <div key={`${offer.id ?? offer.offer_id ?? index}`} className="flex items-center justify-between gap-3 rounded-md border bg-muted/10 px-3 py-2 text-sm">
+                          <span className="font-medium">{orderOfferTitle(offer, index)}</span>
+                          <span className="text-muted-foreground">
+                            offer_id: {cleanText(offer.offer_id) || offer.offer?.id || "-"} · {money(offer.discount_amount)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const [order, setOrder] = useState<BackendOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingStatus, setSavingStatus] = useState(false);
-  const [savingQuote, setSavingQuote] = useState(false);
   const [savingAssignment, setSavingAssignment] = useState(false);
-  const [quoteDraft, setQuoteDraft] = useState("");
   const [orderDetailsOpen, setOrderDetailsOpen] = useState(true);
   const [representativeOpen, setRepresentativeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1958,7 +2233,6 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
       const nextOrder = apiOrderData(data);
       if (!nextOrder) throw new Error("تعذر قراءة تفاصيل الطلب من استجابة الباك.");
       setOrder(nextOrder);
-      setQuoteDraft(String(nextOrder.delivery_price ?? ""));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر تحميل تفاصيل الطلب.");
     } finally {
@@ -1990,31 +2264,6 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
       });
     } finally {
       setSavingStatus(false);
-    }
-  }
-
-  async function updateDeliveryQuote() {
-    if (!order || !quoteDraft.trim()) return;
-    setSavingQuote(true);
-    try {
-      const response = await apiFetch(`auth/representatives/${order.id}/delivery-quote/`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ delivery_price: Number(quoteDraft || 0) }),
-      });
-      const data = await apiResponseData(response);
-      if (!response.ok) throw new Error(apiError(data, "تعذر تثبيت سعر الدليفري."));
-      const nextOrder = data as BackendOrder;
-      setOrder(nextOrder);
-      setQuoteDraft(String(nextOrder.delivery_price ?? ""));
-      showSnackbar({ message: "تم تثبيت سعر الدليفري.", tone: "success" });
-    } catch (reason) {
-      showSnackbar({
-        message: reason instanceof Error ? reason.message : "تعذر تثبيت سعر الدليفري.",
-        tone: "danger",
-      });
-    } finally {
-      setSavingQuote(false);
     }
   }
 
@@ -2103,47 +2352,11 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
       <OrderRouteCard order={order} />
 
       <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <Card className="overflow-hidden">
-          <div className="border-b bg-muted/25 px-5 py-4 font-semibold">منتجات الطلب</div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead>
-                <tr className="border-b text-xs text-muted-foreground">
-                  <th className="w-16 px-4 py-3 text-start">#</th>
-                  <th className="px-4 py-3 text-start">المنتج</th>
-                  <th className="px-4 py-3 text-start">السعر</th>
-                  <th className="px-4 py-3 text-start">الكمية</th>
-                  <th className="px-4 py-3 text-start">الإجمالي</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(order.items ?? []).map((item, index) => (
-                  <tr key={item.id} className="border-b last:border-0">
-                    <td className="px-4 py-4 text-muted-foreground">{index + 1}</td>
-                    <td className="px-4 py-4 font-medium">{item.variant?.product?.name ?? `Variant #${item.variant_id ?? item.variant?.id ?? item.id}`}</td>
-                    <td className="px-4 py-4"><CurrencyText>{money(item.unit_price)}</CurrencyText></td>
-                    <td className="px-4 py-4">{item.quantity}</td>
-                    <td className="px-4 py-4"><CurrencyText>{money(Number(item.unit_price) * item.quantity)}</CurrencyText></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="grid gap-5">
+          <PickupStopsCard order={order} />
+          <MarketSectionsCard order={order} />
           <FinancialSummaryCard order={order} />
-          {order.offers?.length ? (
-            <div className="mx-5 mb-5 rounded-lg border bg-muted/10 p-5 text-sm">
-              <div className="mb-3 font-semibold">العروض</div>
-              <div className="grid gap-2">
-                {order.offers.map((offer, index) => (
-                  <div key={`${offer.id ?? offer.offer_id ?? index}`} className="flex items-center justify-between gap-3 rounded-md bg-background/60 px-3 py-2">
-                    <span className="font-medium">{offer.title ?? `Offer #${offer.offer_id ?? offer.id ?? index + 1}`}</span>
-                    <span className="text-muted-foreground">{money(offer.discount_amount)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </Card>
+        </div>
 
         <div className="grid gap-4">
           <Card className="p-5">
@@ -2205,13 +2418,21 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                 <SummaryRow label="payment_method" value={order.payment_method ?? "-"} />
                 <SummaryRow label="العميل" value={customerName(order)} />
                 <SummaryRow label="الهاتف" value={order.customer?.phone ?? "-"} />
-                <SummaryRow label="المحل" value={marketName(order)} />
-                <SummaryRow label="المدينة" value={serviceCityName(order)} />
+                <SummaryRow label="نوع الطلب" value={getOrderScopeLabel(order)} />
+                <SummaryRow label="محلات الطلب" value={marketName(order)} />
+                <SummaryRow label="عدد المحلات" value={String(getMarketCount(order) || "-")} />
+                <SummaryRow label="المدينة" value={isGeneralOrder(order) ? getManualCity(order) : serviceCityName(order)} />
                 <SummaryRow label="المنطقة" value={deliveryAreaName(order)} />
-                <SummaryRow label="العنوان" value={order.delivery_address?.name ?? `Address #${order.delivery_address_id ?? "-"}`} />
-                <SummaryRow label="نوع الطلب" value={deliveryTypeLabel(order)} />
+                <SummaryRow label="عنوان التوصيل" value={getDeliveryDestination(order)} />
+                {isGeneralOrder(order) ? (
+                  <>
+                    <SummaryRow label="المدينة اليدوية" value={getManualCity(order)} />
+                    <SummaryRow label="المنطقة اليدوية" value={getManualArea(order)} />
+                  </>
+                ) : null}
+                <SummaryRow label="نوع التوصيل" value={deliveryTypeLabel(order)} />
                 <SummaryRow label="subtotal_price" value={money(order.subtotal_price)} />
-                <SummaryRow label="delivery_price" value={money(order.delivery_price)} />
+                <SummaryRow label="delivery_price" value={deliveryFeeLabel(order)} />
                 <SummaryRow label="discount" value={money(order.discount)} />
                 <SummaryRow label="total_price" value={money(order.total_price)} strong />
                 <SummaryRow label="description" value={order.description?.trim() || "-"} />
@@ -2259,24 +2480,12 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
             ) : null}
           </Card>
 
-          {(order.delivery_type === "delivery" || order.delivery_type === "manual_quote") && order.delivery_price_status === "pending_quote" ? (
+          {order.delivery_price == null ? (
             <Card className="p-5 text-sm">
-              <div className="mb-3 font-semibold">سعر الدليفري</div>
-              <div className="grid gap-2">
-                <Field label="سعر الدليفري بعد التواصل">
-                  <Input
-                    min={0}
-                    step="0.01"
-                    type="number"
-                    value={quoteDraft}
-                    onChange={(event) => setQuoteDraft(event.target.value)}
-                  />
-                </Field>
-                <Button type="button" disabled={savingQuote || !quoteDraft.trim()} onClick={() => void updateDeliveryQuote()}>
-                  {savingQuote ? <Loader2 className="size-4 animate-spin" /> : null}
-                  تثبيت السعر
-                </Button>
-              </div>
+              <div className="mb-1 font-semibold">سعر التوصيل</div>
+              <p className="text-muted-foreground">
+                {deliveryLaterLabel}
+              </p>
             </Card>
           ) : null}
         </div>
@@ -2340,7 +2549,7 @@ function OrderRouteCard({ order }: { order: BackendOrder }) {
           تم فصل الإلغاء عن مسار الحالات الأساسية لهذا الطلب.
         </div>
       ) : (
-        <ol className="grid gap-y-5 px-5 py-6 md:grid-cols-5 md:gap-y-0">
+        <ol className="grid gap-y-5 px-5 py-6 md:grid-cols-7 md:gap-y-0">
           {orderRouteStatuses.map((status, index) => {
             const isReached = index <= activeIndex;
             const isActive = index === activeIndex;

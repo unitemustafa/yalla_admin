@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -113,6 +114,7 @@ function apiErrorMessage(value: unknown, fallback: string) {
 function typeLabel(type: string) {
   const labels: Record<string, string> = {
     order_review: "الطلبات",
+    new_order_review: "مراجعة الطلبات",
     stock_alert: "المخزون",
     delivery: "التوصيل",
     system: "النظام",
@@ -124,7 +126,7 @@ function typeLabel(type: string) {
 }
 
 function typeTone(type: string): "default" | "blue" | "green" | "red" | "secondary" {
-  if (type === "order_review") return "blue";
+  if (type === "order_review" || type === "new_order_review") return "blue";
   if (type === "stock_alert" || type === "security") return "red";
   if (type === "delivery") return "green";
   if (type === "reports") return "default";
@@ -134,6 +136,7 @@ function typeTone(type: string): "default" | "blue" | "green" | "red" | "seconda
 function iconForType(type: string) {
   const icons = {
     order_review: ShoppingCart,
+    new_order_review: ShoppingCart,
     stock_alert: CircleAlert,
     delivery: Truck,
     system: Bell,
@@ -184,6 +187,7 @@ function emptyMessage(filter: NotificationFilter) {
 
 export function NotificationsPage() {
   const { status, user, apiFetch } = useAuth();
+  const router = useRouter();
   const { t } = useDashboardI18n();
   const { showSnackbar } = useSnackbar();
   const {
@@ -359,6 +363,13 @@ export function NotificationsPage() {
     }
   }
 
+  async function openNotification(notification: DashboardNotification) {
+    await markAsRead(notification);
+    if (notification.orderId) {
+      router.push(`/orders/view/${encodeURIComponent(notification.orderId)}`);
+    }
+  }
+
   async function markAllAsRead() {
     if (markingAll) return;
 
@@ -530,7 +541,7 @@ export function NotificationsPage() {
                       !notification.isRead && "bg-primary/5",
                       markingThis && "opacity-70",
                     )}
-                    onClick={() => void markAsRead(notification)}
+                    onClick={() => void openNotification(notification)}
                   >
                     <span
                       className={cn(
@@ -562,7 +573,7 @@ export function NotificationsPage() {
                           </p>
                           {notification.orderId ? (
                             <p className="mt-1 text-xs text-muted-foreground" dir="ltr">
-                              order_id: {notification.orderId}
+                              order_id: {notification.orderId} · parent order
                             </p>
                           ) : null}
                         </div>
@@ -589,9 +600,11 @@ export function NotificationsPage() {
                               : "text-primary",
                           )}
                         >
-                          {notification.isRead
-                            ? t("notifications.state.read")
-                            : t("notifications.state.unread")}
+                          {notification.orderId
+                            ? "فتح الطلب"
+                            : notification.isRead
+                              ? t("notifications.state.read")
+                              : t("notifications.state.unread")}
                         </span>
                       </div>
                     </div>

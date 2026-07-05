@@ -21,6 +21,16 @@ import {
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { DashboardImage } from "../dashboard-image";
+import {
+  getDeliveryDestination,
+  getDeliveryPriceLabel,
+  getDeliveryTypeLabel,
+  getMarketCount,
+  getOrderMarketsSummary,
+  getOrderScopeLabel,
+  isMultiMarket,
+  type DashboardOrderLike,
+} from "../order-display";
 import { AppSelect, Badge, Button, Card, CurrencyText, Input } from "../primitives";
 import {
   apiResponseData,
@@ -35,10 +45,13 @@ type CourierOrderStatus =
   | "confirmed"
   | "under_preparation"
   | "ready"
+  | "picked_up"
+  | "on_the_way"
   | "delivered"
+  | "failed_delivery"
   | "cancelled";
 
-type CourierOrder = {
+type CourierOrder = DashboardOrderLike & {
   id: number;
   order_number?: string | null;
   status: CourierOrderStatus;
@@ -48,11 +61,9 @@ type CourierOrder = {
   created_at?: string | null;
   updated_at?: string | null;
   delivery_note?: string | null;
-  delivery_address?: { name?: string | null } | null;
-  delivery_area?: { name?: string | null } | null;
-  market?: { name?: string | null; branch?: string | null } | null;
   customer?: {
     id?: number;
+    name?: string | null;
     first_name?: string | null;
     last_name?: string | null;
     phone?: string | null;
@@ -64,15 +75,18 @@ const statusLabels: Record<CourierOrderStatus, string> = {
   pending: "قيد الانتظار",
   confirmed: "مؤكد",
   under_preparation: "قيد التجهيز",
-  ready: "جاري التسليم",
+  ready: "جاهز للاستلام",
+  picked_up: "تم الاستلام",
+  on_the_way: "في الطريق",
   delivered: "تم التسليم",
+  failed_delivery: "فشل التوصيل",
   cancelled: "ملغي",
 };
 
 function statusTone(status: CourierOrderStatus) {
   if (status === "delivered") return "green" as const;
-  if (status === "cancelled") return "red" as const;
-  if (status === "ready" || status === "confirmed") return "blue" as const;
+  if (status === "cancelled" || status === "failed_delivery") return "red" as const;
+  if (status === "ready" || status === "confirmed" || status === "picked_up" || status === "on_the_way") return "blue" as const;
   return "secondary" as const;
 }
 
@@ -99,6 +113,7 @@ function orderNumber(order: CourierOrder) {
 }
 
 function customerName(order: CourierOrder) {
+  if (order.customer?.name?.trim()) return order.customer.name.trim();
   return [order.customer?.first_name, order.customer?.last_name]
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)
@@ -194,9 +209,14 @@ function FeaturedOrder({
                 {orderNumber(order)}
               </Link>
               <div className="mt-1 text-sm font-semibold">{customerName(order)}</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {order.market?.name ?? "محل غير محدد"} -{" "}
-                {order.delivery_address?.name ?? order.delivery_area?.name ?? "عنوان غير محدد"}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Badge tone="secondary">{getOrderScopeLabel(order)}</Badge>
+                <Badge tone={isMultiMarket(order) ? "green" : "secondary"}>
+                  {isMultiMarket(order) ? "متعدد المحلات" : "محل واحد"}
+                </Badge>
+              </div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                {getOrderMarketsSummary(order)} - {getDeliveryDestination(order)}
               </div>
             </div>
             <Badge tone={statusTone(order.status)}>{statusLabels[order.status]}</Badge>
@@ -292,7 +312,7 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
   }, [load]);
 
   const activeOrders = useMemo(
-    () => orders.filter((order) => order.status === "ready"),
+    () => orders.filter((order) => ["ready", "picked_up", "on_the_way"].includes(order.status)),
     [orders],
   );
   const deliveredOrders = useMemo(
@@ -318,10 +338,10 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
           orderNumber(order),
           customerName(order),
           order.customer?.phone,
-          order.market?.name,
-          order.market?.branch,
-          order.delivery_address?.name,
-          order.delivery_area?.name,
+          getOrderScopeLabel(order),
+          getOrderMarketsSummary(order),
+          getDeliveryDestination(order),
+          getDeliveryTypeLabel(order),
         ]
           .join(" ")
           .toLocaleLowerCase("ar-EG")
@@ -524,8 +544,11 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
               }
               options={[
                 { value: "all", label: "كل الحالات" },
-                { value: "ready", label: "جاري التسليم" },
+                { value: "ready", label: "جاهز للاستلام" },
+                { value: "picked_up", label: "تم الاستلام" },
+                { value: "on_the_way", label: "في الطريق" },
                 { value: "delivered", label: "تم التسليم" },
+                { value: "failed_delivery", label: "فشل التوصيل" },
                 { value: "cancelled", label: "ملغي" },
               ]}
               ariaLabel="فلترة حالة الطلب"
@@ -541,8 +564,8 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
                 <tr className="border-b bg-muted/25 text-xs text-muted-foreground">
                   <th className="px-4 py-3 text-start">الطلب</th>
                   <th className="px-4 py-3 text-start">العميل</th>
-                  <th className="px-4 py-3 text-start">المحل</th>
-                  <th className="px-4 py-3 text-start">العنوان</th>
+                  <th className="px-4 py-3 text-start">محلات الطلب</th>
+                  <th className="px-4 py-3 text-start">وجهة التوصيل</th>
                   <th className="px-4 py-3 text-start">الحالة</th>
                   <th className="px-4 py-3 text-start">الإجمالي</th>
                   <th className="px-4 py-3 text-start">الإسناد</th>
@@ -553,8 +576,16 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
               <tbody>
                 {visibleOrders.map((order) => (
                   <tr key={order.id} className="border-b last:border-0 hover:bg-muted/20">
-                    <td className="px-4 py-4 font-semibold text-primary" dir="ltr">
-                      {orderNumber(order)}
+                    <td className="px-4 py-4">
+                      <Link href={`/orders/view/${order.id}`} className="font-semibold text-primary hover:underline" dir="ltr">
+                        {orderNumber(order)}
+                      </Link>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        <Badge tone="secondary">{getOrderScopeLabel(order)}</Badge>
+                        <Badge tone={isMultiMarket(order) ? "green" : "secondary"}>
+                          {isMultiMarket(order) ? "متعدد المحلات" : "محل واحد"}
+                        </Badge>
+                      </div>
                     </td>
                     <td className="px-4 py-4">
                       <div className="font-semibold">{customerName(order)}</div>
@@ -563,15 +594,16 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      <div>{order.market?.name ?? "-"}</div>
+                      <div>{getOrderMarketsSummary(order)}</div>
                       <div className="mt-1 text-xs text-muted-foreground">
-                        {order.market?.branch ?? ""}
+                        عدد المحلات: {getMarketCount(order) || "-"}
                       </div>
                     </td>
                     <td className="max-w-56 px-4 py-4">
-                      {order.delivery_address?.name ??
-                        order.delivery_area?.name ??
-                        "-"}
+                      <div>{getDeliveryDestination(order)}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {getDeliveryTypeLabel(order)} - {getDeliveryPriceLabel(order)}
+                      </div>
                     </td>
                     <td className="px-4 py-4">
                       <Badge tone={statusTone(order.status)}>

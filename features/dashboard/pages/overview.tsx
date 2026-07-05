@@ -35,6 +35,11 @@ import {
   type DashboardOverview,
 } from "../admin-api";
 import {
+  getMarketCount,
+  getOrderMarketsSummary,
+  type DashboardOrderLike,
+} from "../order-display";
+import {
   AnimatedChartWrapper,
   AnimatedNumber,
   AnimatedProgressBar,
@@ -138,11 +143,19 @@ function activeOrderData(items: BackendRecord[]) {
     const code =
       valueText(order, ["order_number", "code", "description"]) ||
       `ORD-${valueText(order, ["id"], String(index + 1))}`;
+    const orderId = valueText(order, ["id", "order_id"]);
+    const orderLike = order as DashboardOrderLike;
+    const marketSummary =
+      valueText(order, ["market_names_summary"]) || getOrderMarketsSummary(orderLike);
+    const marketCount = getMarketCount(orderLike);
 
     return {
       key: `${code}-${index}`,
       code,
       customerName,
+      marketSummary,
+      marketCount,
+      href: orderId ? `/orders/view/${encodeURIComponent(orderId)}` : "/orders",
       amount: safeNumber(firstValue(order, ["total_price", "total", "amount"])),
       status: translateOrderStatus(order.status),
     };
@@ -1237,8 +1250,8 @@ export function OverviewPage() {
                 {activeOrders.map((order, index) => (
                   <Link
                     key={order.key}
-                    href="/orders"
-                    className="flex min-h-[67px] items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2.5 text-start transition-colors hover:border-primary hover:bg-primary/5"
+                    href={order.href}
+                    className="flex min-h-[82px] items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2.5 text-start transition-colors hover:border-primary hover:bg-primary/5"
                   >
                     <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                       <Bike className="size-4" />
@@ -1249,6 +1262,10 @@ export function OverviewPage() {
                       </span>
                       <span className="block truncate text-xs leading-4 text-muted-foreground">
                         {order.customerName}
+                      </span>
+                      <span className="block truncate text-xs leading-4 text-muted-foreground">
+                        {order.marketSummary}
+                        {order.marketCount > 1 ? ` · ${order.marketCount} محلات` : ""}
                       </span>
                     </span>
                     <span className="flex shrink-0 flex-col items-end gap-1">
