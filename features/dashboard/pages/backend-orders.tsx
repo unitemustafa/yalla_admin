@@ -39,12 +39,27 @@ type BackendOrderStatus =
   | "confirmed"
   | "under_preparation"
   | "ready"
+  | "picked_up"
+  | "on_the_way"
   | "delivered"
+  | "failed_delivery"
   | "cancelled";
+
+type BackendReviewStatus = "pending_review" | "approved" | "rejected";
+
+type BackendDeliveryType = "fixed_area" | "delivery" | "manual_quote" | string;
 
 type BackendAddress = {
   id: number;
   name?: string | null;
+  line1?: string | null;
+  details?: string | null;
+  service_city?: { id: number; name?: string | null; name_ar?: string | null } | null;
+  service_city_id?: number | string | null;
+  delivery_area?: { id: number; name?: string | null; delivery_price?: string | null } | null;
+  delivery_area_id?: number | string | null;
+  delivery_type?: BackendDeliveryType | null;
+  delivery_price_preview?: string | null;
   latitude?: string | null;
   longitude?: string | null;
   is_default?: boolean | null;
@@ -72,13 +87,19 @@ type BackendOrder = {
     phone?: string | null;
   } | null;
   payment_method?: string | null;
-  delivery_type?: "fixed_area" | "manual_quote" | string | null;
+  delivery_type?: BackendDeliveryType | null;
   delivery_price_status?: "fixed" | "pending_quote" | string | null;
+  service_city?: { id: number; name?: string | null; name_ar?: string | null } | null;
+  service_city_id?: number | string | null;
+  delivery_area?: { id: number; name?: string | null; delivery_price?: string | null } | null;
+  delivery_area_id?: number | string | null;
   custom_delivery_area?: string | null;
   delivery_label?: string | null;
   discount?: string | null;
   description?: string | null;
+  delivery_note?: string | null;
   status: BackendOrderStatus;
+  review_status?: BackendReviewStatus | string | null;
   delivery_price?: string | null;
   subtotal_price?: string | null;
   total_price?: string | null;
@@ -122,10 +143,35 @@ type BackendProduct = {
   variants?: Array<{ id: number; price: string; sku?: string | null }>;
 };
 
+type BackendMarket = {
+  id: number;
+  name?: string | null;
+  branch?: string | null;
+  scope?: string | null;
+  status?: string | null;
+};
+
+type BackendOffer = {
+  id: number;
+  title?: string | null;
+  type?: string | null;
+  discount?: string | number | null;
+  status?: string | null;
+  market_id?: number | string | null;
+  market?: { id: number; name?: string | null } | null;
+};
+
 type OrderLineDraft = {
   id: string;
   variantId: string;
   quantity: string;
+  unitPrice: string;
+};
+
+type OrderOfferDraft = {
+  id: string;
+  offerId: string;
+  discountAmount: string;
 };
 
 type ProductVariantOption = {
@@ -146,15 +192,20 @@ const statusOptions: BackendOrderStatus[] = [
   "confirmed",
   "under_preparation",
   "ready",
+  "picked_up",
+  "on_the_way",
+  "delivered",
 ];
 
-const filterStatusOptions: BackendOrderStatus[] = [...statusOptions, "delivered", "cancelled"];
+const filterStatusOptions: BackendOrderStatus[] = [...statusOptions, "failed_delivery", "cancelled"];
 
 const orderRouteStatuses: BackendOrderStatus[] = [
   "pending",
   "confirmed",
   "under_preparation",
   "ready",
+  "picked_up",
+  "on_the_way",
   "delivered",
 ];
 
@@ -165,37 +216,63 @@ const statusLabels: Record<BackendOrderStatus, string> = {
   confirmed: "مؤكد",
   under_preparation: "قيد التجهيز",
   ready: "جاهز للإسناد",
+  picked_up: "تم الاستلام",
+  on_the_way: "في الطريق",
   delivered: "تم التسليم",
+  failed_delivery: "فشل التوصيل",
   cancelled: "ملغي",
+};
+
+const reviewStatusLabels: Record<BackendReviewStatus, string> = {
+  pending_review: "قيد المراجعة",
+  approved: "مقبول",
+  rejected: "مرفوض",
 };
 
 function statusTone(status: BackendOrderStatus): "blue" | "green" | "red" | "secondary" {
   if (status === "delivered") return "green";
-  if (status === "cancelled") return "red";
-  if (status === "ready" || status === "confirmed") return "blue";
+  if (status === "cancelled" || status === "failed_delivery") return "red";
+  if (status === "ready" || status === "confirmed" || status === "on_the_way" || status === "picked_up") return "blue";
+  return "secondary";
+}
+
+function reviewStatusTone(status: string | null | undefined): "blue" | "green" | "red" | "secondary" {
+  if (status === "approved") return "green";
+  if (status === "rejected") return "red";
+  if (status === "pending_review") return "blue";
   return "secondary";
 }
 
 function deliveryTypeLabel(order: BackendOrder) {
-  return order.delivery_type === "manual_quote" ? "دليفري" : "توصيل";
+  if (order.delivery_type === "delivery" || order.delivery_type === "manual_quote") {
+    return "دليفري / أخرى";
+  }
+  return "منطقة ثابتة";
 }
 
 function deliveryTypeTone(order: BackendOrder): "blue" | "green" | "red" | "secondary" {
-  if (order.delivery_type === "manual_quote") return "red";
+  if (order.delivery_type === "delivery" || order.delivery_type === "manual_quote") return "red";
   if (order.delivery_price_status === "fixed") return "green";
   return "secondary";
 }
 
 function deliveryFeeLabel(order: BackendOrder) {
   if (order.delivery_label?.trim()) return order.delivery_label;
-  if (order.delivery_type === "manual_quote" && order.delivery_price_status === "pending_quote") {
-    return "دليفري";
+  if (
+    (order.delivery_type === "delivery" || order.delivery_type === "manual_quote") &&
+    (order.delivery_price_status === "pending_quote" || order.delivery_price == null)
+  ) {
+    return "يحدد لاحقاً";
   }
   return money(order.delivery_price);
 }
 
 function draftLineId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function draftOfferId() {
+  return `offer-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function money(value: string | number | null | undefined) {
@@ -221,7 +298,7 @@ function customerName(order: BackendOrder) {
 }
 
 function DeliveryTypeBadge({ order }: { order: BackendOrder }) {
-  const isDeliveryOrder = order.delivery_type === "manual_quote";
+  const isDeliveryOrder = order.delivery_type === "delivery" || order.delivery_type === "manual_quote";
   const Icon = isDeliveryOrder ? Truck : MapPin;
 
   return (
@@ -235,7 +312,7 @@ function DeliveryTypeBadge({ order }: { order: BackendOrder }) {
 }
 
 function OrderDeliveryIcon({ order }: { order: BackendOrder }) {
-  const isDeliveryOrder = order.delivery_type === "manual_quote";
+  const isDeliveryOrder = order.delivery_type === "delivery" || order.delivery_type === "manual_quote";
   const Icon = isDeliveryOrder ? Truck : MapPin;
 
   return (
@@ -256,16 +333,16 @@ function orderNumber(order: BackendOrder) {
   return order.order_number || `YM-${order.id}`;
 }
 
-function apiListData(value: unknown): BackendOrder[] {
-  if (Array.isArray(value)) return value as BackendOrder[];
+function apiListData<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[];
   if (!value || typeof value !== "object") return [];
 
   const record = value as { results?: unknown; data?: unknown };
-  if (Array.isArray(record.results)) return record.results as BackendOrder[];
-  if (Array.isArray(record.data)) return record.data as BackendOrder[];
+  if (Array.isArray(record.results)) return record.results as T[];
+  if (Array.isArray(record.data)) return record.data as T[];
   if (record.data && typeof record.data === "object") {
     const nested = record.data as { results?: unknown };
-    if (Array.isArray(nested.results)) return nested.results as BackendOrder[];
+    if (Array.isArray(nested.results)) return nested.results as T[];
   }
 
   return [];
@@ -282,6 +359,29 @@ function apiOrderData(value: unknown): BackendOrder | null {
 
 function marketName(order: BackendOrder) {
   return order.market?.name?.trim() || `Market #${order.market_id ?? "-"}`;
+}
+
+function serviceCityName(order: BackendOrder) {
+  return (
+    order.service_city?.name_ar?.trim() ||
+    order.service_city?.name?.trim() ||
+    order.delivery_address?.service_city?.name_ar?.trim() ||
+    order.delivery_address?.service_city?.name?.trim() ||
+    (order.service_city_id ? `City #${order.service_city_id}` : "-")
+  );
+}
+
+function deliveryAreaName(order: BackendOrder) {
+  if (order.delivery_area?.name?.trim()) return order.delivery_area.name;
+  if (order.delivery_address?.delivery_area?.name?.trim()) return order.delivery_address.delivery_area.name;
+  if (order.delivery_type === "delivery" || order.delivery_type === "manual_quote") return "أخرى";
+  return order.delivery_area_id ? `Area #${order.delivery_area_id}` : "-";
+}
+
+function reviewStatusLabel(status: string | null | undefined) {
+  return status && status in reviewStatusLabels
+    ? reviewStatusLabels[status as BackendReviewStatus]
+    : status || "-";
 }
 
 function assignedRepresentativeId(order: BackendOrder) {
@@ -333,7 +433,7 @@ function customerSearchText(user: BackendDashboardUser) {
 }
 
 function addressLabel(address: BackendAddress) {
-  return address.name?.trim() || `عنوان #${address.id}`;
+  return address.name?.trim() || address.line1?.trim() || `عنوان #${address.id}`;
 }
 
 function representativeHref(order: BackendOrder) {
@@ -353,19 +453,23 @@ export function BackendOrdersPage() {
   const [orders, setOrders] = useState<BackendOrder[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | BackendOrderStatus>("all");
-  const [deliveryType, setDeliveryType] = useState<"all" | "fixed_area" | "manual_quote">("all");
+  const [deliveryType, setDeliveryType] = useState<"all" | "fixed_area" | "delivery">("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadOrders() {
+  async function loadOrders(nextStatus: "all" | BackendOrderStatus = status) {
     setLoading(true);
     setError(null);
     try {
-      const ordersResponse = await apiFetch("orders/");
+      const ordersPath =
+        nextStatus === "all"
+          ? "orders/"
+          : `orders/?status=${encodeURIComponent(nextStatus)}`;
+      const ordersResponse = await apiFetch(ordersPath);
       const ordersData = await apiResponseData(ordersResponse);
       if (!ordersResponse.ok) throw new Error(apiError(ordersData, "تعذر تحميل الطلبات."));
-      setOrders(apiListData(ordersData));
+      setOrders(apiListData<BackendOrder>(ordersData));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر تحميل الطلبات.");
     } finally {
@@ -385,7 +489,10 @@ export function BackendOrdersPage() {
     const normalized = query.trim().toLowerCase();
     return orders.filter((order) => {
       const matchesStatus = status === "all" || order.status === status;
-      const matchesDeliveryType = deliveryType === "all" || order.delivery_type === deliveryType;
+      const matchesDeliveryType =
+        deliveryType === "all" ||
+        order.delivery_type === deliveryType ||
+        (deliveryType === "delivery" && order.delivery_type === "manual_quote");
       const matchesQuery =
         !normalized ||
         [
@@ -471,8 +578,10 @@ export function BackendOrdersPage() {
           <AppSelect
             value={status}
             onValueChange={(value) => {
-              setStatus(value as "all" | BackendOrderStatus);
+              const nextStatus = value as "all" | BackendOrderStatus;
+              setStatus(nextStatus);
               setCurrentPage(1);
+              void loadOrders(nextStatus);
             }}
             options={[
               { value: "all", label: "كل الحالات" },
@@ -488,13 +597,13 @@ export function BackendOrdersPage() {
           <AppSelect
             value={deliveryType}
             onValueChange={(value) => {
-              setDeliveryType(value as "all" | "fixed_area" | "manual_quote");
+              setDeliveryType(value as "all" | "fixed_area" | "delivery");
               setCurrentPage(1);
             }}
             options={[
               { value: "all", label: "كل أنواع التوصيل" },
-              { value: "fixed_area", label: "توصيل" },
-              { value: "manual_quote", label: "دليفري" },
+              { value: "fixed_area", label: "منطقة ثابتة" },
+              { value: "delivery", label: "دليفري / أخرى" },
             ]}
             ariaLabel="فلترة نوع التوصيل"
             dir="rtl"
@@ -515,7 +624,7 @@ export function BackendOrdersPage() {
         ) : (
           <div className="grid gap-3 p-4">
             {pagedOrders.map((order, index) => {
-              const isDeliveryOrder = order.delivery_type === "manual_quote";
+              const isDeliveryOrder = order.delivery_type === "delivery" || order.delivery_type === "manual_quote";
 
               return (
                 <div
@@ -559,6 +668,9 @@ export function BackendOrdersPage() {
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <Badge tone={statusTone(order.status)}>{statusLabels[order.status]}</Badge>
+                        <Badge tone={reviewStatusTone(order.review_status)}>
+                          {reviewStatusLabel(order.review_status)}
+                        </Badge>
                         <DeliveryTypeBadge order={order} />
                       </div>
                     </div>
@@ -601,6 +713,18 @@ export function BackendOrdersPage() {
                     <CurrencyText className="block text-base font-extrabold tabular-nums">
                       {money(order.total_price)}
                     </CurrencyText>
+                    <div className="mt-1 text-xs text-muted-foreground">{order.payment_method ?? "-"}</div>
+                  </div>
+
+                  <div className="grid gap-2 rounded-md border bg-muted/10 p-3 text-xs xl:col-span-6 md:grid-cols-2 xl:grid-cols-4">
+                    <SummaryPill label="المدينة" value={serviceCityName(order)} />
+                    <SummaryPill label="المنطقة" value={deliveryAreaName(order)} />
+                    <SummaryPill label="التوصيل" value={deliveryFeeLabel(order)} />
+                    <SummaryPill label="تاريخ الإنشاء" value={dateTime(order.created_at)} />
+                    <SummaryPill label="المنتجات" value={money(order.subtotal_price)} />
+                    <SummaryPill label="الخصم" value={money(order.discount)} />
+                    <SummaryPill label="ملاحظات الطلب" value={order.description?.trim() || "-"} />
+                    <SummaryPill label="ملاحظة التوصيل" value={order.delivery_note?.trim() || "-"} />
                   </div>
 
                   <Link
@@ -644,15 +768,27 @@ function Metric({ title, value }: { title: string; value: number }) {
   );
 }
 
+function SummaryPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-md bg-background/70 px-3 py-2">
+      <div className="font-bold text-muted-foreground">{label}</div>
+      <div className="mt-1 truncate font-semibold">{value}</div>
+    </div>
+  );
+}
+
 export function BackendCreateOrderPage() {
   const { apiFetch } = useAuth();
   const router = useRouter();
   const { showSnackbar } = useSnackbar();
   const [users, setUsers] = useState<BackendDashboardUser[]>([]);
   const [products, setProducts] = useState<BackendProduct[]>([]);
+  const [markets, setMarkets] = useState<BackendMarket[]>([]);
+  const [offers, setOffers] = useState<BackendOffer[]>([]);
   const [addresses, setAddresses] = useState<BackendAddress[]>([]);
   const [selectedUser, setSelectedUser] = useState("");
   const [selectedAddress, setSelectedAddress] = useState("");
+  const [selectedMarketId, setSelectedMarketId] = useState("");
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   const [customerQuery, setCustomerQuery] = useState("");
   const [createAddressOpen, setCreateAddressOpen] = useState(false);
@@ -660,14 +796,13 @@ export function BackendCreateOrderPage() {
   const [addressLatitude, setAddressLatitude] = useState("");
   const [addressLongitude, setAddressLongitude] = useState("");
   const [savingAddress, setSavingAddress] = useState(false);
-  const [orderDeliveryType, setOrderDeliveryType] = useState<"fixed_area" | "manual_quote">("fixed_area");
   const [paymentMethod, setPaymentMethod] = useState("cash_on_delivery");
-  const [deliveryPrice, setDeliveryPrice] = useState("0");
-  const [discount, setDiscount] = useState("0");
   const [description, setDescription] = useState("");
+  const [deliveryNote, setDeliveryNote] = useState("");
   const [lines, setLines] = useState<OrderLineDraft[]>([
-    { id: draftLineId(), variantId: "", quantity: "1" },
+    { id: draftLineId(), variantId: "", quantity: "1", unitPrice: "" },
   ]);
+  const [orderOffers, setOrderOffers] = useState<OrderOfferDraft[]>([]);
   const [pickerLineId, setPickerLineId] = useState<string | null>(null);
   const [productQuery, setProductQuery] = useState("");
   const [productMarketFilter, setProductMarketFilter] = useState("all");
@@ -681,22 +816,32 @@ export function BackendCreateOrderPage() {
     setLoading(true);
     setError(null);
     try {
-      const [usersResponse, productsResponse] = await Promise.all([
+      const [usersResponse, productsResponse, marketsResponse, offersResponse] = await Promise.all([
         apiFetch("auth/users/"),
         apiFetch("catalog/products/"),
+        apiFetch("home/markets/"),
+        apiFetch("offers/"),
       ]);
-      const [usersData, productsData] = await Promise.all([
+      const [usersData, productsData, marketsData, offersData] = await Promise.all([
         apiResponseData(usersResponse),
         apiResponseData(productsResponse),
+        apiResponseData(marketsResponse),
+        apiResponseData(offersResponse),
       ]);
       if (!usersResponse.ok) throw new Error(apiError(usersData, "تعذر تحميل العملاء."));
       if (!productsResponse.ok) throw new Error(apiError(productsData, "تعذر تحميل المنتجات."));
+      if (!marketsResponse.ok) throw new Error(apiError(marketsData, "تعذر تحميل المحلات."));
+      if (!offersResponse.ok) throw new Error(apiError(offersData, "تعذر تحميل العروض."));
       setUsers(
-        Array.isArray(usersData)
-          ? usersData.filter(isBackendDashboardUser).filter((user) => user.role === "client")
-          : [],
+        apiListData<BackendDashboardUser>(usersData)
+          .filter(isBackendDashboardUser)
+          .filter((user) => user.role === "client"),
       );
-      setProducts(Array.isArray(productsData) ? (productsData as BackendProduct[]) : []);
+      setProducts(apiListData<BackendProduct>(productsData));
+      const nextMarkets = apiListData<BackendMarket>(marketsData);
+      setMarkets(nextMarkets);
+      setSelectedMarketId((current) => current || (nextMarkets[0]?.id ? String(nextMarkets[0].id) : ""));
+      setOffers(apiListData<BackendOffer>(offersData));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر تحميل بيانات إنشاء الطلب.");
     } finally {
@@ -714,7 +859,7 @@ export function BackendCreateOrderPage() {
       showSnackbar({ message: apiError(data, "تعذر تحميل عناوين العميل."), tone: "danger" });
       return;
     }
-    const rows = Array.isArray(data) ? (data as BackendAddress[]) : [];
+    const rows = apiListData<BackendAddress>(data);
     setAddresses(rows);
     setSelectedAddress(rows[0]?.id ? String(rows[0].id) : "");
   }
@@ -755,7 +900,7 @@ export function BackendCreateOrderPage() {
       const data = await apiResponseData(response);
       if (!response.ok) throw new Error(apiError(data, "تعذر إضافة عنوان العميل."));
 
-      const rows = Array.isArray(data) ? (data as BackendAddress[]) : [];
+      const rows = apiListData<BackendAddress>(data);
       setAddresses(rows);
       setSelectedAddress(rows[0]?.id ? String(rows[0].id) : "");
       setCreateAddressOpen(false);
@@ -815,6 +960,16 @@ export function BackendCreateOrderPage() {
     [selectedUser, users],
   );
 
+  const selectedAddressRecord = useMemo(
+    () => addresses.find((address) => String(address.id) === selectedAddress) ?? null,
+    [addresses, selectedAddress],
+  );
+
+  const selectedMarket = useMemo(
+    () => markets.find((market) => String(market.id) === selectedMarketId) ?? null,
+    [markets, selectedMarketId],
+  );
+
   const filteredCustomers = useMemo(() => {
     const normalizedQuery = customerQuery.trim().toLowerCase();
     if (!normalizedQuery) return users;
@@ -833,22 +988,23 @@ export function BackendCreateOrderPage() {
           .some((value) => String(value).toLowerCase().includes(normalizedQuery));
       const matchesMarket =
         productMarketFilter === "all" || String(variant.marketId ?? "") === productMarketFilter;
+      const matchesSelectedMarket =
+        !selectedMarketId || String(variant.marketId ?? "") === selectedMarketId;
       const matchesCategory =
         productCategoryFilter === "all" || variant.categoryName === productCategoryFilter;
       const matchesAvailability =
         productAvailabilityFilter === "all" ||
         (productAvailabilityFilter === "available" ? variant.available : !variant.available);
 
-      return matchesQuery && matchesMarket && matchesCategory && matchesAvailability;
+      return matchesQuery && matchesSelectedMarket && matchesMarket && matchesCategory && matchesAvailability;
     });
-  }, [productAvailabilityFilter, productCategoryFilter, productMarketFilter, productQuery, variants]);
+  }, [productAvailabilityFilter, productCategoryFilter, productMarketFilter, productQuery, selectedMarketId, variants]);
 
   const subtotal = lines.reduce((sum, line) => {
     const variant = variants.find((item) => item.id === line.variantId);
-    return sum + (variant?.price ?? 0) * Math.max(1, Number(line.quantity) || 1);
+    const unitPrice = Number(line.unitPrice || variant?.price || 0);
+    return sum + unitPrice * Math.max(1, Number(line.quantity) || 1);
   }, 0);
-  const effectiveDeliveryPrice = Number(deliveryPrice || 0);
-  const total = Math.max(0, subtotal + effectiveDeliveryPrice - Number(discount || 0));
   const selectedVariants = lines.map((line) => line.variantId).filter(Boolean);
   const hasMixedMarkets =
     new Set(
@@ -856,6 +1012,12 @@ export function BackendCreateOrderPage() {
         .map((line) => variants.find((variant) => variant.id === line.variantId)?.marketId)
         .filter(Boolean),
     ).size > 1;
+  const selectedVariantMarketId = lines
+    .map((line) => variants.find((variant) => variant.id === line.variantId)?.marketId)
+    .find(Boolean);
+  const hasMarketMismatch =
+    Boolean(selectedMarketId && selectedVariantMarketId) &&
+    String(selectedVariantMarketId) !== selectedMarketId;
 
   function updateLine(id: string, patch: Partial<OrderLineDraft>) {
     setLines((current) =>
@@ -872,9 +1034,43 @@ export function BackendCreateOrderPage() {
     if (
       !selectedUser ||
       !selectedAddress ||
+      !selectedMarketId ||
+      !paymentMethod.trim() ||
       !selectedVariants.length ||
-      hasMixedMarkets
+      hasMixedMarkets ||
+      hasMarketMismatch
     ) return;
+
+    const items = lines
+      .filter((line) => line.variantId)
+      .map((line) => {
+        const variant = variants.find((item) => item.id === line.variantId);
+        const unitPrice = Number(line.unitPrice || variant?.price || 0);
+
+        return {
+          variant_id: Number(line.variantId),
+          quantity: Math.max(1, Number(line.quantity) || 1),
+          unit_price: unitPrice.toFixed(2),
+        };
+      });
+
+    if (!items.length || items.some((item) => !item.variant_id || item.quantity < 1 || Number(item.unit_price) < 0)) {
+      showSnackbar({ message: "أكمل بيانات منتجات الطلب.", tone: "danger" });
+      return;
+    }
+
+    const selectedOfferPayload = orderOffers
+      .filter((offer) => offer.offerId)
+      .map((offer) => ({
+        offer_id: Number(offer.offerId),
+        discount_amount: Number(offer.discountAmount || 0).toFixed(2),
+      }));
+
+    if (selectedOfferPayload.some((offer) => !offer.offer_id || Number(offer.discount_amount) < 0)) {
+      showSnackbar({ message: "أكمل بيانات العروض أو احذف العرض غير المكتمل.", tone: "danger" });
+      return;
+    }
+
     setSaving(true);
     try {
       const response = await apiFetch("orders/", {
@@ -883,22 +1079,24 @@ export function BackendCreateOrderPage() {
         body: JSON.stringify({
           user_id: Number(selectedUser),
           delivery_address_id: Number(selectedAddress),
-          payment_method: paymentMethod,
-          delivery_price: Number(deliveryPrice || 0).toFixed(2),
-          discount: Number(discount || 0).toFixed(2),
+          market_id: Number(selectedMarketId),
+          service_city_id: selectedAddressRecord?.service_city_id
+            ? Number(selectedAddressRecord.service_city_id)
+            : undefined,
+          payment_method: paymentMethod.trim(),
           description: description.trim(),
-          items: lines
-            .filter((line) => line.variantId)
-            .map((line) => ({
-              variant_id: Number(line.variantId),
-              quantity: Math.max(1, Number(line.quantity) || 1),
-            })),
+          delivery_note: deliveryNote.trim(),
+          items,
+          offers: selectedOfferPayload,
         }),
       });
       const data = await apiResponseData(response);
       if (!response.ok) throw new Error(apiError(data, "تعذر إنشاء الطلب."));
-      const order = data as BackendOrder;
-      showSnackbar({ message: "تم إنشاء الطلب وربطه بالباك.", tone: "success" });
+      const order = apiOrderData(data) ?? (data as BackendOrder);
+      showSnackbar({
+        message: `تم إنشاء الطلب. الإجمالي ${money(order.total_price)}، التوصيل ${deliveryFeeLabel(order)}.`,
+        tone: "success",
+      });
       router.push(`/orders/view/${order.id}`);
     } catch (reason) {
       showSnackbar({
@@ -1040,33 +1238,70 @@ export function BackendCreateOrderPage() {
                 </div>
               </Field>
 
-              <div className="grid gap-4 md:grid-cols-3">
+              {selectedAddressRecord ? (
+                <div className="grid gap-2 rounded-md border bg-muted/10 p-3 text-sm md:grid-cols-2 xl:grid-cols-4">
+                  <SummaryPill
+                    label="المدينة"
+                    value={
+                      selectedAddressRecord.service_city?.name_ar?.trim() ||
+                      selectedAddressRecord.service_city?.name?.trim() ||
+                      (selectedAddressRecord.service_city_id ? `City #${selectedAddressRecord.service_city_id}` : "-")
+                    }
+                  />
+                  <SummaryPill
+                    label="المنطقة"
+                    value={selectedAddressRecord.delivery_area?.name?.trim() || "أخرى"}
+                  />
+                  <SummaryPill
+                    label="نوع التوصيل"
+                    value={selectedAddressRecord.delivery_type === "fixed_area" ? "منطقة ثابتة" : "دليفري / أخرى"}
+                  />
+                  <SummaryPill
+                    label={selectedAddressRecord.delivery_type === "fixed_area" ? "سعر التوصيل المتوقع" : "سعر التوصيل"}
+                    value={
+                      selectedAddressRecord.delivery_type === "fixed_area"
+                        ? money(selectedAddressRecord.delivery_price_preview ?? selectedAddressRecord.delivery_area?.delivery_price)
+                        : "يحدد لاحقاً"
+                    }
+                  />
+                </div>
+              ) : null}
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="المحل">
+                  <AppSelect
+                    value={selectedMarketId}
+                    onValueChange={(marketId) => {
+                      setSelectedMarketId(marketId);
+                      setProductMarketFilter("all");
+                      setLines((current) =>
+                        current.map((line) => {
+                          const variant = variants.find((item) => item.id === line.variantId);
+                          return variant?.marketId && String(variant.marketId) !== marketId
+                            ? { ...line, variantId: "", unitPrice: "" }
+                            : line;
+                        }),
+                      );
+                    }}
+                    placeholder="اختر المحل"
+                    ariaLabel="اختيار المحل"
+                    className="h-11 bg-input"
+                    options={markets.map((market) => ({
+                      value: String(market.id),
+                      label: [market.name?.trim() || `محل #${market.id}`, market.branch?.trim()]
+                        .filter(Boolean)
+                        .join(" - "),
+                    }))}
+                  />
+                </Field>
                 <Field label="طريقة الدفع">
-                  <AppSelect
+                  <Input
                     value={paymentMethod}
-                    onValueChange={setPaymentMethod}
-                    placeholder="اختر طريقة الدفع"
-                    ariaLabel="طريقة الدفع"
+                    onChange={(event) => setPaymentMethod(event.target.value)}
                     className="h-11 bg-input"
-                    options={[
-                      { value: "cash_on_delivery", label: "الدفع عند الاستلام" },
-                    ]}
+                    placeholder="cash_on_delivery"
+                    dir="ltr"
                   />
-                </Field>
-                <Field label="نوع التوصيل">
-                  <AppSelect
-                    value={orderDeliveryType}
-                    onValueChange={(value) => setOrderDeliveryType(value as "fixed_area" | "manual_quote")}
-                    ariaLabel="نوع التوصيل"
-                    className="h-11 bg-input"
-                    options={[
-                      { value: "fixed_area", label: "توصيل" },
-                      { value: "manual_quote", label: "دليفري" },
-                    ]}
-                  />
-                </Field>
-                <Field label="رسوم التوصيل">
-                  <Input min={0} step="0.01" type="number" value={deliveryPrice} onChange={(event) => setDeliveryPrice(event.target.value)} className="h-11" />
                 </Field>
               </div>
 
@@ -1079,7 +1314,7 @@ export function BackendCreateOrderPage() {
                     onClick={() =>
                       setLines((current) => [
                         ...current,
-                        { id: draftLineId(), variantId: "", quantity: "1" },
+                        { id: draftLineId(), variantId: "", quantity: "1", unitPrice: "" },
                       ])
                     }
                   >
@@ -1091,7 +1326,7 @@ export function BackendCreateOrderPage() {
                   const selectedVariant = variants.find((variant) => variant.id === line.variantId);
 
                   return (
-                  <div key={line.id} className="grid gap-3 rounded-md border bg-muted/10 p-3 md:grid-cols-[minmax(0,1fr)_150px_44px] md:items-center">
+                  <div key={line.id} className="grid gap-3 rounded-md border bg-muted/10 p-3 md:grid-cols-[minmax(0,1fr)_130px_150px_44px] md:items-center">
                     <input required type="hidden" value={line.variantId} readOnly />
                     <button
                       type="button"
@@ -1113,6 +1348,13 @@ export function BackendCreateOrderPage() {
                       </span>
                       <Search className="size-4 shrink-0 text-primary" />
                     </button>
+                    <Input
+                      readOnly
+                      value={line.unitPrice || (selectedVariant ? Number(selectedVariant.price || 0).toFixed(2) : "")}
+                      className="h-14 text-center text-base font-semibold"
+                      placeholder="unit_price"
+                      dir="ltr"
+                    />
                     <Input
                       required
                       min={1}
@@ -1138,18 +1380,106 @@ export function BackendCreateOrderPage() {
                 {hasMixedMarkets ? (
                   <p className="text-sm text-destructive">كل منتجات الطلب يجب أن تكون من نفس المحل.</p>
                 ) : null}
+                {hasMarketMismatch ? (
+                  <p className="text-sm text-destructive">منتجات الطلب يجب أن تكون من المحل المختار.</p>
+                ) : null}
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="الخصم">
-                  <Input min={0} step="0.01" type="number" value={discount} onChange={(event) => setDiscount(event.target.value)} className="h-11" />
-                </Field>
+              <div className="grid gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold">العروض</div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setOrderOffers((current) => [
+                        ...current,
+                        { id: draftOfferId(), offerId: "", discountAmount: "0" },
+                      ])
+                    }
+                  >
+                    <Plus className="size-4" />
+                    إضافة عرض
+                  </Button>
+                </div>
+                {orderOffers.length === 0 ? (
+                  <div className="rounded-md border bg-muted/10 px-3 py-3 text-sm text-muted-foreground">
+                    يمكن ترك العروض فارغة.
+                  </div>
+                ) : (
+                  <div className="grid gap-2">
+                    {orderOffers.map((offerLine, index) => (
+                      <div
+                        key={offerLine.id}
+                        className="grid gap-3 rounded-md border bg-muted/10 p-3 md:grid-cols-[minmax(0,1fr)_150px_44px] md:items-center"
+                      >
+                        <AppSelect
+                          value={offerLine.offerId}
+                          onValueChange={(offerId) =>
+                            setOrderOffers((current) =>
+                              current.map((line) =>
+                                line.id === offerLine.id ? { ...line, offerId } : line,
+                              ),
+                            )
+                          }
+                          placeholder="اختر العرض"
+                          ariaLabel={`اختيار العرض ${index + 1}`}
+                          className="h-11 bg-input"
+                          options={offers.map((offer) => ({
+                            value: String(offer.id),
+                            label: `${offer.title?.trim() || `عرض #${offer.id}`} - ${offer.type ?? "-"} - ${money(offer.discount)}`,
+                          }))}
+                        />
+                        <Input
+                          min={0}
+                          step="0.01"
+                          type="number"
+                          value={offerLine.discountAmount}
+                          onChange={(event) =>
+                            setOrderOffers((current) =>
+                              current.map((line) =>
+                                line.id === offerLine.id
+                                  ? { ...line, discountAmount: event.target.value }
+                                  : line,
+                              ),
+                            )
+                          }
+                          className="h-11 text-center"
+                          placeholder="discount_amount"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-11"
+                          onClick={() =>
+                            setOrderOffers((current) =>
+                              current.filter((line) => line.id !== offerLine.id),
+                            )
+                          }
+                          aria-label={`حذف العرض ${index + 1}`}
+                        >
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+
               <Field label="ملاحظات">
                 <textarea
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
                   className="min-h-24 rounded-md border bg-input px-3 py-2 text-sm"
+                />
+              </Field>
+              <Field label="ملاحظة التوصيل">
+                <textarea
+                  value={deliveryNote}
+                  onChange={(event) => setDeliveryNote(event.target.value)}
+                  className="min-h-24 rounded-md border bg-input px-3 py-2 text-sm"
+                  placeholder="مثلاً: الاتصال عند الوصول"
                 />
               </Field>
             </div>
@@ -1161,13 +1491,30 @@ export function BackendCreateOrderPage() {
               ملخص الطلب
             </div>
             <div className="flex flex-1 flex-col">
+              <SummaryRow label="المحل" value={selectedMarket?.name?.trim() || "-"} />
               <SummaryRow label="إجمالي المنتجات" value={money(subtotal)} />
-              <SummaryRow label="نوع التوصيل" value={orderDeliveryType === "manual_quote" ? "دليفري" : "توصيل"} />
-              <SummaryRow label="رسوم التوصيل" value={money(effectiveDeliveryPrice)} />
-              <SummaryRow label="الخصم" value={money(discount)} />
-              <div className="mt-auto border-t pt-4">
-                <SummaryRow label="الإجمالي" value={money(total)} strong />
-              </div>
+              <SummaryRow
+                label="نوع التوصيل"
+                value={
+                  selectedAddressRecord?.delivery_type === "fixed_area"
+                    ? "منطقة ثابتة"
+                    : selectedAddressRecord
+                      ? "دليفري / أخرى"
+                      : "-"
+                }
+              />
+              <SummaryRow
+                label="سعر التوصيل المتوقع"
+                value={
+                  selectedAddressRecord?.delivery_type === "fixed_area"
+                    ? money(selectedAddressRecord.delivery_price_preview ?? selectedAddressRecord.delivery_area?.delivery_price)
+                    : selectedAddressRecord
+                      ? "يحدد لاحقاً"
+                      : "-"
+                }
+              />
+              <SummaryRow label="عدد العروض" value={`${orderOffers.filter((offer) => offer.offerId).length}`} />
+              <div className="mt-auto border-t pt-4" />
             </div>
             <Button
               className="mt-5 w-full"
@@ -1175,8 +1522,11 @@ export function BackendCreateOrderPage() {
                 saving ||
                 !selectedUser ||
                 !selectedAddress ||
+                !selectedMarketId ||
+                !paymentMethod.trim() ||
                 !selectedVariants.length ||
-                hasMixedMarkets
+                hasMixedMarkets ||
+                hasMarketMismatch
               }
             >
               {saving ? <Loader2 className="size-4 animate-spin" /> : <ClipboardList className="size-4" />}
@@ -1200,7 +1550,16 @@ export function BackendCreateOrderPage() {
             onAvailabilityFilterChange={setProductAvailabilityFilter}
             onClose={() => setPickerLineId(null)}
             onSelect={(variantId) => {
-              if (pickerLineId) updateLine(pickerLineId, { variantId });
+              const variant = variants.find((item) => item.id === variantId);
+              if (variant?.marketId && !selectedMarketId) {
+                setSelectedMarketId(String(variant.marketId));
+              }
+              if (pickerLineId) {
+                updateLine(pickerLineId, {
+                  variantId,
+                  unitPrice: variant ? Number(variant.price || 0).toFixed(2) : "",
+                });
+              }
               setPickerLineId(null);
             }}
           />
@@ -1842,16 +2201,21 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                 <SummaryRow label="delivery_address_id" value={String(order.delivery_address_id ?? order.delivery_address?.id ?? "-")} />
                 <SummaryRow label="assigned_representative_id" value={String(assignedRepresentativeId(order) ?? "Unassigned")} />
                 <SummaryRow label="status" value={order.status} />
+                <SummaryRow label="review_status" value={reviewStatusLabel(order.review_status)} />
                 <SummaryRow label="payment_method" value={order.payment_method ?? "-"} />
                 <SummaryRow label="العميل" value={customerName(order)} />
                 <SummaryRow label="الهاتف" value={order.customer?.phone ?? "-"} />
                 <SummaryRow label="المحل" value={marketName(order)} />
+                <SummaryRow label="المدينة" value={serviceCityName(order)} />
+                <SummaryRow label="المنطقة" value={deliveryAreaName(order)} />
                 <SummaryRow label="العنوان" value={order.delivery_address?.name ?? `Address #${order.delivery_address_id ?? "-"}`} />
                 <SummaryRow label="نوع الطلب" value={deliveryTypeLabel(order)} />
                 <SummaryRow label="subtotal_price" value={money(order.subtotal_price)} />
                 <SummaryRow label="delivery_price" value={money(order.delivery_price)} />
                 <SummaryRow label="discount" value={money(order.discount)} />
                 <SummaryRow label="total_price" value={money(order.total_price)} strong />
+                <SummaryRow label="description" value={order.description?.trim() || "-"} />
+                <SummaryRow label="delivery_note" value={order.delivery_note?.trim() || "-"} />
                 <SummaryRow label="created_at" value={dateTime(order.created_at)} />
                 {order.custom_delivery_area ? (
                   <SummaryRow label="منطقة الدليفري" value={order.custom_delivery_area} />
@@ -1895,7 +2259,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
             ) : null}
           </Card>
 
-          {order.delivery_type === "manual_quote" && order.delivery_price_status === "pending_quote" ? (
+          {(order.delivery_type === "delivery" || order.delivery_type === "manual_quote") && order.delivery_price_status === "pending_quote" ? (
             <Card className="p-5 text-sm">
               <div className="mb-3 font-semibold">سعر الدليفري</div>
               <div className="grid gap-2">

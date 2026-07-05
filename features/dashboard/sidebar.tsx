@@ -86,7 +86,7 @@ export function Sidebar({
   onToggleCollapsed: () => void;
 }) {
   const { logout: endSession } = useAuth();
-  const { isGroupOpen, toggleGroup } = useSidebarGroups();
+  const { isGroupOpen, toggleGroup } = useSidebarGroups(activePage);
   const { direction, language, pageTitle, t } = useDashboardI18n();
   const { unreadCount } = useDashboardNotifications();
   const { customization } = useDashboardCustomization();
@@ -353,7 +353,7 @@ export function Sidebar({
                     Boolean(
                       item.children?.some((child) => child.page === activePage),
                     );
-                  const open = isGroupOpen(item.label) || active;
+                  const open = isGroupOpen(item.label);
                   const disabled = item.soon && !hasChildren;
                   const soonClass =
                     "rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-200";

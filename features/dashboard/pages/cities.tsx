@@ -1,10 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   Building2,
+  Check,
   Globe2,
   Edit3,
   LoaderCircle,
@@ -28,7 +29,12 @@ import {
   Switch,
 } from "../primitives";
 import {
+  deleteDeliveryArea,
   deleteServiceCity,
+  loadDeliveryAreas,
+  saveDeliveryArea,
+  type DeliveryArea,
+  type DeliveryAreaPayload,
   saveServiceCity,
   type ServiceCity,
   type ServiceCityPayload,
@@ -58,11 +64,29 @@ type CityDraft = {
   active: boolean;
 };
 
+type AreaDraft = {
+  name: string;
+  deliveryPrice: string;
+  centerLatitude: string;
+  centerLongitude: string;
+  radiusKm: string;
+  active: boolean;
+};
+
 const defaultDraft: CityDraft = {
   nameAr: "",
   latitude: "30.0444000",
   longitude: "31.2357000",
   radiusKm: "25",
+  active: true,
+};
+
+const defaultAreaDraft: AreaDraft = {
+  name: "",
+  deliveryPrice: "",
+  centerLatitude: "",
+  centerLongitude: "",
+  radiusKm: "",
   active: true,
 };
 
@@ -85,6 +109,73 @@ function payloadFromDraft(draft: CityDraft): ServiceCityPayload {
     radius_km: Number(draft.radiusKm).toFixed(2),
     is_active: draft.active,
   };
+}
+
+function areaDraft(area?: DeliveryArea): AreaDraft {
+  return {
+    name: area?.name ?? defaultAreaDraft.name,
+    deliveryPrice: area?.delivery_price ?? defaultAreaDraft.deliveryPrice,
+    centerLatitude: area?.center_latitude ?? defaultAreaDraft.centerLatitude,
+    centerLongitude: area?.center_longitude ?? defaultAreaDraft.centerLongitude,
+    radiusKm: area?.radius_km ?? defaultAreaDraft.radiusKm,
+    active: area?.is_active ?? defaultAreaDraft.active,
+  };
+}
+
+function validateAreaDraft(draft: AreaDraft) {
+  if (!draft.name.trim()) return "اسم المنطقة مطلوب";
+  if (!draft.deliveryPrice.trim()) return "سعر التوصيل مطلوب";
+
+  const deliveryPrice = Number(draft.deliveryPrice);
+  if (!Number.isFinite(deliveryPrice) || deliveryPrice < 0) {
+    return "سعر التوصيل يجب أن يكون رقمًا صحيحًا";
+  }
+
+  const radius = draft.radiusKm.trim() ? Number(draft.radiusKm) : null;
+  if (radius !== null && (!Number.isFinite(radius) || radius <= 0)) {
+    return "نصف القطر يجب أن يكون أكبر من صفر";
+  }
+
+  const latitude = draft.centerLatitude.trim() ? Number(draft.centerLatitude) : null;
+  const longitude = draft.centerLongitude.trim() ? Number(draft.centerLongitude) : null;
+  if (
+    (latitude !== null && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90)) ||
+    (longitude !== null && (!Number.isFinite(longitude) || longitude < -180 || longitude > 180))
+  ) {
+    return "إحداثيات غير صحيحة";
+  }
+
+  return null;
+}
+
+function payloadFromAreaDraft(city: ServiceCity, draft: AreaDraft): DeliveryAreaPayload {
+  return {
+    service_city_id: city.id,
+    name: draft.name.trim(),
+    center_latitude: draft.centerLatitude.trim() || null,
+    center_longitude: draft.centerLongitude.trim() || null,
+    radius_km: draft.radiusKm.trim() || null,
+    delivery_price: Number(draft.deliveryPrice).toFixed(2),
+    is_active: draft.active,
+  };
+}
+
+function formatMoney(value: string | number | null | undefined) {
+  const number = Number(value ?? 0);
+  const amount = Number.isFinite(number)
+    ? number.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    : "0.00";
+  return `${amount} EGP`;
+}
+
+function formatRadius(value: string | null | undefined) {
+  if (!value) return "-";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return value;
+  return `${number.toLocaleString("ar-EG-u-nu-latn")} كم`;
 }
 
 function useLockedPageScroll() {
@@ -379,6 +470,433 @@ function CityDialog({
   );
 }
 
+function AreaDeleteDialog({
+  area,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  area: DeliveryArea;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  useLockedPageScroll();
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/60 px-4 py-6 backdrop-blur-sm">
+      <section
+        dir="rtl"
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-md rounded-xl border bg-background p-5 shadow-2xl"
+      >
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg bg-destructive/10 p-2 text-destructive">
+            <Trash2 className="size-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">حذف منطقة التوصيل</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              هل أنت متأكد من حذف هذه المنطقة؟ قد لا يمكن حذفها إذا كانت مرتبطة بمحلات أو طلبات.
+            </p>
+            <p className="mt-2 text-sm font-semibold">{area.name}</p>
+          </div>
+        </div>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+            إلغاء
+          </Button>
+          <Button type="button" variant="danger" onClick={onConfirm} disabled={busy}>
+            {busy ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+            حذف
+          </Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function AreaForm({
+  area,
+  city,
+  saving,
+  onCancel,
+  onSubmit,
+}: {
+  area?: DeliveryArea;
+  city: ServiceCity;
+  saving: boolean;
+  onCancel: () => void;
+  onSubmit: (draft: AreaDraft) => void;
+}) {
+  const cityCoverage = city.coverages[0];
+  const [draft, setDraft] = useState(() => ({
+    ...areaDraft(area),
+    centerLatitude: area?.center_latitude ?? cityCoverage?.center_latitude ?? defaultAreaDraft.centerLatitude,
+    centerLongitude:
+      area?.center_longitude ?? cityCoverage?.center_longitude ?? defaultAreaDraft.centerLongitude,
+    radiusKm: area?.radius_km ?? cityCoverage?.radius_km ?? defaultAreaDraft.radiusKm,
+  }));
+  const [error, setError] = useState<string | null>(null);
+  const latitude = Number(draft.centerLatitude);
+  const longitude = Number(draft.centerLongitude);
+  const radiusKm = Number(draft.radiusKm);
+  const mapRadiusKm = Number.isFinite(radiusKm) && radiusKm > 0 ? radiusKm : 1;
+
+  function update<K extends keyof AreaDraft>(key: K, value: AreaDraft[K]) {
+    setDraft((current) => ({ ...current, [key]: value }));
+    setError(null);
+  }
+
+  function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const validationError = validateAreaDraft(draft);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    onSubmit(draft);
+  }
+
+  function useCityCoverageCenter() {
+    if (!cityCoverage) return;
+    setDraft((current) => ({
+      ...current,
+      centerLatitude: cityCoverage.center_latitude,
+      centerLongitude: cityCoverage.center_longitude,
+      radiusKm: current.radiusKm || cityCoverage.radius_km,
+    }));
+    setError(null);
+  }
+
+  return (
+    <form onSubmit={submit} className="rounded-xl border bg-muted/10 p-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="font-bold">{area ? "تعديل منطقة التوصيل" : "إضافة منطقة"}</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            المنطقة ستتبع مدينة {city.name_ar || city.name}.
+          </p>
+        </div>
+        <Badge tone="blue">service_city_id: {city.id}</Badge>
+      </div>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <Card className="overflow-hidden">
+          <div className="border-b px-5 py-4">
+            <h4 className="font-bold">بيانات المنطقة</h4>
+            <p className="text-xs text-muted-foreground">الاسم والسعر وحالة الظهور داخل المدينة.</p>
+          </div>
+          <div className="grid gap-4 p-5 md:grid-cols-2">
+            <label className="grid gap-2 text-sm font-semibold">
+              اسم المنطقة *
+              <Input
+                autoFocus
+                value={draft.name}
+                onChange={(event) => update("name", event.target.value)}
+                placeholder="مثال: باب الزوار"
+                className="h-11"
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-semibold">
+              سعر التوصيل *
+              <Input
+                dir="ltr"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                type="number"
+                value={draft.deliveryPrice}
+                onChange={(event) => update("deliveryPrice", event.target.value)}
+                placeholder="300.00"
+                className="h-11 text-right"
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-semibold">
+              نصف قطر التغطية كم
+              <Input
+                dir="ltr"
+                inputMode="decimal"
+                min="0.1"
+                step="0.1"
+                type="number"
+                value={draft.radiusKm}
+                onChange={(event) => update("radiusKm", event.target.value)}
+                placeholder="6.50"
+                className="h-11 text-right"
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-semibold">
+              خط العرض
+              <Input
+                dir="ltr"
+                inputMode="decimal"
+                value={draft.centerLatitude}
+                onChange={(event) => update("centerLatitude", event.target.value)}
+                placeholder="36.7167000"
+                className="h-11 text-right"
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-semibold">
+              خط الطول
+              <Input
+                dir="ltr"
+                inputMode="decimal"
+                value={draft.centerLongitude}
+                onChange={(event) => update("centerLongitude", event.target.value)}
+                placeholder="3.1833000"
+                className="h-11 text-right"
+              />
+            </label>
+            <div className="flex min-h-11 items-center justify-between gap-4 rounded-lg border bg-background px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold">المنطقة مفعلة</p>
+                <p className="text-xs text-muted-foreground">تظهر ضمن مناطق المدينة.</p>
+              </div>
+              <Switch
+                checked={draft.active}
+                onCheckedChange={(checked) => update("active", checked)}
+              />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <div className="flex items-center justify-between gap-3 border-b px-5 py-4">
+            <div className="flex items-center gap-3">
+              <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <MapPinned className="size-4" />
+              </span>
+              <div>
+                <h4 className="font-bold">نطاق التغطية</h4>
+                <p className="text-xs text-muted-foreground">اضغط على الخريطة لاختيار مركز المنطقة.</p>
+              </div>
+            </div>
+          </div>
+          <div className="grid gap-3 p-5">
+            {Number.isFinite(latitude) && Number.isFinite(longitude) ? (
+              <div className="overflow-hidden rounded-lg border p-1">
+                <CityCoverageMap
+                  latitude={latitude}
+                  longitude={longitude}
+                  radiusKm={mapRadiusKm}
+                  onCenterChange={(nextLatitude, nextLongitude) => {
+                    setDraft((current) => ({
+                      ...current,
+                      centerLatitude: nextLatitude.toFixed(7),
+                      centerLongitude: nextLongitude.toFixed(7),
+                    }));
+                    setError(null);
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="flex h-[260px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+                أدخل إحداثيات صحيحة لعرض الخريطة.
+              </div>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={useCityCoverageCenter}
+              disabled={!cityCoverage}
+              className="h-11"
+            >
+              <MapPin className="size-4" />
+              استخدام مركز المدينة
+            </Button>
+          </div>
+        </Card>
+      </div>
+      {error ? (
+        <div className="mt-4 flex gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          {error}
+        </div>
+      ) : null}
+      <div className="mt-4 flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
+          إلغاء
+        </Button>
+        <Button type="submit" disabled={saving}>
+          {saving ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}
+          {saving ? "جاري الحفظ..." : "حفظ المنطقة"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function DeliveryAreasDialog({
+  city,
+  areas,
+  loading,
+  loadError,
+  areaFormOpen,
+  editingArea,
+  savingArea,
+  busyAreaId,
+  onClose,
+  onReload,
+  onOpenCreate,
+  onEditArea,
+  onCancelForm,
+  onSubmitArea,
+  onToggleArea,
+  onRequestDelete,
+}: {
+  city: ServiceCity;
+  areas: DeliveryArea[];
+  loading: boolean;
+  loadError: string | null;
+  areaFormOpen: boolean;
+  editingArea: DeliveryArea | null;
+  savingArea: boolean;
+  busyAreaId: number | null;
+  onClose: () => void;
+  onReload: () => void;
+  onOpenCreate: () => void;
+  onEditArea: (area: DeliveryArea) => void;
+  onCancelForm: () => void;
+  onSubmitArea: (draft: AreaDraft) => void;
+  onToggleArea: (area: DeliveryArea, checked: boolean) => void;
+  onRequestDelete: (area: DeliveryArea) => void;
+}) {
+  useLockedPageScroll();
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-foreground/60 px-4 py-4 backdrop-blur-sm">
+      <section
+        dir="rtl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delivery-areas-dialog-title"
+        className="mx-auto max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-xl border bg-background shadow-2xl"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b bg-muted/20 px-6 py-5">
+          <div>
+            <h2 id="delivery-areas-dialog-title" className="text-xl font-bold">
+              مناطق التوصيل - {city.name_ar || city.name}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              إدارة المناطق والأسعار الثابتة داخل هذه المدينة فقط.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" onClick={onReload} disabled={loading}>
+              <RefreshCw className="size-4" />
+              تحديث
+            </Button>
+            <Button type="button" onClick={onOpenCreate}>
+              <Plus className="size-4" />
+              إضافة منطقة
+            </Button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="إغلاق"
+              className="rounded-full border p-2 hover:bg-accent"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-4 p-5">
+          {areaFormOpen ? (
+            <AreaForm
+              key={editingArea?.id ?? "new-area"}
+              area={editingArea ?? undefined}
+              city={city}
+              saving={savingArea}
+              onCancel={onCancelForm}
+              onSubmit={onSubmitArea}
+            />
+          ) : null}
+
+          {loading ? (
+            <div className="flex min-h-48 items-center justify-center rounded-lg border bg-muted/10 text-sm text-muted-foreground">
+              <LoaderCircle className="me-2 size-5 animate-spin" />
+              جاري تحميل مناطق التوصيل...
+            </div>
+          ) : loadError ? (
+            <div className="flex min-h-48 flex-col items-center justify-center gap-3 rounded-lg border px-6 text-center">
+              <AlertCircle className="size-8 text-destructive" />
+              <p className="text-sm">{loadError}</p>
+              <Button type="button" variant="outline" onClick={onReload}>
+                إعادة المحاولة
+              </Button>
+            </div>
+          ) : areas.length === 0 ? (
+            <div className="flex min-h-48 flex-col items-center justify-center gap-2 rounded-lg border bg-muted/10 text-center">
+              <MapPin className="size-8 text-muted-foreground" />
+              <p className="font-semibold">لا توجد مناطق توصيل لهذه المدينة</p>
+              <p className="text-sm text-muted-foreground">أضف منطقة توصيل ثابتة السعر.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full min-w-[860px] text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/35 text-xs text-muted-foreground">
+                    <th className="px-4 py-3 text-start">اسم المنطقة</th>
+                    <th className="px-4 py-3 text-start">سعر التوصيل</th>
+                    <th className="px-4 py-3 text-start">نصف القطر</th>
+                    <th className="px-4 py-3 text-start">الحالة</th>
+                    <th className="px-4 py-3 text-start">الإجراءات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {areas.map((area) => (
+                    <tr key={area.id} className="border-b last:border-0">
+                      <td className="px-4 py-4 font-semibold">{area.name}</td>
+                      <td className="px-4 py-4">{formatMoney(area.delivery_price)}</td>
+                      <td className="px-4 py-4">{formatRadius(area.radius_km)}</td>
+                      <td className="px-4 py-4">
+                        <Badge tone={area.is_active ? "green" : "red"}>
+                          {area.is_active ? "مفعلة" : "معطلة"}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex h-9 items-center gap-2 rounded-md border bg-background px-3">
+                            <Switch
+                              checked={area.is_active}
+                              disabled={busyAreaId === area.id}
+                              onCheckedChange={(checked) => onToggleArea(area, checked)}
+                            />
+                            <span className="text-xs font-semibold">
+                              {area.is_active ? "تعطيل" : "تفعيل"}
+                            </span>
+                          </div>
+                          <Button type="button" variant="outline" size="sm" onClick={() => onEditArea(area)}>
+                            <Edit3 className="size-4" />
+                            تعديل
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={busyAreaId === area.id}
+                            onClick={() => onRequestDelete(area)}
+                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          >
+                            <Trash2 className="size-4" />
+                            حذف
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export function CitiesPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
@@ -389,6 +907,66 @@ export function CitiesPage() {
   const [deleteCity, setDeleteCity] = useState<ServiceCity | null>(null);
   const [busyCityId, setBusyCityId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [deliveryAreaCounts, setDeliveryAreaCounts] = useState<Record<number, number>>({});
+  const [selectedCityForAreas, setSelectedCityForAreas] = useState<ServiceCity | null>(null);
+  const [deliveryAreas, setDeliveryAreas] = useState<DeliveryArea[]>([]);
+  const [areasLoading, setAreasLoading] = useState(false);
+  const [areasError, setAreasError] = useState<string | null>(null);
+  const [areaFormOpen, setAreaFormOpen] = useState(false);
+  const [editingArea, setEditingArea] = useState<DeliveryArea | null>(null);
+  const [deleteArea, setDeleteArea] = useState<DeliveryArea | null>(null);
+  const [savingArea, setSavingArea] = useState(false);
+  const [busyAreaId, setBusyAreaId] = useState<number | null>(null);
+
+  const loadAreasForCity = useCallback(
+    async (city: ServiceCity) => {
+      setAreasLoading(true);
+      setAreasError(null);
+      try {
+        const nextAreas = await loadDeliveryAreas(apiFetch, city.id);
+        setDeliveryAreas(nextAreas);
+        setDeliveryAreaCounts((current) => ({
+          ...current,
+          [city.id]: nextAreas.length,
+        }));
+      } catch (reason) {
+        setDeliveryAreas([]);
+        setAreasError(
+          reason instanceof Error ? reason.message : "تعذر تحميل مناطق التوصيل.",
+        );
+      } finally {
+        setAreasLoading(false);
+      }
+    },
+    [apiFetch],
+  );
+
+  useEffect(() => {
+    if (!cities.length) {
+      const timer = window.setTimeout(() => setDeliveryAreaCounts({}), 0);
+      return () => window.clearTimeout(timer);
+    }
+
+    let active = true;
+
+    void Promise.all(
+      cities.map(async (city) => {
+        try {
+          const areas = await loadDeliveryAreas(apiFetch, city.id);
+          return [city.id, areas.length] as const;
+        } catch {
+          return [city.id, 0] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (!active) return;
+      setDeliveryAreaCounts(Object.fromEntries(entries));
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [apiFetch, cities]);
 
   const filteredCities = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -456,6 +1034,124 @@ export function CitiesPage() {
       },
     });
     setBusyCityId(null);
+  }
+
+  function openDeliveryAreas(city: ServiceCity) {
+    setSelectedCityForAreas(city);
+    setAreaFormOpen(false);
+    setEditingArea(null);
+    setDeleteArea(null);
+    void loadAreasForCity(city);
+  }
+
+  function closeDeliveryAreas() {
+    setSelectedCityForAreas(null);
+    setDeliveryAreas([]);
+    setAreasError(null);
+    setAreaFormOpen(false);
+    setEditingArea(null);
+    setDeleteArea(null);
+  }
+
+  function openCreateAreaForm() {
+    setEditingArea(null);
+    setAreaFormOpen(true);
+  }
+
+  function openEditAreaForm(area: DeliveryArea) {
+    setEditingArea(area);
+    setAreaFormOpen(true);
+  }
+
+  function closeAreaForm() {
+    setAreaFormOpen(false);
+    setEditingArea(null);
+  }
+
+  async function submitArea(draft: AreaDraft) {
+    if (!selectedCityForAreas || savingArea) return;
+    const validationError = validateAreaDraft(draft);
+    if (validationError) {
+      showSnackbar({ message: validationError, tone: "danger" });
+      return;
+    }
+
+    setSavingArea(true);
+    try {
+      await saveDeliveryArea(
+        apiFetch,
+        payloadFromAreaDraft(selectedCityForAreas, draft),
+        editingArea?.id,
+      );
+      closeAreaForm();
+      await loadAreasForCity(selectedCityForAreas);
+      showSnackbar({
+        message: editingArea
+          ? "تم تحديث منطقة التوصيل."
+          : "تمت إضافة منطقة التوصيل.",
+        tone: "success",
+      });
+    } catch (reason) {
+      showSnackbar({
+        message: reason instanceof Error ? reason.message : "تعذر حفظ منطقة التوصيل.",
+        tone: "danger",
+      });
+    } finally {
+      setSavingArea(false);
+    }
+  }
+
+  async function toggleArea(area: DeliveryArea, checked: boolean) {
+    if (!selectedCityForAreas) return;
+
+    setBusyAreaId(area.id);
+    try {
+      await saveDeliveryArea(
+        apiFetch,
+        {
+          service_city_id: selectedCityForAreas.id,
+          name: area.name,
+          center_latitude: area.center_latitude,
+          center_longitude: area.center_longitude,
+          radius_km: area.radius_km,
+          delivery_price: Number(area.delivery_price).toFixed(2),
+          is_active: checked,
+        },
+        area.id,
+      );
+      await loadAreasForCity(selectedCityForAreas);
+      showSnackbar({
+        message: checked ? "تم تفعيل منطقة التوصيل." : "تم تعطيل منطقة التوصيل.",
+        tone: "success",
+      });
+    } catch (reason) {
+      showSnackbar({
+        message: reason instanceof Error ? reason.message : "تعذر تحديث منطقة التوصيل.",
+        tone: "danger",
+      });
+    } finally {
+      setBusyAreaId(null);
+    }
+  }
+
+  async function confirmDeleteArea() {
+    if (!selectedCityForAreas || !deleteArea) return;
+    const area = deleteArea;
+
+    setBusyAreaId(area.id);
+    try {
+      await deleteDeliveryArea(apiFetch, area.id);
+      setDeleteArea(null);
+      await loadAreasForCity(selectedCityForAreas);
+      showSnackbar({ message: "تم حذف منطقة التوصيل.", tone: "success" });
+    } catch (reason) {
+      showSnackbar({
+        message: reason instanceof Error ? reason.message : "تعذر حذف منطقة التوصيل.",
+        tone: "danger",
+      });
+    } finally {
+      setBusyAreaId(null);
+    }
   }
 
   const activeCount = cities.filter((city) => city.is_active).length;
@@ -551,10 +1247,16 @@ export function CitiesPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                  <div className="grid grid-cols-4 gap-2 text-center text-sm">
                     <div className="rounded-md bg-muted px-3 py-2">
                       <div className="font-bold">{coverage ? `${Number(coverage.radius_km).toLocaleString("ar-EG-u-nu-latn")} كم` : "-"}</div>
                       <div className="text-xs text-muted-foreground">النطاق</div>
+                    </div>
+                    <div className="rounded-md bg-muted px-3 py-2">
+                      <div className="font-bold">
+                        {deliveryAreaCounts[city.id] ?? "…"}
+                      </div>
+                      <div className="text-xs text-muted-foreground">مناطق التوصيل</div>
                     </div>
                     <div className="rounded-md bg-muted px-3 py-2">
                       <div className="font-bold">{city.market_count}</div>
@@ -571,6 +1273,10 @@ export function CitiesPage() {
                       <Switch checked={city.is_active} disabled={busyCityId === city.id} onCheckedChange={(checked) => void toggleCity(city, checked)} />
                       <span className="text-xs font-semibold">{city.is_active ? "مفعّلة" : "معطلة"}</span>
                     </div>
+                    <Button type="button" variant="outline" onClick={() => openDeliveryAreas(city)}>
+                      <MapPin className="size-4" />
+                      مناطق التوصيل
+                    </Button>
                     <Button size="icon" variant="outline" title="تعديل" onClick={() => setEditingCity(city)} aria-label={`تعديل ${city.name_ar || city.name}`}>
                       <Edit3 className="size-4" />
                     </Button>
@@ -623,6 +1329,34 @@ export function CitiesPage() {
           busy={busyCityId === deleteCity.id}
           onCancel={() => setDeleteCity(null)}
           onConfirm={() => removeCity(deleteCity)}
+        />
+      ) : null}
+      {selectedCityForAreas ? (
+        <DeliveryAreasDialog
+          city={selectedCityForAreas}
+          areas={deliveryAreas}
+          loading={areasLoading}
+          loadError={areasError}
+          areaFormOpen={areaFormOpen}
+          editingArea={editingArea}
+          savingArea={savingArea}
+          busyAreaId={busyAreaId}
+          onClose={closeDeliveryAreas}
+          onReload={() => void loadAreasForCity(selectedCityForAreas)}
+          onOpenCreate={openCreateAreaForm}
+          onEditArea={openEditAreaForm}
+          onCancelForm={closeAreaForm}
+          onSubmitArea={(draft) => void submitArea(draft)}
+          onToggleArea={(area, checked) => void toggleArea(area, checked)}
+          onRequestDelete={setDeleteArea}
+        />
+      ) : null}
+      {deleteArea ? (
+        <AreaDeleteDialog
+          area={deleteArea}
+          busy={busyAreaId === deleteArea.id}
+          onCancel={() => setDeleteArea(null)}
+          onConfirm={() => void confirmDeleteArea()}
         />
       ) : null}
     </div>

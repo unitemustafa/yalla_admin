@@ -1,4 +1,5 @@
 import type { DashboardUser } from "./default-dashboard-users";
+import { resolveMediaUrl } from "@/lib/media-url";
 
 export type BackendDashboardUser = {
   id: string | number;
@@ -72,7 +73,7 @@ export function dashboardUserFromBackend(user: BackendDashboardUser): DashboardU
     username: user.username?.trim() || unavailable,
     phone: user.phone?.trim() || unavailable,
     email: user.email?.trim() || unavailable,
-    avatar: user.avatar_url?.trim() || defaultAvatar,
+    avatar: resolveMediaUrl(user.avatar_url?.trim() || defaultAvatar),
     role: roleLabel(user.role),
     branch: unset,
     location: unset,

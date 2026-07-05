@@ -4,6 +4,7 @@ import Image, { type ImageProps } from "next/image";
 import { useState } from "react";
 import { ImageIcon } from "lucide-react";
 
+import { resolveMediaUrl, shouldUnoptimizeMediaUrl } from "@/lib/media-url";
 import { cn } from "@/lib/utils";
 
 type DashboardImageProps = Omit<ImageProps, "className" | "onError" | "onLoad"> & {
@@ -22,10 +23,12 @@ export function DashboardImage({
   unoptimized,
   ...props
 }: DashboardImageProps) {
-  const sourceKey = typeof src === "string" ? src : "static";
-  const isBlobSource = typeof src === "string" && src.startsWith("blob:");
+  const resolvedSrc = typeof src === "string" ? resolveMediaUrl(src) : src;
+  const resolvedStringSrc = typeof resolvedSrc === "string" ? resolvedSrc : "";
+  const sourceKey = typeof resolvedSrc === "string" ? resolvedSrc : "static";
+  const isBlobSource = resolvedStringSrc.startsWith("blob:");
   const isInlineSource =
-    typeof src === "string" && (src.startsWith("data:") || src.startsWith("blob:"));
+    resolvedStringSrc.startsWith("data:") || resolvedStringSrc.startsWith("blob:");
   const [imageState, setImageState] = useState({
     failed: false,
     loaded: false,
@@ -33,7 +36,7 @@ export function DashboardImage({
   });
   const loaded = imageState.sourceKey === sourceKey && imageState.loaded;
   const failed = imageState.sourceKey === sourceKey && imageState.failed;
-  const canRender = Boolean(src) && !failed;
+  const canRender = Boolean(resolvedSrc) && !failed;
 
   return (
     <span
@@ -55,7 +58,7 @@ export function DashboardImage({
           onLoad={() =>
             setImageState({ failed: false, loaded: true, sourceKey })
           }
-          src={src}
+          src={resolvedStringSrc}
           className={cn(
             "relative z-10 size-full object-cover transition-opacity duration-150",
             loaded ? "opacity-100" : "opacity-0",
@@ -74,8 +77,8 @@ export function DashboardImage({
             setImageState({ failed: false, loaded: true, sourceKey })
           }
           sizes={sizes}
-          src={src}
-          unoptimized={unoptimized ?? isInlineSource}
+          src={resolvedSrc}
+          unoptimized={Boolean(unoptimized || isInlineSource || shouldUnoptimizeMediaUrl(resolvedSrc))}
           width={width}
           className={cn(
             "relative z-10 size-full object-cover transition-opacity duration-150",

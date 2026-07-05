@@ -127,11 +127,14 @@ function formatItemPrice(price: string) {
 }
 
 function normalizeItemRow(row: ItemRow): ItemRow {
+  const priceLabel = formatItemPrice(row.displayPriceLabel ?? row.price);
+
   return {
     ...row,
     code: row.code ?? row.id,
     shopName: row.shopName ?? "",
-    price: formatItemPrice(row.price),
+    price: priceLabel,
+    displayPriceLabel: priceLabel,
     visibilityMode: row.visibilityMode ?? "general",
     regionSlugs: row.regionSlugs ?? [],
     regionNames: row.regionNames ?? [],
@@ -150,7 +153,16 @@ function itemShopLabel(row: ItemRow) {
 
 function splitItemPrice(price: string) {
   const normalizedPrice = formatItemPrice(price).trim();
-  const [amount = normalizedPrice, currency = ""] = normalizedPrice.split(/\s+/);
+  if (!normalizedPrice || normalizedPrice === "بدون سعر" || normalizedPrice.includes(" - ")) {
+    return { amount: normalizedPrice || "بدون سعر", currency: "" };
+  }
+
+  const parts = normalizedPrice.split(/\s+/);
+  if (parts[0]?.toUpperCase() === "EGP") {
+    return { amount: parts.slice(1).join(" "), currency: parts[0] };
+  }
+
+  const [amount = normalizedPrice, currency = ""] = parts;
 
   return { amount, currency };
 }
@@ -172,7 +184,7 @@ function matchesFilters(row: ItemRow, filters: ItemFilters) {
       row.description,
       row.category,
       row.shopName,
-      formatItemPrice(row.price),
+      formatItemPrice(row.displayPriceLabel ?? row.price),
     ]
       .join(" ")
       .toLowerCase()
@@ -473,10 +485,13 @@ function InfoPill({ children }: { children: ReactNode }) {
 
 function PriceCell({ price }: { price: string }) {
   const { amount, currency } = splitItemPrice(price);
+  const compactText = !currency && (amount === "بدون سعر" || amount.includes(" - "));
 
   return (
     <div className="inline-flex min-w-[78px] items-baseline justify-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-primary">
-      <span className="text-sm font-black leading-none">{amount}</span>
+      <span className={cn(compactText ? "text-xs font-bold leading-4" : "text-sm font-black leading-none")}>
+        {amount}
+      </span>
       {currency ? <span className="currency-text text-[11px] font-bold">{currency}</span> : null}
     </div>
   );

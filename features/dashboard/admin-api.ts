@@ -1,5 +1,6 @@
-import type { AddonRow, CategoryRow, ItemRow } from "./data";
+import type { AddonRow, CategoryRow, ItemRow, ProductVariant } from "./data";
 import { firstApiError } from "./users/api-users";
+import { resolveMediaUrl } from "@/lib/media-url";
 
 export const adminApiPaths = {
   products: "catalog/products/",
@@ -19,6 +20,10 @@ export const adminApiPaths = {
 export type ApiFetch = (path: string, init?: RequestInit) => Promise<Response>;
 
 export type BackendRecord = Record<string, unknown>;
+
+export type ProductLike = {
+  variants?: unknown;
+};
 
 export type DashboardOverview = {
   range?: {
@@ -161,12 +166,55 @@ function id(record: BackendRecord, index: number) {
 }
 
 function image(record: BackendRecord) {
-  return text(record, ["image", "image_url", "thumbnail", "thumbnail_url", "avatar_url"], fallbackImage);
+  return resolveMediaUrl(
+    text(record, ["image", "image_url", "thumbnail", "thumbnail_url", "avatar_url"], fallbackImage),
+  );
 }
 
 function price(record: BackendRecord) {
   const value = text(record, ["price", "amount"], "0");
   return /\bEGP\b/i.test(value) ? value : `${value} EGP`;
+}
+
+function productVariants(product: ProductLike): ProductVariant[] {
+  const variants = Array.isArray(product.variants) ? product.variants : [];
+
+  return variants
+    .filter((variant): variant is BackendRecord => Boolean(variant && typeof variant === "object"))
+    .map((variant) => ({
+      id: safeNumber(variant.id),
+      price: typeof variant.price === "number" || typeof variant.price === "string" ? variant.price : "",
+      sku: typeof variant.sku === "string" ? variant.sku : null,
+      attribute_values: Array.isArray(variant.attribute_values) ? variant.attribute_values : [],
+    }));
+}
+
+function productVariantPrices(product: ProductLike) {
+  return productVariants(product)
+    .map((variant) => {
+      if (typeof variant.price === "string" && !variant.price.trim()) return Number.NaN;
+      return Number(variant.price);
+    })
+    .filter((variantPrice) => Number.isFinite(variantPrice) && variantPrice >= 0);
+}
+
+export function getProductDisplayPrice(product: ProductLike): number {
+  const prices = productVariantPrices(product);
+  if (prices.length === 0) return 0;
+  return Math.min(...prices);
+}
+
+export function formatProductPrice(product: ProductLike): string {
+  const prices = productVariantPrices(product);
+
+  if (prices.length === 0) return "بدون سعر";
+
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+
+  if (min === max) return formatMoney(min);
+
+  return `${formatMoney(min)} - ${formatMoney(max)}`;
 }
 
 function nestedName(value: unknown) {
@@ -187,6 +235,7 @@ export function productRowFromApi(record: BackendRecord, index: number): ItemRow
     record.market && typeof record.market === "object"
       ? (record.market as BackendRecord)
       : null;
+  const marketId = text(record, ["market_id"], text(market ?? {}, ["id"]));
   const shopName =
     nestedName(market) ||
     nestedName(record.shop) ||
@@ -215,6 +264,9 @@ export function productRowFromApi(record: BackendRecord, index: number): ItemRow
             : Array.isArray(market?.service_city_slugs)
               ? market.service_city_slugs
               : [];
+  const variants = productVariants(record);
+  const displayPrice = getProductDisplayPrice(record);
+  const displayPriceLabel = formatProductPrice(record);
 
   return {
     index: String(index + 1),
@@ -225,11 +277,15 @@ export function productRowFromApi(record: BackendRecord, index: number): ItemRow
     description: text(record, ["description", "details"], ""),
     category,
     subcategory: text(record, ["subcategory", "subcategory_name"], category),
+    marketId,
     shopName,
     calories: text(record, ["stock", "quantity", "calories"], ""),
     regionSlugs: rawRegionSlugs.map(String).filter(Boolean),
     regionNames: rawRegionNames.map(String).filter(Boolean),
-    price: price(record),
+    price: displayPriceLabel,
+    displayPrice,
+    displayPriceLabel,
+    variants,
     featured: bool(record, ["is_featured", "featured"], false) ? "نعم" : "لا",
     active: bool(record, ["is_active", "active", "available", "status"], true),
   };
@@ -245,6 +301,7 @@ export function categoryRowFromApi(record: BackendRecord, index: number): Catego
     image: image(record),
     name: text(record, ["name", "name_ar", "name_en"], `فئة #${index + 1}`),
     nameAr: text(record, ["name_ar"], ""),
+    type: text(record, ["type"], ""),
     sections: [classification].filter(Boolean),
     active: bool(record, ["is_active", "active", "status"], true),
     featured: text(record, ["type"]).includes("مميزة") ? "نعم" : "لا",

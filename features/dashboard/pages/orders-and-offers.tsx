@@ -31,7 +31,7 @@ import {
   Zap,
 } from "lucide-react";
 
-import { addonRows, categoryRows, itemRows, type AddonRow, type ItemRow } from "../data";
+import { addonRows, itemRows, type AddonRow, type ItemRow } from "../data";
 import { useAuth } from "@/features/auth/auth-provider";
 import {
   addonRowFromApi,
@@ -1184,9 +1184,7 @@ export function CreateOrderPage() {
 
   function itemPrice(item: ItemRow | undefined) {
     if (!item) return 0;
-
-    const value = Number.parseFloat(item.price.replace(/[^\d.]/g, ""));
-    return Number.isFinite(value) ? value : 0;
+    return itemDisplayPrice(item);
   }
 
   const productsById = useMemo(
@@ -2667,7 +2665,19 @@ export function AddonsPage() {
   );
 }
 
-type OfferStatus = "نشط" | "متوقف" | "منتهي";
+type OfferType = "package" | "flash" | "discount" | "announcement" | "delivery";
+type OfferStatus = "active" | "inactive" | "expired";
+type OfferScope = "general" | "service_city";
+type ActiveDay =
+  | "sunday"
+  | "monday"
+  | "tuesday"
+  | "wednesday"
+  | "thursday"
+  | "friday"
+  | "saturday";
+
+type OfferDisplayStatus = "نشط" | "متوقف" | "منتهي";
 
 const offerTypeOptions = [
   { label: "باكج", icon: Package, accent: "text-sky-400", bg: "bg-sky-500/15" },
@@ -2677,12 +2687,28 @@ const offerTypeOptions = [
   { label: "توصيل", icon: Truck, accent: "text-emerald-400", bg: "bg-emerald-500/15" },
 ] as const;
 
+type ArabicOfferType = (typeof offerTypeOptions)[number]["label"];
+
 type OfferCard = {
   id: string;
   title: string;
-  type: string;
+  description: string;
+  type: ArabicOfferType;
+  apiType: OfferType;
+  discount: string;
   method: string;
-  status: OfferStatus;
+  status: OfferDisplayStatus;
+  backendStatus: OfferStatus;
+  scope: OfferScope;
+  marketId: string;
+  marketName: string;
+  serviceCityId: string;
+  serviceCityName: string;
+  productIds: string[];
+  productNames: string[];
+  activeDays: ActiveDay[];
+  useLimits: string;
+  userLimit: string;
   period: string;
   startsAt: string;
   endsAt: string;
@@ -2692,37 +2718,141 @@ type OfferCard = {
   iconBg: string;
 };
 
-const offerTypeLabels: Record<string, string> = {
+type OfferMarket = {
+  id: string;
+  name: string;
+  scope: OfferScope;
+  status: string;
+  serviceCityIds: string[];
+};
+
+const offerTypeLabels: Record<OfferType, ArabicOfferType> = {
   package: "باكج",
   flash: "فلاش",
   discount: "خصم",
-  ad: "إعلان",
-  advertisement: "إعلان",
+  announcement: "إعلان",
   delivery: "توصيل",
 };
 
-const offerTypeValues: Record<string, string> = {
+const offerTypeValues: Record<ArabicOfferType, OfferType> = {
   باكج: "package",
   فلاش: "flash",
   خصم: "discount",
-  إعلان: "ad",
+  إعلان: "announcement",
   توصيل: "delivery",
 };
 
+const offerStatusLabels: Record<OfferStatus, OfferDisplayStatus> = {
+  active: "نشط",
+  inactive: "متوقف",
+  expired: "منتهي",
+};
+
+function isOfferType(value: unknown): value is OfferType {
+  return (
+    value === "package" ||
+    value === "flash" ||
+    value === "discount" ||
+    value === "announcement" ||
+    value === "delivery"
+  );
+}
+
+function isOfferStatus(value: unknown): value is OfferStatus {
+  return value === "active" || value === "inactive" || value === "expired";
+}
+
+function isActiveDay(value: unknown): value is ActiveDay {
+  return (
+    value === "sunday" ||
+    value === "monday" ||
+    value === "tuesday" ||
+    value === "wednesday" ||
+    value === "thursday" ||
+    value === "friday" ||
+    value === "saturday"
+  );
+}
+
+function recordDisplayName(value: unknown, fallback = "") {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (value && typeof value === "object") {
+    const record = value as BackendRecord;
+    for (const key of ["name_ar", "name", "title"]) {
+      const text = record[key];
+      if (typeof text === "string" && text.trim()) return text.trim();
+    }
+  }
+  return fallback;
+}
+
+function offerMarketFromApi(record: BackendRecord): OfferMarket | null {
+  const id = record.id == null ? "" : String(record.id);
+  if (!id) return null;
+  const serviceCities = Array.isArray(record.service_cities)
+    ? record.service_cities.filter((city): city is BackendRecord =>
+        Boolean(city && typeof city === "object"),
+      )
+    : [];
+
+  return {
+    id,
+    name: recordDisplayName(record, `سوق #${id}`),
+    scope: record.scope === "service_city" ? "service_city" : "general",
+    status: String(record.status ?? "active").toLowerCase(),
+    serviceCityIds: serviceCities
+      .map((city) => String(city.id ?? ""))
+      .filter(Boolean),
+  };
+}
+
 function offerCardFromApi(record: BackendRecord): OfferCard {
-  const type = offerTypeLabels[String(record.type ?? "")] ?? String(record.type ?? "خصم");
+  const apiType = isOfferType(record.type) ? record.type : "discount";
+  const type = offerTypeLabels[apiType];
   const meta = offerVisualMeta(type);
   const startsAt = String(record.start_time ?? "");
   const endsAt = String(record.end_time ?? "");
   const expired = Number.isFinite(new Date(endsAt).getTime()) && new Date(endsAt).getTime() < Date.now();
-  const backendStatus = String(record.status ?? "active").toLowerCase();
+  const rawStatus = String(record.status ?? "active").toLowerCase();
+  const backendStatus = isOfferStatus(rawStatus) ? rawStatus : "active";
+  const market = record.market && typeof record.market === "object" ? (record.market as BackendRecord) : null;
+  const serviceCity =
+    record.service_city && typeof record.service_city === "object"
+      ? (record.service_city as BackendRecord)
+      : null;
+  const products = Array.isArray(record.products)
+    ? record.products.filter((product): product is BackendRecord =>
+        Boolean(product && typeof product === "object"),
+      )
+    : [];
+  const productIds = Array.isArray(record.product_ids)
+    ? record.product_ids.map(String)
+    : products.map((product) => String(product.id ?? "")).filter(Boolean);
+  const activeDays = Array.isArray(record.active_days)
+    ? record.active_days.map(String).filter(isActiveDay)
+    : [];
+  const effectiveStatus: OfferStatus = expired ? "expired" : backendStatus;
 
   return {
     id: String(record.id),
     title: String(record.title ?? `عرض #${record.id}`),
+    description: String(record.description ?? ""),
     type,
+    apiType,
+    discount: String(record.discount ?? "0"),
     method: "تطبيق تلقائي",
-    status: expired ? "منتهي" : backendStatus === "active" ? "نشط" : "متوقف",
+    status: offerStatusLabels[effectiveStatus],
+    backendStatus: effectiveStatus,
+    scope: record.scope === "service_city" ? "service_city" : "general",
+    marketId: String(record.market_id ?? market?.id ?? ""),
+    marketName: recordDisplayName(market, record.market_id ? `سوق #${record.market_id}` : "-"),
+    serviceCityId: String(record.service_city_id ?? serviceCity?.id ?? ""),
+    serviceCityName: recordDisplayName(serviceCity, record.service_city_id ? `مدينة #${record.service_city_id}` : "-"),
+    productIds,
+    productNames: products.map((product) => recordDisplayName(product, `منتج #${product.id ?? ""}`)).filter(Boolean),
+    activeDays,
+    useLimits: record.use_limits == null ? "غير محدود" : String(record.use_limits),
+    userLimit: record.user_limit == null ? "غير محدود" : String(record.user_limit),
     period: `${startsAt ? new Date(startsAt).toLocaleDateString("ar-EG") : "—"} → ${endsAt ? new Date(endsAt).toLocaleDateString("ar-EG") : "—"}`,
     startsAt,
     endsAt,
@@ -2732,79 +2862,6 @@ function offerCardFromApi(record: BackendRecord): OfferCard {
     iconBg: meta.bg,
   };
 }
-
-const initialOffers: OfferCard[] = [
-  {
-    id: "1",
-    title: "عرض الباكج",
-    type: "باكج",
-    method: "تطبيق تلقائي",
-    status: "نشط",
-    period: "14 مايو 2026 → 1 يونيو 2026",
-    startsAt: "2026-05-14T12:00:00+03:00",
-    endsAt: "2026-06-01T23:59:00+03:00",
-    image: categoryRows[0]?.image,
-    icon: Package,
-    accent: "text-sky-400",
-    iconBg: "bg-sky-500/15",
-  },
-  {
-    id: "2",
-    title: "عرض فلاش",
-    type: "فلاش",
-    method: "تطبيق تلقائي",
-    status: "نشط",
-    period: "29 مايو 2026 → 1 يونيو 2026",
-    startsAt: "2026-05-29T12:00:00+03:00",
-    endsAt: "2026-06-01T23:59:00+03:00",
-    image: categoryRows[1]?.image,
-    icon: Zap,
-    accent: "text-amber-400",
-    iconBg: "bg-amber-500/15",
-  },
-  {
-    id: "3",
-    title: "خصم 50%",
-    type: "خصم",
-    method: "تطبيق تلقائي",
-    status: "نشط",
-    period: "10 مايو 2026 → 1 يونيو 2026",
-    startsAt: "2026-05-10T12:00:00+03:00",
-    endsAt: "2026-06-01T23:59:00+03:00",
-    image: categoryRows[2]?.image,
-    icon: Percent,
-    accent: "text-rose-400",
-    iconBg: "bg-rose-500/15",
-  },
-  {
-    id: "4",
-    title: "توصيل مجاني",
-    type: "توصيل",
-    method: "تطبيق تلقائي",
-    status: "نشط",
-    period: "20 أبريل 2026 → 26 مايو 2026",
-    startsAt: "2026-04-20T12:00:00+03:00",
-    endsAt: "2026-05-26T23:59:00+03:00",
-    image: categoryRows[3]?.image,
-    icon: Truck,
-    accent: "text-emerald-400",
-    iconBg: "bg-emerald-500/15",
-  },
-  {
-    id: "5",
-    title: "إعلان الصفحة الرئيسية",
-    type: "إعلان",
-    method: "عرض بانر",
-    status: "نشط",
-    period: "5 يونيو 2026 → 30 يونيو 2026",
-    startsAt: "2026-06-05T12:00:00+03:00",
-    endsAt: "2026-06-30T23:59:00+03:00",
-    image: categoryRows[4]?.image,
-    icon: Megaphone,
-    accent: "text-fuchsia-400",
-    iconBg: "bg-fuchsia-500/15",
-  },
-];
 
 function getCountdownParts(endsAt: string, now: number | null) {
   if (now === null) {
@@ -2880,7 +2937,7 @@ function OfferCountdown({ endsAt, now }: { endsAt: string; now: number | null })
   );
 }
 
-type OfferVisualData = Pick<OfferCard, "title" | "type" | "endsAt"> & {
+type OfferVisualData = Pick<OfferCard, "title" | "description" | "type" | "endsAt"> & {
   image?: string;
   icon?: React.ComponentType<{ className?: string }>;
   accent?: string;
@@ -2962,7 +3019,7 @@ function OfferVisual({
         <div className="max-w-[76%]">
           <h3 className="truncate text-base font-semibold leading-6">{offer.title}</h3>
           <p className="mt-1 line-clamp-2 text-xs leading-5 text-white/75">
-            نوع العرض والعداد يظهران فوق الصورة تلقائيا.
+            {offer.description || "بدون وصف"}
           </p>
         </div>
       </div>
@@ -2975,6 +3032,9 @@ export function OffersPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const [offers, setOffers] = useState<OfferCard[]>([]);
+  const [offersLoading, setOffersLoading] = useState(true);
+  const [offerDeleteTarget, setOfferDeleteTarget] = useState<OfferCard | null>(null);
+  const [deletingOffer, setDeletingOffer] = useState(false);
   const [now, setNow] = useState<number | null>(null);
   const activeOffers = offers.filter((offer) => offer.status === "نشط").length;
   const expiredOffers = offers.filter((offer) => offer.status === "منتهي").length;
@@ -2990,13 +3050,32 @@ export function OffersPage() {
     };
   }, []);
 
+  async function loadOffers() {
+    setOffersLoading(true);
+    try {
+      const response = await apiFetch(adminApiPaths.offers);
+      const data = await readApiData(response);
+      if (!response.ok) {
+        throw new Error(apiErrorMessage(data, "تعذر تحميل العروض من الباك."));
+      }
+      setOffers(apiList(data).map(offerCardFromApi));
+    } catch (error) {
+      showSnackbar({
+        message: error instanceof Error ? error.message : "تعذر تحميل العروض.",
+        tone: "danger",
+      });
+    } finally {
+      setOffersLoading(false);
+    }
+  }
+
   useEffect(() => {
     let active = true;
 
     void apiFetch(adminApiPaths.offers)
       .then(async (response) => {
         const data = await readApiData(response);
-        if (!response.ok) throw new Error("تعذر تحميل العروض من الباك.");
+        if (!response.ok) throw new Error(apiErrorMessage(data, "تعذر تحميل العروض من الباك."));
         if (active) setOffers(apiList(data).map(offerCardFromApi));
       })
       .catch((error) => {
@@ -3006,6 +3085,9 @@ export function OffersPage() {
             tone: "danger",
           });
         }
+      })
+      .finally(() => {
+        if (active) setOffersLoading(false);
       });
 
     return () => {
@@ -3046,18 +3128,22 @@ export function OffersPage() {
 
   async function deleteOffer(offerId: string) {
     try {
+      setDeletingOffer(true);
       await sendAdminJson(
         apiFetch,
         `${adminApiPaths.offers}${encodeURIComponent(offerId)}/`,
         { method: "DELETE" },
       );
-      setOffers((currentOffers) => currentOffers.filter((offer) => offer.id !== offerId));
+      await loadOffers();
+      setOfferDeleteTarget(null);
       showSnackbar({ message: "تم حذف العرض.", tone: "success" });
     } catch (error) {
       showSnackbar({
         message: error instanceof Error ? error.message : "تعذر حذف العرض.",
         tone: "danger",
       });
+    } finally {
+      setDeletingOffer(false);
     }
   }
 
@@ -3085,9 +3171,26 @@ export function OffersPage() {
           ["منتهي", String(expiredOffers), XCircle, "text-destructive"],
         ]}
       />
+      {offersLoading ? (
+        <Card className="mt-6 flex min-h-52 items-center justify-center">
+          <Clock className="size-6 animate-spin text-primary" />
+        </Card>
+      ) : offers.length === 0 ? (
+        <Card className="mt-6 p-10 text-center text-sm text-muted-foreground">
+          لا توجد عروض.
+        </Card>
+      ) : (
       <div className="mt-6 grid gap-4 lg:grid-cols-2 2xl:grid-cols-4">
         {offers.map((offer) => {
           const Icon = offer.icon;
+          const activeDaysText = offer.activeDays.length
+            ? offer.activeDays.map((day) => weekDayLabels[day]).join("، ")
+            : "-";
+          const productText = offer.productNames.length
+            ? offer.productNames.slice(0, 3).join("، ")
+            : offer.productIds.length
+              ? `${offer.productIds.length} منتجات`
+              : "-";
 
           return (
             <Card
@@ -3111,12 +3214,28 @@ export function OffersPage() {
 
                 <div className="mt-5 flex flex-wrap gap-2">
                   <RefBadge tone="gray">{offer.type}</RefBadge>
+                  <RefBadge tone="blue">خصم {offer.discount}</RefBadge>
                   <RefBadge tone={offer.status === "نشط" ? "green" : offer.status === "منتهي" ? "red" : "yellow"}>
                     {offer.status}
                   </RefBadge>
                 </div>
 
                 <div className="mt-5 grid gap-3 text-sm">
+                  <div className="rounded-md bg-muted/25 px-3 py-2">
+                    <div className="text-xs text-muted-foreground">الوصف</div>
+                    <div className="mt-1 line-clamp-2 font-medium">{offer.description || "-"}</div>
+                  </div>
+                  <div className="grid gap-2 text-xs">
+                    <OfferInfoRow label="السوق" value={offer.marketName} />
+                    <OfferInfoRow label="النطاق" value={offer.scope === "service_city" ? "مدينة خدمة" : "عام"} />
+                    {offer.scope === "service_city" ? (
+                      <OfferInfoRow label="مدينة الخدمة" value={offer.serviceCityName} />
+                    ) : null}
+                    <OfferInfoRow label="المنتجات" value={productText} />
+                    <OfferInfoRow label="أيام التفعيل" value={activeDaysText} />
+                    <OfferInfoRow label="حد الاستخدام" value={offer.useLimits} />
+                    <OfferInfoRow label="حد العميل" value={offer.userLimit} />
+                  </div>
                   <div className="flex items-center justify-between gap-3 rounded-md bg-muted/25 px-3 py-2">
                     <span className="text-muted-foreground">الفترة</span>
                     <span className="text-end font-medium">{offer.period}</span>
@@ -3147,7 +3266,7 @@ export function OffersPage() {
                     <MiniIconButton ariaLabel="تعديل العرض" onClick={() => editOffer(offer)}>
                       <Edit className="size-4" />
                     </MiniIconButton>
-                    <MiniIconButton tone="red" ariaLabel="حذف العرض" onClick={() => deleteOffer(offer.id)}>
+                    <MiniIconButton tone="red" ariaLabel="حذف العرض" onClick={() => setOfferDeleteTarget(offer)}>
                       <Trash2 className="size-4" />
                     </MiniIconButton>
                   </div>
@@ -3157,28 +3276,83 @@ export function OffersPage() {
           );
         })}
       </div>
+      )}
+      {offerDeleteTarget ? (
+        <OfferDeleteModal
+          offer={offerDeleteTarget}
+          deleting={deletingOffer}
+          onClose={() => setOfferDeleteTarget(null)}
+          onConfirm={() => void deleteOffer(offerDeleteTarget.id)}
+        />
+      ) : null}
     </div>
   );
 }
 
-const weekDayOptions = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"] as const;
-const weekDayShortLabels: Record<(typeof weekDayOptions)[number], string> = {
-  الاثنين: "ن",
-  الثلاثاء: "ث",
-  الأربعاء: "ر",
-  الخميس: "خ",
-  الجمعة: "ج",
-  السبت: "س",
-  الأحد: "ح",
-};
-const weekDayApiValues: Record<string, string> = {
-  الاثنين: "monday",
-  الثلاثاء: "tuesday",
-  الأربعاء: "wednesday",
-  الخميس: "thursday",
-  الجمعة: "friday",
-  السبت: "saturday",
-  الأحد: "sunday",
+function OfferInfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md bg-muted/25 px-3 py-2">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="truncate text-end font-semibold">{value}</span>
+    </div>
+  );
+}
+
+function OfferDeleteModal({
+  offer,
+  deleting,
+  onClose,
+  onConfirm,
+}: {
+  offer: OfferCard;
+  deleting: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/45 px-4 py-6 backdrop-blur-sm">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-offer-title"
+        className="w-full max-w-md overflow-hidden rounded-lg border bg-background shadow-2xl"
+      >
+        <div className="border-b px-5 py-4">
+          <h2 id="delete-offer-title" className="text-base font-bold">
+            حذف العرض
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">{offer.title}</p>
+        </div>
+        <div className="flex justify-end gap-2 p-5">
+          <Button type="button" variant="outline" disabled={deleting} onClick={onClose}>
+            إلغاء
+          </Button>
+          <Button type="button" variant="danger" disabled={deleting} onClick={onConfirm}>
+            {deleting ? "جار الحذف..." : "حذف"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const weekDayOptions = [
+  { label: "الأحد", value: "sunday", short: "ح" },
+  { label: "الإثنين", value: "monday", short: "ن" },
+  { label: "الثلاثاء", value: "tuesday", short: "ث" },
+  { label: "الأربعاء", value: "wednesday", short: "ر" },
+  { label: "الخميس", value: "thursday", short: "خ" },
+  { label: "الجمعة", value: "friday", short: "ج" },
+  { label: "السبت", value: "saturday", short: "س" },
+] as const satisfies readonly { label: string; value: ActiveDay; short: string }[];
+const weekDayLabels: Record<ActiveDay, string> = {
+  sunday: "الأحد",
+  monday: "الإثنين",
+  tuesday: "الثلاثاء",
+  wednesday: "الأربعاء",
+  thursday: "الخميس",
+  friday: "الجمعة",
+  saturday: "السبت",
 };
 const selectableItems = itemRows;
 type OfferProductsContextValue = {
@@ -3212,6 +3386,16 @@ function parseItemPrice(price: string) {
   return Number.isFinite(value) ? value : 0;
 }
 
+function itemDisplayPrice(item: ItemRow) {
+  return typeof item.displayPrice === "number" && Number.isFinite(item.displayPrice)
+    ? item.displayPrice
+    : parseItemPrice(item.price);
+}
+
+function itemPriceLabel(item: ItemRow) {
+  return item.displayPriceLabel ?? item.price;
+}
+
 function fallbackSelectableItem(): ItemRow {
   const item = selectableItems[0] ?? itemRows[0];
 
@@ -3240,7 +3424,7 @@ function clampDiscountPercent(value: number) {
 }
 
 function discountedItemPrice(item: ItemRow, discountPercent: number) {
-  return parseItemPrice(item.price) * (1 - clampDiscountPercent(discountPercent) / 100);
+  return itemDisplayPrice(item) * (1 - clampDiscountPercent(discountPercent) / 100);
 }
 
 function normalizeProductSearch(value: string) {
@@ -3255,7 +3439,7 @@ function itemMatchesProductSearch(item: ItemRow, normalizedQuery: string) {
     item.description,
     item.category,
     item.subcategory,
-    item.price,
+    itemPriceLabel(item),
     item.code,
     item.id,
     item.active ? "نشط active" : "متوقف inactive",
@@ -3342,7 +3526,7 @@ function ProductPicker({
           <div className="truncate text-sm font-semibold">{selectedItem.name}</div>
           <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
             <span className="truncate">{selectedItem.category}</span>
-            <span className="shrink-0">{selectedItem.price}</span>
+            <span className="shrink-0">{itemPriceLabel(selectedItem)}</span>
           </div>
         </div>
         <button
@@ -3537,7 +3721,7 @@ function PackageProductSearchModal({
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {filteredItems.map((item) => {
                 const selected = selectedItemIds.includes(item.id);
-                const price = formatReferenceCurrency(parseItemPrice(item.price));
+                const price = itemPriceLabel(item);
                 const code = item.code ?? item.id;
 
                 return (
@@ -3633,7 +3817,7 @@ function SingleOfferProductPanel({
     selectedItem && typeof discountPercent === "number"
       ? discountedItemPrice(selectedItem, discountPercent) * quantity
       : selectedItem
-        ? parseItemPrice(selectedItem.price) * quantity
+        ? itemDisplayPrice(selectedItem) * quantity
         : 0;
   const singleLine: BundleLine = {
     id: `single-${selectedItemId || "empty"}`,
@@ -3766,7 +3950,7 @@ function PackageProductCard({
   onChange: (patch: Partial<BundleLine>) => void;
   onRemove: () => void;
 }) {
-  const unitPrice = parseItemPrice(item.price);
+  const unitPrice = itemDisplayPrice(item);
   const hasDiscount = typeof discountPercent === "number";
   const discountedPrice = hasDiscount
     ? discountedItemPrice(item, discountPercent)
@@ -4294,43 +4478,60 @@ export function CreateOfferPage() {
   const [editingOfferId, setEditingOfferId] = useState("");
   const [editingOffer, setEditingOffer] = useState<OfferCard | null>(null);
   const formMode = editingOfferId ? "edit" : "create";
-  const [markets, setMarkets] = useState<Array<{ id: string; name: string }>>([]);
-  const [offerProducts, setOfferProducts] = useState<ItemRow[]>([]);
+  const [markets, setMarkets] = useState<OfferMarket[]>([]);
+  const [allOfferProducts, setAllOfferProducts] = useState<ItemRow[]>([]);
   const [selectedMarketId, setSelectedMarketId] = useState("");
+  const [selectedScope, setSelectedScope] = useState<OfferScope>("general");
   const [savingOffer, setSavingOffer] = useState(false);
-  const [offerStatus, setOfferStatus] = useState("active");
+  const [offerStatus, setOfferStatus] = useState<OfferStatus>("active");
   const [offerTitle, setOfferTitle] = useState(editingOffer?.title ?? "");
   const [offerDescription, setOfferDescription] = useState("");
-  const [selectedOfferCityId, setSelectedOfferCityId] = useState("all");
+  const [selectedOfferCityId, setSelectedOfferCityId] = useState("");
   const offerImageObjectUrlRef = useRef<string | null>(null);
   const [offerImagePreview, setOfferImagePreview] = useState(editingOffer?.image ?? "");
   const [offerImageName, setOfferImageName] = useState(
     editingOffer?.image ? "صورة العرض الحالية" : "",
   );
-  const [selectedType, setSelectedType] = useState(editingOffer?.type ?? "خصم");
+  const [offerImageFile, setOfferImageFile] = useState<File | null>(null);
+  const [selectedType, setSelectedType] = useState<ArabicOfferType>(editingOffer?.type ?? "خصم");
   const [discountProductId, setDiscountProductId] = useState("");
   const [discountPercent, setDiscountPercent] = useState("20");
   const [flashProductIds, setFlashProductIds] = useState<string[]>([]);
   const [flashDiscountPercent, setFlashDiscountPercent] = useState("30");
   const [deliveryProductId, setDeliveryProductId] = useState("");
-  const [adLinkType, setAdLinkType] = useState<"link" | "product">("link");
-  const [adProductId, setAdProductId] = useState("");
+  const [announcementLinkType, setAnnouncementLinkType] = useState<"link" | "product">("link");
+  const [announcementProductId, setAnnouncementProductId] = useState("");
   const [packageDiscountPercent, setPackageDiscountPercent] = useState("15");
-  const [bundleItems, setBundleItems] = useState<BundleLine[]>(() =>
-    packageSeedItems.map((item, index) => ({
-      id: `bundle-${item.id}`,
-      itemId: item.id,
-      quantity: index === 0 ? 2 : 1,
-    })),
-  );
+  const [bundleItems, setBundleItems] = useState<BundleLine[]>([]);
   const [packageProductsOpen, setPackageProductsOpen] = useState(false);
   const [packageProductSearchOpen, setPackageProductSearchOpen] = useState(false);
+  const marketsForScope = useMemo(() => {
+    if (selectedScope === "general") {
+      return markets.filter((market) => market.scope === "general" && market.status === "active");
+    }
+
+    if (!selectedOfferCityId) return [];
+
+    return markets.filter(
+      (market) =>
+        market.scope === "service_city" &&
+        market.status === "active" &&
+        market.serviceCityIds.some((cityId) => Number(cityId) === Number(selectedOfferCityId)),
+    );
+  }, [markets, selectedOfferCityId, selectedScope]);
+  const offerProducts = useMemo(
+    () =>
+      selectedMarketId
+        ? allOfferProducts.filter((product) => Number(product.marketId) === Number(selectedMarketId))
+        : [],
+    [allOfferProducts, selectedMarketId],
+  );
   const discountRate = clampDiscountPercent(Number(discountPercent) || 0);
   const flashDiscountRate = clampDiscountPercent(Number(flashDiscountPercent) || 0);
   const packageDiscountRate = clampDiscountPercent(Number(packageDiscountPercent) || 0);
   const packageSubtotal = bundleItems.reduce((total, line) => {
     const item = selectedItemFrom(offerProducts, line.itemId);
-    return total + parseItemPrice(item.price) * line.quantity;
+    return total + itemDisplayPrice(item) * line.quantity;
   }, 0);
   const packageFinalPrice = packageSubtotal * (1 - packageDiscountRate / 100);
   const packageSaving = Math.max(packageSubtotal - packageFinalPrice, 0);
@@ -4346,7 +4547,7 @@ export function CreateOfferPage() {
   const [openScheduleTime, setOpenScheduleTime] = useState<"start" | "end" | null>(null);
   const [startTime, setStartTime] = useState(initialScheduleValues.time);
   const [endTime, setEndTime] = useState(initialScheduleValues.time);
-  const [activeWeekDays, setActiveWeekDays] = useState<string[]>([]);
+  const [activeWeekDays, setActiveWeekDays] = useState<ActiveDay[]>([]);
   const [useLimits, setUseLimits] = useState("");
   const [userLimit, setUserLimit] = useState("");
 
@@ -4385,18 +4586,53 @@ export function CreateOfferPage() {
     offerImageObjectUrlRef.current = nextPreview;
     setOfferImagePreview(nextPreview);
     setOfferImageName(file.name);
+    setOfferImageFile(file);
     event.target.value = "";
   }
 
   function removeOfferImage() {
     revokeOfferImageObjectUrl();
+    setOfferImageFile(null);
+    if (editingOffer?.image) {
+      setOfferImagePreview(editingOffer.image);
+      setOfferImageName("صورة العرض الحالية");
+      return;
+    }
     setOfferImagePreview("");
     setOfferImageName("");
   }
 
   useEffect(() => revokeOfferImageObjectUrl, []);
 
-  function selectOfferType(nextType: string) {
+  function clearOfferProductSelection() {
+    setDiscountProductId("");
+    setFlashProductIds([]);
+    setDeliveryProductId("");
+    setAnnouncementProductId("");
+    setBundleItems([]);
+    setPackageProductsOpen(false);
+    setPackageProductSearchOpen(false);
+  }
+
+  function changeOfferScope(nextScope: OfferScope) {
+    setSelectedScope(nextScope);
+    setSelectedOfferCityId("");
+    setSelectedMarketId("");
+    clearOfferProductSelection();
+  }
+
+  function changeOfferCity(cityId: string) {
+    setSelectedOfferCityId(cityId);
+    setSelectedMarketId("");
+    clearOfferProductSelection();
+  }
+
+  function changeOfferMarket(marketId: string) {
+    setSelectedMarketId(marketId);
+    clearOfferProductSelection();
+  }
+
+  function selectOfferType(nextType: ArabicOfferType) {
     setSelectedType(nextType);
   }
 
@@ -4450,7 +4686,7 @@ export function CreateOfferPage() {
     );
   }
 
-  function toggleActiveWeekDay(day: string) {
+  function toggleActiveWeekDay(day: ActiveDay) {
     setActiveWeekDays((currentDays) => {
       if (currentDays.includes(day)) {
         return currentDays.filter((currentDay) => currentDay !== day);
@@ -4473,8 +4709,8 @@ export function CreateOfferPage() {
       const item = offerProducts.find((currentItem) => currentItem.id === deliveryProductId);
       return item ? [item] : [];
     }
-    if (selectedType === "إعلان" && adLinkType === "product") {
-      const item = offerProducts.find((currentItem) => currentItem.id === adProductId);
+    if (selectedType === "إعلان") {
+      const item = offerProducts.find((currentItem) => currentItem.id === announcementProductId);
       return item ? [item] : [];
     }
     const item = offerProducts.find((currentItem) => currentItem.id === discountProductId);
@@ -4483,37 +4719,86 @@ export function CreateOfferPage() {
 
   async function saveOffer() {
     if (savingOffer) return;
-    if (!offerTitle.trim() || !selectedMarketId) {
-      showSnackbar({ message: "أدخل عنوان العرض واختر السوق.", tone: "danger" });
+    if (!offerTitle.trim()) {
+      showSnackbar({ message: "العنوان مطلوب", tone: "danger" });
+      return;
+    }
+    if (!selectedScope) {
+      showSnackbar({ message: "اختر نطاق العرض", tone: "danger" });
+      return;
+    }
+    if (selectedScope === "service_city" && !selectedOfferCityId) {
+      showSnackbar({ message: "اختر مدينة الخدمة", tone: "danger" });
+      return;
+    }
+    if (!selectedMarketId) {
+      showSnackbar({
+        message:
+          selectedScope === "general" && marketsForScope.length === 0
+            ? "لا توجد محلات عامة. أنشئ محلًا عامًا من صفحة المحلات أولاً."
+            : selectedScope === "service_city" && selectedOfferCityId && marketsForScope.length === 0
+              ? "لا توجد محلات في هذه المدينة"
+              : "اختر السوق",
+        tone: "danger",
+      });
+      return;
+    }
+    if (!marketsForScope.some((market) => Number(market.id) === Number(selectedMarketId))) {
+      showSnackbar({ message: "اختر السوق", tone: "danger" });
+      return;
+    }
+    if (!selectedType) {
+      showSnackbar({ message: "نوع العرض مطلوب", tone: "danger" });
       return;
     }
     const productIds = Array.from(
       new Set(selectedOfferItems().map((item) => Number(item.id)).filter(Number.isFinite)),
     );
     if (!productIds.length) {
-      showSnackbar({ message: "اختر منتجًا واحدًا على الأقل للعرض.", tone: "danger" });
+      showSnackbar({ message: "اختر منتجًا واحدًا على الأقل", tone: "danger" });
       return;
     }
 
     const discount =
-      selectedType === "فلاش"
+        selectedType === "فلاش"
         ? flashDiscountPercent
         : selectedType === "باكج"
           ? packageDiscountPercent
           : selectedType === "خصم"
             ? discountPercent
             : "0";
+    const discountNumber = Number(discount || 0);
+    const startDateTime = new Date(`${startDate}T${startTime}`);
+    const endDateTime = new Date(`${endDate}T${endTime}`);
+
+    if (!Number.isFinite(discountNumber) || discountNumber < 0) {
+      showSnackbar({ message: "قيمة الخصم يجب أن تكون صفر أو أكثر.", tone: "danger" });
+      return;
+    }
+    if (!Number.isFinite(startDateTime.getTime()) || !Number.isFinite(endDateTime.getTime())) {
+      showSnackbar({ message: "تأكد من تاريخ ووقت بداية ونهاية العرض.", tone: "danger" });
+      return;
+    }
+    if (endDateTime.getTime() <= startDateTime.getTime()) {
+      showSnackbar({ message: "تاريخ النهاية يجب أن يكون بعد تاريخ البداية", tone: "danger" });
+      return;
+    }
+    const startTimeIso = startDateTime.toISOString();
+    const endTimeIso = endDateTime.toISOString();
+
     const payload = {
       market_id: Number(selectedMarketId),
+      scope: selectedScope,
+      service_city_id:
+        selectedScope === "service_city" ? Number(selectedOfferCityId) : null,
       product_ids: productIds,
       title: offerTitle.trim(),
       description: offerDescription.trim(),
-      image: null,
-      type: offerTypeValues[selectedType] ?? "discount",
-      discount,
-      start_time: new Date(`${startDate}T${startTime}`).toISOString(),
-      end_time: new Date(`${endDate}T${endTime}`).toISOString(),
-      active_days: activeWeekDays.map((day) => weekDayApiValues[day]).filter(Boolean),
+      type: offerTypeValues[selectedType],
+      discount: discountNumber.toFixed(2),
+      start_time: startTimeIso,
+      end_time: endTimeIso,
+      active_days: activeWeekDays,
       use_limits: useLimits ? Number(useLimits) : null,
       user_limit: userLimit ? Number(userLimit) : null,
       status: offerStatus,
@@ -4521,16 +4806,47 @@ export function CreateOfferPage() {
 
     setSavingOffer(true);
     try {
-      await sendAdminJson(
-        apiFetch,
+      const offerPath =
         formMode === "edit"
           ? `${adminApiPaths.offers}${encodeURIComponent(editingOfferId)}/`
-          : adminApiPaths.offers,
-        {
-          method: formMode === "edit" ? "PATCH" : "POST",
-          body: JSON.stringify(payload),
-        },
-      );
+          : adminApiPaths.offers;
+      const method = formMode === "edit" ? "PATCH" : "POST";
+      const response = offerImageFile
+        ? await apiFetch(offerPath, {
+            method,
+            body: (() => {
+              const formData = new FormData();
+              formData.append("market_id", String(payload.market_id));
+              formData.append("scope", payload.scope);
+              if (payload.scope === "service_city" && payload.service_city_id) {
+                formData.append("service_city_id", String(payload.service_city_id));
+              }
+              payload.product_ids.forEach((id) => {
+                formData.append("product_ids", String(id));
+              });
+              formData.append("title", payload.title);
+              formData.append("description", payload.description);
+              formData.append("type", payload.type);
+              formData.append("discount", payload.discount);
+              formData.append("start_time", payload.start_time);
+              formData.append("end_time", payload.end_time);
+              formData.append("active_days", JSON.stringify(payload.active_days));
+              if (payload.use_limits !== null) formData.append("use_limits", String(payload.use_limits));
+              if (payload.user_limit !== null) formData.append("user_limit", String(payload.user_limit));
+              formData.append("status", payload.status);
+              formData.append("image", offerImageFile);
+              return formData;
+            })(),
+          })
+        : await apiFetch(offerPath, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+      const data = await readApiData(response);
+      if (!response.ok) {
+        throw new Error(apiErrorMessage(data, "تعذر حفظ العرض."));
+      }
       showSnackbar({
         message:
           formMode === "edit"
@@ -4564,6 +4880,12 @@ export function CreateOfferPage() {
         revokeOfferImageObjectUrl();
         setOfferImagePreview("");
         setOfferImageName("");
+        setOfferImageFile(null);
+        setSelectedScope("general");
+        setSelectedOfferCityId("");
+        setSelectedMarketId("");
+        clearOfferProductSelection();
+        setOfferStatus("active");
         setStartDate(nextScheduleValues.date);
         setEndDate(nextScheduleValues.date);
         setStartTime(nextScheduleValues.time);
@@ -4579,12 +4901,10 @@ export function CreateOfferPage() {
         const data = await readApiData(response);
         if (!response.ok) throw new Error("تعذر تحميل الأسواق.");
         if (!active) return;
-        const nextMarkets = apiList(data).map((record) => ({
-          id: String(record.id),
-          name: String(record.name ?? `سوق #${record.id}`),
-        }));
+        const nextMarkets = apiList(data)
+          .map(offerMarketFromApi)
+          .filter((market): market is OfferMarket => Boolean(market));
         setMarkets(nextMarkets);
-        setSelectedMarketId((current) => current || nextMarkets[0]?.id || "");
       })
       .catch((error) => {
         if (active) showSnackbar({ message: error instanceof Error ? error.message : "تعذر تحميل الأسواق.", tone: "danger" });
@@ -4593,24 +4913,7 @@ export function CreateOfferPage() {
     void fetchAdminRows(apiFetch, adminApiPaths.products, productRowFromApi)
       .then((products) => {
         if (!active) return;
-        setOfferProducts(products);
-        setDiscountProductId((current) =>
-          products.some((product) => product.id === current)
-            ? current
-            : products[0]?.id ?? "",
-        );
-        setBundleItems((current) => {
-          const valid = current.filter((line) =>
-            products.some((product) => product.id === line.itemId),
-          );
-          return valid.length
-            ? valid
-            : products.slice(0, 3).map((product) => ({
-                id: `bundle-${product.id}`,
-                itemId: product.id,
-                quantity: 1,
-              }));
-        });
+        setAllOfferProducts(products);
       })
       .catch((error) => {
         if (active) showSnackbar({ message: error instanceof Error ? error.message : "تعذر تحميل المنتجات.", tone: "danger" });
@@ -4630,34 +4933,43 @@ export function CreateOfferPage() {
           const card = offerCardFromApi(record);
           const market = record.market as BackendRecord | undefined;
           const products = Array.isArray(record.products) ? record.products as BackendRecord[] : [];
-          const productIds = products.map((product) => String(product.id));
+          const productIds = Array.isArray(record.product_ids)
+            ? record.product_ids.map(String)
+            : products.map((product) => String(product.id));
           const start = new Date(String(record.start_time));
           const end = new Date(String(record.end_time));
-          const apiDays = Array.isArray(record.active_days) ? record.active_days.map(String) : [];
+          const apiDays = Array.isArray(record.active_days)
+            ? record.active_days.map(String).filter(isActiveDay)
+            : [];
 
           setEditingOffer(card);
           setOfferTitle(card.title);
           setOfferDescription(String(record.description ?? ""));
           setSelectedType(card.type);
           setSelectedMarketId(String(market?.id ?? record.market_id ?? ""));
+          setSelectedScope(card.scope);
+          setSelectedOfferCityId(card.serviceCityId);
+          setOfferImageFile(null);
           setOfferImagePreview(card.image ?? "");
           setOfferImageName(card.image ? "صورة العرض الحالية" : "");
           setStartDate(formatDateInputValue(start));
           setStartTime(formatTimeInputValue(start));
           setEndDate(formatDateInputValue(end));
           setEndTime(formatTimeInputValue(end));
-          setActiveWeekDays(
-            weekDayOptions.filter((day) => apiDays.includes(weekDayApiValues[day])),
-          );
+          setActiveWeekDays(apiDays);
           setUseLimits(record.use_limits == null ? "" : String(record.use_limits));
           setUserLimit(record.user_limit == null ? "" : String(record.user_limit));
-          setOfferStatus(String(record.status ?? "active"));
+          setOfferStatus(isOfferStatus(record.status) ? record.status : "active");
           if (card.type === "فلاش") {
             setFlashProductIds(productIds);
             setFlashDiscountPercent(String(record.discount ?? "0"));
           } else if (card.type === "باكج") {
             setBundleItems(productIds.map((itemId) => ({ id: `bundle-${itemId}`, itemId, quantity: 1 })));
             setPackageDiscountPercent(String(record.discount ?? "0"));
+          } else if (card.type === "توصيل") {
+            setDeliveryProductId(productIds[0] ?? "");
+          } else if (card.type === "إعلان") {
+            setAnnouncementProductId(productIds[0] ?? "");
           } else {
             setDiscountProductId(productIds[0] ?? "");
             setDiscountPercent(String(record.discount ?? "0"));
@@ -4742,48 +5054,74 @@ export function CreateOfferPage() {
                   />
                 </Field>
               </div>
-              <Field label="المدينة">
-                <AppSelect
-                  ariaLabel="المدينة"
-                  className="h-11 bg-input"
-                  onValueChange={setSelectedOfferCityId}
-                  options={[
-                    { value: "all", label: serviceCitiesLoading ? "جاري تحميل المدن..." : "كل المدن" },
-                    ...serviceCities.map((city) => ({
+              <div className="grid gap-4 lg:grid-cols-4">
+                <Field label="النطاق *">
+                  <AppSelect
+                    ariaLabel="نطاق العرض"
+                    className="h-11 bg-input"
+                    onValueChange={(value) => changeOfferScope(value as OfferScope)}
+                    options={[
+                      { value: "general", label: "عام" },
+                      { value: "service_city", label: "مدينة خدمة" },
+                    ]}
+                    value={selectedScope}
+                  />
+                </Field>
+                {selectedScope === "service_city" ? (
+                <Field label="مدينة الخدمة">
+                  <AppSelect
+                    ariaLabel="مدينة الخدمة"
+                    className="h-11 bg-input"
+                    onValueChange={changeOfferCity}
+                    options={serviceCities.map((city) => ({
                       value: String(city.id),
                       label: city.name_ar || city.name,
-                    })),
-                  ]}
-                  value={selectedOfferCityId}
-                />
-              </Field>
-
-              <div className="hidden">
-              <Field label="السوق *">
-                <AppSelect
-                  ariaLabel="السوق"
-                  className="h-10 bg-input"
-                  onValueChange={setSelectedMarketId}
-                  options={markets.map((market) => ({
-                    value: market.id,
-                    label: market.name,
-                  }))}
-                  placeholder="اختر السوق"
-                  value={selectedMarketId}
-                />
-              </Field>
-              <Field label="الحالة *">
-                <AppSelect
-                  ariaLabel="حالة العرض"
-                  className="h-10 bg-input"
-                  onValueChange={setOfferStatus}
-                  options={[
-                    { value: "active", label: "نشط" },
-                    { value: "inactive", label: "متوقف" },
-                  ]}
-                  value={offerStatus}
-                />
-              </Field>
+                    }))}
+                    placeholder={serviceCitiesLoading ? "جاري تحميل المدن..." : "اختر مدينة"}
+                    value={selectedOfferCityId}
+                  />
+                </Field>
+                ) : null}
+                <Field label="السوق *">
+                  <AppSelect
+                    ariaLabel="السوق"
+                    className="h-11 bg-input"
+                    disabled={selectedScope === "service_city" && !selectedOfferCityId}
+                    onValueChange={changeOfferMarket}
+                    options={marketsForScope.map((market) => ({
+                      value: market.id,
+                      label: market.name,
+                    }))}
+                    placeholder={
+                      selectedScope === "general"
+                        ? "اختر محلًا عامًا"
+                        : selectedOfferCityId
+                          ? "اختر محلًا في المدينة"
+                          : "اختر المدينة أولاً"
+                    }
+                    value={selectedMarketId}
+                  />
+                  {selectedScope === "general" && marketsForScope.length === 0 ? (
+                    <p className="text-xs text-destructive">
+                      لا توجد محلات عامة. أنشئ محلًا عامًا من صفحة المحلات أولاً.
+                    </p>
+                  ) : selectedScope === "service_city" && selectedOfferCityId && marketsForScope.length === 0 ? (
+                    <p className="text-xs text-destructive">لا توجد محلات في هذه المدينة</p>
+                  ) : null}
+                </Field>
+                <Field label="الحالة *">
+                  <AppSelect
+                    ariaLabel="حالة العرض"
+                    className="h-11 bg-input"
+                    onValueChange={(value) => setOfferStatus(value as OfferStatus)}
+                    options={[
+                      { value: "active", label: "نشط" },
+                      { value: "inactive", label: "متوقف" },
+                      { value: "expired", label: "منتهي" },
+                    ]}
+                    value={offerStatus}
+                  />
+                </Field>
               </div>
 
               <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/15 p-3 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-center">
@@ -4952,7 +5290,7 @@ export function CreateOfferPage() {
                     <div className="grid gap-3 border-t bg-background/30 p-3">
                       {bundleItems.map((line) => {
                         const item = selectedItemFrom(offerProducts, line.itemId);
-                        const lineTotal = parseItemPrice(item.price) * line.quantity;
+                        const lineTotal = itemDisplayPrice(item) * line.quantity;
 
                         return (
                           <PackageProductCard
@@ -5021,13 +5359,13 @@ export function CreateOfferPage() {
                 />
               </div>
             ) : selectedType === "إعلان" ? (
-              <div key="ad-settings" className="grid gap-4">
+              <div key="announcement-settings" className="grid gap-4">
                 <div className="grid gap-4 lg:grid-cols-3">
                   <Field label="نوع الرابط">
                     <AppSelect
-                      value={adLinkType}
+                      value={announcementLinkType}
                       onValueChange={(value) =>
-                        setAdLinkType(value as "link" | "product")
+                        setAnnouncementLinkType(value as "link" | "product")
                       }
                       ariaLabel="نوع الرابط"
                       className="h-10 bg-input"
@@ -5044,20 +5382,19 @@ export function CreateOfferPage() {
                     <Input type="number" min="1" defaultValue="15" className="h-10" />
                   </Field>
                 </div>
-                {adLinkType === "link" ? (
+                {announcementLinkType === "link" ? (
                   <Field label="إضافة رابط">
                     <Input dir="ltr" className="h-10 text-left" placeholder="/items/pizza-margherita" />
                   </Field>
-                ) : (
-                  <SingleOfferProductPanel
-                    title="منتج الإعلان"
-                    description="اختار المنتج اللي هيفتح لما العميل يضغط على الإعلان."
-                    selectedItemId={adProductId}
-                    onSelectItem={setAdProductId}
-                    badgeTone="blue"
-                    contextLabel="الإعلان"
-                  />
-                )}
+                ) : null}
+                <SingleOfferProductPanel
+                  title="منتج الإعلان"
+                  description="اختار المنتج المرتبط بالإعلان."
+                  selectedItemId={announcementProductId}
+                  onSelectItem={setAnnouncementProductId}
+                  badgeTone="blue"
+                  contextLabel="الإعلان"
+                />
                 <Field label="نص زر الإعلان">
                   <Input className="h-10" defaultValue="تسوق الآن" />
                 </Field>
@@ -5146,12 +5483,12 @@ export function CreateOfferPage() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7">
-                  {weekDayOptions.map((label) => {
-                    const selected = activeWeekDays.includes(label);
+                  {weekDayOptions.map((day) => {
+                    const selected = activeWeekDays.includes(day.value);
 
                     return (
                       <label
-                        key={label}
+                        key={day.value}
                         className={cn(
                           "group relative flex min-h-16 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border px-2 py-2 text-center text-sm shadow-sm transition duration-150",
                           "hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus-within:ring-2 focus-within:ring-primary/30",
@@ -5163,9 +5500,9 @@ export function CreateOfferPage() {
                         <input
                           type="checkbox"
                           checked={selected}
-                          onChange={() => toggleActiveWeekDay(label)}
+                          onChange={() => toggleActiveWeekDay(day.value)}
                           className="sr-only"
-                          aria-label={`تفعيل يوم ${label}`}
+                          aria-label={`تفعيل يوم ${day.label}`}
                         />
                         <span
                           className={cn(
@@ -5175,9 +5512,9 @@ export function CreateOfferPage() {
                               : "border-border bg-muted/40 text-foreground",
                           )}
                         >
-                          {weekDayShortLabels[label]}
+                          {day.short}
                         </span>
-                        <span className="max-w-full font-semibold leading-5">{label}</span>
+                        <span className="max-w-full font-semibold leading-5">{day.label}</span>
                         <span
                           className={cn(
                             "absolute start-2 top-2 grid size-5 place-items-center rounded-full border transition",

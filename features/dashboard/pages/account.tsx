@@ -24,6 +24,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { currentUser } from "@/features/dashboard/profile-data";
 import { Button, Card, Input, PageTitle } from "@/features/dashboard/primitives";
 import { useSnackbar } from "@/features/dashboard/snackbar";
+import { resolveMediaUrl, shouldUnoptimizeMediaUrl } from "@/lib/media-url";
 
 function displayName(firstName?: string, lastName?: string) {
   return [firstName, lastName].filter(Boolean).join(" ") || currentUser.fullName;
@@ -126,6 +127,11 @@ export function AccountPage() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const name = displayName(user?.first_name, user?.last_name);
   const email = user?.email ?? currentUser.email;
+  const avatarImageUrl = resolveMediaUrl(avatarUrl);
+  const avatarImageUnoptimized =
+    avatarImageUrl.startsWith("data:") ||
+    avatarImageUrl.startsWith("blob:") ||
+    shouldUnoptimizeMediaUrl(avatarImageUrl);
 
   useEffect(() => {
     let active = true;
@@ -310,10 +316,10 @@ export function AccountPage() {
             <div className="relative mx-auto size-28 overflow-hidden rounded-xl border bg-background shadow-sm">
               <Image
                 alt={name}
-                src={avatarUrl}
+                src={avatarImageUrl}
                 fill
                 sizes="112px"
-                unoptimized
+                unoptimized={avatarImageUnoptimized}
                 className="object-cover"
               />
               <button

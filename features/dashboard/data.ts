@@ -192,6 +192,13 @@ export function pageFromPathname(pathname: string): PageKey {
   return "overview";
 }
 
+export type ProductVariant = {
+  id: number;
+  price: string | number;
+  sku?: string | null;
+  attribute_values?: unknown[];
+};
+
 export type ItemRow = {
   index: string;
   id: string;
@@ -201,9 +208,13 @@ export type ItemRow = {
   description: string;
   category: string;
   subcategory: string;
+  marketId?: string;
   shopName?: string;
   calories: string;
   price: string;
+  displayPrice?: number;
+  displayPriceLabel?: string;
+  variants?: ProductVariant[];
   variantDetails?: string;
   visibilityMode?: "general" | "regions";
   regionSlugs?: string[];
@@ -593,6 +604,7 @@ export type CategoryRow = {
   image: string;
   name: string;
   nameAr: string;
+  type?: string;
   sections: string[];
   active: boolean;
   featured: "نعم" | "لا";
@@ -829,4 +841,3 @@ export const topItems = [
   { name: "موز", revenue: 1280, sold: 34, orders: 23 },
   { name: "فراخ الامهات الحمرا", revenue: 1280, sold: 8, orders: 3 },
 ];
-

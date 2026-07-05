@@ -39,8 +39,15 @@ import { useDisclosure } from "../hooks";
 import { useSnackbar } from "../snackbar";
 
 type CategoryStatusFilter = "all" | "active" | "inactive";
-type CategoryTypeFilter = "all" | "popular";
+type CategoryKind = "normal" | "featured" | "popular";
+type CategoryTypeFilter = "all" | CategoryKind;
 type CategorySectionFilter = string;
+type CategoryDraft = {
+  name: string;
+  classificationName: string;
+  type: CategoryKind;
+  description: string;
+};
 
 const initialCategorySectionOptions: CategorySectionFilter[] = [
   "all",
@@ -53,6 +60,114 @@ const initialCategorySectionOptions: CategorySectionFilter[] = [
 ];
 
 const categoriesPageSize = 10;
+const categoryTypeOptions: Array<{
+  value: CategoryKind;
+  label: string;
+  backendValue: string;
+}> = [
+  { value: "normal", label: "فئة عادية", backendValue: "فئات عادية" },
+  { value: "featured", label: "فئة مميزة", backendValue: "فئات مميزة" },
+  { value: "popular", label: "فئة شائعة", backendValue: "فئات شائعة" },
+];
+
+function categoryTypeOption(value: CategoryKind) {
+  return categoryTypeOptions.find((option) => option.value === value) ?? categoryTypeOptions[0];
+}
+
+function categoryTypeKind(value: string | undefined | null): CategoryKind | null {
+  const normalized = String(value ?? "").trim();
+  if (!normalized || normalized === "فئة عادية" || normalized === "فئات عادية") return "normal";
+  if (normalized === "فئة مميزة" || normalized === "فئات مميزة") return "featured";
+  if (normalized === "فئة شائعة" || normalized === "فئات شائعة") return "popular";
+  return null;
+}
+
+function initialCategoryType(category?: CategoryRow | null): CategoryKind {
+  const kind = categoryTypeKind(category?.type);
+  if (kind) return kind;
+
+  if (category?.type?.trim()) {
+    console.warn(`Unknown product category type "${category.type}" for category "${category.name}".`);
+  }
+
+  return "normal";
+}
+
+function categoryTypeBackendValue(value: CategoryKind) {
+  return categoryTypeOption(value).backendValue;
+}
+
+function categoryTypeLabel(value: string | undefined | null) {
+  const kind = categoryTypeKind(value);
+  if (kind) return categoryTypeOption(kind).label;
+
+  const rawValue = String(value ?? "").trim();
+  return rawValue || categoryTypeOptions[0].label;
+}
+
+function categoryMatchesType(row: CategoryRow, filter: CategoryTypeFilter) {
+  return filter === "all" || categoryTypeKind(row.type) === filter;
+}
+
+function CategoryTypeSelector({
+  value,
+  onChange,
+  customType,
+}: {
+  value: CategoryKind;
+  onChange: (value: CategoryKind) => void;
+  customType?: string;
+}) {
+  return (
+    <div className="grid gap-2">
+      <div className="grid gap-2 sm:grid-cols-3">
+        {categoryTypeOptions.map((option) => {
+          const selected = value === option.value;
+
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onChange(option.value)}
+              className={`min-h-11 rounded-md border px-3 py-2 text-sm font-bold transition ${
+                selected
+                  ? "border-primary bg-primary/10 text-primary shadow-sm"
+                  : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-accent hover:text-foreground"
+              }`}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+      {customType ? (
+        <p className="text-xs leading-5 text-muted-foreground">
+          القيمة الحالية من الباك: {customType}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function CategoryTypeBadge({ row }: { row: CategoryRow }) {
+  const kind = categoryTypeKind(row.type);
+  const label = categoryTypeLabel(row.type);
+  const toneClass =
+    kind === "featured"
+      ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+      : kind === "popular"
+        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+        : kind === "normal"
+          ? "bg-muted text-muted-foreground"
+          : "bg-sky-500/10 text-sky-700 dark:text-sky-300";
+
+  return (
+    <span className={`rounded-md px-2 py-0.5 text-xs font-bold ${toneClass}`}>
+      {label}
+    </span>
+  );
+}
 
 function CategoryDrawer({
   category,
@@ -61,12 +176,7 @@ function CategoryDrawer({
 }: {
   category?: CategoryRow | null;
   onClose: () => void;
-  onSubmit: (draft: {
-    name: string;
-    classificationName: string;
-    type: string;
-    description: string;
-  }) => void;
+  onSubmit: (draft: CategoryDraft) => void;
 }) {
   const isEditing = Boolean(category);
   const selectedSection = category?.sections[0] ?? "الطازج";
@@ -74,8 +184,10 @@ function CategoryDrawer({
   const [categoryImagePreview, setCategoryImagePreview] = useState(category?.image ?? "");
   const [categoryImageName, setCategoryImageName] = useState("");
   const [name, setName] = useState(category?.name ?? "");
-  const [isPopular, setIsPopular] = useState(category?.featured !== "نعم");
+  const [categoryType, setCategoryType] = useState<CategoryKind>(() => initialCategoryType(category));
   const [description, setDescription] = useState("");
+  const customCategoryType =
+    category?.type?.trim() && !categoryTypeKind(category.type) ? category.type.trim() : "";
 
   function revokeCategoryImageObjectUrl() {
     if (categoryImageObjectUrlRef.current) {
@@ -144,7 +256,7 @@ function CategoryDrawer({
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {isEditing
-                ? "عدّل بيانات الفئة وحالة ظهورها الشائعة."
+                ? "عدّل بيانات الفئة ونوع ظهورها."
                 : "أنشئ فئة جديدة تظهر داخل القسم المناسب في تطبيق العملاء."}
             </p>
           </div>
@@ -228,9 +340,13 @@ function CategoryDrawer({
                 placeholder="مثلاً: طيور، أسماك، لحوم فريش..."
               />
             </label>
-            <div className="flex h-[76px] items-center justify-between gap-4 rounded-md border bg-muted/15 px-4 text-sm font-medium sm:col-span-2">
+            <div className="grid gap-3 rounded-md border bg-muted/15 px-4 py-3 text-sm font-medium sm:col-span-2">
               <span className="leading-5">تصنيف الفئة</span>
-              <Switch checked={isPopular} onCheckedChange={setIsPopular} />
+              <CategoryTypeSelector
+                value={categoryType}
+                onChange={setCategoryType}
+                customType={customCategoryType}
+              />
             </div>
             <label className="flex min-h-[124px] flex-col gap-3 text-sm font-medium sm:col-span-2">
               <span className="leading-5">وصف الفئة</span>
@@ -252,7 +368,7 @@ function CategoryDrawer({
               onSubmit({
                 name,
                 classificationName: selectedSection,
-                type: isPopular ? "popular" : "featured",
+                type: categoryType,
                 description,
               })
             }
@@ -309,15 +425,12 @@ function CategoryInlineEditPanel({
 }: {
   category: CategoryRow;
   onCancel: () => void;
-  onSave: (draft: {
-    name: string;
-    classificationName: string;
-    type: string;
-    description: string;
-  }) => void;
+  onSave: (draft: CategoryDraft) => void;
 }) {
   const [name, setName] = useState(category.name);
-  const [isPopular, setIsPopular] = useState(category.featured !== "نعم");
+  const [categoryType, setCategoryType] = useState<CategoryKind>(() => initialCategoryType(category));
+  const customCategoryType =
+    category.type?.trim() && !categoryTypeKind(category.type) ? category.type.trim() : "";
   const categoryImageObjectUrlRef = useRef<string | null>(null);
   const [imagePreview, setImagePreview] = useState(category.image);
 
@@ -352,7 +465,7 @@ function CategoryInlineEditPanel({
         onSave({
           name,
           classificationName: category.sections[0] ?? "الطازج",
-          type: isPopular ? "popular" : "featured",
+          type: categoryType,
           description: "",
         });
       }}
@@ -391,10 +504,11 @@ function CategoryInlineEditPanel({
             />
           </Field>
           <Field label="تصنيف الفئة">
-            <div className="flex h-9 items-center justify-between gap-3 rounded-md border bg-input px-3 text-sm font-medium">
-              <span>{isPopular ? "فئة شائعة" : "الكل"}</span>
-              <Switch checked={isPopular} onCheckedChange={setIsPopular} />
-            </div>
+            <CategoryTypeSelector
+              value={categoryType}
+              onChange={setCategoryType}
+              customType={customCategoryType}
+            />
           </Field>
         </div>
         <div className="flex gap-2 lg:pb-0">
@@ -493,7 +607,7 @@ export function CategoriesPage() {
     const matchesStatus =
       statusFilter === "all" ||
       (statusFilter === "active" ? row.active : !row.active);
-    const matchesType = typeFilter === "all" || row.featured !== "نعم";
+    const matchesType = categoryMatchesType(row, typeFilter);
 
     return matchesSearch && matchesStatus && matchesType;
   });
@@ -562,8 +676,9 @@ export function CategoriesPage() {
 
   function openEditDrawer(category: CategoryRow) {
     setEditingCategory(category);
-    setInlineEditingCategory(category);
+    setInlineEditingCategory(null);
     setOpenActionMenu(null);
+    categoryDrawer.open();
   }
 
   function closeCategoryDrawer() {
@@ -641,16 +756,26 @@ export function CategoriesPage() {
     return sectionIndex >= 0 ? sectionIndex + 1 : 1;
   }
 
-  async function saveCategoryDraft(draft: {
-    name: string;
-    classificationName: string;
-    type: string;
-    description: string;
-  }) {
+  async function saveCategoryDraft(draft: CategoryDraft) {
+    if (!draft.name.trim()) {
+      showSnackbar({ message: "اسم الفئة مطلوب", tone: "danger" });
+      return;
+    }
+
+    if (!draft.classificationName.trim()) {
+      showSnackbar({ message: "تصنيف الفئة مطلوب", tone: "danger" });
+      return;
+    }
+
+    if (!draft.type) {
+      showSnackbar({ message: "نوع الفئة مطلوب", tone: "danger" });
+      return;
+    }
+
     const payload = {
       classification_id: classificationIdByName(draft.classificationName),
       name: draft.name.trim(),
-      type: draft.type === "featured" ? "فئات مميزة" : "فئات شائعة",
+      type: categoryTypeBackendValue(draft.type),
       description: draft.description.trim(),
     };
     const path = editingCategory
@@ -715,13 +840,9 @@ export function CategoriesPage() {
       </div>,
       <div key={`name-${row.index}`} className="min-w-0">
         <p className="truncate font-semibold">{row.name}</p>
-        {row.featured !== "نعم" ? (
-          <p className="mt-1">
-            <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
-              فئة شائعة
-            </span>
-          </p>
-        ) : null}
+        <p className="mt-1">
+          <CategoryTypeBadge row={row} />
+        </p>
       </div>,
       <div key={`status-${row.index}`} className="flex justify-center">
         <Switch
@@ -845,6 +966,8 @@ export function CategoriesPage() {
                 }}
                 options={[
                   { value: "all", label: "الكل" },
+                  { value: "normal", label: "فئة عادية" },
+                  { value: "featured", label: "فئة مميزة" },
                   { value: "popular", label: "فئة شائعة" },
                 ]}
                 className="h-9"

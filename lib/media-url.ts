@@ -1,0 +1,73 @@
+const mediaPathPattern = /^\/?media\//i;
+
+function configuredBackendUrl() {
+  return (
+    process.env.NEXT_PUBLIC_BACKEND_URL?.trim() ||
+    process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ||
+    ""
+  );
+}
+
+export function getBackendOrigin() {
+  const backendUrl = configuredBackendUrl();
+  if (!backendUrl) return "";
+
+  try {
+    return new URL(backendUrl).origin;
+  } catch {
+    return "";
+  }
+}
+
+export function isMediaPath(value: string) {
+  return mediaPathPattern.test(value.trim());
+}
+
+export function resolveMediaUrl<T extends string | null | undefined>(src: T): T | string {
+  if (typeof src !== "string") return src;
+
+  const value = src.trim();
+  if (!value || !isMediaPath(value)) return src;
+
+  const backendOrigin = getBackendOrigin();
+  if (!backendOrigin) return src;
+
+  return `${backendOrigin}${value.startsWith("/") ? value : `/${value}`}`;
+}
+
+function isLocalBackendHostname(hostname: string) {
+  if (
+    hostname === "localhost" ||
+    hostname === "0.0.0.0" ||
+    hostname === "::1" ||
+    hostname.startsWith("127.")
+  ) {
+    return true;
+  }
+
+  if (hostname.startsWith("10.") || hostname.startsWith("192.168.")) {
+    return true;
+  }
+
+  const match = hostname.match(/^172\.(\d{1,2})\./);
+  if (!match) return false;
+
+  const secondOctet = Number(match[1]);
+  return secondOctet >= 16 && secondOctet <= 31;
+}
+
+export function shouldUnoptimizeMediaUrl(src: unknown) {
+  if (process.env.NODE_ENV !== "development" || typeof src !== "string") {
+    return false;
+  }
+
+  const value = resolveMediaUrl(src);
+  if (typeof value !== "string") return false;
+
+  try {
+    const url = new URL(value);
+    return url.pathname.startsWith("/media/") && isLocalBackendHostname(url.hostname);
+  } catch {
+    return false;
+  }
+}
