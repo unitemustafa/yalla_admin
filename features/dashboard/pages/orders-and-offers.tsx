@@ -2678,7 +2678,7 @@ type ActiveDay =
   | "friday"
   | "saturday";
 
-type OfferDisplayStatus = "نشط" | "متوقف" | "منتهي";
+type OfferDisplayStatus = "نشط" | "متوقف" | "مجدول" | "منتهي";
 
 const offerTypeOptions = [
   { label: "باكج", icon: Package, accent: "text-sky-400", bg: "bg-sky-500/15" },
@@ -2700,11 +2700,14 @@ type OfferCard = {
   method: string;
   status: OfferDisplayStatus;
   backendStatus: OfferStatus;
+  showInGeneral: boolean;
   scope: OfferScope;
   marketId: string;
   marketName: string;
   serviceCityId: string;
   serviceCityName: string;
+  serviceCityIds: string[];
+  serviceCityNames: string[];
   productIds: string[];
   productNames: string[];
   activeDays: ActiveDay[];
@@ -2727,6 +2730,9 @@ type OfferMarket = {
   serviceCityIds: string[];
 };
 
+const allOffersFilterValue = "all";
+const generalOffersFilterValue = "general";
+
 const offerTypeLabels: Record<OfferType, ArabicOfferType> = {
   package: "باكج",
   flash: "فلاش",
@@ -2748,6 +2754,28 @@ const offerStatusLabels: Record<OfferStatus, OfferDisplayStatus> = {
   inactive: "متوقف",
   expired: "منتهي",
 };
+
+function offerDateLifecycle(startsAt: string, endsAt: string, now = Date.now()) {
+  const startTime = new Date(startsAt).getTime();
+  const endTime = new Date(endsAt).getTime();
+
+  if (Number.isFinite(endTime) && endTime < now) return "expired";
+  if (Number.isFinite(startTime) && startTime > now) return "scheduled";
+  return "current";
+}
+
+function offerDisplayStatus(
+  backendStatus: OfferStatus,
+  startsAt: string,
+  endsAt: string,
+): OfferDisplayStatus {
+  const lifecycle = offerDateLifecycle(startsAt, endsAt);
+
+  if (lifecycle === "expired") return "منتهي";
+  if (backendStatus !== "active") return offerStatusLabels[backendStatus];
+  if (lifecycle === "scheduled") return "مجدول";
+  return "نشط";
+}
 
 function isOfferType(value: unknown): value is OfferType {
   return (
@@ -2787,6 +2815,10 @@ function recordDisplayName(value: unknown, fallback = "") {
   return fallback;
 }
 
+function normalizeOfferFilterText(value: string) {
+  return value.trim().toLowerCase();
+}
+
 function offerMarketFromApi(record: BackendRecord): OfferMarket | null {
   const id = record.id == null ? "" : String(record.id);
   if (!id) return null;
@@ -2813,14 +2845,14 @@ function offerCardFromApi(record: BackendRecord): OfferCard {
   const meta = offerVisualMeta(type);
   const startsAt = String(record.start_time ?? "");
   const endsAt = String(record.end_time ?? "");
-  const expired = Number.isFinite(new Date(endsAt).getTime()) && new Date(endsAt).getTime() < Date.now();
   const rawStatus = String(record.status ?? "active").toLowerCase();
   const backendStatus = isOfferStatus(rawStatus) ? rawStatus : "active";
   const market = record.market && typeof record.market === "object" ? (record.market as BackendRecord) : null;
-  const serviceCity =
-    record.service_city && typeof record.service_city === "object"
-      ? (record.service_city as BackendRecord)
-      : null;
+  const serviceCities = Array.isArray(record.service_cities)
+    ? record.service_cities.filter((city): city is BackendRecord =>
+        Boolean(city && typeof city === "object"),
+      )
+    : [];
   const products = Array.isArray(record.products)
     ? record.products.filter((product): product is BackendRecord =>
         Boolean(product && typeof product === "object"),
@@ -2832,7 +2864,12 @@ function offerCardFromApi(record: BackendRecord): OfferCard {
   const activeDays = Array.isArray(record.active_days)
     ? record.active_days.map(String).filter(isActiveDay)
     : [];
-  const effectiveStatus: OfferStatus = expired ? "expired" : backendStatus;
+  const serviceCityIds = Array.isArray(record.service_city_ids)
+    ? record.service_city_ids.map(String)
+    : serviceCities.map((city) => String(city.id ?? "")).filter(Boolean);
+  const serviceCityNames = serviceCities
+    .map((city) => recordDisplayName(city, city.id ? `مدينة #${city.id}` : ""))
+    .filter(Boolean);
 
   return {
     id: String(record.id),
@@ -2842,13 +2879,20 @@ function offerCardFromApi(record: BackendRecord): OfferCard {
     apiType,
     discount: String(record.discount ?? "0"),
     method: "تطبيق تلقائي",
-    status: offerStatusLabels[effectiveStatus],
-    backendStatus: effectiveStatus,
-    scope: record.scope === "service_city" ? "service_city" : "general",
+    status: offerDisplayStatus(backendStatus, startsAt, endsAt),
+    backendStatus,
+    showInGeneral: Boolean(record.show_in_general),
+    scope: serviceCityIds.length && !record.show_in_general ? "service_city" : "general",
     marketId: String(record.market_id ?? market?.id ?? ""),
+    serviceCityId: serviceCityIds[0] ?? "",
+    serviceCityName: serviceCityNames.length ? serviceCityNames.join("، ") : "-",
     marketName: recordDisplayName(market, record.market_id ? `سوق #${record.market_id}` : "-"),
-    serviceCityId: String(record.service_city_id ?? serviceCity?.id ?? ""),
-    serviceCityName: recordDisplayName(serviceCity, record.service_city_id ? `مدينة #${record.service_city_id}` : "-"),
+    serviceCityIds: Array.isArray(record.service_city_ids)
+      ? record.service_city_ids.map(String)
+      : serviceCities.map((city) => String(city.id ?? "")).filter(Boolean),
+    serviceCityNames: serviceCities
+      .map((city) => recordDisplayName(city, city.id ? `مدينة #${city.id}` : ""))
+      .filter(Boolean),
     productIds,
     productNames: products.map((product) => recordDisplayName(product, `منتج #${product.id ?? ""}`)).filter(Boolean),
     activeDays,
@@ -3037,8 +3081,61 @@ export function OffersPage() {
   const [offerDeleteTarget, setOfferDeleteTarget] = useState<OfferCard | null>(null);
   const [deletingOffer, setDeletingOffer] = useState(false);
   const [now, setNow] = useState<number | null>(null);
-  const activeOffers = offers.filter((offer) => offer.status === "نشط").length;
-  const expiredOffers = offers.filter((offer) => offer.status === "منتهي").length;
+  const [offerSearch, setOfferSearch] = useState("");
+  const [offerTypeFilter, setOfferTypeFilter] = useState(allOffersFilterValue);
+  const [offerCityFilter, setOfferCityFilter] = useState(allOffersFilterValue);
+  const [expandedOfferIds, setExpandedOfferIds] = useState<Record<string, boolean>>({});
+  const activeOffers = offers.filter(
+    (offer) => offer.backendStatus === "active" && offerDateLifecycle(offer.startsAt, offer.endsAt) === "current",
+  ).length;
+  const scheduledOffers = offers.filter(
+    (offer) => offer.backendStatus === "active" && offerDateLifecycle(offer.startsAt, offer.endsAt) === "scheduled",
+  ).length;
+  const expiredOffers = offers.filter(
+    (offer) => offerDateLifecycle(offer.startsAt, offer.endsAt) === "expired",
+  ).length;
+  const offerCityOptions = useMemo(() => {
+    const cityOptions = new Map<string, string>();
+
+    offers.forEach((offer) => {
+      offer.serviceCityIds.forEach((cityId, index) => {
+        if (!cityId) return;
+        cityOptions.set(cityId, offer.serviceCityNames[index] || `مدينة #${cityId}`);
+      });
+    });
+
+    return [
+      { value: allOffersFilterValue, label: "كل المدن" },
+      { value: generalOffersFilterValue, label: "عام" },
+      ...Array.from(cityOptions, ([value, label]) => ({ value, label })),
+    ];
+  }, [offers]);
+  const filteredOffers = useMemo(() => {
+    const search = normalizeOfferFilterText(offerSearch);
+
+    return offers.filter((offer) => {
+      const matchesSearch =
+        !search ||
+        [
+          offer.id,
+          offer.title,
+          offer.description,
+          offer.type,
+          offer.marketName,
+          offer.serviceCityName,
+          offer.status,
+        ].some((value) => normalizeOfferFilterText(value).includes(search));
+      const matchesType =
+        offerTypeFilter === allOffersFilterValue || offer.apiType === offerTypeFilter;
+      const matchesCity =
+        offerCityFilter === allOffersFilterValue ||
+        (offerCityFilter === generalOffersFilterValue
+          ? offer.showInGeneral
+          : offer.serviceCityIds.includes(offerCityFilter));
+
+      return matchesSearch && matchesType && matchesCity;
+    });
+  }, [offers, offerSearch, offerTypeFilter, offerCityFilter]);
 
   useEffect(() => {
     const updateCountdown = () => setNow(Date.now());
@@ -3099,7 +3196,7 @@ export function OffersPage() {
   async function toggleOfferStatus(offerId: string) {
     const offer = offers.find((item) => item.id === offerId);
     if (!offer) return;
-    const nextStatus = offer.status === "نشط" ? "inactive" : "active";
+    const nextStatus = offer.backendStatus === "active" ? "inactive" : "active";
 
     try {
       const data = await sendAdminJson(
@@ -3125,6 +3222,13 @@ export function OffersPage() {
   function editOffer(offer: OfferCard) {
     showSnackbar({ message: `تم فتح تعديل ${offer.title}.` });
     router.push(`/offers/create?edit=${offer.id}`);
+  }
+
+  function toggleOfferCollapsed(offerId: string) {
+    setExpandedOfferIds((current) => ({
+      ...current,
+      [offerId]: !current[offerId],
+    }));
   }
 
   async function deleteOffer(offerId: string) {
@@ -3168,10 +3272,44 @@ export function OffersPage() {
         cards={[
           ["إجمالي العروض", String(offers.length), Tag, "text-primary"],
           ["نشط", String(activeOffers), CheckCircle2, "text-green-500"],
-          ["مجدول", "0", Calendar, "text-orange-500"],
+          ["مجدول", String(scheduledOffers), Calendar, "text-orange-500"],
           ["منتهي", String(expiredOffers), XCircle, "text-destructive"],
         ]}
       />
+      <Card className="mt-6 p-4">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_220px]">
+          <div className="relative">
+            <Search className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={offerSearch}
+              onChange={(event) => setOfferSearch(event.target.value)}
+              placeholder="ابحث في العروض..."
+              className="pr-9"
+            />
+          </div>
+          <AppSelect
+            value={offerTypeFilter}
+            onValueChange={setOfferTypeFilter}
+            ariaLabel="فلترة حسب نوع العرض"
+            options={[
+              { value: allOffersFilterValue, label: "كل الأنواع" },
+              ...offerTypeOptions.map((option) => ({
+                value: offerTypeValues[option.label],
+                label: option.label,
+              })),
+            ]}
+          />
+          <AppSelect
+            value={offerCityFilter}
+            onValueChange={setOfferCityFilter}
+            ariaLabel="فلترة حسب المدينة"
+            options={offerCityOptions}
+          />
+        </div>
+        <div className="hidden">
+          عرض {filteredOffers.length} من {offers.length} عرض
+        </div>
+      </Card>
       {offersLoading ? (
         <Card className="mt-6 flex min-h-52 items-center justify-center">
           <Clock className="size-6 animate-spin text-primary" />
@@ -3180,28 +3318,37 @@ export function OffersPage() {
         <Card className="mt-6 p-10 text-center text-sm text-muted-foreground">
           لا توجد عروض.
         </Card>
+      ) : filteredOffers.length === 0 ? (
+        <Card className="mt-6 p-10 text-center text-sm text-muted-foreground">
+          لا توجد عروض مطابقة للفلاتر الحالية.
+        </Card>
       ) : (
       <div className="mt-6 grid gap-4 lg:grid-cols-2 2xl:grid-cols-4">
-        {offers.map((offer) => {
+        {filteredOffers.map((offer) => {
           const Icon = offer.icon;
           const activeDaysText = offer.activeDays.length
             ? offer.activeDays.map((day) => weekDayLabels[day]).join("، ")
-            : "-";
+            : "كل الأيام";
           const productText = offer.productNames.length
             ? offer.productNames.slice(0, 3).join("، ")
             : offer.productIds.length
               ? `${offer.productIds.length} منتجات`
               : "-";
+          const isInactive = offer.backendStatus === "inactive";
+          const isCollapsed = !expandedOfferIds[offer.id];
 
           return (
             <Card
               key={offer.id}
-              className="overflow-hidden rounded-lg transition hover:border-primary/35 hover:bg-accent/20"
+              className={cn(
+                "overflow-hidden rounded-lg transition hover:border-primary/35 hover:bg-accent/20",
+                isInactive && "border-muted-foreground/20 bg-muted/20 opacity-60 grayscale",
+              )}
             >
-              <div className="flex min-h-[410px] flex-col p-4">
-                <OfferVisual offer={offer} now={now} className="h-36" />
+              <div className={cn("flex flex-col p-4", isCollapsed ? "min-h-0" : "min-h-[410px]")}>
+                {isCollapsed ? null : <OfferVisual offer={offer} now={now} className="h-36" />}
 
-                <div className="mt-4 flex items-start justify-between gap-3">
+                <div className={cn("flex items-start justify-between gap-3", isCollapsed ? "mt-0" : "mt-4")}>
                   <div className="flex min-w-0 items-center gap-3">
                     <span className={cn("flex size-11 shrink-0 items-center justify-center rounded-md", offer.iconBg, offer.accent)}>
                       <Icon className="size-5" />
@@ -3211,16 +3358,23 @@ export function OffersPage() {
                       <h3 className="mt-1 truncate text-base font-semibold">{offer.title}</h3>
                     </div>
                   </div>
+                  <MiniIconButton
+                    ariaLabel={isCollapsed ? "فتح تفاصيل العرض" : "طي تفاصيل العرض"}
+                    onClick={() => toggleOfferCollapsed(offer.id)}
+                  >
+                    <ChevronDown className={cn("size-4 transition-transform", isCollapsed && "rotate-180")} />
+                  </MiniIconButton>
                 </div>
 
                 <div className="mt-5 flex flex-wrap gap-2">
                   <RefBadge tone="gray">{offer.type}</RefBadge>
                   <RefBadge tone="blue">خصم {offer.discount}</RefBadge>
-                  <RefBadge tone={offer.status === "نشط" ? "green" : offer.status === "منتهي" ? "red" : "yellow"}>
+                  <RefBadge tone={offer.status === "نشط" ? "green" : offer.status === "منتهي" ? "red" : offer.status === "مجدول" ? "orange" : "yellow"}>
                     {offer.status}
                   </RefBadge>
                 </div>
 
+                {isCollapsed ? null : (
                 <div className="mt-5 grid gap-3 text-sm">
                   <div className="rounded-md bg-muted/25 px-3 py-2">
                     <div className="text-xs text-muted-foreground">الوصف</div>
@@ -3228,9 +3382,15 @@ export function OffersPage() {
                   </div>
                   <div className="grid gap-2 text-xs">
                     <OfferInfoRow label="السوق" value={offer.marketName} />
-                    <OfferInfoRow label="النطاق" value={offer.scope === "service_city" ? "مدينة خدمة" : "عام"} />
-                    {offer.scope === "service_city" ? (
-                      <OfferInfoRow label="مدينة الخدمة" value={offer.serviceCityName} />
+                    <OfferInfoRow
+                      label="النطاق"
+                      value={[
+                        offer.showInGeneral ? "عام" : "",
+                        offer.serviceCityIds.length ? "مدن خدمة" : "",
+                      ].filter(Boolean).join(" + ") || "-"}
+                    />
+                    {offer.serviceCityIds.length ? (
+                      <OfferInfoRow label="مدن الخدمة" value={offer.serviceCityName} />
                     ) : null}
                     <OfferInfoRow label="المنتجات" value={productText} />
                     <OfferInfoRow label="أيام التفعيل" value={activeDaysText} />
@@ -3243,11 +3403,12 @@ export function OffersPage() {
                   </div>
                   <OfferCountdown endsAt={offer.endsAt} now={now} />
                 </div>
+                )}
 
-                <div className="mt-auto flex items-center justify-between border-t pt-4">
+                <div className={cn("flex items-center justify-between border-t pt-4", isCollapsed ? "mt-4" : "mt-auto")}>
                   <span className="text-xs text-muted-foreground">إجراءات العرض</span>
                   <div className="flex items-center gap-1">
-                    {offer.status === "متوقف" ? (
+                    {offer.backendStatus === "inactive" ? (
                       <MiniIconButton
                         tone="green"
                         ariaLabel="تشغيل العرض"
@@ -3255,7 +3416,7 @@ export function OffersPage() {
                       >
                         <PlayCircle className="size-4" />
                       </MiniIconButton>
-                    ) : offer.status === "نشط" ? (
+                    ) : offer.backendStatus === "active" ? (
                       <MiniIconButton
                         tone="orange"
                         ariaLabel="إيقاف العرض مؤقتا"
@@ -3367,15 +3528,6 @@ const OfferProductsContext = createContext<OfferProductsContextValue>({
   cities: [],
   citiesLoading: false,
 });
-const activeSelectableItems = selectableItems.filter((item) => item.active);
-const defaultSelectableItems =
-  activeSelectableItems.length > 0 ? activeSelectableItems : selectableItems;
-const preferredPackageSeedItems = defaultSelectableItems.slice(2, 5);
-const packageSeedItems =
-  preferredPackageSeedItems.length > 0
-    ? preferredPackageSeedItems
-    : defaultSelectableItems.slice(0, 3);
-
 type BundleLine = {
   id: string;
   itemId: string;
@@ -3407,16 +3559,8 @@ function fallbackSelectableItem(): ItemRow {
   return item;
 }
 
-function selectedBundleItem(itemId: string): ItemRow {
-  return selectableItems.find((item) => item.id === itemId) ?? fallbackSelectableItem();
-}
-
 function selectedItemFrom(rows: ItemRow[], itemId: string): ItemRow {
   return rows.find((item) => item.id === itemId) ?? rows[0] ?? fallbackSelectableItem();
-}
-
-function selectedOfferItem(itemId: string): ItemRow {
-  return selectableItems.find((item) => item.id === itemId) ?? fallbackSelectableItem();
 }
 
 function clampDiscountPercent(value: number) {
@@ -3450,34 +3594,6 @@ function itemMatchesProductSearch(item: ItemRow, normalizedQuery: string) {
     .toLocaleLowerCase();
 
   return searchable.includes(normalizedQuery);
-}
-
-function uniqueProductShops(rows: ItemRow[]) {
-  return Array.from(
-    new Set(rows.map((item) => item.shopName).filter((shopName): shopName is string => Boolean(shopName))),
-  ).sort((first, second) =>
-    first.localeCompare(second, "ar", { numeric: true, sensitivity: "base" }),
-  );
-}
-
-function normalizeFilterText(value: string) {
-  return value.trim().toLocaleLowerCase();
-}
-
-function itemMatchesCityFilter(item: ItemRow, cityId: string, cities: ServiceCity[]) {
-  if (cityId === "all") return true;
-
-  const selectedCity = cities.find((city) => String(city.id) === cityId);
-  if (!selectedCity) return true;
-
-  const cityTokens = [selectedCity.name]
-    .map(normalizeFilterText)
-    .filter(Boolean);
-  const itemTokens = [...(item.regionNames ?? []), ...(item.regionSlugs ?? [])]
-    .map(normalizeFilterText)
-    .filter(Boolean);
-
-  return itemTokens.some((token) => cityTokens.includes(token));
 }
 
 function ProductPicker({
@@ -3570,25 +3686,17 @@ function PackageProductSearchModal({
   onClose: () => void;
   onSelect: (itemId: string) => void;
 }) {
-  const { products, cities, citiesLoading } = useContext(OfferProductsContext);
+  const { products } = useContext(OfferProductsContext);
   const [query, setQuery] = useState("");
-  const [shop, setShop] = useState("all");
-  const [city, setCity] = useState("all");
-  const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
-  const shops = useMemo(() => uniqueProductShops(products), [products]);
   const normalizedQuery = normalizeProductSearch(query);
   const filteredItems = useMemo(
     () =>
       products.filter((item) => {
         const matchesSearch = itemMatchesProductSearch(item, normalizedQuery);
-        const matchesShop = shop === "all" || item.shopName === shop;
-        const matchesCity = itemMatchesCityFilter(item, city, cities);
-        const matchesStatus =
-          status === "all" || (status === "active" ? item.active : !item.active);
 
-        return matchesSearch && matchesShop && matchesCity && matchesStatus;
+        return matchesSearch;
       }),
-    [cities, city, normalizedQuery, products, shop, status],
+    [normalizedQuery, products],
   );
 
   useEffect(() => {
@@ -3650,7 +3758,7 @@ function PackageProductSearchModal({
           </button>
         </div>
 
-        <div className="grid gap-3 border-b bg-muted/15 p-4 lg:grid-cols-[minmax(260px,1fr)_210px_210px_160px]">
+        <div className="grid gap-3 border-b bg-muted/15 p-4">
           <label className="grid gap-2 text-sm font-medium">
             بحث
             <div className="relative">
@@ -3663,57 +3771,6 @@ function PackageProductSearchModal({
                 autoFocus
               />
             </div>
-          </label>
-
-          <label className="grid gap-2 text-sm font-medium">
-            المحل
-            <AppSelect
-              value={shop}
-              onValueChange={setShop}
-              ariaLabel="فلتر المحل"
-              className="h-10 bg-input"
-              options={[
-                { value: "all", label: "كل المحلات" },
-                ...shops.map((shopName) => ({
-                  value: shopName,
-                  label: shopName,
-                })),
-              ]}
-            />
-          </label>
-
-          <label className="grid gap-2 text-sm font-medium">
-            المدينة
-            <AppSelect
-              value={city}
-              onValueChange={setCity}
-              ariaLabel="فلتر المدينة"
-              className="h-10 bg-input"
-              options={[
-                { value: "all", label: citiesLoading ? "جاري تحميل المدن..." : "كل المدن" },
-                ...cities.map((cityOption) => ({
-                  value: String(cityOption.id),
-                  label: cityOption.name,
-                })),
-              ]}
-            />
-          </label>
-
-          <label className="grid gap-2 text-sm font-medium">
-            الحالة
-            <AppSelect
-              value={status}
-              onValueChange={(nextStatus) =>
-                setStatus(nextStatus as "all" | "active" | "inactive")
-              }
-              ariaLabel="حالة المنتج"
-              className="h-10 bg-input"
-              options={[
-                { value: "all", label: "الكل" },
-                { value: "active", label: "نشط" },
-                { value: "inactive", label: "متوقف" },
-              ]}
-            />
           </label>
         </div>
 
@@ -4065,6 +4122,20 @@ function formatTimeInputValue(date: Date) {
   return `${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`;
 }
 
+function formatLocalIsoDateTime(date: Date) {
+  const offsetMinutes = -date.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const absoluteOffset = Math.abs(offsetMinutes);
+  const offsetHours = Math.floor(absoluteOffset / 60);
+  const offsetRemainderMinutes = absoluteOffset % 60;
+
+  return [
+    `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`,
+    `T${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`,
+    `${sign}${padDatePart(offsetHours)}:${padDatePart(offsetRemainderMinutes)}`,
+  ].join("");
+}
+
 function currentScheduleValues() {
   const now = new Date();
 
@@ -4072,12 +4143,6 @@ function currentScheduleValues() {
     date: formatDateInputValue(now),
     time: formatTimeInputValue(now),
   };
-}
-
-function parseOfferEndDate(value?: string) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isFinite(date.getTime()) ? date : null;
 }
 
 const calendarWeekDays = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
@@ -4481,14 +4546,12 @@ export function CreateOfferPage() {
   const formMode = editingOfferId ? "edit" : "create";
   const [markets, setMarkets] = useState<OfferMarket[]>([]);
   const [allOfferProducts, setAllOfferProducts] = useState<ItemRow[]>([]);
-  const [selectedMarketId, setSelectedMarketId] = useState("");
   const [offerAppearsInGeneral, setOfferAppearsInGeneral] = useState(true);
   const [offerAppearsInServiceCity, setOfferAppearsInServiceCity] = useState(false);
   const [savingOffer, setSavingOffer] = useState(false);
-  const [offerStatus, setOfferStatus] = useState<OfferStatus>("active");
   const [offerTitle, setOfferTitle] = useState(editingOffer?.title ?? "");
   const [offerDescription, setOfferDescription] = useState("");
-  const [selectedOfferCityId, setSelectedOfferCityId] = useState("");
+  const [selectedOfferCityIds, setSelectedOfferCityIds] = useState<string[]>([]);
   const offerImageObjectUrlRef = useRef<string | null>(null);
   const [offerImagePreview, setOfferImagePreview] = useState(editingOffer?.image ?? "");
   const [offerImageName, setOfferImageName] = useState(
@@ -4507,46 +4570,29 @@ export function CreateOfferPage() {
   const [bundleItems, setBundleItems] = useState<BundleLine[]>([]);
   const [packageProductsOpen, setPackageProductsOpen] = useState(false);
   const [packageProductSearchOpen, setPackageProductSearchOpen] = useState(false);
-  const effectiveOfferScope: OfferScope =
-    offerAppearsInServiceCity && !offerAppearsInGeneral ? "service_city" : "general";
   const marketsForScope = useMemo(() => {
-    if (effectiveOfferScope === "general") {
-      return markets.filter((market) => market.scope === "general" && market.status === "active");
-    }
-
-    if (!selectedOfferCityId) return [];
-
     return markets.filter(
-      (market) =>
-        market.scope === "service_city" &&
-        market.status === "active" &&
-        market.serviceCityIds.some((cityId) => Number(cityId) === Number(selectedOfferCityId)),
+      (market) => {
+        if (market.status !== "active") return false;
+        if (market.scope === "general") return offerAppearsInGeneral;
+        if (market.scope !== "service_city") return false;
+        if (!offerAppearsInServiceCity || !selectedOfferCityIds.length) return false;
+        return selectedOfferCityIds.every((selectedCityId) =>
+          market.serviceCityIds.some((cityId) => Number(cityId) === Number(selectedCityId)),
+        );
+      },
     );
-  }, [effectiveOfferScope, markets, selectedOfferCityId]);
-  const selectedMarketIsAvailable = marketsForScope.some(
-    (market) => Number(market.id) === Number(selectedMarketId),
+  }, [markets, offerAppearsInGeneral, offerAppearsInServiceCity, selectedOfferCityIds]);
+  const marketIdsForScope = useMemo(
+    () => new Set(marketsForScope.map((market) => String(market.id))),
+    [marketsForScope],
   );
-  const isEditingWithOriginalMarket =
-    formMode === "edit" &&
-    Boolean(selectedMarketId) &&
-    selectedMarketId === editingOffer?.marketId;
-  const canUseSelectedMarket = selectedMarketIsAvailable || isEditingWithOriginalMarket;
-  const effectiveMarketId = canUseSelectedMarket
-    ? selectedMarketId
-    : marketsForScope[0]?.id ?? "";
-  const offerScopeDescription = offerAppearsInGeneral && offerAppearsInServiceCity
-    ? "عقد العروض الحالي لا يدعم حفظ عام + مدينة خدمة في السجل نفسه. احفظ أحد النطاقين فقط إلى أن يتم تحديث backend."
-    : offerAppearsInGeneral
-      ? "سيظهر العرض في النطاق العام فقط."
-      : offerAppearsInServiceCity
-        ? "سيظهر العرض داخل مدينة الخدمة المختارة فقط."
-        : "اختر الظهور في العام أو مدينة خدمة واحدة على الأقل.";
   const offerProducts = useMemo(
     () =>
-      effectiveMarketId
-        ? allOfferProducts.filter((product) => Number(product.marketId) === Number(effectiveMarketId))
-        : [],
-    [allOfferProducts, effectiveMarketId],
+      allOfferProducts.filter((product) =>
+        product.marketId ? marketIdsForScope.has(String(product.marketId)) : false,
+      ),
+    [allOfferProducts, marketIdsForScope],
   );
   const discountRate = clampDiscountPercent(Number(discountPercent) || 0);
   const flashDiscountRate = clampDiscountPercent(Number(flashDiscountPercent) || 0);
@@ -4572,6 +4618,7 @@ export function CreateOfferPage() {
   const [activeWeekDays, setActiveWeekDays] = useState<ActiveDay[]>([]);
   const [useLimits, setUseLimits] = useState("");
   const [userLimit, setUserLimit] = useState("");
+  const [serviceCityClearConfirmOpen, setServiceCityClearConfirmOpen] = useState(false);
 
   function setScheduleDateOpen(field: "start" | "end", open: boolean) {
     setOpenScheduleDate(open ? field : null);
@@ -4636,25 +4683,47 @@ export function CreateOfferPage() {
     setPackageProductSearchOpen(false);
   }
 
+  function clearOfferProductSelectionWithReason() {
+    if (selectedOfferItems().length) {
+      showSnackbar({
+        message: "تم مسح المنتجات المختارة لأن السوق أو مدن الظهور تغيرت. اختر منتجات متوافقة من السوق الحالي.",
+      });
+    }
+    clearOfferProductSelection();
+  }
+
   function setOfferGeneralEnabled(enabled: boolean) {
     setOfferAppearsInGeneral(enabled);
-    setSelectedMarketId("");
-    clearOfferProductSelection();
+    clearOfferProductSelectionWithReason();
   }
 
   function setOfferServiceCityEnabled(enabled: boolean) {
+    if (!enabled && selectedOfferCityIds.length) {
+      setServiceCityClearConfirmOpen(true);
+      return;
+    }
+
     setOfferAppearsInServiceCity(enabled);
     if (!enabled) {
-      setSelectedOfferCityId("");
+      setSelectedOfferCityIds([]);
     }
-    setSelectedMarketId("");
-    clearOfferProductSelection();
+    clearOfferProductSelectionWithReason();
+  }
+
+  function confirmClearServiceCities() {
+    setServiceCityClearConfirmOpen(false);
+    setOfferAppearsInServiceCity(false);
+    setSelectedOfferCityIds([]);
+    clearOfferProductSelectionWithReason();
   }
 
   function changeOfferCity(cityId: string) {
-    setSelectedOfferCityId(cityId);
-    setSelectedMarketId("");
-    clearOfferProductSelection();
+    setSelectedOfferCityIds((currentCityIds) =>
+      currentCityIds.includes(cityId)
+        ? currentCityIds.filter((currentCityId) => currentCityId !== cityId)
+        : [...currentCityIds, cityId],
+    );
+    clearOfferProductSelectionWithReason();
   }
 
   function selectOfferType(nextType: ArabicOfferType) {
@@ -4752,23 +4821,16 @@ export function CreateOfferPage() {
       showSnackbar({ message: "اختر الظهور في العام أو مدينة خدمة واحدة على الأقل.", tone: "danger" });
       return;
     }
-    if (offerAppearsInGeneral && offerAppearsInServiceCity) {
-      showSnackbar({
-        message: "الـ backend الحالي للعروض لا يدعم حفظ عام + مدينة خدمة معًا.",
-        tone: "danger",
-      });
-      return;
-    }
-    if (offerAppearsInServiceCity && !selectedOfferCityId) {
+    if (offerAppearsInServiceCity && !selectedOfferCityIds.length) {
       showSnackbar({ message: "اختر مدينة الخدمة", tone: "danger" });
       return;
     }
-    if (!effectiveMarketId) {
+    if (!marketsForScope.length) {
       showSnackbar({
         message:
-          effectiveOfferScope === "general" && marketsForScope.length === 0
+          offerAppearsInGeneral && marketsForScope.length === 0
             ? "لا توجد محلات عامة. أنشئ محلًا عامًا من صفحة المحلات أولاً."
-            : effectiveOfferScope === "service_city" && selectedOfferCityId && marketsForScope.length === 0
+            : offerAppearsInServiceCity && selectedOfferCityIds.length && marketsForScope.length === 0
               ? "لا توجد محلات في هذه المدينة"
               : "تعذر تحديد سوق مناسب للعرض تلقائيًا.",
         tone: "danger",
@@ -4779,11 +4841,35 @@ export function CreateOfferPage() {
       showSnackbar({ message: "نوع العرض مطلوب", tone: "danger" });
       return;
     }
+    const selectedItems = selectedOfferItems();
     const productIds = Array.from(
-      new Set(selectedOfferItems().map((item) => Number(item.id)).filter(Number.isFinite)),
+      new Set(selectedItems.map((item) => Number(item.id)).filter(Number.isFinite)),
     );
     if (!productIds.length) {
       showSnackbar({ message: "اختر منتجًا واحدًا على الأقل", tone: "danger" });
+      return;
+    }
+    const selectedMarketIds = Array.from(
+      new Set(
+        selectedItems
+          .map((item) => item.marketId)
+          .filter((marketId): marketId is string => Boolean(marketId)),
+      ),
+    );
+    if (selectedMarketIds.length !== 1) {
+      showSnackbar({ message: "اختار منتجات العرض من نفس المحل.", tone: "danger" });
+      return;
+    }
+    const inferredMarketId = selectedMarketIds[0];
+    const staleProductIds = productIds.filter((productId) =>
+      !offerProducts.some((product) => Number(product.id) === productId),
+    );
+    if (staleProductIds.length) {
+      clearOfferProductSelectionWithReason();
+      showSnackbar({
+        message: "تم منع حفظ منتجات غير متوافقة مع السوق أو مدن الظهور الحالية.",
+        tone: "danger",
+      });
       return;
     }
 
@@ -4811,14 +4897,15 @@ export function CreateOfferPage() {
       showSnackbar({ message: "تاريخ النهاية يجب أن يكون بعد تاريخ البداية", tone: "danger" });
       return;
     }
-    const startTimeIso = startDateTime.toISOString();
-    const endTimeIso = endDateTime.toISOString();
+    const startTimeIso = formatLocalIsoDateTime(startDateTime);
+    const endTimeIso = formatLocalIsoDateTime(endDateTime);
 
     const payload = {
-      market_id: Number(effectiveMarketId),
-      scope: effectiveOfferScope,
-      service_city_id:
-        effectiveOfferScope === "service_city" ? Number(selectedOfferCityId) : null,
+      market_id: Number(inferredMarketId),
+      show_in_general: offerAppearsInGeneral,
+      service_city_ids: offerAppearsInServiceCity
+        ? selectedOfferCityIds.map((cityId) => Number(cityId))
+        : [],
       product_ids: productIds,
       title: offerTitle.trim(),
       description: offerDescription.trim(),
@@ -4829,8 +4916,21 @@ export function CreateOfferPage() {
       active_days: activeWeekDays,
       use_limits: useLimits ? Number(useLimits) : null,
       user_limit: userLimit ? Number(userLimit) : null,
-      status: offerStatus,
     };
+    if (payload.use_limits === null) {
+      payload.user_limit = null;
+    }
+    if (
+      (payload.use_limits !== null && (!Number.isFinite(payload.use_limits) || payload.use_limits <= 0)) ||
+      (payload.user_limit !== null && (!Number.isFinite(payload.user_limit) || payload.user_limit <= 0))
+    ) {
+      showSnackbar({ message: "حدود الاستخدام يجب أن تكون أرقامًا موجبة.", tone: "danger" });
+      return;
+    }
+    if (payload.use_limits !== null && payload.user_limit === null) {
+      showSnackbar({ message: "أدخل الحد لكل عميل عند تفعيل حدود الاستخدام.", tone: "danger" });
+      return;
+    }
 
     setSavingOffer(true);
     try {
@@ -4845,13 +4945,9 @@ export function CreateOfferPage() {
             body: (() => {
               const formData = new FormData();
               formData.append("market_id", String(payload.market_id));
-              formData.append("scope", payload.scope);
-              if (payload.scope === "service_city" && payload.service_city_id) {
-                formData.append("service_city_id", String(payload.service_city_id));
-              }
-              payload.product_ids.forEach((id) => {
-                formData.append("product_ids", String(id));
-              });
+              formData.append("show_in_general", String(payload.show_in_general));
+              formData.append("service_city_ids", JSON.stringify(payload.service_city_ids));
+              formData.append("product_ids", JSON.stringify(payload.product_ids));
               formData.append("title", payload.title);
               formData.append("description", payload.description);
               formData.append("type", payload.type);
@@ -4861,7 +4957,6 @@ export function CreateOfferPage() {
               formData.append("active_days", JSON.stringify(payload.active_days));
               if (payload.use_limits !== null) formData.append("use_limits", String(payload.use_limits));
               if (payload.user_limit !== null) formData.append("user_limit", String(payload.user_limit));
-              formData.append("status", payload.status);
               formData.append("image", offerImageFile);
               return formData;
             })(),
@@ -4911,10 +5006,8 @@ export function CreateOfferPage() {
         setOfferImageFile(null);
         setOfferAppearsInGeneral(true);
         setOfferAppearsInServiceCity(false);
-        setSelectedOfferCityId("");
-        setSelectedMarketId("");
+        setSelectedOfferCityIds([]);
         clearOfferProductSelection();
-        setOfferStatus("active");
         setStartDate(nextScheduleValues.date);
         setEndDate(nextScheduleValues.date);
         setStartTime(nextScheduleValues.time);
@@ -4960,7 +5053,6 @@ export function CreateOfferPage() {
           if (!active) return;
           const record = data as BackendRecord;
           const card = offerCardFromApi(record);
-          const market = record.market as BackendRecord | undefined;
           const products = Array.isArray(record.products) ? record.products as BackendRecord[] : [];
           const productIds = Array.isArray(record.product_ids)
             ? record.product_ids.map(String)
@@ -4975,10 +5067,9 @@ export function CreateOfferPage() {
           setOfferTitle(card.title);
           setOfferDescription(String(record.description ?? ""));
           setSelectedType(card.type);
-          setSelectedMarketId(String(market?.id ?? record.market_id ?? ""));
-          setOfferAppearsInGeneral(card.scope === "general");
-          setOfferAppearsInServiceCity(card.scope === "service_city");
-          setSelectedOfferCityId(card.serviceCityId);
+          setOfferAppearsInGeneral(card.showInGeneral);
+          setOfferAppearsInServiceCity(card.serviceCityIds.length > 0);
+          setSelectedOfferCityIds(card.serviceCityIds);
           setOfferImageFile(null);
           setOfferImagePreview(card.image ?? "");
           setOfferImageName(card.image ? "صورة العرض الحالية" : "");
@@ -4989,7 +5080,6 @@ export function CreateOfferPage() {
           setActiveWeekDays(apiDays);
           setUseLimits(record.use_limits == null ? "" : String(record.use_limits));
           setUserLimit(record.user_limit == null ? "" : String(record.user_limit));
-          setOfferStatus(isOfferStatus(record.status) ? record.status : "active");
           if (card.type === "فلاش") {
             setFlashProductIds(productIds);
             setFlashDiscountPercent(String(record.discount ?? "0"));
@@ -5091,57 +5181,70 @@ export function CreateOfferPage() {
                     <label className="flex min-h-16 cursor-pointer items-center justify-between gap-3 rounded-md border bg-background px-4 py-3 shadow-sm transition hover:border-primary/40">
                       <span>
                         <span className="block text-sm font-semibold">يظهر في العام</span>
-                        <span className="mt-1 block text-xs text-muted-foreground">العروض العامة فقط.</span>
                       </span>
                       <Switch checked={offerAppearsInGeneral} onCheckedChange={setOfferGeneralEnabled} />
                     </label>
                     <label className="flex min-h-16 cursor-pointer items-center justify-between gap-3 rounded-md border bg-background px-4 py-3 shadow-sm transition hover:border-primary/40">
                       <span>
                         <span className="block text-sm font-semibold">يظهر في مدينة خدمة</span>
-                        <span className="mt-1 block text-xs text-muted-foreground">العقد الحالي يدعم مدينة واحدة.</span>
                       </span>
                       <Switch checked={offerAppearsInServiceCity} onCheckedChange={setOfferServiceCityEnabled} />
                     </label>
                   </div>
-                  <div
-                    className={cn(
-                      "rounded-md border px-3 py-2 text-sm",
-                      offerAppearsInGeneral && offerAppearsInServiceCity
-                        ? "border-destructive/40 bg-destructive/10 text-destructive"
-                        : "border-border bg-muted/20 text-muted-foreground",
-                    )}
-                  >
-                    {offerScopeDescription}
-                  </div>
                 </div>
                 {offerAppearsInServiceCity ? (
-                <Field label="مدينة الخدمة">
-                  <AppSelect
-                    ariaLabel="مدينة الخدمة"
-                    className="h-11 bg-input"
-                    onValueChange={changeOfferCity}
-                    options={serviceCities.map((city) => ({
-                      value: String(city.id),
-                      label: city.name,
-                    }))}
-                    placeholder={serviceCitiesLoading ? "جاري تحميل المدن..." : "اختر مدينة"}
-                    value={selectedOfferCityId}
-                  />
-                </Field>
+                  <div className="grid gap-3 lg:col-span-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-medium">مدن الخدمة</div>
+                      <RefBadge tone="blue">{selectedOfferCityIds.length} مدن</RefBadge>
+                    </div>
+                    <div className="overflow-x-auto pb-2">
+                      <div className="flex min-w-0 flex-nowrap gap-2">
+                        {serviceCitiesLoading ? (
+                          <div className="flex h-14 min-w-40 shrink-0 items-center justify-center rounded-md border bg-muted/20 text-xs font-semibold text-muted-foreground">
+                            جاري تحميل المدن...
+                          </div>
+                        ) : serviceCities.length ? (
+                          serviceCities.map((city) => {
+                            const cityId = String(city.id);
+                            const selected = selectedOfferCityIds.includes(cityId);
+
+                            return (
+                              <button
+                                key={city.id}
+                                type="button"
+                                aria-pressed={selected}
+                                onClick={() => changeOfferCity(cityId)}
+                                className={cn(
+                                  "flex h-14 min-w-40 shrink-0 items-center justify-between gap-3 rounded-md border px-3 text-sm font-semibold shadow-sm transition",
+                                  selected
+                                    ? "border-primary bg-primary/10 text-primary"
+                                    : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-accent",
+                                )}
+                              >
+                                <span className="truncate">{city.name}</span>
+                                <span
+                                  className={cn(
+                                    "grid size-5 shrink-0 place-items-center rounded-full border",
+                                    selected
+                                      ? "border-primary bg-primary text-primary-foreground"
+                                      : "border-border bg-muted/40 text-transparent",
+                                  )}
+                                >
+                                  <CheckCircle2 className="size-3.5" />
+                                </span>
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <div className="flex h-14 min-w-56 shrink-0 items-center justify-center rounded-md border bg-muted/20 text-xs font-semibold text-muted-foreground">
+                            لا توجد مدن خدمة نشطة.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 ) : null}
-                <Field label="الحالة *">
-                  <AppSelect
-                    ariaLabel="حالة العرض"
-                    className="h-11 bg-input"
-                    onValueChange={(value) => setOfferStatus(value as OfferStatus)}
-                    options={[
-                      { value: "active", label: "نشط" },
-                      { value: "inactive", label: "متوقف" },
-                      { value: "expired", label: "منتهي" },
-                    ]}
-                    value={offerStatus}
-                  />
-                </Field>
               </div>
 
               <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/15 p-3 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-center">
@@ -5498,7 +5601,7 @@ export function CreateOfferPage() {
                   <div className="inline-flex h-8 items-center gap-2 rounded-md border border-border/70 bg-background px-2.5 text-xs font-semibold text-muted-foreground shadow-sm">
                     <Calendar className="size-3.5 text-primary" />
                     <span>
-                      {activeWeekDays.length} / {weekDayOptions.length}
+                      {activeWeekDays.length ? `${activeWeekDays.length} / ${weekDayOptions.length}` : "كل الأيام"}
                     </span>
                   </div>
                 </div>
@@ -5580,6 +5683,37 @@ export function CreateOfferPage() {
         </div>
 
       </div>
+      {serviceCityClearConfirmOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/45 px-4 py-6 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clear-service-cities-title"
+            className="w-full max-w-md overflow-hidden rounded-lg border bg-background shadow-2xl"
+          >
+            <div className="border-b px-5 py-4">
+              <h2 id="clear-service-cities-title" className="text-base font-bold">
+                مسح مدن الخدمة المختارة؟
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                إيقاف ظهور العرض في مدن الخدمة هيمسح المدن المختارة وأي منتجات مرتبطة بالنطاق الحالي.
+              </p>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 p-5">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setServiceCityClearConfirmOpen(false)}
+              >
+                إلغاء
+              </Button>
+              <Button type="button" variant="danger" onClick={confirmClearServiceCities}>
+                مسح المدن
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
     </OfferProductsContext.Provider>
   );

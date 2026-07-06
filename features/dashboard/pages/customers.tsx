@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import type { FormEvent, ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -11,6 +11,7 @@ import {
   Loader2,
   Plus,
   RefreshCcw,
+  Search,
   Trash2,
   Users,
 } from "lucide-react";
@@ -99,6 +100,22 @@ function createCustomerPayload(draft: CustomerDraft) {
   };
 }
 
+function restoreCustomerPayload(user: DashboardUser) {
+  const temporaryPassword = `Restore${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}!1a`;
+
+  return {
+    ...splitFullName(user.name),
+    username: normalizeUsername(user.username),
+    email: normalizeEmail(user.email),
+    phone: canonicalPhoneValue(user.phone),
+    password: temporaryPassword,
+    role: "client",
+    is_active: user.active !== false,
+    is_staff: false,
+    is_superuser: false,
+  };
+}
+
 function apiErrorMessage(data: unknown, fallback: string) {
   return firstApiError(data) ?? fallback;
 }
@@ -146,6 +163,7 @@ export function CustomersPage() {
   const [deleteCustomer, setDeleteCustomer] = useState<DashboardUser | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [activationUserId, setActivationUserId] = useState<string | null>(null);
+  const [customerSearch, setCustomerSearch] = useState("");
 
   const loadCustomers = useCallback(async () => {
     setPageState("loading");
@@ -216,10 +234,52 @@ export function CustomersPage() {
     });
   }
 
+  async function restoreDeletedCustomer(user: DashboardUser, index: number) {
+    try {
+      const response = await apiFetch("auth/users/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(restoreCustomerPayload(user)),
+      });
+      const data = await apiResponseData(response);
+
+      if (!response.ok) {
+        throw new Error(apiErrorMessage(data, "تعذر التراجع عن حذف المستخدم."));
+      }
+
+      if (!isBackendDashboardUser(data)) {
+        throw new Error("تم التراجع لكن استجابة الباك غير مكتملة.");
+      }
+
+      const restoredCustomer = dashboardUserFromBackend(data);
+      setCustomers((currentCustomers) => {
+        if (currentCustomers.some((customer) => customer.id === restoredCustomer.id)) {
+          return currentCustomers;
+        }
+        const nextCustomers = [...currentCustomers];
+        nextCustomers.splice(Math.max(0, index), 0, restoredCustomer);
+        return nextCustomers;
+      });
+      showSnackbar({
+        message: `تم التراجع واستعادة ${restoredCustomer.name}.`,
+        tone: "success",
+      });
+    } catch (error) {
+      showSnackbar({
+        message:
+          error instanceof Error
+            ? error.message
+            : "تعذر التراجع عن حذف المستخدم.",
+        tone: "danger",
+      });
+    }
+  }
+
   async function handleDeleteCustomer() {
     if (!deleteCustomer || deletingUserId) return;
 
     const user = deleteCustomer;
+    const userIndex = customers.findIndex((customer) => customer.id === user.id);
     setDeletingUserId(user.id);
     try {
       const response = await apiFetch(`auth/users/${encodeURIComponent(user.id)}/`, {
@@ -237,7 +297,9 @@ export function CustomersPage() {
       setDeleteCustomer(null);
       showSnackbar({
         message: `تم حذف ${user.name} من الباك.`,
-        tone: "success",
+        tone: "danger",
+        actionLabel: "تراجع",
+        onAction: () => void restoreDeletedCustomer(user, userIndex),
       });
     } catch (error) {
       showSnackbar({
@@ -279,7 +341,7 @@ export function CustomersPage() {
       );
       showSnackbar({
         message: checked ? "تم تفعيل المستخدم." : "تم تعطيل المستخدم.",
-        tone: "success",
+        tone: checked ? "success" : "danger",
       });
     } catch (error) {
       showSnackbar({
@@ -295,6 +357,17 @@ export function CustomersPage() {
   const isLoading = pageState === "loading";
   const hasError = pageState === "error";
   const hasCustomers = customers.length > 0;
+  const filteredCustomers = useMemo(() => {
+    const normalized = customerSearch.trim().toLocaleLowerCase("ar-EG");
+    if (!normalized) return customers;
+
+    return customers.filter((customer) =>
+      [customer.name, customer.username]
+        .join(" ")
+        .toLocaleLowerCase("ar-EG")
+        .includes(normalized),
+    );
+  }, [customerSearch, customers]);
 
   return (
     <div className="space-y-6 px-6 py-10">
@@ -322,10 +395,23 @@ export function CustomersPage() {
         }
       />
 
-      <Card className="p-4">
-        <div className="text-2xl font-extrabold">{customers.length}</div>
-        <div className="text-xs font-bold text-muted-foreground">
-          إجمالي المستخدمين
+      <Card className="border-border/70 bg-muted/20 p-4 shadow-none">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-start">
+            <div className="text-2xl font-extrabold">{customers.length}</div>
+            <div className="text-xs font-bold text-muted-foreground">
+              إجمالي المستخدمين
+            </div>
+          </div>
+          <div className="relative w-full sm:max-w-[550px]">
+            <Search className="pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={customerSearch}
+              onChange={(event) => setCustomerSearch(event.target.value)}
+              placeholder="ابحث باليوزر أو الاسم..."
+              className="h-11 bg-background/40 pr-11 text-right placeholder:text-muted-foreground/70"
+            />
+          </div>
         </div>
       </Card>
 
@@ -341,9 +427,13 @@ export function CustomersPage() {
         <CustomersEmptyState onAdd={() => setAddCustomerOpen(true)} />
       ) : null}
 
-      {!isLoading && !hasError && hasCustomers ? (
+      {!isLoading && !hasError && hasCustomers && filteredCustomers.length === 0 ? (
+        <CustomersNoResults query={customerSearch} />
+      ) : null}
+
+      {!isLoading && !hasError && filteredCustomers.length > 0 ? (
         <CustomersTable
-          customers={customers}
+          customers={filteredCustomers}
           deletingUserId={deletingUserId}
           activationUserId={activationUserId}
           onDelete={setDeleteCustomer}
@@ -510,6 +600,20 @@ function CustomersEmptyState({ onAdd }: { onAdd: () => void }) {
   );
 }
 
+function CustomersNoResults({ query }: { query: string }) {
+  return (
+    <Card className="flex min-h-[220px] items-center justify-center border-border/70 bg-muted/20 p-6 text-center shadow-none">
+      <div>
+        <Search className="mx-auto size-8 text-muted-foreground" />
+        <h2 className="mt-4 font-semibold">لا توجد نتائج مطابقة</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          جرّب البحث باسم مختلف أو يوزر آخر{query.trim() ? `: ${query.trim()}` : "."}
+        </p>
+      </div>
+    </Card>
+  );
+}
+
 function AddCustomerDialog({
   onClose,
   onCreate,
@@ -616,7 +720,7 @@ function AddCustomerDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-customer-title"
-        className="relative flex max-h-[calc(100vh-3rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl border bg-background shadow-2xl"
+        className="relative flex max-h-[calc(100vh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl"
       >
         <div className="border-b bg-muted/20 px-6 py-5">
           <h2 id="add-customer-title" className="text-xl font-semibold leading-7">
@@ -650,98 +754,105 @@ function AddCustomerDialog({
               />
             </CustomerField>
 
-            <CustomerField label="اسم الدخول *" error={errorFor("username")}>
-              <Input
-                autoComplete="off"
-                dir="rtl"
-                value={draft.username}
-                onChange={(event) => updateDraft("username", event.target.value)}
-                onFocus={() => setFocusedAvailabilityField("username")}
-                onBlur={() => setFocusedAvailabilityField(null)}
-                placeholder="اسم فريد لتسجيل الدخول"
-                className="h-10 text-right"
-                disabled={saving}
-              />
-              <AvailabilityHint
-                field="username"
-                state={usernameAvailability.state}
-                visible={focusedAvailabilityField === "username"}
-              />
-            </CustomerField>
-
-            <CustomerField label="رقم الهاتف *" error={errorFor("phone")}>
-              <Input
-                dir="ltr"
-                autoComplete="off"
-                inputMode="tel"
-                maxLength={11}
-                value={draft.phone}
-                onChange={(event) => updateDraft("phone", event.target.value)}
-                onFocus={() => setFocusedAvailabilityField("phone")}
-                onBlur={() => setFocusedAvailabilityField(null)}
-                placeholder="01xxxxxxxxx"
-                className="h-10 text-right"
-                disabled={saving}
-              />
-              <AvailabilityHint
-                field="phone"
-                state={phoneAvailability.state}
-                visible={focusedAvailabilityField === "phone"}
-              />
-            </CustomerField>
-
-            <CustomerField label="البريد الإلكتروني *" error={errorFor("email")}>
-              <Input
-                dir="ltr"
-                type="email"
-                autoComplete="new-password"
-                value={draft.email}
-                onChange={(event) => updateDraft("email", event.target.value)}
-                onFocus={() => setFocusedAvailabilityField("email")}
-                onBlur={() => setFocusedAvailabilityField(null)}
-                placeholder="name@example.com"
-                className="h-10 text-right"
-                disabled={saving}
-              />
-              <AvailabilityHint
-                field="email"
-                state={emailAvailability.state}
-                visible={focusedAvailabilityField === "email"}
-              />
-            </CustomerField>
-
-            <CustomerField label="كلمة المرور *" error={errorFor("password")}>
-              <div className="relative">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <CustomerField label="اسم الدخول *" error={errorFor("username")}>
                 <Input
+                  autoComplete="off"
                   dir="rtl"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="new-password"
-                  value={draft.password}
-                  onChange={(event) =>
-                    updateDraft("password", event.target.value)
-                  }
-                  placeholder="8 أحرف على الأقل"
-                  className="h-10 pe-10"
+                  value={draft.username}
+                  onChange={(event) => updateDraft("username", event.target.value)}
+                  onFocus={() => setFocusedAvailabilityField("username")}
+                  onBlur={() => setFocusedAvailabilityField(null)}
+                  placeholder="اسم فريد لتسجيل الدخول"
+                  className="h-10 text-right"
                   disabled={saving}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((current) => !current)}
-                  className="absolute left-2 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-                  aria-label={
-                    showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"
-                  }
+                <AvailabilityHint
+                  field="username"
+                  state={usernameAvailability.state}
+                  visible={focusedAvailabilityField === "username"}
+                />
+              </CustomerField>
+
+              <CustomerField label="رقم الهاتف *" error={errorFor("phone")}>
+                <Input
+                  dir="ltr"
+                  autoComplete="off"
+                  inputMode="tel"
+                  maxLength={11}
+                  value={draft.phone}
+                  onChange={(event) => updateDraft("phone", event.target.value)}
+                  onFocus={() => setFocusedAvailabilityField("phone")}
+                  onBlur={() => setFocusedAvailabilityField(null)}
+                  placeholder="01xxxxxxxxx"
+                  className="h-10 text-right"
                   disabled={saving}
-                >
-                  {showPassword ? (
-                    <Eye className="size-4" />
-                  ) : (
-                    <EyeOff className="size-4" />
-                  )}
-                </button>
-              </div>
-              <PasswordRequirementMessages password={draft.password} />
-            </CustomerField>
+                />
+                <AvailabilityHint
+                  field="phone"
+                  state={phoneAvailability.state}
+                  visible={focusedAvailabilityField === "phone"}
+                />
+              </CustomerField>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <CustomerField label="البريد الإلكتروني *" error={errorFor("email")}>
+                <Input
+                  dir="ltr"
+                  type="email"
+                  autoComplete="new-password"
+                  value={draft.email}
+                  onChange={(event) => updateDraft("email", event.target.value)}
+                  onFocus={() => setFocusedAvailabilityField("email")}
+                  onBlur={() => setFocusedAvailabilityField(null)}
+                  placeholder="name@example.com"
+                  className="h-10 text-right"
+                  disabled={saving}
+                />
+                <AvailabilityHint
+                  field="email"
+                  state={emailAvailability.state}
+                  visible={focusedAvailabilityField === "email"}
+                />
+              </CustomerField>
+
+              <CustomerField label="كلمة المرور *" error={errorFor("password")}>
+                <div className="relative">
+                  <Input
+                    dir="rtl"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    value={draft.password}
+                    onChange={(event) =>
+                      updateDraft("password", event.target.value)
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === " ") event.preventDefault();
+                    }}
+                    placeholder="8 أحرف على الأقل"
+                    className="h-10 pe-10"
+                    disabled={saving}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((current) => !current)}
+                    className="absolute left-2 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                    aria-label={
+                      showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"
+                    }
+                    disabled={saving}
+                  >
+                    {showPassword ? (
+                      <Eye className="size-4" />
+                    ) : (
+                      <EyeOff className="size-4" />
+                    )}
+                  </button>
+                </div>
+                <PasswordRequirementMessages password={draft.password} />
+              </CustomerField>
+            </div>
           </div>
 
           <div className="flex shrink-0 justify-end gap-2 border-t border-border/70 px-6 py-4">
@@ -784,6 +895,7 @@ function CustomerField({
 function sanitizeCustomerInput(field: keyof CustomerDraft, value: string) {
   if (field === "phone") return value.replace(/\D/g, "").slice(0, 11);
   if (field === "username" || field === "email") return value.replace(/\s/g, "").trim();
+  if (field === "password") return value.replace(/\s/g, "");
   return value;
 }
 
@@ -913,7 +1025,7 @@ function CustomersTable({
       {pagedCustomers.map((customer, index) => (
         <Card
           key={customer.id}
-          className="grid gap-4 p-4 xl:grid-cols-[minmax(280px,1fr)_300px_120px] xl:items-center"
+          className="grid gap-4 p-4 xl:grid-cols-[minmax(280px,1fr)_300px_190px] xl:items-center"
         >
           <button
             type="button"
@@ -959,8 +1071,8 @@ function CustomersTable({
             </div>
           </div>
 
-          <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
-            <div className="flex items-center gap-2 rounded-md border px-2 py-1">
+          <div className="flex items-center justify-start gap-2 xl:justify-end">
+            <div className="flex shrink-0 items-center gap-2 rounded-md border px-2 py-1">
               <Switch
                 checked={customer.active !== false}
                 disabled={activationUserId === customer.id}
@@ -977,6 +1089,7 @@ function CustomersTable({
               onClick={() => openUser(customer)}
               aria-label={`عرض تفاصيل ${customer.name}`}
               title="عرض التفاصيل"
+              className="shrink-0"
             >
               <Eye className="size-4" />
             </Button>
@@ -986,7 +1099,7 @@ function CustomersTable({
               size="icon"
               aria-label={`حذف ${customer.name}`}
               title="حذف"
-              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
               disabled={deletingUserId === customer.id}
               onClick={() => onDelete(customer)}
             >

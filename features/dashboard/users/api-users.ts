@@ -151,6 +151,7 @@ export function translateApiMessage(message: string) {
     "password must contain at least one number": "يجب أن تحتوي كلمة المرور على رقم واحد على الأقل.",
     "password must contain at least one special character": "يجب أن تحتوي كلمة المرور على رمز خاص واحد على الأقل.",
     "password must be at least 8 characters": "يجب ألا تقل كلمة المرور عن 8 أحرف.",
+    "new password must be different from the current password": "كلمة المرور الجديدة يجب أن تكون مختلفة عن كلمة المرور الحالية.",
     "spaces are not allowed in this field": "لا يسمح بوجود مسافات داخلية في هذا الحقل.",
     "service city is required for couriers": "مدينة التشغيل مطلوبة للمندوب.",
     "upload a valid profile photo: jpg, jpeg, png, or webp": "ارفع صورة شخصية بصيغة JPG أو JPEG أو PNG أو WEBP.",

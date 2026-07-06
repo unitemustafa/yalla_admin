@@ -28,12 +28,10 @@ import {
   Switch,
 } from "../primitives";
 import {
-  deleteDeliveryArea,
   deleteServiceCity,
   loadDeliveryAreas,
   saveDeliveryArea,
   type DeliveryArea,
-  type DeliveryAreaPayload,
   saveServiceCity,
   type ServiceCity,
   type ServiceCityPayload,
@@ -87,6 +85,16 @@ function payloadFromDraft(draft: CityDraft): ServiceCityPayload {
     center_longitude: Number(draft.longitude).toFixed(7),
     radius_km: Number(draft.radiusKm).toFixed(2),
     is_active: draft.active,
+  };
+}
+
+function payloadFromCity(city: ServiceCity): ServiceCityPayload {
+  return {
+    name: city.name,
+    center_latitude: city.center_latitude ?? defaultDraft.latitude,
+    center_longitude: city.center_longitude ?? defaultDraft.longitude,
+    radius_km: city.radius_km ?? defaultDraft.radiusKm,
+    is_active: city.is_active,
   };
 }
 
@@ -151,7 +159,7 @@ function CityDeleteDialog({
           <div>
             <h2 className="text-lg font-semibold">حذف المدينة</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              هل تريد حذف مدينة {city.name}؟ لا يمكن التراجع عن هذا الإجراء.
+              هل تريد حذف مدينة {city.name}؟ يمكنك التراجع مباشرة من رسالة الحذف.
             </p>
           </div>
         </div>
@@ -402,53 +410,6 @@ function CityDialog({
   );
 }
 
-function AreaDeleteDialog({
-  area,
-  busy,
-  onCancel,
-  onConfirm,
-}: {
-  area: DeliveryArea;
-  busy: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  useLockedPageScroll();
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/60 px-4 py-6 backdrop-blur-sm">
-      <section
-        dir="rtl"
-        role="dialog"
-        aria-modal="true"
-        className="w-full max-w-md rounded-xl border bg-background p-5 shadow-2xl"
-      >
-        <div className="flex items-start gap-3">
-          <div className="rounded-lg bg-destructive/10 p-2 text-destructive">
-            <Trash2 className="size-5" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold">حذف منطقة التوصيل</h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              هل أنت متأكد من حذف هذه المنطقة؟ قد لا يمكن حذفها إذا كانت مرتبطة بمحلات أو طلبات.
-            </p>
-            <p className="mt-2 text-sm font-semibold">{area.name}</p>
-          </div>
-        </div>
-        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
-            إلغاء
-          </Button>
-          <Button type="button" variant="danger" onClick={onConfirm} disabled={busy}>
-            {busy ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-            حذف
-          </Button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
 function DeliveryAreasDialog({
   city,
   areas,
@@ -458,7 +419,6 @@ function DeliveryAreasDialog({
   onClose,
   onReload,
   onToggleArea,
-  onRequestDelete,
 }: {
   city: ServiceCity;
   areas: DeliveryArea[];
@@ -468,7 +428,6 @@ function DeliveryAreasDialog({
   onClose: () => void;
   onReload: () => void;
   onToggleArea: (area: DeliveryArea, checked: boolean) => void;
-  onRequestDelete: (area: DeliveryArea) => void;
 }) {
   useLockedPageScroll();
 
@@ -479,7 +438,7 @@ function DeliveryAreasDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="delivery-areas-dialog-title"
-        className="max-h-[88vh] w-fit max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border bg-background shadow-2xl"
+        className="max-h-[88vh] w-full max-w-[940px] overflow-y-auto rounded-xl border bg-background shadow-2xl"
       >
         <div className="flex flex-wrap items-start justify-between gap-4 border-b bg-background px-6 py-5">
           <div>
@@ -520,15 +479,9 @@ function DeliveryAreasDialog({
                 إعادة المحاولة
               </Button>
             </div>
-          ) : areas.length === 0 ? (
-            <div className="flex min-h-48 flex-col items-center justify-center gap-2 rounded-lg border bg-muted/10 text-center">
-              <MapPin className="size-8 text-muted-foreground" />
-              <p className="font-semibold">لا توجد مناطق توصيل لهذه المدينة</p>
-              <p className="text-sm text-muted-foreground">أضف منطقة توصيل ثابتة السعر.</p>
-            </div>
           ) : (
             <div className="overflow-x-auto rounded-lg border">
-              <table className="w-auto min-w-[720px] text-sm">
+              <table className="w-full min-w-[860px] text-sm">
                 <colgroup>
                   <col className="w-[220px]" />
                   <col className="w-[180px]" />
@@ -546,42 +499,44 @@ function DeliveryAreasDialog({
                   </tr>
                 </thead>
                 <tbody>
-                  {areas.map((area) => (
-                    <tr key={area.id} className="border-b last:border-0">
-                      <td className="px-4 py-4 font-semibold">{area.name}</td>
-                      <td className="px-4 py-4">{formatMoney(area.delivery_price)}</td>
-                      <td className="px-4 py-4">{formatRadius(area.radius_km)}</td>
-                      <td className="px-4 py-4">
-                        <Badge tone={area.is_active ? "green" : "red"}>
-                          {area.is_active ? "مفعلة" : "معطلة"}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2 whitespace-nowrap">
-                          <div className="flex h-9 items-center gap-2 rounded-md border bg-background px-3">
-                            <Switch
-                              checked={area.is_active}
-                              disabled={busyAreaId === area.id}
-                              onCheckedChange={(checked) => onToggleArea(area, checked)}
-                            />
-                            <span className="text-xs font-semibold">
-                              {area.is_active ? "تعطيل" : "تفعيل"}
-                            </span>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="danger"
-                            size="sm"
-                            disabled={busyAreaId === area.id}
-                            onClick={() => onRequestDelete(area)}
-                          >
-                            <Trash2 className="size-4" />
-                            حذف
-                          </Button>
+                  {areas.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-0">
+                        <div className="flex min-h-48 flex-col items-center justify-center gap-2 bg-muted/10 px-4 text-center">
+                          <MapPin className="size-8 text-muted-foreground" />
+                          <p className="font-semibold">لا توجد مناطق توصيل لهذه المدينة</p>
+                          <p className="text-sm text-muted-foreground">أضف منطقة توصيل ثابتة السعر.</p>
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    areas.map((area) => (
+                      <tr key={area.id} className="border-b last:border-0">
+                        <td className="px-4 py-4 font-semibold">{area.name}</td>
+                        <td className="px-4 py-4">{formatMoney(area.delivery_price)}</td>
+                        <td className="px-4 py-4">{formatRadius(area.radius_km)}</td>
+                        <td className="px-4 py-4">
+                          <Badge tone={area.is_active ? "green" : "red"}>
+                            {area.is_active ? "مفعلة" : "معطلة"}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-2 whitespace-nowrap">
+                            <div className="flex h-9 items-center gap-2 rounded-md border bg-background px-3">
+                              <Switch
+                                checked={area.is_active}
+                                disabled={busyAreaId === area.id}
+                                onCheckedChange={(checked) => onToggleArea(area, checked)}
+                              />
+                              <span className="text-xs font-semibold">
+                                {area.is_active ? "تعطيل" : "تفعيل"}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -605,7 +560,6 @@ export function CitiesPage() {
   const [deliveryAreas, setDeliveryAreas] = useState<DeliveryArea[]>([]);
   const [areasLoading, setAreasLoading] = useState(false);
   const [areasError, setAreasError] = useState<string | null>(null);
-  const [deleteArea, setDeleteArea] = useState<DeliveryArea | null>(null);
   const [busyAreaId, setBusyAreaId] = useState<number | null>(null);
 
   const loadAreasForCity = useCallback(
@@ -654,7 +608,10 @@ export function CitiesPage() {
         city.id,
       );
       setCities((current) => current.map((item) => (item.id === city.id ? updated : item)));
-      showSnackbar({ message: checked ? "تم تفعيل المدينة." : "تم تعطيل المدينة." });
+      showSnackbar({
+        message: checked ? "تم تفعيل المدينة." : "تم تعطيل المدينة.",
+        tone: checked ? "success" : "danger",
+      });
     } catch (reason) {
       showSnackbar({
         message: reason instanceof Error ? reason.message : "تعذر تحديث المدينة.",
@@ -665,14 +622,43 @@ export function CitiesPage() {
     }
   }
 
+  async function restoreDeletedCity(city: ServiceCity, index: number) {
+    try {
+      const restoredCity = await saveServiceCity(apiFetch, payloadFromCity(city));
+      setCities((current) => {
+        if (current.some((item) => item.id === restoredCity.id)) return current;
+        const next = [...current];
+        next.splice(Math.max(0, index), 0, {
+          ...restoredCity,
+          delivery_area_count: city.delivery_area_count,
+          market_count: city.market_count,
+          offer_count: city.offer_count,
+        });
+        return next;
+      });
+      showSnackbar({ message: `تم التراجع واستعادة ${city.name}.`, tone: "success" });
+    } catch (reason) {
+      showSnackbar({
+        message: reason instanceof Error ? reason.message : "تعذر التراجع عن حذف المدينة.",
+        tone: "danger",
+      });
+    }
+  }
+
   async function removeCity(city: ServiceCity) {
     if (busyCityId === city.id) return;
+    const cityIndex = cities.findIndex((item) => item.id === city.id);
     setBusyCityId(city.id);
     try {
       await deleteServiceCity(apiFetch, city.id);
       setCities((current) => current.filter((item) => item.id !== city.id));
       setDeleteCity(null);
-      showSnackbar({ message: `تم حذف ${city.name}.`, tone: "success" });
+      showSnackbar({
+        message: `تم حذف ${city.name}.`,
+        tone: "danger",
+        actionLabel: "تراجع",
+        onAction: () => void restoreDeletedCity(city, cityIndex),
+      });
     } catch (reason) {
       showSnackbar({
         message: reason instanceof Error ? reason.message : "تعذر حذف المدينة.",
@@ -685,7 +671,6 @@ export function CitiesPage() {
 
   function openDeliveryAreas(city: ServiceCity) {
     setSelectedCityForAreas(city);
-    setDeleteArea(null);
     void loadAreasForCity(city);
   }
 
@@ -693,7 +678,6 @@ export function CitiesPage() {
     setSelectedCityForAreas(null);
     setDeliveryAreas([]);
     setAreasError(null);
-    setDeleteArea(null);
   }
 
   async function toggleArea(area: DeliveryArea, checked: boolean) {
@@ -717,76 +701,11 @@ export function CitiesPage() {
       await loadAreasForCity(selectedCityForAreas);
       showSnackbar({
         message: checked ? "تم تفعيل منطقة التوصيل." : "تم تعطيل منطقة التوصيل.",
-        tone: "success",
+        tone: checked ? "success" : "danger",
       });
     } catch (reason) {
       showSnackbar({
         message: reason instanceof Error ? reason.message : "تعذر تحديث منطقة التوصيل.",
-        tone: "danger",
-      });
-    } finally {
-      setBusyAreaId(null);
-    }
-  }
-
-  async function restoreDeletedArea(city: ServiceCity, area: DeliveryArea) {
-    const payload: DeliveryAreaPayload = {
-      service_city_id: city.id,
-      name: area.name,
-      center_latitude: area.center_latitude,
-      center_longitude: area.center_longitude,
-      radius_km: area.radius_km,
-      delivery_price: Number(area.delivery_price).toFixed(2),
-      is_active: area.is_active,
-    };
-
-    try {
-      const restoredArea = await saveDeliveryArea(apiFetch, payload);
-      if (selectedCityForAreas?.id === city.id) {
-        setDeliveryAreas((current) => {
-          if (current.some((item) => item.id === restoredArea.id)) return current;
-          return [...current, restoredArea];
-        });
-        setCities((current) =>
-          current.map((item) =>
-            item.id === city.id
-              ? { ...item, delivery_area_count: item.delivery_area_count + 1 }
-              : item,
-          ),
-        );
-      }
-    } catch (reason) {
-      showSnackbar({
-        message:
-          reason instanceof Error
-            ? reason.message
-            : "تعذر التراجع عن حذف منطقة التوصيل.",
-        tone: "danger",
-      });
-    }
-  }
-
-  async function confirmDeleteArea() {
-    if (!selectedCityForAreas || !deleteArea) return;
-    const area = deleteArea;
-    const city = selectedCityForAreas;
-    const areaName = area.name;
-
-    if (busyAreaId === area.id) return;
-    setBusyAreaId(area.id);
-    try {
-      await deleteDeliveryArea(apiFetch, area.id);
-      setDeleteArea(null);
-      await loadAreasForCity(city);
-      showSnackbar({
-        message: `تم حذف ${areaName}.`,
-        tone: "danger",
-        actionLabel: "تراجع",
-        onAction: () => void restoreDeletedArea(city, area),
-      });
-    } catch (reason) {
-      showSnackbar({
-        message: reason instanceof Error ? reason.message : "تعذر حذف منطقة التوصيل.",
         tone: "danger",
       });
     } finally {
@@ -838,7 +757,7 @@ export function CitiesPage() {
       </div>
 
       <Card className="mt-6 overflow-hidden">
-        <div className="grid gap-4 border-b px-5 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,440px)] lg:items-end">
+        <div className="grid gap-4 border-b px-5 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(420px,560px)] lg:items-end">
           <div>
             <h2 className="font-semibold">كل المدن</h2>
             <p className="text-xs text-muted-foreground">راجع النطاق الجغرافي والارتباطات وحالة كل مدينة.</p>
@@ -982,15 +901,6 @@ export function CitiesPage() {
           onClose={closeDeliveryAreas}
           onReload={() => void loadAreasForCity(selectedCityForAreas)}
           onToggleArea={(area, checked) => void toggleArea(area, checked)}
-          onRequestDelete={setDeleteArea}
-        />
-      ) : null}
-      {deleteArea ? (
-        <AreaDeleteDialog
-          area={deleteArea}
-          busy={busyAreaId === deleteArea.id}
-          onCancel={() => setDeleteArea(null)}
-          onConfirm={() => void confirmDeleteArea()}
         />
       ) : null}
     </div>

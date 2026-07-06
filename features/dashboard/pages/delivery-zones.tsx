@@ -678,7 +678,7 @@ export function DeliveryZonesPage() {
   const { cities, loading: citiesLoading, error: citiesError } = useServiceCities();
   const cityFilterOptions = useMemo(
     () => [
-      { value: allCitiesFilterValue, label: "كل المدن" },
+      { value: allCitiesFilterValue, label: "جميع المدن" },
       ...cities.map((city) => ({
         value: String(city.id),
         label: city.name,
@@ -882,7 +882,7 @@ export function DeliveryZonesPage() {
 
       {activeTab === "zones" ? (
         <section className="mt-6">
-          <div className="grid gap-4 rounded-lg border bg-card p-4 xl:grid-cols-[minmax(0,1fr)_minmax(240px,320px)_minmax(240px,320px)] xl:items-end">
+          <div className="grid gap-4 rounded-lg border bg-card p-4 xl:grid-cols-[minmax(0,1fr)_minmax(240px,320px)_minmax(320px,460px)] xl:items-end">
             <div>
               <h2 className="font-semibold">كل مناطق التوصيل</h2>
               <p className="text-xs text-muted-foreground">ابحث وراجع الحالة والتسعير لكل منطقة.</p>
@@ -909,7 +909,7 @@ export function DeliveryZonesPage() {
             <div className="relative w-full min-w-0">
               <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                className="h-11 bg-background ps-9"
+                className="h-11 border-border/70 bg-muted/20 ps-9 placeholder:text-muted-foreground/60"
                 value={searchQuery}
                 onChange={(event) => {
                   setSearchQuery(event.target.value);

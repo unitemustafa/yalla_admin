@@ -35,7 +35,7 @@ import {
   isMultiMarket,
   type DashboardOrderLike,
 } from "../order-display";
-import { AppSelect, Badge, Button, Card, CurrencyText, Input } from "../primitives";
+import { Badge, Button, Card, CurrencyText, Input } from "../primitives";
 import {
   apiResponseData,
   firstApiError,
@@ -261,7 +261,6 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
   const [courier, setCourier] = useState<BackendDashboardUser | null>(null);
   const [orders, setOrders] = useState<CourierOrder[]>([]);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState<"all" | CourierOrderStatus>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -333,27 +332,24 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
   );
   const visibleOrders = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("ar-EG");
-    return orders.filter((order) => {
-      const matchesStatus = status === "all" || order.status === status;
-      const matchesQuery =
-        !normalized ||
-        [
-          order.id,
-          orderNumber(order),
-          customerName(order),
-          order.customer?.phone,
-          getOrderScopeLabel(order),
-          getOrderMarketsSummary(order),
-          getDeliveryDestination(order),
-          getDeliveryTypeLabel(order),
-        ]
-          .join(" ")
-          .toLocaleLowerCase("ar-EG")
-          .includes(normalized);
-      return matchesStatus && matchesQuery;
-    });
-  }, [orders, query, status]);
+    if (!normalized) return orders;
 
+    return orders.filter((order) =>
+      [
+        order.id,
+        orderNumber(order),
+        customerName(order),
+        order.customer?.phone,
+        getOrderScopeLabel(order),
+        getOrderMarketsSummary(order),
+        getDeliveryDestination(order),
+        getDeliveryTypeLabel(order),
+      ]
+        .join(" ")
+        .toLocaleLowerCase("ar-EG")
+        .includes(normalized),
+    );
+  }, [orders, query]);
   if (loading) {
     return (
       <div className="flex min-h-96 items-center justify-center">
@@ -532,43 +528,24 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
               الطلبات النشطة والمسلمة مع العميل والعنوان والتوقيت
             </div>
           </div>
-          <div className="grid gap-2 sm:grid-cols-[minmax(220px,1fr)_180px]">
-            <label className="relative">
-              <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="ابحث برقم الطلب أو العميل..."
-                className="ps-9"
-              />
-            </label>
-            <AppSelect
-              value={status}
-              onValueChange={(value) =>
-                setStatus(value as "all" | CourierOrderStatus)
-              }
-              options={[
-                { value: "all", label: "كل الحالات" },
-                { value: "ready", label: "جاهز للاستلام" },
-                { value: "picked_up", label: "تم الاستلام" },
-                { value: "on_the_way", label: "في الطريق" },
-                { value: "delivered", label: "تم التسليم" },
-                { value: "failed_delivery", label: "فشل التوصيل" },
-                { value: "cancelled", label: "ملغي" },
-              ]}
-              ariaLabel="فلترة حالة الطلب"
-              dir="rtl"
+          <label className="relative w-full md:w-[480px]">
+            <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="ابحث برقم الطلب أو العميل..."
+              className="h-10 border-border/70 bg-muted/20 ps-9 placeholder:text-muted-foreground/60"
             />
-          </div>
+          </label>
         </div>
 
         {visibleOrders.length ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px] text-sm">
+            <table className="w-full min-w-[1080px] text-sm">
               <thead>
                 <tr className="border-b bg-muted/25 text-xs text-muted-foreground">
                   <th className="px-4 py-3 text-start">الطلب</th>
-                  <th className="px-4 py-3 text-start">العميل</th>
+                  <th className="w-[240px] px-4 py-3 text-center">العميل</th>
                   <th className="px-4 py-3 text-start">محلات الطلب</th>
                   <th className="px-4 py-3 text-start">وجهة التوصيل</th>
                   <th className="px-4 py-3 text-start">الحالة</th>
@@ -592,10 +569,17 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
                         </Badge>
                       </div>
                     </td>
-                    <td className="px-4 py-4">
-                      <div className="font-semibold">{customerName(order)}</div>
-                      <div className="mt-1 text-xs text-muted-foreground" dir="ltr">
-                        {order.customer?.phone ?? "-"}
+                    <td className="w-[240px] px-4 py-4 text-center align-middle">
+                      <div className="mx-auto flex min-w-0 max-w-[210px] flex-col items-center gap-1 text-center">
+                        <div className="w-full truncate text-center font-bold leading-6 text-foreground">
+                          {customerName(order)}
+                        </div>
+                        <div
+                          className="w-full break-all text-center text-xs leading-5 text-muted-foreground"
+                          dir="ltr"
+                        >
+                          {order.customer?.phone ?? "-"}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-4">

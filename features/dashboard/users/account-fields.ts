@@ -37,11 +37,11 @@ export const availabilityRequestError =
   "تعذر التحقق حاليًا، حاول مرة أخرى.";
 
 export function normalizeUsername(value: string) {
-  return value.trim();
+  return value.replace(/\s/g, "");
 }
 
 export function normalizeEmail(value: string) {
-  return value.trim().toLowerCase();
+  return value.replace(/\s/g, "").toLowerCase();
 }
 
 export function digitsOnly(value: string) {

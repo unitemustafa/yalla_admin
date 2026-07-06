@@ -251,10 +251,12 @@ function AvailabilityLine({
   field,
   state,
   error,
+  showSuccess,
 }: {
   field: AvailabilityField;
   state: AvailabilityState;
   error?: string;
+  showSuccess?: boolean;
 }) {
   if (error) {
     return <span className="text-xs font-semibold text-destructive">{error}</span>;
@@ -266,7 +268,27 @@ function AvailabilityLine({
   if (!message || state === "invalid" || state === "taken" || state === "request_error") {
     return null;
   }
+  if (!showSuccess) return null;
   return <span className="text-xs font-semibold text-emerald-600">{message}</span>;
+}
+
+function PasswordRequirementMessages({
+  password,
+  visible,
+}: {
+  password: string;
+  visible: boolean;
+}) {
+  const missingRules = accountPasswordRules(password).filter((rule) => !rule.done);
+  if (!visible || missingRules.length === 0) return null;
+
+  return (
+    <div className="mt-2 grid gap-1 text-xs font-semibold text-destructive">
+      {missingRules.map((rule) => (
+        <span key={rule.label}>• {rule.label}</span>
+      ))}
+    </div>
+  );
 }
 
 function CourierForm({
@@ -285,12 +307,22 @@ function CourierForm({
   const [draft, setDraft] = useState<Draft>(() => draftFromCourier(courier ?? null, cities));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(draft.avatarUrl);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const [focusedAvailabilityField, setFocusedAvailabilityField] =
+    useState<AvailabilityField | null>(null);
+  const [passwordFocused, setPasswordFocused] = useState(false);
   const errors = useMemo(() => validateCourierDraft(draft, isEditing), [draft, isEditing]);
+  const deliveryHasErrors = Boolean(
+    errors.vehicleType ||
+      errors.plateNumber ||
+      errors.serviceCity ||
+      errors.maxActiveOrders,
+  );
   const usernameAvailability = useAvailabilityCheck({
     apiFetch,
     field: "username",
@@ -321,7 +353,17 @@ function CourierForm({
     ["invalid", "checking", "taken", "request_error"].includes(state),
   );
   const update = (key: keyof Draft, value: string) => {
-    setDraft((current) => ({ ...current, [key]: value }));
+    const nextValue =
+      key === "username"
+        ? normalizeUsername(value)
+        : key === "email"
+          ? normalizeEmail(value)
+          : key === "phone"
+            ? value.replace(/\D/g, "").slice(0, 11)
+            : key === "password"
+              ? value.replace(/\s/g, "")
+              : value;
+    setDraft((current) => ({ ...current, [key]: nextValue }));
     setError(null);
     setSubmitted(false);
   };
@@ -336,6 +378,7 @@ function CourierForm({
   };
   function uploadAvatar(file: File | undefined) {
     if (!file) return;
+    setAvatarError(null);
     setAvatarFile(file);
     setAvatarPreviewUrl(URL.createObjectURL(file));
   }
@@ -344,11 +387,17 @@ function CourierForm({
     event.preventDefault();
     setSubmitted(true);
     if (Object.keys(errors).length > 0 || availabilityBlocksSubmit) {
-      setError("راجع البيانات المطلوبة ثم حاول مرة أخرى.");
+      if (deliveryHasErrors) {
+        setDeliveryOpen(true);
+        setError("بيانات التوصيل مطلوبة.");
+      } else {
+        setError("راجع البيانات المطلوبة ثم حاول مرة أخرى.");
+      }
       return;
     }
     setSaving(true);
     setError(null);
+    setAvatarError(null);
 
     const body: Record<string, unknown> = {
       first_name: draft.firstName.trim(),
@@ -356,7 +405,6 @@ function CourierForm({
       username: normalizeUsername(draft.username),
       email: normalizeEmail(draft.email),
       phone: canonicalPhoneValue(draft.phone),
-      avatar_url: avatarFile ? undefined : draft.avatarUrl.trim() || null,
       role: "representative",
       is_active: isEditing ? courier!.is_active !== false : true,
       is_staff: false,
@@ -369,7 +417,6 @@ function CourierForm({
         is_available: draft.isAvailable === "true",
       },
     };
-    if (avatarFile) delete body.avatar_url;
     if (!isEditing && draft.password) body.password = draft.password;
 
     try {
@@ -395,10 +442,12 @@ function CourierForm({
         });
         const avatarData = await apiResponseData(avatarResponse);
         if (!avatarResponse.ok) {
-          throw new Error(errorMessage(avatarData, "Could not upload courier photo."));
+          setAvatarError(errorMessage(avatarData, "تعذر رفع صورة المندوب."));
+          return;
         }
         if (!isBackendDashboardUser(avatarData)) {
-          throw new Error("Incomplete courier photo response.");
+          setAvatarError("استجابة رفع صورة المندوب غير مكتملة.");
+          return;
         }
         savedUser = avatarData;
       }
@@ -449,13 +498,17 @@ function CourierForm({
                 <div><h2 className="text-lg font-extrabold">بيانات الحساب</h2><p className="mt-1 text-sm text-muted-foreground">معلومات الهوية وبيانات الدخول الأساسية.</p></div>
               </div>
               <div className="grid gap-x-5 gap-y-5 md:grid-cols-2">
-                <Field label="الاسم الأول"><Input required autoComplete="off" placeholder="مثال: أحمد" value={draft.firstName} onChange={(e) => update("firstName", e.target.value)} className="h-10 rounded-xl" /></Field>
-                <Field label="اسم العائلة"><Input required autoComplete="off" placeholder="مثال: محمد" value={draft.lastName} onChange={(e) => update("lastName", e.target.value)} className="h-10 rounded-xl" /></Field>
-                <Field label="اسم المستخدم *"><div className="space-y-2"><div className="relative"><IdCard className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoComplete="off" dir="rtl" placeholder="اسم فريد لتسجيل الدخول" value={draft.username} onChange={(e) => update("username", e.target.value)} className="h-10 rounded-xl pe-11 text-right" /></div><AvailabilityLine field="username" state={usernameAvailability.state} error={errorFor("username")} /></div></Field>
-                <Field label="رقم الهاتف *"><div className="space-y-2"><div className="relative"><Phone className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoComplete="off" inputMode="tel" dir="ltr" placeholder="01xxxxxxxxx" value={draft.phone} onChange={(e) => update("phone", e.target.value)} className="h-10 rounded-xl pe-11 text-right" /></div><AvailabilityLine field="phone" state={phoneAvailability.state} error={errorFor("phone")} /></div></Field>
-                <Field label="البريد الإلكتروني *"><div className="space-y-2"><div className="relative"><Mail className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required autoComplete="new-password" type="email" dir="ltr" placeholder="name@example.com" value={draft.email} onChange={(e) => update("email", e.target.value)} className="h-10 rounded-xl pe-11 text-right" /></div><AvailabilityLine field="email" state={emailAvailability.state} error={errorFor("email")} /></div></Field>
+                <Field label="الاسم الأول"><Input required autoComplete="off" placeholder="مثال: أحمد" value={draft.firstName} onChange={(e) => update("firstName", e.target.value)} className="h-10 rounded-md" /></Field>
+                <Field label="اسم العائلة"><Input required autoComplete="off" placeholder="مثال: محمد" value={draft.lastName} onChange={(e) => update("lastName", e.target.value)} className="h-10 rounded-md" /></Field>
+                <Field label="اسم المستخدم *"><div className="space-y-2"><div className="relative"><IdCard className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoComplete="off" dir="ltr" placeholder="اسم فريد لتسجيل الدخول" value={draft.username} onFocus={() => setFocusedAvailabilityField("username")} onBlur={() => setFocusedAvailabilityField(null)} onKeyDown={(event) => { if (event.key === " ") event.preventDefault(); }} onChange={(e) => update("username", e.target.value)} className="h-10 rounded-md ps-11 text-right" /></div><AvailabilityLine field="username" state={usernameAvailability.state} error={errorFor("username")} showSuccess={focusedAvailabilityField === "username"} /></div></Field>
+                <Field label="رقم الهاتف *"><div className="space-y-2"><div className="relative"><Phone className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoComplete="off" inputMode="tel" dir="ltr" placeholder="01xxxxxxxxx" value={draft.phone} onFocus={() => setFocusedAvailabilityField("phone")} onBlur={() => setFocusedAvailabilityField(null)} onChange={(e) => update("phone", e.target.value)} className="h-10 rounded-md ps-11 text-right" /></div><AvailabilityLine field="phone" state={phoneAvailability.state} error={errorFor("phone")} showSuccess={focusedAvailabilityField === "phone"} /></div></Field>
+                <Field label="البريد الإلكتروني *"><div className="space-y-2"><div className="relative"><Mail className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required autoComplete="new-password" type="email" dir="ltr" placeholder="name@example.com" value={draft.email} onFocus={() => setFocusedAvailabilityField("email")} onBlur={() => setFocusedAvailabilityField(null)} onKeyDown={(event) => { if (event.key === " ") event.preventDefault(); }} onChange={(e) => update("email", e.target.value)} className="h-10 rounded-md ps-11 text-right" /></div><AvailabilityLine field="email" state={emailAvailability.state} error={errorFor("email")} showSuccess={focusedAvailabilityField === "email"} /></div></Field>
                 {!isEditing ? <Field label="كلمة المرور *">
-                  <div className="relative"><KeyRound className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required={!isEditing} autoComplete="new-password" type={showPassword ? "text" : "password"} dir="rtl" minLength={8} placeholder="8 أحرف على الأقل" value={draft.password} onChange={(e) => update("password", e.target.value)} className="h-10 rounded-xl pe-11 ps-12 text-right" /><button type="button" aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"} title={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"} onClick={() => setShowPassword((visible) => !visible)} className="absolute start-2 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{showPassword ? <Eye className="size-4" /> : <EyeOff className="size-4" />}</button></div>
+                  <div className="relative"><KeyRound className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required={!isEditing} autoComplete="new-password" type={showPassword ? "text" : "password"} dir="rtl" minLength={8} placeholder="8 أحرف على الأقل" value={draft.password} onFocus={() => setPasswordFocused(true)} onBlur={() => setPasswordFocused(false)} onKeyDown={(event) => { if (event.key === " ") event.preventDefault(); }} onChange={(e) => update("password", e.target.value)} className="h-10 rounded-md pe-11 ps-12 text-right" /><button type="button" aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"} title={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"} onClick={() => setShowPassword((visible) => !visible)} className="absolute start-2 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{showPassword ? <Eye className="size-4" /> : <EyeOff className="size-4" />}</button></div>
+                  <PasswordRequirementMessages
+                    password={draft.password}
+                    visible={passwordFocused || submitted || Boolean(draft.password)}
+                  />
                 </Field> : null}
               </div>
               </section>
@@ -471,7 +524,27 @@ function CourierForm({
                     <p className="mt-1 truncate text-xs text-muted-foreground">{draft.phone || "رقم الهاتف سيظهر هنا"}</p>
                   </div>
                 </div>
-                <div className="mt-auto rounded-xl border border-dashed bg-muted/20 p-4 text-start"><div className="mb-3 flex items-center gap-2 text-xs font-bold"><Camera className="size-4 text-primary" />صورة المندوب</div><Input type="text" dir="rtl" autoComplete="off" value={draft.avatarUrl} onChange={(e) => { setAvatarFile(null); setAvatarPreviewUrl(e.target.value); update("avatarUrl", e.target.value); }} placeholder="رابط الصورة" className="h-10 rounded-lg text-right text-sm" /><label className="mt-3 inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border bg-background px-3 text-sm font-bold text-muted-foreground transition hover:bg-accent hover:text-foreground"><Upload className="size-4" />رفع صورة من الجهاز<input type="file" accept="image/*" className="sr-only" onChange={(event) => uploadAvatar(event.target.files?.[0])} /></label></div>
+                <div className="mt-auto rounded-xl border border-dashed bg-muted/20 p-4 text-start">
+                  <div className="mb-3 flex items-center gap-2 text-xs font-bold">
+                    <Camera className="size-4 text-primary" />
+                    صورة المندوب
+                  </div>
+                  <label className="inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border bg-background px-3 text-sm font-bold text-muted-foreground transition hover:bg-accent hover:text-foreground">
+                    <Upload className="size-4" />
+                    رفع صورة من الجهاز
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={(event) => uploadAvatar(event.target.files?.[0])}
+                    />
+                  </label>
+                  {avatarError ? (
+                    <p className="mt-2 text-xs font-semibold text-destructive">
+                      {avatarError}
+                    </p>
+                  ) : null}
+                </div>
               </div>
             </Card>
           </div>
@@ -489,13 +562,18 @@ function CourierForm({
                 </span>
                 <ChevronDown className={cn("mt-2 size-5 text-muted-foreground transition-transform", deliveryOpen && "rotate-180")} />
               </button>
+              {submitted && deliveryHasErrors ? (
+                <div className="mb-5 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive">
+                  بيانات التوصيل مطلوبة.
+                </div>
+              ) : null}
               {deliveryOpen ? (
                 <div className="grid gap-x-5 gap-y-5 md:grid-cols-2">
-                  <Field label="نوع المركبة"><Input required autoComplete="off" placeholder="مثال: دراجة نارية" value={draft.vehicleType} onChange={(e) => update("vehicleType", e.target.value)} className="h-10 rounded-xl" /></Field>
-                  <Field label="رقم اللوحة"><Input required autoComplete="off" placeholder="مثال: أ ب ج 1234" value={draft.plateNumber} onChange={(e) => update("plateNumber", e.target.value)} className="h-10 rounded-xl" /></Field>
-                  <Field label="مدينة التشغيل"><AppSelect value={draft.serviceCity} onValueChange={(value) => update("serviceCity", value)} options={cities.filter((city) => city.is_active !== false).map((city) => ({ value: String(city.id), label: city.name }))} placeholder="اختر مدينة التشغيل" icon={<MapPin className="size-4" />} className="h-10 rounded-xl bg-input" contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl" ariaLabel="مدينة التشغيل" /></Field>
-                  <Field label="التوفر"><AppSelect value={draft.isAvailable} onValueChange={(value) => update("isAvailable", value)} options={[{ value: "true", label: "متاح" }, { value: "false", label: "غير متاح" }]} className="h-10 rounded-xl bg-input" contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl" ariaLabel="التوفر" /></Field>
-                  <Field label="الحد الأقصى للطلبات"><Input required min={1} type="number" autoComplete="off" value={draft.maxActiveOrders} onChange={(e) => update("maxActiveOrders", e.target.value)} className="h-10 rounded-xl" /></Field>
+                  <Field label="نوع المركبة"><Input required autoComplete="off" placeholder="مثال: دراجة نارية" value={draft.vehicleType} onChange={(e) => update("vehicleType", e.target.value)} className="h-10 rounded-md" /></Field>
+                  <Field label="رقم اللوحة"><Input required autoComplete="off" placeholder="مثال: أ ب ج 1234" value={draft.plateNumber} onChange={(e) => update("plateNumber", e.target.value)} className="h-10 rounded-md" /></Field>
+                  <Field label="مدينة التشغيل"><AppSelect value={draft.serviceCity} onValueChange={(value) => update("serviceCity", value)} options={cities.filter((city) => city.is_active !== false).map((city) => ({ value: String(city.id), label: city.name }))} placeholder="اختر مدينة التشغيل" icon={<MapPin className="size-4" />} className="h-10 rounded-md bg-input" contentClassName="rounded-md border-border/80 bg-popover p-1.5 shadow-2xl" ariaLabel="مدينة التشغيل" /></Field>
+                  <Field label="التوفر"><AppSelect value={draft.isAvailable} onValueChange={(value) => update("isAvailable", value)} options={[{ value: "true", label: "متاح" }, { value: "false", label: "غير متاح" }]} className="h-10 rounded-md bg-input" contentClassName="rounded-md border-border/80 bg-popover p-1.5 shadow-2xl" ariaLabel="التوفر" /></Field>
+                  <Field label="الحد الأقصى للطلبات"><Input required min={1} type="number" autoComplete="off" value={draft.maxActiveOrders} onChange={(e) => update("maxActiveOrders", e.target.value)} className="h-10 rounded-md" /></Field>
                 </div>
               ) : null}
             </section>
@@ -592,6 +670,9 @@ function PasswordDialog({
 }) {
   const [password, setPassword] = useState("");
   const [visible, setVisible] = useState(false);
+  const passwordChecks = accountPasswordRules(password);
+  const missingPasswordChecks = passwordChecks.filter((rule) => !rule.done);
+  const canSavePassword = passwordChecks.every((rule) => rule.done);
 
   return (
     <Modal title="تغيير كلمة المرور" onClose={onClose} maxWidth="max-w-md">
@@ -607,7 +688,7 @@ function PasswordDialog({
               dir="rtl"
               minLength={8}
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              onChange={(event) => setPassword(event.target.value.replace(/\s/g, ""))}
               className="h-11 pe-11 text-right"
             />
             <button
@@ -619,10 +700,19 @@ function PasswordDialog({
               {visible ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
             </button>
           </div>
+          {missingPasswordChecks.length > 0 ? (
+            <div className="mt-2 grid gap-1 text-xs font-semibold text-destructive">
+              {missingPasswordChecks.map((rule) => (
+                <span key={rule.label}>
+                  • {rule.label}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </Field>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>إلغاء</Button>
-          <Button type="button" disabled={busy || password.length < 8} onClick={() => onConfirm(password)}>
+          <Button type="button" disabled={busy || !canSavePassword} onClick={() => onConfirm(password)}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
             حفظ كلمة المرور
           </Button>
@@ -898,7 +988,7 @@ export function CouriersPage() {
                   : `مندوبو مدينة ${cities.find((city) => String(city.id) === areaFilter)?.name || ""}`}
             </div>
           </div>
-          <div className="w-full md:w-72">
+          <div className="w-full md:w-[360px]">
             <AppSelect
               value={areaFilter}
               onValueChange={(value) => {
@@ -906,10 +996,10 @@ export function CouriersPage() {
                 setCurrentPage(1);
               }}
               options={[
-                { value: "all", label: "جميع مدن الخدمة" },
+                { value: "all", label: "جميع المدن" },
                 ...cities.map((city) => ({ value: String(city.id), label: city.name })),
               ]}
-              className="h-10 bg-input"
+              className="h-11 border-border/70 bg-background"
               contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl"
               ariaLabel="فلتر المدينة"
             />
@@ -997,7 +1087,7 @@ export function CouriersPage() {
                     <Send className="size-4" />إسناد
                   </Button>
                   <Link href={`/delivery/couriers/${courier.id}/edit`} aria-label="تعديل" title="تعديل" className="inline-flex size-9 items-center justify-center rounded-md border border-border bg-background text-muted-foreground shadow-sm transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"><Pencil className="size-4" /></Link>
-                  <Button size="icon" variant="outline" disabled aria-disabled="true" title="غير متاح حالياً" className="cursor-not-allowed opacity-50" aria-label="كلمة المرور"><KeyRound className="size-4" /></Button>
+                  <Button size="icon" variant="outline" disabled={busy !== null} title="تغيير كلمة المرور" aria-label="تغيير كلمة المرور" onClick={() => setPasswordCourier(courier)}><KeyRound className="size-4" /></Button>
                   <Button size="icon" variant="outline" disabled={busy !== null} onClick={() => setDeleteCourier(courier)} aria-label="حذف" className="text-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 className="size-4" /></Button>
                 </div>
               </Card>
