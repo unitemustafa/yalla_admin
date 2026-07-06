@@ -1,5 +1,3 @@
-import { deliveryZones } from "./reference-data";
-
 export type DashboardOrder = {
   index: string;
   number: string;
@@ -76,16 +74,10 @@ export const dashboardOrders: DashboardOrder[] = [
   },
 ];
 
-export const loginDashboardSnapshot = {
-  todayOrders: dashboardOrders.length,
-  availableCities: deliveryZones.length,
-  deliveryZones: deliveryZones.length,
-  completedPercent: Math.round(
-    (dashboardOrders.filter((order) => order.status === "مكتمل").length /
-      dashboardOrders.length) *
-      100,
-  ),
-  averagePreparationMinutes: 18,
+export const emptyLoginDashboardSnapshot = {
+  todayOrders: 0,
+  availableCities: 0,
+  deliveryZones: 0,
 };
 
-export type LoginDashboardSnapshot = typeof loginDashboardSnapshot;
+export type LoginDashboardSnapshot = typeof emptyLoginDashboardSnapshot;

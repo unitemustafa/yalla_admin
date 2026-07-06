@@ -1,6 +1,6 @@
 import { LoginPage } from "@/features/auth/login-page";
 import {
-  loginDashboardSnapshot,
+  emptyLoginDashboardSnapshot,
   type LoginDashboardSnapshot,
 } from "@/features/dashboard/static-data";
 
@@ -11,13 +11,11 @@ const API_BASE_URL = (
 function isSnapshot(value: unknown): value is LoginDashboardSnapshot {
   if (!value || typeof value !== "object") return false;
   const snapshot = value as Record<string, unknown>;
-  return [
-    "todayOrders",
-    "availableCities",
-    "deliveryZones",
-    "completedPercent",
-    "averagePreparationMinutes",
-  ].every((key) => typeof snapshot[key] === "number");
+  const expectedKeys = ["todayOrders", "availableCities", "deliveryZones"];
+  return (
+    Object.keys(snapshot).length === expectedKeys.length &&
+    expectedKeys.every((key) => typeof snapshot[key] === "number")
+  );
 }
 
 async function loadLoginDashboardSnapshot() {
@@ -26,12 +24,12 @@ async function loadLoginDashboardSnapshot() {
       `${API_BASE_URL}/home/login-dashboard-snapshot/`,
       { cache: "no-store" },
     );
-    if (!response.ok) return loginDashboardSnapshot;
+    if (!response.ok) return emptyLoginDashboardSnapshot;
 
     const snapshot: unknown = await response.json();
-    return isSnapshot(snapshot) ? snapshot : loginDashboardSnapshot;
+    return isSnapshot(snapshot) ? snapshot : emptyLoginDashboardSnapshot;
   } catch {
-    return loginDashboardSnapshot;
+    return emptyLoginDashboardSnapshot;
   }
 }
 
