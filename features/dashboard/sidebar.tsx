@@ -85,7 +85,7 @@ export function Sidebar({
   onCloseMobile: () => void;
   onToggleCollapsed: () => void;
 }) {
-  const { logout: endSession } = useAuth();
+  const { logout: endSession, user } = useAuth();
   const { isGroupOpen, toggleGroup } = useSidebarGroups(activePage);
   const { direction, language, pageTitle, t } = useDashboardI18n();
   const { unreadCount } = useDashboardNotifications();
@@ -102,6 +102,17 @@ export function Sidebar({
   const brandName = customization.brandName || t("brand.name");
   const branchName = customization.branchName || t("branch.default");
   const brandLogo = customization.logoDataUrl || logoSrc;
+  const userFullName =
+    [user?.first_name, user?.last_name].filter(Boolean).join(" ") ||
+    user?.username ||
+    currentUser.fullName;
+  const userAvatar = user?.avatar_url?.trim();
+  const userInitials = userFullName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || currentUser.initials;
   const [theme, setTheme] = useState<ThemeChoice>(() => {
     if (typeof window === "undefined") {
       return "dark";
@@ -597,12 +608,22 @@ export function Sidebar({
             )}
           >
             <div className="mb-1 flex items-center gap-3 rounded-md bg-sidebar-accent/60 px-3 py-2">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-semibold">
-                {currentUser.initials}
-              </span>
+              {userAvatar ? (
+                <DashboardImage
+                  alt={userFullName}
+                  src={userAvatar}
+                  width={36}
+                  height={36}
+                  className="size-9 rounded-lg"
+                />
+              ) : (
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-semibold">
+                  {userInitials}
+                </span>
+              )}
               <span className="min-w-0 flex-1 text-start">
                 <span className="block truncate text-sm font-semibold">
-                  {currentUser.fullName}
+                  {userFullName}
                 </span>
               </span>
             </div>
@@ -739,25 +760,35 @@ export function Sidebar({
             setCollapsedGroupOpen(null);
             setIconTooltip(null);
           }}
-          onFocus={(event) => showIconTooltip(event, currentUser.fullName)}
-          onMouseEnter={(event) => showIconTooltip(event, currentUser.fullName)}
-          onBlur={() => hideIconTooltip(currentUser.fullName)}
-          onMouseLeave={() => hideIconTooltip(currentUser.fullName)}
-          title={iconOnly ? currentUser.fullName : undefined}
+          onFocus={(event) => showIconTooltip(event, userFullName)}
+          onMouseEnter={(event) => showIconTooltip(event, userFullName)}
+          onBlur={() => hideIconTooltip(userFullName)}
+          onMouseLeave={() => hideIconTooltip(userFullName)}
+          title={iconOnly ? userFullName : undefined}
           className={cn(
             "flex h-12 items-center gap-2 rounded-md p-2 text-start transition-colors hover:bg-sidebar-accent",
             profileMenuOpen && "bg-sidebar-accent text-sidebar-accent-foreground",
             iconOnly ? "w-12 justify-center" : "w-full",
           )}
         >
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-semibold">
-            {currentUser.initials}
-          </span>
+          {userAvatar ? (
+            <DashboardImage
+              alt={userFullName}
+              src={userAvatar}
+              width={32}
+              height={32}
+              className="size-8 rounded-lg"
+            />
+          ) : (
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-semibold">
+              {userInitials}
+            </span>
+          )}
           {!iconOnly ? (
             <>
               <span className="flex min-w-0 flex-1 flex-col items-start justify-start text-sm leading-tight">
                 <span className="block truncate font-medium">
-                  {currentUser.fullName}
+                  {userFullName}
                 </span>
                 <span className="block truncate text-xs">
                   {t("role.manager")}

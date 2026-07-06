@@ -41,6 +41,7 @@ type AuthContextValue = {
   }) => Promise<void>;
   logout: () => Promise<void>;
   reloadUser: () => Promise<AuthUser>;
+  updateUser: (nextUser: AuthUser) => void;
   apiFetch: (path: string, init?: RequestInit) => Promise<Response>;
 };
 
@@ -504,9 +505,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return nextUser;
   }, [apiFetch]);
 
+  const updateUser = useCallback((nextUser: AuthUser) => {
+    persistUser(nextUser);
+    setUser(nextUser);
+  }, []);
+
   const value = useMemo(
-    () => ({ status, user, login, logout, reloadUser, apiFetch }),
-    [apiFetch, login, logout, reloadUser, status, user],
+    () => ({ status, user, login, logout, reloadUser, updateUser, apiFetch }),
+    [apiFetch, login, logout, reloadUser, status, updateUser, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -24,10 +24,14 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { currentUser } from "@/features/dashboard/profile-data";
 import { Button, Card, Input, PageTitle } from "@/features/dashboard/primitives";
 import { useSnackbar } from "@/features/dashboard/snackbar";
+import type { AuthUser } from "@/lib/auth";
 import { resolveMediaUrl, shouldUnoptimizeMediaUrl } from "@/lib/media-url";
 
-function displayName(firstName?: string, lastName?: string) {
-  return [firstName, lastName].filter(Boolean).join(" ") || currentUser.fullName;
+const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
+const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+function displayName(firstName?: string, lastName?: string, username?: string) {
+  return [firstName, lastName].filter(Boolean).join(" ") || username || currentUser.fullName;
 }
 
 function splitDisplayName(value: string) {
@@ -48,13 +52,10 @@ function preventWhitespaceInput(event: KeyboardEvent<HTMLInputElement>) {
   }
 }
 
-function readImageAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
+async function responseData(response: Response) {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) return null;
+  return (await response.json().catch(() => null)) as unknown;
 }
 
 function firstApiError(value: unknown): string | null {
@@ -72,6 +73,26 @@ function firstApiError(value: unknown): string | null {
     }
   }
   return null;
+}
+
+function localizedProfileError(value: unknown, fallback: string) {
+  const message = firstApiError(value);
+  if (!message) return fallback;
+
+  const normalized = message.toLowerCase().replace(/\.$/, "");
+  if (
+    normalized === "user with this email already exists" ||
+    normalized === "an account with this email already exists"
+  ) {
+    return "البريد الإلكتروني مسجل بالفعل.";
+  }
+  if (message === "Upload a valid profile photo: JPG, JPEG, PNG, or WEBP.") {
+    return "ارفع صورة صالحة بصيغة JPG أو JPEG أو PNG أو WEBP.";
+  }
+  if (message === "Profile photo must be 5 MB or smaller.") {
+    return "يجب ألا يتجاوز حجم الصورة الشخصية 5 ميجابايت.";
+  }
+  return message;
 }
 
 function localizedPasswordError(value: unknown, fallback: string) {
@@ -107,27 +128,32 @@ function validatePassword(password: string, confirmation: string) {
 
 export function AccountPage() {
   const router = useRouter();
-  const { user, apiFetch, logout, reloadUser } = useAuth();
+  const { user, apiFetch, logout, reloadUser, updateUser } = useAuth();
   const { showSnackbar } = useSnackbar();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const objectUrlRef = useRef<string | null>(null);
   const [passwordStep, setPasswordStep] = useState<"idle" | "verify">("idle");
   const [otp, setOtp] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [devOtp, setDevOtp] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [profileName, setProfileName] = useState(() =>
-    displayName(user?.first_name, user?.last_name),
+    displayName(user?.first_name, user?.last_name, user?.username),
   );
+  const [profileEmail, setProfileEmail] = useState(() => user?.email ?? currentUser.email);
   const [avatarUrl, setAvatarUrl] = useState(
     () => user?.avatar_url?.trim() || "/default-user-avatar.svg",
   );
+  const [selectedAvatar, setSelectedAvatar] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
   const [profileError, setProfileError] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
   const [busyAction, setBusyAction] = useState<"request" | "reset" | null>(null);
-  const avatarInputRef = useRef<HTMLInputElement>(null);
-  const name = displayName(user?.first_name, user?.last_name);
-  const email = user?.email ?? currentUser.email;
-  const avatarImageUrl = resolveMediaUrl(avatarUrl);
+  const name = displayName(user?.first_name, user?.last_name, user?.username);
+  const email = profileEmail || user?.email || currentUser.email;
+  const avatarImageUrl = resolveMediaUrl(avatarPreviewUrl || avatarUrl);
   const avatarImageUnoptimized =
     avatarImageUrl.startsWith("data:") ||
     avatarImageUrl.startsWith("blob:") ||
@@ -136,56 +162,117 @@ export function AccountPage() {
   useEffect(() => {
     let active = true;
 
-    void reloadUser().then((nextUser) => {
-      if (!active) return;
-      setProfileName(displayName(nextUser.first_name, nextUser.last_name));
-      setAvatarUrl(nextUser.avatar_url?.trim() || "/default-user-avatar.svg");
-    }).catch((error: unknown) => {
-      if (!active) return;
-      showSnackbar({
-        message:
-          error instanceof Error
-            ? error.message
-            : "تعذر تحديث بيانات الحساب من الخادم.",
-        tone: "danger",
+    void reloadUser()
+      .then((nextUser) => {
+        if (!active) return;
+        setProfileName(displayName(nextUser.first_name, nextUser.last_name, nextUser.username));
+        setProfileEmail(nextUser.email);
+        setAvatarUrl(nextUser.avatar_url?.trim() || "/default-user-avatar.svg");
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        showSnackbar({
+          message:
+            error instanceof Error
+              ? error.message
+              : "تعذر تحديث بيانات الحساب من الخادم.",
+          tone: "danger",
+        });
       });
-    });
 
     return () => {
       active = false;
     };
   }, [reloadUser, showSnackbar]);
 
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setTimeout(() => {
+      setResendCooldown((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
+
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    };
+  }, []);
+
   async function saveProfile(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     if (profileSaving) return;
 
     const nextName = profileName.trim().replace(/\s+/g, " ");
-    const nextNameParts = splitDisplayName(nextName);
+    const nextNameParts =
+      nextName === displayName(user?.first_name, user?.last_name, user?.username)
+        ? {
+            first_name: user?.first_name ?? "",
+            last_name: user?.last_name ?? "",
+          }
+        : splitDisplayName(nextName);
     if (!nextNameParts.first_name) {
       setProfileError("اكتب الاسم قبل الحفظ.");
+      return;
+    }
+    if (!profileEmail.trim()) {
+      setProfileError("اكتب البريد الإلكتروني قبل الحفظ.");
       return;
     }
 
     setProfileSaving(true);
     setProfileError("");
     try {
-      const response = await apiFetch("auth/me/", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...nextNameParts,
-          avatar_url: avatarUrl === "/default-user-avatar.svg" ? "" : avatarUrl,
-        }),
-      });
-      const data = await response.json().catch(() => null);
+      const textPayload = {
+        ...nextNameParts,
+        email: profileEmail.trim(),
+      };
+      const response = selectedAvatar
+        ? await apiFetch("auth/me/", {
+            method: "PATCH",
+            body: (() => {
+              const formData = new FormData();
+              formData.set("avatar", selectedAvatar);
+              formData.set("first_name", textPayload.first_name);
+              formData.set("last_name", textPayload.last_name);
+              formData.set("email", textPayload.email);
+              return formData;
+            })(),
+          })
+        : await apiFetch("auth/me/", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(textPayload),
+          });
+      const data = await responseData(response);
 
-      if (!response.ok) {
-        throw new Error(firstApiError(data) ?? "تعذر تحديث بيانات الحساب.");
+      if (!response.ok || !data || typeof data !== "object") {
+        throw new Error(
+          localizedProfileError(data, "تعذر تحديث بيانات الحساب."),
+        );
       }
 
-      await reloadUser();
-      showSnackbar({ message: "تم تحديث بيانات الحساب." });
+      const returnedUser = data as AuthUser;
+      updateUser(returnedUser);
+      setProfileName(displayName(returnedUser.first_name, returnedUser.last_name, returnedUser.username));
+      setProfileEmail(returnedUser.email);
+      setAvatarUrl(returnedUser.avatar_url?.trim() || "/default-user-avatar.svg");
+      setSelectedAvatar(null);
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+      setAvatarPreviewUrl("");
+
+      try {
+        await reloadUser();
+        showSnackbar({ message: "تم تحديث بيانات الحساب." });
+      } catch {
+        showSnackbar({
+          message: "تم حفظ البيانات، لكن تعذر إعادة تحميل حالة الحساب الآن.",
+          tone: "info",
+        });
+      }
     } catch (error) {
       setProfileError(
         error instanceof Error ? error.message : "تعذر تحديث بيانات الحساب.",
@@ -195,31 +282,30 @@ export function AccountPage() {
     }
   }
 
-  async function changeAvatar(event: ChangeEvent<HTMLInputElement>) {
+  function changeAvatar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setProfileError("اختار ملف صورة صحيح.");
+    if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
+      setProfileError("ارفع صورة صالحة بصيغة JPG أو JPEG أو PNG أو WEBP.");
       return;
     }
-    if (file.size > 2 * 1024 * 1024) {
-      setProfileError("حجم الصورة يجب ألا يزيد عن 2 ميجابايت.");
+    if (file.size > MAX_AVATAR_SIZE) {
+      setProfileError("يجب ألا يتجاوز حجم الصورة الشخصية 5 ميجابايت.");
       return;
     }
 
+    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    const nextPreviewUrl = URL.createObjectURL(file);
+    objectUrlRef.current = nextPreviewUrl;
+    setSelectedAvatar(file);
+    setAvatarPreviewUrl(nextPreviewUrl);
     setProfileError("");
-    try {
-      const nextAvatarUrl = await readImageAsDataUrl(file);
-      setAvatarUrl(nextAvatarUrl);
-      showSnackbar({ message: "تم اختيار الصورة. اضغط حفظ لتطبيق التغيير." });
-    } catch {
-      setProfileError("تعذر قراءة الصورة.");
-    }
+    showSnackbar({ message: "تم اختيار الصورة. اضغط حفظ لتطبيق التغيير." });
   }
 
   async function requestResetCode(isResend = false) {
-    if (!email || busyAction) return;
+    if (!email || busyAction || resendCooldown > 0) return;
 
     setBusyAction("request");
     setPasswordError("");
@@ -229,8 +315,10 @@ export function AccountPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      const data = (await response.json().catch(() => null)) as {
+      const data = (await responseData(response)) as {
         dev_otp?: unknown;
+        resend_after_seconds?: unknown;
+        retry_after_seconds?: unknown;
       } | null;
 
       if (!response.ok) {
@@ -242,8 +330,17 @@ export function AccountPage() {
       setPasswordStep("verify");
       setOtp("");
       setDevOtp(typeof data?.dev_otp === "string" ? data.dev_otp : null);
+      const cooldown =
+        typeof data?.resend_after_seconds === "number"
+          ? data.resend_after_seconds
+          : typeof data?.retry_after_seconds === "number"
+            ? data.retry_after_seconds
+            : 30;
+      setResendCooldown(cooldown);
       showSnackbar({
-        message: isResend ? "تم إرسال كود تحقق جديد." : "تم إرسال كود التحقق إلى بريد الحساب.",
+        message: isResend
+          ? "تم إرسال كود تحقق جديد."
+          : "تم إرسال كود التحقق إلى بريد الحساب.",
       });
     } catch (error) {
       setPasswordError(
@@ -259,7 +356,7 @@ export function AccountPage() {
     if (busyAction) return;
 
     if (!/^\d{6}$/.test(otp)) {
-      setPasswordError("أدخل كود التحقق المكوّن من 6 أرقام.");
+      setPasswordError("أدخل كود التحقق المكون من 6 أرقام.");
       return;
     }
     const cleanPassword = stripWhitespace(password);
@@ -283,7 +380,7 @@ export function AccountPage() {
           password_confirm: cleanPasswordConfirm,
         }),
       });
-      const data = await response.json().catch(() => null);
+      const data = await responseData(response);
 
       if (!response.ok) {
         throw new Error(
@@ -291,7 +388,12 @@ export function AccountPage() {
         );
       }
 
-      showSnackbar({ message: "تم تغيير كلمة المرور. سجّل الدخول من جديد." });
+      setPasswordStep("idle");
+      setOtp("");
+      setPassword("");
+      setPasswordConfirm("");
+      setDevOtp(null);
+      showSnackbar({ message: "تم تغيير كلمة المرور. سجل الدخول من جديد." });
       await logout();
       router.replace("/login");
     } catch (error) {
@@ -335,7 +437,7 @@ export function AccountPage() {
             <input
               ref={avatarInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               className="hidden"
               onChange={changeAvatar}
             />
@@ -370,7 +472,13 @@ export function AccountPage() {
               </label>
               <label className="grid gap-2 text-sm font-medium">
                 البريد الإلكتروني
-                <Input dir="ltr" className="text-right" value={email} readOnly />
+                <Input
+                  dir="ltr"
+                  className="text-right"
+                  value={profileEmail}
+                  onChange={(event) => setProfileEmail(event.target.value)}
+                  required
+                />
               </label>
               <div className="flex items-end gap-2 md:col-span-2">
                 <Button type="submit" disabled={profileSaving} className="w-full">
@@ -396,7 +504,7 @@ export function AccountPage() {
           <Card className="p-5">
             <h3 className="text-lg font-bold">الأمان</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              غيّر كلمة المرور باستخدام كود تحقق يُرسل إلى بريد الحساب.
+              غير كلمة المرور باستخدام كود تحقق يرسل إلى بريد الحساب.
             </p>
             {passwordStep === "idle" ? (
               <Button
@@ -411,7 +519,7 @@ export function AccountPage() {
                 ) : (
                   <KeyRound className="size-4" />
                 )}
-                {busyAction === "request" ? "جارٍ إرسال الكود..." : "تغيير كلمة المرور"}
+                {busyAction === "request" ? "جاري إرسال الكود..." : "تغيير كلمة المرور"}
               </Button>
             ) : (
               <form className="mt-5 grid max-w-xl gap-4" onSubmit={resetPassword}>
@@ -469,12 +577,12 @@ export function AccountPage() {
                 <div className="flex flex-wrap gap-2">
                   <Button type="submit" disabled={busyAction !== null}>
                     {busyAction === "reset" ? <Loader2 className="size-4 animate-spin" /> : null}
-                    {busyAction === "reset" ? "جارٍ الحفظ..." : "حفظ كلمة المرور"}
+                    {busyAction === "reset" ? "جاري الحفظ..." : "حفظ كلمة المرور"}
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={busyAction !== null}
+                    disabled={busyAction !== null || resendCooldown > 0}
                     onClick={() => void requestResetCode(true)}
                   >
                     {busyAction === "request" ? (
@@ -482,7 +590,9 @@ export function AccountPage() {
                     ) : (
                       <RefreshCw className="size-4" />
                     )}
-                    إعادة إرسال الكود
+                    {resendCooldown > 0
+                      ? `إعادة الإرسال خلال ${resendCooldown}s`
+                      : "إعادة إرسال الكود"}
                   </Button>
                   <Button
                     type="button"

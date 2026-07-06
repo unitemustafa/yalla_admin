@@ -3,69 +3,88 @@ import {
   normalizeDashboardCustomColors,
   type DashboardCustomization,
   type DashboardFontId,
-  type DashboardPaletteId,
 } from "./customization";
 
 type ApiFetch = (path: string, init?: RequestInit) => Promise<Response>;
 
 type BackendDashboardSettings = {
-  palette?: string;
-  font?: string;
+  primary_color?: string;
+  subtle_color?: string;
+  accent_color?: string;
+  font_family?: string;
   brand_name?: string;
-  branch_name?: string;
-  logo?: string | null;
-  custom_colors?: unknown;
+  brand_tagline?: string;
+  logo_url?: string | null;
+  updated_at?: string;
 };
 
-function isPalette(value: unknown): value is DashboardPaletteId {
-  return (
-    value === "teal" ||
-    value === "emerald" ||
-    value === "indigo" ||
-    value === "rose" ||
-    value === "custom"
-  );
+function fontFromBackend(value: unknown): DashboardFontId {
+  if (value === "Tajawal") return "tajawal";
+  if (value === "Alexandria") return "alexandria";
+  if (value === "System") return "system";
+  return "cairo";
 }
 
-function isFont(value: unknown): value is DashboardFontId {
-  return (
-    value === "cairo" ||
-    value === "tajawal" ||
-    value === "alexandria" ||
-    value === "system"
-  );
+function fontToBackend(value: DashboardFontId) {
+  if (value === "tajawal") return "Tajawal";
+  if (value === "alexandria") return "Alexandria";
+  if (value === "system") return "System";
+  return "Cairo";
+}
+
+function firstApiError(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const message = firstApiError(item);
+      if (message) return message;
+    }
+  }
+  if (value && typeof value === "object") {
+    for (const item of Object.values(value)) {
+      const message = firstApiError(item);
+      if (message) return message;
+    }
+  }
+  return null;
 }
 
 function dashboardSettingsFromBackend(
   value: BackendDashboardSettings,
 ): DashboardCustomization {
   return {
-    palette: isPalette(value.palette)
-      ? value.palette
-      : defaultDashboardCustomization.palette,
-    font: isFont(value.font) ? value.font : defaultDashboardCustomization.font,
+    palette: "custom",
+    font: fontFromBackend(value.font_family),
     brandName:
       typeof value.brand_name === "string"
         ? value.brand_name
         : defaultDashboardCustomization.brandName,
     branchName:
-      typeof value.branch_name === "string"
-        ? value.branch_name
+      typeof value.brand_tagline === "string"
+        ? value.brand_tagline
         : defaultDashboardCustomization.branchName,
     logoDataUrl:
-      typeof value.logo === "string" ? value.logo : defaultDashboardCustomization.logoDataUrl,
-    customColors: normalizeDashboardCustomColors(value.custom_colors),
+      typeof value.logo_url === "string"
+        ? value.logo_url
+        : defaultDashboardCustomization.logoDataUrl,
+    customColors: normalizeDashboardCustomColors({
+      primary: value.primary_color,
+      surface: value.subtle_color,
+      accent: value.accent_color,
+    }),
   };
 }
 
 async function readResponse(response: Response) {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) return null;
   return (await response.json().catch(() => null)) as BackendDashboardSettings | null;
 }
 
 async function parseSettingsResponse(response: Response, fallback: string) {
   const data = await readResponse(response);
   if (!response.ok || !data || typeof data !== "object") {
-    throw new Error(fallback);
+    throw new Error(firstApiError(data) ?? fallback);
   }
 
   return dashboardSettingsFromBackend(data);
@@ -73,58 +92,49 @@ async function parseSettingsResponse(response: Response, fallback: string) {
 
 function dashboardSettingsPayload(customization: DashboardCustomization) {
   return {
-    palette: customization.palette,
-    font: customization.font,
+    primary_color: customization.customColors.primary,
+    subtle_color: customization.customColors.surface,
+    accent_color: customization.customColors.accent,
+    font_family: fontToBackend(customization.font),
     brand_name: customization.brandName,
-    branch_name: customization.branchName,
-    custom_colors: customization.customColors,
+    brand_tagline: customization.branchName,
   };
 }
 
 export async function loadDashboardSettings(apiFetch: ApiFetch) {
-  const response = await apiFetch("home/dashboard-settings/");
-  return parseSettingsResponse(response, "تعذر تحميل إعدادات اللوحة.");
+  const response = await apiFetch("dashboard/settings/");
+  return parseSettingsResponse(
+    response,
+    "تعذر تحميل إعدادات اللوحة من الخادم.",
+  );
 }
 
 export async function saveDashboardSettings(
   apiFetch: ApiFetch,
   customization: DashboardCustomization,
+  logo?: File | null,
 ) {
-  const response = await apiFetch("home/dashboard-settings/", {
+  const payload = dashboardSettingsPayload(customization);
+
+  if (logo) {
+    const formData = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      formData.set(key, value);
+    });
+    formData.set("logo", logo);
+
+    const response = await apiFetch("dashboard/settings/", {
+      method: "PATCH",
+      body: formData,
+    });
+    return parseSettingsResponse(response, "تعذر حفظ إعدادات اللوحة.");
+  }
+
+  const response = await apiFetch("dashboard/settings/", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(dashboardSettingsPayload(customization)),
+    body: JSON.stringify(payload),
   });
 
   return parseSettingsResponse(response, "تعذر حفظ إعدادات اللوحة.");
-}
-
-export async function uploadDashboardLogo(apiFetch: ApiFetch, file: File) {
-  const formData = new FormData();
-  formData.set("logo", file);
-
-  const response = await apiFetch("home/dashboard-settings/", {
-    method: "PATCH",
-    body: formData,
-  });
-
-  return parseSettingsResponse(response, "تعذر رفع اللوجو.");
-}
-
-export async function clearDashboardLogo(apiFetch: ApiFetch) {
-  const response = await apiFetch("home/dashboard-settings/", {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ clear_logo: true }),
-  });
-
-  return parseSettingsResponse(response, "تعذر حذف اللوجو.");
-}
-
-export async function resetDashboardSettings(apiFetch: ApiFetch) {
-  const response = await apiFetch("home/dashboard-settings/", {
-    method: "DELETE",
-  });
-
-  return parseSettingsResponse(response, "تعذر الرجوع للإعدادات الافتراضية.");
 }

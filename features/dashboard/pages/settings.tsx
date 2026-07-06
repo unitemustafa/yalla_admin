@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import {
   Check,
   ChevronDown,
   ImagePlus,
+  Loader2,
   Paintbrush,
   Palette,
   RotateCcw,
+  Save,
   Store,
   Type,
 } from "lucide-react";
@@ -17,24 +19,26 @@ import {
   dashboardCustomPaletteVariables,
   dashboardFonts,
   dashboardPalettes,
+  defaultDashboardCustomization,
   type DashboardCustomization,
   type DashboardCustomColors,
   useDashboardCustomization,
 } from "@/features/dashboard/customization";
 import {
-  clearDashboardLogo,
   loadDashboardSettings,
-  resetDashboardSettings,
   saveDashboardSettings,
-  uploadDashboardLogo,
 } from "@/features/dashboard/dashboard-settings-api";
 import { DashboardImage } from "@/features/dashboard/dashboard-image";
 import { logoSrc } from "@/features/dashboard/data";
 import { useDashboardI18n } from "@/features/dashboard/i18n";
 import { Button, Card, Input, PageTitle } from "@/features/dashboard/primitives";
 import { useSnackbar } from "@/features/dashboard/snackbar";
-import { useUndoableDelete } from "@/features/dashboard/use-undoable-delete";
 import { cn } from "@/lib/utils";
+
+const MAX_LOGO_SIZE = 5 * 1024 * 1024;
+const ALLOWED_LOGO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const DEFAULT_SERVER_BRAND_NAME = "يلا ماركت";
+const DEFAULT_SERVER_TAGLINE = "أول أونلاين ماركت في النيل الكبير";
 
 function SettingBlock({
   icon,
@@ -83,26 +87,62 @@ function SettingBlock({
   );
 }
 
+function settingsErrorMessage(message: string) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("color must be a hex")) {
+    return "استخدم لونًا بصيغة #RRGGBB.";
+  }
+  if (normalized.includes("unsupported font")) {
+    return "الخط المختار غير مدعوم.";
+  }
+  if (normalized.includes("brand name is required")) {
+    return "اسم البراند مطلوب.";
+  }
+  if (normalized.includes("brand tagline is required")) {
+    return "وصف البراند مطلوب.";
+  }
+  if (normalized.includes("valid dashboard logo")) {
+    return "ارفع لوجو صالحًا بصيغة JPG أو JPEG أو PNG أو WEBP.";
+  }
+  if (normalized.includes("5 mb")) {
+    return "يجب ألا يتجاوز حجم اللوجو 5 ميجابايت.";
+  }
+  return message;
+}
+
+function withServerDefaults(
+  customization: DashboardCustomization,
+): DashboardCustomization {
+  return {
+    ...customization,
+    brandName: customization.brandName || DEFAULT_SERVER_BRAND_NAME,
+    branchName: customization.branchName || DEFAULT_SERVER_TAGLINE,
+  };
+}
+
 export function SettingsPage() {
   const { apiFetch } = useAuth();
   const { t } = useDashboardI18n();
   const { showSnackbar } = useSnackbar();
-  const queueUndoableDelete = useUndoableDelete();
-  const { customization, setCustomization, resetCustomization } =
-    useDashboardCustomization();
+  const { customization, setCustomization } = useDashboardCustomization();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const objectUrlRef = useRef<string | null>(null);
+  const [draft, setDraft] = useState<DashboardCustomization>(() =>
+    withServerDefaults(customization),
+  );
+  const [selectedLogo, setSelectedLogo] = useState<File | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState("");
   const [status, setStatus] = useState<string | null>(null);
-  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
-  const brandName = customization.brandName || t("brand.name");
-  const branchName = customization.branchName || t("branch.default");
-  const logo = customization.logoDataUrl || logoSrc;
+  const brandName = draft.brandName || t("brand.name");
+  const branchName = draft.branchName || t("branch.default");
+  const logo = logoPreviewUrl || draft.logoDataUrl || logoSrc;
   const selectedSwatches =
-    customization.palette === "custom"
-      ? dashboardCustomPaletteVariables(customization.customColors).swatches
-      : (dashboardPalettes.find((palette) => palette.id === customization.palette)
+    draft.palette === "custom"
+      ? dashboardCustomPaletteVariables(draft.customColors).swatches
+      : (dashboardPalettes.find((palette) => palette.id === draft.palette)
           ?.swatches ?? dashboardPalettes[0].swatches);
 
   useEffect(() => {
@@ -111,16 +151,19 @@ export function SettingsPage() {
     void loadDashboardSettings(apiFetch)
       .then((serverCustomization) => {
         if (!active) return;
-        setCustomization(serverCustomization);
+        const nextCustomization = withServerDefaults(serverCustomization);
+        setDraft(nextCustomization);
+        setCustomization(nextCustomization);
         setStatus("تم تحميل إعدادات اللوحة من الخادم.");
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!active) return;
+        const message =
+          error instanceof Error
+            ? settingsErrorMessage(error.message)
+            : "تعذر تحميل إعدادات اللوحة من الخادم.";
         setStatus("تعذر تحميل إعدادات اللوحة من الخادم.");
-        showSnackbar({
-          message: "تعذر تحميل إعدادات اللوحة من الخادم.",
-          tone: "danger",
-        });
+        showSnackbar({ message, tone: "danger" });
       })
       .finally(() => {
         if (active) setIsLoadingSettings(false);
@@ -131,121 +174,120 @@ export function SettingsPage() {
     };
   }, [apiFetch, setCustomization, showSnackbar]);
 
-  async function updateCustomization(
-    next: Partial<DashboardCustomization>,
-    notify = true,
-    persist = true,
-  ) {
-    const nextCustomization = { ...customization, ...next };
-    setCustomization(nextCustomization);
-    setStatus("تم تطبيق الإعدادات.");
-    if (notify) {
-      showSnackbar({ message: "تم تطبيق الإعدادات." });
-    }
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    };
+  }, []);
 
-    if (!persist) return;
-
-    setIsSavingSettings(true);
-    try {
-      const savedCustomization = await saveDashboardSettings(
-        apiFetch,
-        nextCustomization,
-      );
-      setCustomization(savedCustomization);
-    } catch {
-      setStatus("تعذر حفظ إعدادات اللوحة على الخادم.");
-      showSnackbar({
-        message: "تعذر حفظ إعدادات اللوحة على الخادم.",
-        tone: "danger",
-      });
-    } finally {
-      setIsSavingSettings(false);
-    }
-  }
-
-  async function handleLogoUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    setIsUploadingLogo(true);
-
-    try {
-      const savedCustomization = await uploadDashboardLogo(apiFetch, file);
-      setCustomization(savedCustomization);
-      setStatus("تم تحديث اللوجو.");
-      showSnackbar({ message: "تم تحديث اللوجو." });
-    } catch {
-      setStatus("تعذر رفع اللوجو الآن.");
-      showSnackbar({ message: "تعذر رفع اللوجو.", tone: "danger" });
-    } finally {
-      setIsUploadingLogo(false);
-      event.target.value = "";
-    }
-  }
-
-  function handleClearLogo() {
-    const previousCustomization = customization;
-    setIsUploadingLogo(true);
-
-    queueUndoableDelete({
-      message: "تم حذف اللوجو المخصص.",
-      onDelete: () => {
-        setCustomization({ ...customization, logoDataUrl: "" });
-        setStatus("تم حذف اللوجو المخصص.");
-      },
-      onUndo: () => {
-        setCustomization(previousCustomization);
-        setIsUploadingLogo(false);
-      },
-      onCommit: async () => {
-        const savedCustomization = await clearDashboardLogo(apiFetch);
-        setCustomization(savedCustomization);
-        setIsUploadingLogo(false);
-      },
-      onCommitError: () => {
-        setStatus("تعذر حذف اللوجو المخصص.");
-        showSnackbar({ message: "تعذر حذف اللوجو المخصص.", tone: "danger" });
-        setIsUploadingLogo(false);
-      },
-    });
-  }
-
-  async function handleReset() {
-    setIsSavingSettings(true);
-    try {
-      const serverCustomization = await resetDashboardSettings(apiFetch);
-    resetCustomization();
-      setCustomization(serverCustomization);
-    setStatus("تم الرجوع للشكل الافتراضي.");
-    showSnackbar({ message: "تم الرجوع للشكل الافتراضي." });
-    } catch {
-      setStatus("تعذر الرجوع للإعدادات الافتراضية.");
-      showSnackbar({
-        message: "تعذر الرجوع للإعدادات الافتراضية.",
-        tone: "danger",
-      });
-    } finally {
-      setIsSavingSettings(false);
-    }
+  function updateDraft(next: Partial<DashboardCustomization>) {
+    setDraft((current) => ({ ...current, ...next }));
   }
 
   function updateCustomColor(
     colorKey: keyof DashboardCustomColors,
     value: string,
   ) {
-    void updateCustomization(
-      {
-        palette: "custom",
-        customColors: {
-          ...customization.customColors,
-          [colorKey]: value,
-        },
+    updateDraft({
+      palette: "custom",
+      customColors: {
+        ...draft.customColors,
+        [colorKey]: value,
       },
-      false,
-    );
+    });
+  }
+
+  function handleLogoSelection(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file) return;
+
+    if (!ALLOWED_LOGO_TYPES.includes(file.type)) {
+      showSnackbar({
+        message: "ارفع لوجو صالحًا بصيغة JPG أو JPEG أو PNG أو WEBP.",
+        tone: "danger",
+      });
+      return;
+    }
+    if (file.size > MAX_LOGO_SIZE) {
+      showSnackbar({
+        message: "يجب ألا يتجاوز حجم اللوجو 5 ميجابايت.",
+        tone: "danger",
+      });
+      return;
+    }
+
+    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    const nextPreview = URL.createObjectURL(file);
+    objectUrlRef.current = nextPreview;
+    setSelectedLogo(file);
+    setLogoPreviewUrl(nextPreview);
+    setStatus("تم اختيار اللوجو. احفظ لتطبيق التغيير.");
+  }
+
+  async function handleSave() {
+    if (isSavingSettings) return;
+
+    const nextDraft = {
+      ...draft,
+      brandName: draft.brandName.trim(),
+      branchName: draft.branchName.trim(),
+    };
+    if (!nextDraft.brandName) {
+      showSnackbar({ message: "اسم البراند مطلوب.", tone: "danger" });
+      return;
+    }
+    if (!nextDraft.branchName) {
+      showSnackbar({ message: "وصف البراند مطلوب.", tone: "danger" });
+      return;
+    }
+
+    setIsSavingSettings(true);
+    setStatus(null);
+    try {
+      const savedCustomization = await saveDashboardSettings(
+        apiFetch,
+        nextDraft,
+        selectedLogo,
+      );
+      const nextCustomization = withServerDefaults(savedCustomization);
+      setDraft(nextCustomization);
+      setCustomization(nextCustomization);
+      setSelectedLogo(null);
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+      setLogoPreviewUrl("");
+      setStatus("تم حفظ إعدادات اللوحة.");
+      showSnackbar({ message: "تم حفظ إعدادات اللوحة." });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? settingsErrorMessage(error.message)
+          : "تعذر حفظ إعدادات اللوحة.";
+      setStatus("تعذر حفظ إعدادات اللوحة.");
+      showSnackbar({ message, tone: "danger" });
+    } finally {
+      setIsSavingSettings(false);
+    }
+  }
+
+  function handleReset() {
+    setDraft({
+      ...defaultDashboardCustomization,
+      palette: "custom",
+      brandName: DEFAULT_SERVER_BRAND_NAME,
+      branchName: DEFAULT_SERVER_TAGLINE,
+      logoDataUrl: draft.logoDataUrl,
+    });
+    setSelectedLogo(null);
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    setLogoPreviewUrl("");
+    setStatus("تم تجهيز القيم الافتراضية. احفظ لتطبيقها.");
   }
 
   return (
@@ -254,15 +296,29 @@ export function SettingsPage() {
         title="الإعدادات"
         description="تخصيص ألوان اللوحة، الخط، وبيانات البراند الظاهرة في القائمة."
         actions={
-          <Button
-            disabled={isLoadingSettings || isSavingSettings}
-            onClick={() => void handleReset()}
-            type="button"
-            variant="outline"
-          >
-            <RotateCcw className="size-4" />
-            رجوع للافتراضي
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={isLoadingSettings || isSavingSettings}
+              onClick={handleReset}
+              type="button"
+              variant="outline"
+            >
+              <RotateCcw className="size-4" />
+              رجوع للافتراضي
+            </Button>
+            <Button
+              disabled={isLoadingSettings || isSavingSettings}
+              onClick={() => void handleSave()}
+              type="button"
+            >
+              {isSavingSettings ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Save className="size-4" />
+              )}
+              {isSavingSettings ? "جاري الحفظ..." : "حفظ الإعدادات"}
+            </Button>
+          </div>
         }
       />
 
@@ -275,7 +331,7 @@ export function SettingsPage() {
                 className="size-full"
                 height={80}
                 src={logo}
-                unoptimized={logo.startsWith("data:")}
+                unoptimized={logo.startsWith("blob:")}
                 width={80}
               />
             </div>
@@ -314,7 +370,7 @@ export function SettingsPage() {
           >
             <div className="grid gap-3 md:grid-cols-2">
               {dashboardPalettes.map((palette) => {
-                const selected = palette.id === customization.palette;
+                const selected = palette.id === draft.palette;
 
                 return (
                   <button
@@ -324,7 +380,16 @@ export function SettingsPage() {
                       "flex min-h-20 items-center justify-between gap-3 rounded-lg border bg-background p-4 text-start transition-colors hover:bg-accent",
                       selected && "border-primary bg-primary/10 text-primary",
                     )}
-                    onClick={() => void updateCustomization({ palette: palette.id })}
+                    onClick={() =>
+                      updateDraft({
+                        palette: palette.id,
+                        customColors: {
+                          primary: palette.swatches[0],
+                          surface: palette.swatches[1],
+                          accent: palette.swatches[2],
+                        },
+                      })
+                    }
                     type="button"
                   >
                     <span className="font-semibold">{palette.name}</span>
@@ -342,29 +407,27 @@ export function SettingsPage() {
                 );
               })}
               <button
-                aria-pressed={customization.palette === "custom"}
+                aria-pressed={draft.palette === "custom"}
                 className={cn(
                   "flex min-h-20 items-center justify-between gap-3 rounded-lg border bg-background p-4 text-start transition-colors hover:bg-accent",
-                  customization.palette === "custom" &&
+                  draft.palette === "custom" &&
                     "border-primary bg-primary/10 text-primary",
                 )}
-                onClick={() => void updateCustomization({ palette: "custom" })}
+                onClick={() => updateDraft({ palette: "custom" })}
                 type="button"
               >
                 <span className="font-semibold">مخصص</span>
                 <span className="flex items-center gap-2">
-                  {dashboardCustomPaletteVariables(
-                    customization.customColors,
-                  ).swatches.map((swatch) => (
-                    <span
-                      key={swatch}
-                      className="size-7 rounded-md border shadow-sm"
-                      style={{ backgroundColor: swatch }}
-                    />
-                  ))}
-                  {customization.palette === "custom" ? (
-                    <Check className="size-4" />
-                  ) : null}
+                  {dashboardCustomPaletteVariables(draft.customColors).swatches.map(
+                    (swatch) => (
+                      <span
+                        key={swatch}
+                        className="size-7 rounded-md border shadow-sm"
+                        style={{ backgroundColor: swatch }}
+                      />
+                    ),
+                  )}
+                  {draft.palette === "custom" ? <Check className="size-4" /> : null}
                 </span>
               </button>
             </div>
@@ -397,7 +460,7 @@ export function SettingsPage() {
                         }
                         type="color"
                         value={
-                          customization.customColors[
+                          draft.customColors[
                             colorKey as keyof DashboardCustomColors
                           ]
                         }
@@ -405,9 +468,14 @@ export function SettingsPage() {
                       <Input
                         className="h-10 font-mono text-xs"
                         dir="ltr"
-                        readOnly
+                        onChange={(event) =>
+                          updateCustomColor(
+                            colorKey as keyof DashboardCustomColors,
+                            event.target.value,
+                          )
+                        }
                         value={
-                          customization.customColors[
+                          draft.customColors[
                             colorKey as keyof DashboardCustomColors
                           ]
                         }
@@ -416,25 +484,13 @@ export function SettingsPage() {
                   </label>
                 ))}
               </div>
-              <div className="mt-3 flex items-center gap-2 rounded-lg border bg-muted/20 p-3">
-                <span className="text-sm text-muted-foreground">معاينة</span>
-                {dashboardCustomPaletteVariables(
-                  customization.customColors,
-                ).swatches.map((swatch) => (
-                  <span
-                    key={swatch}
-                    className="size-8 rounded-md border shadow-sm"
-                    style={{ backgroundColor: swatch }}
-                  />
-                ))}
-              </div>
             </div>
           </SettingBlock>
 
           <SettingBlock icon={<Type className="size-4" />} title="الخط">
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {dashboardFonts.map((font) => {
-                const selected = font.id === customization.font;
+                const selected = font.id === draft.font;
 
                 return (
                   <button
@@ -444,7 +500,7 @@ export function SettingsPage() {
                       "flex h-12 items-center justify-center gap-2 rounded-lg border px-3 font-semibold transition-colors hover:bg-accent",
                       selected && "border-primary bg-primary/10 text-primary",
                     )}
-                    onClick={() => void updateCustomization({ font: font.id })}
+                    onClick={() => updateDraft({ font: font.id })}
                     style={{ fontFamily: font.cssValue }}
                     type="button"
                   >
@@ -461,56 +517,38 @@ export function SettingsPage() {
               <label className="grid gap-2 text-sm font-medium">
                 اسم البراند
                 <Input
-                  onChange={(event) =>
-                    void updateCustomization({ brandName: event.target.value }, false)
-                  }
-                  onBlur={() => showSnackbar({ message: "تم تحديث اسم البراند." })}
+                  onChange={(event) => updateDraft({ brandName: event.target.value })}
                   placeholder={t("brand.name")}
-                  value={customization.brandName}
+                  value={draft.brandName}
                 />
               </label>
 
               <label className="grid gap-2 text-sm font-medium">
-                الاسم الظاهر تحت اللوجو
+                الوصف الظاهر تحت اللوجو
                 <Input
-                  onChange={(event) =>
-                    void updateCustomization({ branchName: event.target.value }, false)
-                  }
-                  onBlur={() =>
-                    showSnackbar({ message: "تم تحديث الاسم الظاهر تحت اللوجو." })
-                  }
+                  onChange={(event) => updateDraft({ branchName: event.target.value })}
                   placeholder={t("branch.default")}
-                  value={customization.branchName}
+                  value={draft.branchName}
                 />
               </label>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <input
                   ref={fileInputRef}
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   className="sr-only"
-                  onChange={handleLogoUpload}
+                  onChange={handleLogoSelection}
                   type="file"
                 />
                 <Button
-                  disabled={isUploadingLogo}
+                  disabled={isSavingSettings}
                   onClick={() => fileInputRef.current?.click()}
                   type="button"
                   variant="outline"
                 >
                   <ImagePlus className="size-4" />
-                  {isUploadingLogo ? "جاري الرفع..." : "تغيير اللوجو"}
+                  تغيير اللوجو
                 </Button>
-                {customization.logoDataUrl ? (
-                  <Button
-                    disabled={isUploadingLogo}
-                    onClick={() => void handleClearLogo()}
-                    type="button"
-                    variant="ghost"
-                  >
-                    حذف اللوجو المخصص
-                  </Button>
-                ) : null}
               </div>
             </div>
           </SettingBlock>
