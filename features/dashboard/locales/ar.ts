@@ -3,6 +3,8 @@ import type { en } from "./en";
 type TranslationKey = keyof typeof en;
 
 export const ar = {
+  "overview.totalRevenue.realizedRate": "نسبة الإيراد المحقق",
+  "overview.topItems.averageItems": "متوسط المنتجات",
   "brand.name": "يلا ماركت",
   "brand.allBranches": "كل الفروع",
   "branch.default": "أول أونلاين ماركت في التل الكبير",

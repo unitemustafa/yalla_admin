@@ -59,6 +59,9 @@ export type ShopRow = {
   branch: string;
   products: string;
   active: boolean;
+  scope?: "general" | "service_city";
+  serviceCityIds?: string[];
+  serviceCityNames?: string[];
 };
 
 const fallbackImage = "/default-user-avatar.svg";
@@ -116,6 +119,10 @@ export function translateOrderStatus(status: unknown) {
     canceled: "ملغي",
     rejected: "مرفوض",
   };
+
+  labels.confirmed = "مؤكد";
+  labels.picked_up = "تم الاستلام";
+  labels.failed_delivery = "تعذر التوصيل";
 
   return labels[status.trim().toLowerCase()] ?? status;
 }
@@ -326,15 +333,37 @@ export function addonRowFromApi(record: BackendRecord, index: number): AddonRow 
 }
 
 export function shopRowFromApi(record: BackendRecord, index: number): ShopRow {
+  const serviceCities = Array.isArray(record.service_cities)
+    ? record.service_cities.filter((city): city is BackendRecord =>
+        Boolean(city && typeof city === "object"),
+      )
+    : [];
+  const serviceCityIds = serviceCities
+    .map((city) => text(city, ["id"]))
+    .filter(Boolean);
+  const serviceCityNames = serviceCities
+    .map((city) => nestedName(city))
+    .filter(Boolean);
+  const scope = record.scope === "service_city" ? "service_city" : "general";
+  const branch =
+    serviceCityNames.length > 0
+      ? serviceCityNames.join("، ")
+      : scope === "general"
+        ? "عام"
+        : text(record, ["branch", "branch_name", "area_name"], "كل الفروع");
+
   return {
     id: id(record, index),
     name: text(record, ["name", "name_ar", "name_en"], `محل #${index + 1}`),
     category:
       nestedName(record.classification) ||
       text(record, ["classification_name", "category"], "غير مصنف"),
-    branch: text(record, ["branch", "branch_name", "area_name"], "كل الفروع"),
+    branch,
     products: text(record, ["products_count", "total_products", "products"], "0"),
     active: bool(record, ["is_active", "active", "status"], true),
+    scope,
+    serviceCityIds,
+    serviceCityNames,
   };
 }
 

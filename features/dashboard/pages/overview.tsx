@@ -10,7 +10,6 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCcw,
-  TrendingUp,
 } from "lucide-react";
 import type { TooltipContentProps } from "recharts";
 import {
@@ -141,7 +140,7 @@ function activeOrderData(items: BackendRecord[]) {
       nestedCustomerName ||
       "عميل";
     const code =
-      valueText(order, ["order_number", "code", "description"]) ||
+      valueText(order, ["number", "order_number", "code", "description"]) ||
       `ORD-${valueText(order, ["id"], String(index + 1))}`;
     const orderId = valueText(order, ["id", "order_id"]);
     const orderLike = order as DashboardOrderLike;
@@ -167,25 +166,16 @@ function topShopData(items: BackendRecord[]) {
     .map((shop, index) => {
       const name = valueText(shop, ["name", "market_name", "shop_name"], "محل");
       const branch = valueText(shop, ["branch", "branch_name"]);
-      const category = valueText(shop, ["category", "classification_name"]);
+      const zone = valueText(shop, ["zone"]);
       const revenue = safeNumber(firstValue(shop, ["revenue", "total_revenue"]));
       const orders = safeNumber(firstValue(shop, ["orders_count", "order_count"]));
-      const providedAverage = firstValue(shop, [
-        "average_order_value",
-        "avg_order_value",
-      ]);
-      const average =
-        providedAverage !== undefined && providedAverage !== null
-          ? safeNumber(providedAverage)
-          : orders > 0
-            ? revenue / orders
-            : 0;
+      const average = safeNumber(firstValue(shop, ["average_items_per_order"]));
 
       return {
         key: `${name}-${index}`,
         rank: index + 1,
         name: branch ? `${name} - ${branch}` : name,
-        category,
+        zone,
         revenue,
         orders,
         average: Number.isFinite(average) ? average : 0,
@@ -218,14 +208,13 @@ function TopCategoriesCard({
     ];
 
     if (item.orders > 0) {
+      const average = item.average.toLocaleString(numberLocale, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+
       parts.push(
-        `${t("overview.topItems.average")} ${item.average.toLocaleString(
-          numberLocale,
-          {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          },
-        )}/${t("common.order")}`,
+        `${t("overview.topItems.averageItems")} ${average} / ${t("common.order")}`,
       );
     }
 
@@ -292,8 +281,8 @@ function TopCategoriesCard({
                         <span className="truncate text-base font-semibold leading-5 text-card-foreground">
                           {item.name}
                         </span>
-                        {item.category ? (
-                          <span className={zoneBadgeClass}>{item.category}</span>
+                        {item.zone ? (
+                          <span className={zoneBadgeClass}>{item.zone}</span>
                         ) : null}
                       </div>
                       <div className="mt-0.5 truncate text-xs leading-4 text-muted-foreground">
@@ -1099,7 +1088,7 @@ export function OverviewPage() {
           }
           value={revenueTotal}
           percentage={revenuePercentage}
-          label={t("overview.totalRevenue.label")}
+          label={t("overview.totalRevenue.realizedRate")}
           color="var(--chart-1)"
           decimals={2}
           locale={numberLocale}
@@ -1117,30 +1106,20 @@ export function OverviewPage() {
               <HoverTooltip
                 content={
                   <MetricTooltip
-                    title={t("overview.totalRevenue.label")}
-                    value={formatMoney(revenueTotal, currency)}
-                    detail={formatPercent(revenuePercentage)}
+                    title={t("overview.totalRevenue.realizedRate")}
+                    value={formatPercent(revenuePercentage)}
+                    detail={formatMoney(revenueTotal, currency)}
                   />
                 }
               >
                 <div className="flex items-center justify-center gap-1 font-medium leading-none">
-                  {t("overview.totalRevenue.label")}{" "}
-                  <AnimatedNumber
-                    value={revenueTotal}
-                    decimals={2}
-                    locale={numberLocale}
-                    prefix={currencyPrefix}
-                    suffix={currencySuffix}
-                  />{" "}
-                  (
+                  {t("overview.totalRevenue.realizedRate")}{" "}
                   <AnimatedNumber
                     value={revenuePercentage}
                     decimals={Number.isInteger(revenuePercentage) ? 0 : 1}
                     suffix="%"
                     locale={numberLocale}
                   />
-                  )
-                  <TrendingUp className="size-4" />
                 </div>
               </HoverTooltip>
               <div className="text-xs leading-none text-muted-foreground">
@@ -1197,7 +1176,6 @@ export function OverviewPage() {
                     delay={200}
                     locale={numberLocale}
                   />
-                  <TrendingUp className="size-4" />
                 </div>
               </HoverTooltip>
               <div className="text-xs leading-none text-muted-foreground">
