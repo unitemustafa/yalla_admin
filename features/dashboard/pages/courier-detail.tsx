@@ -22,6 +22,10 @@ import {
 import { useAuth } from "@/features/auth/auth-provider";
 import { DashboardImage } from "../dashboard-image";
 import {
+  assignedRepresentativeId,
+  isActiveAssignedOrder,
+} from "../courier-order-rules";
+import {
   getDeliveryDestination,
   getDeliveryPriceLabel,
   getDeliveryTypeLabel,
@@ -68,7 +72,8 @@ type CourierOrder = DashboardOrderLike & {
     last_name?: string | null;
     phone?: string | null;
   } | null;
-  assigned_representative?: { id: number } | null;
+  assigned_representative?: number | string | { id?: number | string | null } | null;
+  assigned_representative_id?: number | string | null;
 };
 
 const statusLabels: Record<CourierOrderStatus, string> = {
@@ -86,7 +91,7 @@ const statusLabels: Record<CourierOrderStatus, string> = {
 function statusTone(status: CourierOrderStatus) {
   if (status === "delivered") return "green" as const;
   if (status === "cancelled" || status === "failed_delivery") return "red" as const;
-  if (status === "ready" || status === "confirmed" || status === "picked_up" || status === "on_the_way") return "blue" as const;
+  if (status === "ready" || status === "confirmed" || status === "under_preparation" || status === "picked_up" || status === "on_the_way") return "blue" as const;
   return "secondary" as const;
 }
 
@@ -266,7 +271,7 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
     try {
       const [courierResponse, ordersResponse] = await Promise.all([
         apiFetch(`auth/users/${encodeURIComponent(courierId)}/`),
-        apiFetch("auth/representatives/"),
+        apiFetch("orders/"),
       ]);
       const [courierData, ordersData] = await Promise.all([
         apiResponseData(courierResponse),
@@ -287,8 +292,7 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
         ? (ordersData as CourierOrder[])
             .filter(
               (order) =>
-                String(order.assigned_representative?.id ?? "") ===
-                String(courierData.id),
+                assignedRepresentativeId(order) === String(courierData.id),
             )
             .sort((first, second) => orderTimestamp(second) - orderTimestamp(first))
         : [];
@@ -312,7 +316,7 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
   }, [load]);
 
   const activeOrders = useMemo(
-    () => orders.filter((order) => ["ready", "picked_up", "on_the_way"].includes(order.status)),
+    () => orders.filter(isActiveAssignedOrder),
     [orders],
   );
   const deliveredOrders = useMemo(
@@ -418,7 +422,7 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
             className="inline-flex h-9 items-center gap-2 rounded-md border px-4 text-sm font-semibold hover:bg-accent"
           >
             <ArrowRight className="size-4" />
-            الرجوع
+            الرجوع للمندوبين
           </Link>
         </div>
       </div>
@@ -486,14 +490,15 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
               <InfoRow label="المركبة" value={profile?.vehicle_type} />
               <InfoRow label="رقم اللوحة" value={profile?.plate_number} dir="ltr" />
               <InfoRow
-                label="منطقة العمل"
+                label="مدينة التشغيل"
                 value={
                   <>
                     <MapPin className="me-1 inline size-3.5 text-primary" />
-                    {profile?.delivery_area_name}
+                    {profile?.service_city_name}
                   </>
                 }
               />
+              <InfoRow label="التوفر" value={profile?.is_available === false ? "غير متاح" : "متاح"} />
               <InfoRow
                 label="السعة النشطة"
                 value={`${activeOrders.length} من ${maxActiveOrders || "-"}`}

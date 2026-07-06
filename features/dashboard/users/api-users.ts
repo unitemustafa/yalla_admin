@@ -1,5 +1,6 @@
 import type { DashboardUser } from "./default-dashboard-users";
 import { resolveMediaUrl } from "@/lib/media-url";
+import { displayLocalPhone } from "./account-fields";
 
 export type BackendDashboardUser = {
   id: string | number;
@@ -39,6 +40,8 @@ export type BackendDashboardUser = {
     plate_number?: string | null;
     delivery_area?: string | number | null;
     delivery_area_name?: string | null;
+    service_city?: string | number | null;
+    service_city_name?: string | null;
     max_active_orders?: number | null;
     is_available?: boolean | null;
   } | null;
@@ -88,7 +91,7 @@ export function dashboardUserFromBackend(user: BackendDashboardUser): DashboardU
     id: String(user.id),
     name: fullNameFromBackendUser(user),
     username: user.username?.trim() || unavailable,
-    phone: user.phone?.trim() || unavailable,
+    phone: displayLocalPhone(user.phone),
     email: user.email?.trim() || unavailable,
     avatar: resolveMediaUrl(user.avatar_url?.trim() || defaultAvatar),
     role: roleLabel(user.role),
@@ -140,6 +143,18 @@ export function translateApiMessage(message: string) {
     .toLowerCase()
     .replace(/[.!؟?]+$/u, "");
   const translations: Record<string, string> = {
+    "delivery area cannot be deleted while representatives are using it": "لا يمكن حذف منطقة التوصيل لأنها مستخدمة بواسطة مندوبين.",
+    "service city must be active": "يجب أن تكون مدينة الخدمة مفعلة.",
+    "reassign active orders before deleting this courier": "أعد إسناد الطلبات النشطة قبل حذف هذا المندوب.",
+    "password must contain at least one uppercase letter": "يجب أن تحتوي كلمة المرور على حرف إنجليزي كبير واحد على الأقل.",
+    "password must contain at least one lowercase letter": "يجب أن تحتوي كلمة المرور على حرف إنجليزي صغير واحد على الأقل.",
+    "password must contain at least one number": "يجب أن تحتوي كلمة المرور على رقم واحد على الأقل.",
+    "password must contain at least one special character": "يجب أن تحتوي كلمة المرور على رمز خاص واحد على الأقل.",
+    "password must be at least 8 characters": "يجب ألا تقل كلمة المرور عن 8 أحرف.",
+    "spaces are not allowed in this field": "لا يسمح بوجود مسافات داخلية في هذا الحقل.",
+    "service city is required for couriers": "مدينة التشغيل مطلوبة للمندوب.",
+    "upload a valid profile photo: jpg, jpeg, png, or webp": "ارفع صورة شخصية بصيغة JPG أو JPEG أو PNG أو WEBP.",
+    "profile photo must be 5 mb or smaller": "يجب ألا يتجاوز حجم الصورة الشخصية 5 ميجابايت.",
     "this username is already taken": "اسم الدخول مستخدم بالفعل.",
     "user with this username already exists": "اسم الدخول مستخدم بالفعل.",
     "an account with this username already exists": "اسم الدخول مستخدم بالفعل.",

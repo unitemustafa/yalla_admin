@@ -9,10 +9,8 @@ import {
   DollarSign,
   Edit3,
   MapPin,
-  PackageCheck,
   Plus,
   RefreshCw,
-  RotateCcw,
   Save,
   Search,
   Settings2,
@@ -32,7 +30,6 @@ import {
   Input,
   PageTitle,
   Pagination,
-  Switch,
 } from "../primitives";
 import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
@@ -44,59 +41,33 @@ import {
 } from "../delivery-zones-api";
 import { useServiceCities, type ServiceCity } from "../cities-api";
 import {
-  calculateDeliveryFee,
-  initialDeliverySettings,
-  type DeliveryFeeResult,
-  type DeliveryPricingType,
-  type DeliverySettings,
   type DeliveryZone,
   type DeliveryZoneStatus,
 } from "../delivery-pricing";
 import { cn } from "@/lib/utils";
 
 const deliveryListPageSize = 5;
+const allCitiesFilterValue = "all";
 
 type DeliveryTab = "zones" | "settings" | "tester";
 
 type ZoneDraft = {
   cityId: string;
   name: string;
-  pricingType: DeliveryPricingType;
   fixedDeliveryPrice: string;
-  basePrice: string;
-  includedKm: string;
-  pricePerExtraKm: string;
-  minOrderAmount: string;
-  maxDistanceKm: string;
-  estimatedDeliveryMinutes: string;
   status: DeliveryZoneStatus;
-  notes: string;
 };
 
 type ZoneDraftErrors = Partial<Record<keyof ZoneDraft, string>>;
 
-const pricingTypeLabels: Record<DeliveryPricingType, string> = {
-  fixed: "سعر ثابت",
-  distance_based: "حسب المسافة",
-  mixed: "ثابت + مسافة",
-};
-
 const statusLabels: Record<DeliveryZoneStatus, string> = {
   active: "مفعلة",
-  paused: "متوقفة مؤقتًا",
-  unavailable: "غير متاحة",
+  inactive: "غير مفعلة",
 };
-
-const pricingTypeOptions = [
-  { value: "fixed", label: "سعر ثابت" },
-  { value: "distance_based", label: "حسب المسافة" },
-  { value: "mixed", label: "سعر ثابت + زيادة حسب المسافة" },
-] satisfies Array<{ value: DeliveryPricingType; label: string }>;
 
 const statusOptions = [
   { value: "active", label: "مفعلة" },
-  { value: "paused", label: "متوقفة مؤقتًا" },
-  { value: "unavailable", label: "غير متاحة" },
+  { value: "inactive", label: "غير مفعلة" },
 ] satisfies Array<{ value: DeliveryZoneStatus; label: string }>;
 
 function formatCurrency(value: number) {
@@ -168,29 +139,14 @@ function createZoneDraft(zone?: DeliveryZone): ZoneDraft {
   return {
     cityId: zone?.cityId ?? "",
     name: zone?.name ?? "",
-    pricingType: zone?.pricingType ?? "fixed",
     fixedDeliveryPrice: numberToDraftValue(zone?.fixedDeliveryPrice ?? 0),
-    basePrice: numberToDraftValue(zone?.basePrice ?? 0),
-    includedKm: numberToDraftValue(zone?.includedKm ?? 0),
-    pricePerExtraKm: numberToDraftValue(zone?.pricePerExtraKm ?? 0),
-    minOrderAmount: numberToDraftValue(zone?.minOrderAmount ?? 0),
-    maxDistanceKm: numberToDraftValue(zone?.maxDistanceKm ?? 10),
-    estimatedDeliveryMinutes: numberToDraftValue(
-      zone?.estimatedDeliveryMinutes ?? 30,
-    ),
     status: zone?.status ?? "active",
-    notes: zone?.notes ?? "",
   };
 }
 
 function validateZoneDraft(draft: ZoneDraft) {
   const errors: ZoneDraftErrors = {};
   const fixedDeliveryPrice = parseNumber(draft.fixedDeliveryPrice);
-  const basePrice = parseNumber(draft.basePrice);
-  const includedKm = parseNumber(draft.includedKm);
-  const pricePerExtraKm = parseNumber(draft.pricePerExtraKm);
-  const minOrderAmount = parseNumber(draft.minOrderAmount);
-  const maxDistanceKm = parseNumber(draft.maxDistanceKm);
 
   if (!draft.cityId) {
     errors.cityId = "مدينة التوصيل مطلوبة.";
@@ -200,37 +156,8 @@ function validateZoneDraft(draft: ZoneDraft) {
     errors.name = "اسم المنطقة مطلوب.";
   }
 
-  if (
-    (draft.pricingType === "fixed" || draft.pricingType === "mixed") &&
-    fixedDeliveryPrice < 0
-  ) {
+  if (fixedDeliveryPrice < 0) {
     errors.fixedDeliveryPrice = "السعر لا يكون أقل من صفر.";
-  }
-
-  if (draft.pricingType === "distance_based" && basePrice < 0) {
-    errors.basePrice = "السعر الأساسي لا يكون أقل من صفر.";
-  }
-
-  if (
-    (draft.pricingType === "distance_based" || draft.pricingType === "mixed") &&
-    includedKm < 0
-  ) {
-    errors.includedKm = "عدد الكيلومترات لا يكون أقل من صفر.";
-  }
-
-  if (
-    (draft.pricingType === "distance_based" || draft.pricingType === "mixed") &&
-    pricePerExtraKm < 0
-  ) {
-    errors.pricePerExtraKm = "سعر كل كيلو إضافي لا يكون أقل من صفر.";
-  }
-
-  if (minOrderAmount < 0) {
-    errors.minOrderAmount = "الحد الأدنى للطلب لا يقل عن صفر.";
-  }
-
-  if (maxDistanceKm <= 0) {
-    errors.maxDistanceKm = "أقصى مسافة يجب أن تكون أكبر من صفر.";
   }
 
   return errors;
@@ -244,49 +171,19 @@ function zoneFromDraft(draft: ZoneDraft, currentZone?: DeliveryZone): DeliveryZo
     cityId: draft.cityId,
     cityName: currentZone?.cityName ?? "",
     name: draft.name.trim(),
-    pricingType: draft.pricingType,
-    fixedDeliveryPrice:
-      draft.pricingType === "distance_based"
-        ? 0
-        : parseNumber(draft.fixedDeliveryPrice),
-    basePrice:
-      draft.pricingType === "distance_based" ? parseNumber(draft.basePrice) : 0,
-    includedKm:
-      draft.pricingType === "fixed" ? 0 : parseNumber(draft.includedKm),
-    pricePerExtraKm:
-      draft.pricingType === "fixed" ? 0 : parseNumber(draft.pricePerExtraKm),
-    minOrderAmount: parseNumber(draft.minOrderAmount),
-    maxDistanceKm: parseNumber(draft.maxDistanceKm),
-    estimatedDeliveryMinutes: parseNumber(draft.estimatedDeliveryMinutes),
+    fixedDeliveryPrice: parseNumber(draft.fixedDeliveryPrice),
     status: draft.status,
-    notes: draft.notes.trim(),
     createdAt: currentZone?.createdAt ?? today,
     updatedAt: today,
   };
 }
 
 function deliveryPriceLabel(zone: DeliveryZone) {
-  if (zone.pricingType === "fixed") {
-    return formatCurrency(zone.fixedDeliveryPrice);
-  }
-
-  if (zone.pricingType === "distance_based") {
-    return `${formatCurrency(zone.basePrice)} + ${formatCurrency(zone.pricePerExtraKm)} / كم`;
-  }
-
-  return `${formatCurrency(zone.fixedDeliveryPrice)} + ${formatCurrency(zone.pricePerExtraKm)} / كم`;
-}
-
-function PricingBadge({ type }: { type: DeliveryPricingType }) {
-  const tone =
-    type === "fixed" ? "green" : type === "distance_based" ? "blue" : "secondary";
-
-  return <Badge tone={tone}>{pricingTypeLabels[type]}</Badge>;
+  return formatCurrency(zone.fixedDeliveryPrice);
 }
 
 function StatusBadge({ status }: { status: DeliveryZoneStatus }) {
-  const tone =
-    status === "active" ? "green" : status === "paused" ? "blue" : "red";
+  const tone = status === "active" ? "green" : "red";
 
   return <Badge tone={tone}>{statusLabels[status]}</Badge>;
 }
@@ -365,6 +262,25 @@ function ZoneFormDialog({
   const [draft, setDraft] = useState<ZoneDraft>(() => createZoneDraft(zone));
   const [errors, setErrors] = useState<ZoneDraftErrors>({});
   const isEditing = Boolean(zone);
+  const cityOptions = useMemo(() => {
+    const activeOptions = cities
+      .filter((city) => city.is_active !== false)
+      .map((city) => ({
+        value: String(city.id),
+        label: city.name_ar || city.name,
+      }));
+    const currentCity = cities.find((city) => String(city.id) === draft.cityId);
+    if (isEditing && currentCity?.is_active === false) {
+      return [
+        {
+          value: String(currentCity.id),
+          label: `${currentCity.name_ar || currentCity.name} (غير مفعلة)`,
+        },
+        ...activeOptions.filter((option) => option.value !== String(currentCity.id)),
+      ];
+    }
+    return activeOptions;
+  }, [cities, draft.cityId, isEditing]);
 
   function updateDraft<K extends keyof ZoneDraft>(field: K, value: ZoneDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -374,6 +290,10 @@ function ZoneFormDialog({
   function submitZone(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextErrors = validateZoneDraft(draft);
+
+    if (!cityOptions.some((option) => option.value === draft.cityId)) {
+      nextErrors.cityId = "اختر مدينة خدمة مفعلة.";
+    }
 
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
@@ -388,12 +308,12 @@ function ZoneFormDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/60 px-4 py-6 backdrop-blur-sm sm:px-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/60 px-4 py-3 backdrop-blur-sm sm:px-6">
       <section
         dir="rtl"
         role="dialog"
         aria-modal="true"
-        className="relative w-full max-w-4xl overflow-hidden rounded-xl border bg-background shadow-2xl"
+        className="relative flex max-h-[calc(100vh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl"
       >
         <button
           type="button"
@@ -404,7 +324,7 @@ function ZoneFormDialog({
           <X className="size-4" />
         </button>
 
-        <div className="border-b bg-muted/20 px-6 py-5 pe-14">
+        <div className="border-b bg-muted/20 px-5 py-3 pe-14">
           <h2 className="text-xl font-semibold leading-7">
             {isEditing ? "تعديل منطقة توصيل" : "إضافة منطقة جديدة"}
           </h2>
@@ -413,13 +333,13 @@ function ZoneFormDialog({
           </p>
         </div>
 
-        <form onSubmit={submitZone}>
-          <div className="grid max-h-[calc(100vh-170px)] items-start gap-5 overflow-y-auto p-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <form onSubmit={submitZone} className="flex min-h-0 flex-1 flex-col">
+          <div className="grid min-h-0 flex-1 items-start gap-3 overflow-y-auto p-4 lg:grid-cols-[minmax(0,1fr)_280px]">
             <div className="rounded-lg border bg-card">
               <div className="border-b px-4 py-3 text-sm font-bold">
                 بيانات المنطقة
               </div>
-              <div className="grid gap-4 p-4 md:grid-cols-2">
+              <div className="grid gap-3 p-3 md:grid-cols-2">
                 <Field label="اسم المنطقة *">
                   <Input
                     autoFocus
@@ -435,106 +355,23 @@ function ZoneFormDialog({
                   <AppSelect
                     value={draft.cityId}
                     onValueChange={(value) => updateDraft("cityId", value)}
-                    options={cities.map((city) => ({
-                      value: String(city.id),
-                      label: city.name_ar || city.name,
-                    }))}
+                    options={cityOptions}
                     placeholder="اختر مدينة التوصيل"
                     ariaLabel="مدينة التوصيل"
+                    disabled={!cityOptions.length}
                     dir="rtl"
                   />
                   <FieldError>{errors.cityId}</FieldError>
                 </Field>
 
-                <Field label="نوع التسعير">
-                  <AppSelect
-                    value={draft.pricingType}
-                    onValueChange={(value) =>
-                      updateDraft("pricingType", value as DeliveryPricingType)
-                    }
-                    options={pricingTypeOptions}
-                    ariaLabel="نوع التسعير"
-                    dir="rtl"
-                  />
-                </Field>
-
-                {draft.pricingType === "fixed" ? (
-                  <NumberField
-                    label="سعر التوصيل الثابت *"
-                    value={draft.fixedDeliveryPrice}
-                    onChange={(value) => updateDraft("fixedDeliveryPrice", value)}
-                    error={errors.fixedDeliveryPrice}
-                    placeholder="45"
-                  />
-                ) : null}
-
-                {draft.pricingType === "distance_based" ? (
-                  <>
-                    <NumberField
-                      label="السعر الأساسي *"
-                      value={draft.basePrice}
-                      onChange={(value) => updateDraft("basePrice", value)}
-                      error={errors.basePrice}
-                      placeholder="20"
-                    />
-                    <NumberField
-                      label="الكيلومترات المشمولة *"
-                      value={draft.includedKm}
-                      onChange={(value) => updateDraft("includedKm", value)}
-                      error={errors.includedKm}
-                      placeholder="3"
-                    />
-                    <NumberField
-                      label="سعر كل كيلو إضافي *"
-                      value={draft.pricePerExtraKm}
-                      onChange={(value) => updateDraft("pricePerExtraKm", value)}
-                      error={errors.pricePerExtraKm}
-                      placeholder="5"
-                    />
-                  </>
-                ) : null}
-
-                {draft.pricingType === "mixed" ? (
-                  <>
-                    <NumberField
-                      label="سعر ثابت داخل المنطقة *"
-                      value={draft.fixedDeliveryPrice}
-                      onChange={(value) => updateDraft("fixedDeliveryPrice", value)}
-                      error={errors.fixedDeliveryPrice}
-                      placeholder="35"
-                    />
-                    <NumberField
-                      label="الزيادة تبدأ بعد كام كيلو *"
-                      value={draft.includedKm}
-                      onChange={(value) => updateDraft("includedKm", value)}
-                      error={errors.includedKm}
-                      placeholder="5"
-                    />
-                    <NumberField
-                      label="سعر كل كيلو إضافي *"
-                      value={draft.pricePerExtraKm}
-                      onChange={(value) => updateDraft("pricePerExtraKm", value)}
-                      error={errors.pricePerExtraKm}
-                      placeholder="7"
-                    />
-                  </>
-                ) : null}
-
                 <NumberField
-                  label="الحد الأدنى للطلب"
-                  value={draft.minOrderAmount}
-                  onChange={(value) => updateDraft("minOrderAmount", value)}
-                  error={errors.minOrderAmount}
-                  placeholder="100"
+                  label="سعر التوصيل الثابت *"
+                  value={draft.fixedDeliveryPrice}
+                  onChange={(value) => updateDraft("fixedDeliveryPrice", value)}
+                  error={errors.fixedDeliveryPrice}
+                  placeholder="45"
                 />
-                <NumberField
-                  label="أقصى مسافة توصيل *"
-                  value={draft.maxDistanceKm}
-                  onChange={(value) => updateDraft("maxDistanceKm", value)}
-                  error={errors.maxDistanceKm}
-                  placeholder="15"
-                />
-                <div className="md:col-span-2">
+<div className="md:col-span-2">
                   <Field label="الحالة">
                     <AppSelect
                       value={draft.status}
@@ -547,15 +384,6 @@ function ZoneFormDialog({
                     />
                   </Field>
                 </div>
-                <label className="flex min-h-[132px] flex-col gap-3 text-sm font-medium md:col-span-2">
-                  <span className="leading-5">ملاحظات اختيارية</span>
-                  <textarea
-                    value={draft.notes}
-                    onChange={(event) => updateDraft("notes", event.target.value)}
-                    className="min-h-24 resize-none rounded-md border border-border bg-input px-3 py-2 text-sm font-normal leading-6 text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/40 focus:ring-2 focus:ring-primary/15"
-                    placeholder="أي تعليمات داخلية لفريق التشغيل..."
-                  />
-                </label>
               </div>
             </div>
 
@@ -563,7 +391,7 @@ function ZoneFormDialog({
               <div className="border-b px-4 py-3 text-sm font-bold">
                 معاينة التسعير
               </div>
-              <div className="space-y-4 p-4 text-sm">
+              <div className="space-y-3 p-3 text-sm">
                 <PreviewRow
                   label="مدينة التوصيل"
                   value={
@@ -574,39 +402,16 @@ function ZoneFormDialog({
                 />
                 <PreviewRow label="المنطقة" value={draft.name || "منطقة جديدة"} />
                 <PreviewRow
-                  label="نوع التسعير"
-                  value={pricingTypeLabels[draft.pricingType]}
-                />
-                <PreviewRow
                   label="سعر التوصيل"
-                  value={
-                    draft.pricingType === "distance_based"
-                      ? `${formatCurrency(parseNumber(draft.basePrice))} + ${formatCurrency(parseNumber(draft.pricePerExtraKm))} / كم`
-                      : `${formatCurrency(parseNumber(draft.fixedDeliveryPrice))}${
-                          draft.pricingType === "mixed"
-                            ? ` + ${formatCurrency(parseNumber(draft.pricePerExtraKm))} / كم`
-                            : ""
-                        }`
-                  }
+                  value={formatCurrency(parseNumber(draft.fixedDeliveryPrice))}
                 />
               </div>
             </div>
           </div>
 
-          <div className="flex flex-col-reverse gap-2 border-t bg-muted/15 px-6 py-4 sm:flex-row sm:justify-end">
+          <div className="flex flex-col-reverse gap-2 border-t bg-muted/15 px-5 py-3 sm:flex-row sm:justify-end">
             <Button type="button" variant="outline" onClick={onClose}>
               إلغاء
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setDraft(createZoneDraft(zone));
-                setErrors({});
-              }}
-            >
-              <RotateCcw className="size-4" />
-              إعادة ضبط
             </Button>
             <Button type="submit">
               <Save className="size-4" />
@@ -630,10 +435,12 @@ function PreviewRow({ label, value }: { label: string; value: React.ReactNode })
 
 function ConfirmDeleteDialog({
   zone,
+  busy,
   onCancel,
   onConfirm,
 }: {
   zone: DeliveryZone;
+  busy: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -659,11 +466,11 @@ function ConfirmDeleteDialog({
           </div>
         </div>
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={onCancel}>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
             إلغاء
           </Button>
-          <Button type="button" variant="danger" onClick={onConfirm}>
-            <Trash2 className="size-4" />
+          <Button type="button" variant="danger" onClick={onConfirm} disabled={busy}>
+            {busy ? <RefreshCw className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
             حذف
           </Button>
         </div>
@@ -705,10 +512,10 @@ function ZonesTable({
     <div className="overflow-x-auto rounded-md border bg-card">
       <table
         className="w-full caption-bottom text-sm"
-        style={{ minWidth: 1015, tableLayout: "fixed" }}
+        style={{ minWidth: 760, tableLayout: "fixed" }}
       >
         <colgroup>
-          {[40, 160, 115, 175, 110, 125, 105, 110, 75].map(
+          {[40, 200, 180, 120, 140, 80].map(
             (width, index) => (
               <col key={index} style={{ width }} />
             ),
@@ -754,16 +561,9 @@ function ZonesTable({
                   <div className="font-semibold">{zone.name}</div>
                 </div>
               </td>
-              <td className="p-2 align-middle">
-                <PricingBadge type={zone.pricingType} />
-              </td>
               <td className="p-2 align-middle font-semibold">
                 {deliveryPriceLabel(zone)}
               </td>
-              <td className="p-2 align-middle">
-                <CurrencyText>{formatCurrency(zone.minOrderAmount)}</CurrencyText>
-              </td>
-              <td className="p-2 align-middle">{zone.maxDistanceKm} كم</td>
               <td className="p-2 align-middle">
                 <StatusBadge status={zone.status} />
               </td>
@@ -821,7 +621,7 @@ function ZonesMobileList({
       {zones.map((zone, index) => (
         <Card
           key={zone.id}
-          className="grid gap-4 p-4 xl:grid-cols-[minmax(280px,1fr)_420px_120px] xl:items-center"
+          className="grid gap-4 p-4 xl:grid-cols-[minmax(280px,1fr)_260px_120px] xl:items-center"
         >
           <div className="flex min-w-0 items-center gap-3">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">
@@ -834,25 +634,16 @@ function ZonesMobileList({
               <div className="grid gap-2">
                 <h3 className="font-bold text-foreground">{zone.name}</h3>
                 <div className="flex flex-wrap items-center gap-2">
-                <PricingBadge type={zone.pricingType} />
                 <StatusBadge status={zone.status} />
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 text-center text-sm">
+          <div className="grid grid-cols-1 gap-2 text-center text-sm">
             <div className="rounded-md bg-muted px-3 py-2">
               <div className="truncate font-bold" dir="ltr">{deliveryPriceLabel(zone)}</div>
               <div className="text-xs text-muted-foreground">سعر التوصيل</div>
-            </div>
-            <div className="rounded-md bg-muted px-3 py-2">
-              <CurrencyText className="block truncate font-bold">{formatCurrency(zone.minOrderAmount)}</CurrencyText>
-              <div className="text-xs text-muted-foreground">الحد الأدنى</div>
-            </div>
-            <div className="rounded-md bg-muted px-3 py-2">
-              <div className="font-bold">{zone.maxDistanceKm} كم</div>
-              <div className="text-xs text-muted-foreground">أقصى مسافة</div>
             </div>
           </div>
 
@@ -870,224 +661,6 @@ function ZonesMobileList({
   );
 }
 
-function SettingsPanel({
-  settings,
-  onChange,
-  onSave,
-}: {
-  settings: DeliverySettings;
-  onChange: (settings: DeliverySettings) => void;
-  onSave: () => void;
-}) {
-  function updateSetting<K extends keyof DeliverySettings>(
-    field: K,
-    value: DeliverySettings[K],
-  ) {
-    onChange({ ...settings, [field]: value, updatedAt: getTodayIso() });
-  }
-
-  return (
-    <Card className="mt-6 overflow-hidden">
-      <div className="flex min-h-[72px] flex-col gap-3 border-b px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-base font-semibold">
-            إعدادات التسعير العام للمناطق غير المسجلة
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            تستخدم عندما يكون المستخدم خارج كل المناطق المحددة.
-          </p>
-        </div>
-        <div className="flex items-center gap-3 rounded-md border bg-background px-3 py-2">
-          <span className="text-sm font-medium">التوصيل خارج المناطق</span>
-          <Switch
-            checked={settings.enableOutsideZonesDelivery}
-            onCheckedChange={(checked) =>
-              updateSetting("enableOutsideZonesDelivery", checked)
-            }
-            aria-label="تفعيل التوصيل خارج المناطق المحددة"
-          />
-        </div>
-      </div>
-      <div className="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-4">
-        <Field label="السعر الأساسي">
-          <Input
-            inputMode="decimal"
-            value={numberToDraftValue(settings.basePrice)}
-            onChange={(event) =>
-              updateSetting("basePrice", Math.max(0, parseNumber(event.target.value)))
-            }
-            dir="ltr"
-            className="text-right"
-          />
-        </Field>
-        <Field label="السعر يشمل أول كام كيلو">
-          <Input
-            inputMode="decimal"
-            value={numberToDraftValue(settings.includedKm)}
-            onChange={(event) =>
-              updateSetting("includedKm", Math.max(0, parseNumber(event.target.value)))
-            }
-            dir="ltr"
-            className="text-right"
-          />
-        </Field>
-        <Field label="سعر كل كيلو إضافي">
-          <Input
-            inputMode="decimal"
-            value={numberToDraftValue(settings.pricePerExtraKm)}
-            onChange={(event) =>
-              updateSetting(
-                "pricePerExtraKm",
-                Math.max(0, parseNumber(event.target.value)),
-              )
-            }
-            dir="ltr"
-            className="text-right"
-          />
-        </Field>
-        <Field label="أقصى مسافة توصيل">
-          <Input
-            inputMode="decimal"
-            value={numberToDraftValue(settings.maxDistanceKm)}
-            onChange={(event) =>
-              updateSetting(
-                "maxDistanceKm",
-                Math.max(1, parseNumber(event.target.value)),
-              )
-            }
-            dir="ltr"
-            className="text-right"
-          />
-        </Field>
-        <label className="flex min-h-[126px] flex-col gap-3 text-sm font-medium md:col-span-2 xl:col-span-4">
-          <span className="leading-5">رسالة تظهر للمستخدم لو خارج النطاق</span>
-          <textarea
-            value={settings.outsideZoneUnavailableMessage}
-            onChange={(event) =>
-              updateSetting("outsideZoneUnavailableMessage", event.target.value)
-            }
-            className="min-h-24 resize-none rounded-md border border-border bg-input px-3 py-2 text-sm font-normal leading-6 text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/40 focus:ring-2 focus:ring-primary/15"
-          />
-        </label>
-      </div>
-      <div className="flex justify-end border-t bg-muted/15 px-6 py-4">
-        <Button type="button" onClick={onSave}>
-          <Save className="size-4" />
-          حفظ الإعدادات
-        </Button>
-      </div>
-    </Card>
-  );
-}
-
-function DeliveryFeeTester({
-  zones,
-  settings,
-}: {
-  zones: DeliveryZone[];
-  settings: DeliverySettings;
-}) {
-  const [selectedZoneId, setSelectedZoneId] = useState("outside");
-  const [distanceKm, setDistanceKm] = useState("5");
-  const [result, setResult] = useState<DeliveryFeeResult | null>(null);
-  const selectedZone =
-    selectedZoneId === "outside"
-      ? null
-      : zones.find((zone) => zone.id === selectedZoneId) ?? null;
-
-  function runCalculation() {
-    setResult(
-      calculateDeliveryFee({
-        zone: selectedZone,
-        settings,
-        distanceKm: parseNumber(distanceKm),
-      }),
-    );
-  }
-
-  return (
-    <Card className="mt-6 overflow-hidden">
-      <div className="border-b px-6 py-5">
-        <h2 className="text-base font-semibold">اختبار سعر التوصيل</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          اختر منطقة أو أدخل مسافة لحساب السعر النهائي.
-        </p>
-      </div>
-      <div className="grid gap-5 p-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label="المنطقة المستخدمة">
-            <AppSelect
-              value={selectedZoneId}
-              onValueChange={setSelectedZoneId}
-              options={[
-                { value: "outside", label: "خارج المناطق المحددة" },
-                ...zones.map((zone) => ({ value: zone.id, label: zone.name })),
-              ]}
-              ariaLabel="اختيار منطقة"
-              dir="rtl"
-            />
-          </Field>
-          <Field label="المسافة بالكيلومتر">
-            <Input
-              inputMode="decimal"
-              value={distanceKm}
-              onChange={(event) => setDistanceKm(event.target.value)}
-              dir="ltr"
-              className="text-right"
-            />
-          </Field>
-          <div className="md:col-span-2">
-            <Button type="button" onClick={runCalculation}>
-              <PackageCheck className="size-4" />
-              احسب السعر
-            </Button>
-          </div>
-        </div>
-
-        <div className="rounded-lg border bg-muted/20 p-4">
-          {result ? (
-            <div className="space-y-3 text-sm">
-              <PreviewRow label="المنطقة المستخدمة" value={result.zoneName} />
-              <PreviewRow
-                label="نوع التسعير"
-                value={
-                  result.pricingType === "outside_zone"
-                    ? "تسعير عام"
-                    : pricingTypeLabels[result.pricingType]
-                }
-              />
-              <PreviewRow label="المسافة" value={`${result.distanceKm} كم`} />
-              <PreviewRow
-                label="سعر التوصيل النهائي"
-                value={formatCurrency(result.deliveryFee)}
-              />
-              <PreviewRow
-                label="التوصيل متاح"
-                value={
-                  result.available ? (
-                    <span className="text-emerald-600">نعم</span>
-                  ) : (
-                    <span className="text-destructive">لا</span>
-                  )
-                }
-              />
-              {!result.available ? (
-                <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-semibold leading-5 text-destructive">
-                  {result.unavailableReason}
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <div className="flex min-h-44 items-center justify-center rounded-md border border-dashed text-center text-sm text-muted-foreground">
-              نتيجة الحساب ستظهر هنا.
-            </div>
-          )}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 export function DeliveryZonesPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
@@ -1096,21 +669,32 @@ export function DeliveryZonesPage() {
   const [loading, setLoading] = useState(true);
   const [zones, setZones] = useState<DeliveryZone[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [settings, setSettings] = useState<DeliverySettings>(
-    initialDeliverySettings,
-  );
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCityId, setSelectedCityId] = useState(allCitiesFilterValue);
   const [currentPage, setCurrentPage] = useState(1);
   const [editingZone, setEditingZone] = useState<DeliveryZone | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleteZone, setDeleteZone] = useState<DeliveryZone | null>(null);
+  const [deletingZoneId, setDeletingZoneId] = useState<string | null>(null);
   const { cities, loading: citiesLoading, error: citiesError } = useServiceCities();
+  const cityFilterOptions = useMemo(
+    () => [
+      { value: allCitiesFilterValue, label: "كل المدن" },
+      ...cities.map((city) => ({
+        value: String(city.id),
+        label: city.name_ar || city.name,
+      })),
+    ],
+    [cities],
+  );
 
   const loadZones = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      setZones(await loadDeliveryZones(apiFetch));
+      const serviceCityId =
+        selectedCityId === allCitiesFilterValue ? undefined : selectedCityId;
+      setZones(await loadDeliveryZones(apiFetch, serviceCityId));
     } catch (error) {
       setZones([]);
       setLoadError(
@@ -1119,7 +703,7 @@ export function DeliveryZonesPage() {
     } finally {
       setLoading(false);
     }
-  }, [apiFetch]);
+  }, [apiFetch, selectedCityId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadZones(), 0);
@@ -1134,7 +718,7 @@ export function DeliveryZonesPage() {
     }
 
     return zones.filter((zone) =>
-      [zone.name, zone.cityName, pricingTypeLabels[zone.pricingType], statusLabels[zone.status]]
+      [zone.name, zone.cityName, statusLabels[zone.status]]
         .join(" ")
         .toLocaleLowerCase("ar-EG")
         .includes(normalizedSearch),
@@ -1152,29 +736,31 @@ export function DeliveryZonesPage() {
     pageStartIndex,
     pageStartIndex + deliveryListPageSize,
   );
-  const displayPrices = zones.map((zone) =>
-    zone.pricingType === "distance_based"
-      ? zone.basePrice
-      : zone.fixedDeliveryPrice,
-  );
+  const displayPrices = zones.map((zone) => zone.fixedDeliveryPrice);
   const lowestPrice = displayPrices.length ? Math.min(...displayPrices) : 0;
   const highestPrice = displayPrices.length ? Math.max(...displayPrices) : 0;
 
   async function saveZone(zone: DeliveryZone) {
     try {
       const savedZone = await saveDeliveryZone(apiFetch, zone);
+      const matchesCityFilter =
+        selectedCityId === allCitiesFilterValue || savedZone.cityId === selectedCityId;
       if (editingZone) {
-      setZones((currentZones) =>
-        currentZones.map((currentZone) =>
-            currentZone.id === zone.id ? savedZone : currentZone,
-        ),
-      );
-      setEditingZone(null);
+        setZones((currentZones) =>
+          matchesCityFilter
+            ? currentZones.map((currentZone) =>
+                currentZone.id === zone.id ? savedZone : currentZone,
+              )
+            : currentZones.filter((currentZone) => currentZone.id !== zone.id),
+        );
+        setEditingZone(null);
         showSnackbar({ message: "تم تحديث منطقة التوصيل وحفظها في الباك.", tone: "success" });
         return;
       }
 
-      setZones((currentZones) => [savedZone, ...currentZones]);
+      if (matchesCityFilter) {
+        setZones((currentZones) => [savedZone, ...currentZones]);
+      }
       setCreating(false);
       setCurrentPage(1);
       showSnackbar({ message: "تمت إضافة منطقة التوصيل وحفظها في الباك.", tone: "success" });
@@ -1186,21 +772,34 @@ export function DeliveryZonesPage() {
     }
   }
 
-  function confirmDeleteZone() {
-    if (!deleteZone) {
+  async function confirmDeleteZone() {
+    if (!deleteZone || deletingZoneId) {
       return;
     }
 
     const zone = deleteZone;
     const zoneIndex = zones.findIndex((currentZone) => currentZone.id === zone.id);
-    setDeleteZone(null);
+    setDeletingZoneId(zone.id);
+    try {
+      await deleteDeliveryZone(apiFetch, zone.id);
+    } catch (error) {
+      showSnackbar({
+        message: error instanceof Error ? error.message : "تعذر حذف منطقة التوصيل.",
+        tone: "danger",
+      });
+      setDeletingZoneId(null);
+      return;
+    }
 
     queueUndoableDelete({
       message: `تم حذف ${zone.name}.`,
-      onDelete: () =>
+      onDelete: () => {
         setZones((currentZones) =>
           currentZones.filter((currentZone) => currentZone.id !== zone.id),
-        ),
+        );
+        setDeleteZone(null);
+        setDeletingZoneId(null);
+      },
       onUndo: () =>
         setZones((currentZones) => {
           if (currentZones.some((currentZone) => currentZone.id === zone.id)) {
@@ -1211,7 +810,7 @@ export function DeliveryZonesPage() {
           nextZones.splice(Math.max(0, zoneIndex), 0, zone);
           return nextZones;
         }),
-      onCommit: () => deleteDeliveryZone(apiFetch, zone.id),
+      onCommit: async () => undefined,
       onCommitError: (error) => {
         showSnackbar({
           message: error instanceof Error ? error.message : "تعذر حذف منطقة التوصيل.",
@@ -1254,41 +853,70 @@ export function DeliveryZonesPage() {
           ["zones", "المناطق الحالية", Truck],
           ["settings", "إعدادات التسعير العام", Settings2],
           ["tester", "اختبار سعر التوصيل", BadgeCheck],
-        ].map(([tab, label, Icon]) => (
-          <button
-            key={tab as string}
-            type="button"
-            onClick={() => setActiveTab(tab as DeliveryTab)}
-            className={cn(
-              "inline-flex h-10 items-center gap-2 rounded-md px-3 text-sm font-semibold transition",
-              activeTab === tab
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-accent hover:text-foreground",
-            )}
-          >
-            <Icon className="size-4" />
-            {label as string}
-          </button>
-        ))}
+        ].map(([tab, label, Icon]) => {
+          const disabled = tab !== "zones";
+          return (
+            <button
+              key={tab as string}
+              type="button"
+              aria-disabled={disabled}
+              disabled={disabled}
+              title={disabled ? "غير متاح حالياً" : undefined}
+              onClick={() => {
+                if (!disabled) setActiveTab(tab as DeliveryTab);
+              }}
+              className={cn(
+                "inline-flex h-10 items-center gap-2 rounded-md px-3 text-sm font-semibold transition",
+                disabled
+                  ? "cursor-not-allowed text-muted-foreground/45 opacity-60"
+                  : activeTab === tab
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+            >
+              <Icon className="size-4" />
+              {label as string}
+            </button>
+          );
+        })}
       </div>
 
       {activeTab === "zones" ? (
         <section className="mt-6">
-          <div className="grid gap-4 rounded-lg border bg-card p-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,440px)] lg:items-end">
+          <div className="grid gap-4 rounded-lg border bg-card p-4 xl:grid-cols-[minmax(0,1fr)_minmax(240px,320px)_minmax(240px,320px)] xl:items-end">
             <div>
               <h2 className="font-semibold">كل مناطق التوصيل</h2>
               <p className="text-xs text-muted-foreground">ابحث وراجع الحالة والتسعير لكل منطقة.</p>
             </div>
+            <div className="min-w-0">
+              <AppSelect
+                value={selectedCityId}
+                onValueChange={(value) => {
+                  setSelectedCityId(value);
+                  setCurrentPage(1);
+                }}
+                options={cityFilterOptions}
+                ariaLabel="فلتر المدينة"
+                disabled={citiesLoading || Boolean(citiesError)}
+                className="h-11 bg-background"
+                dir="rtl"
+              />
+              {citiesLoading ? (
+                <p className="mt-1 text-xs text-muted-foreground">جاري تحميل المدن...</p>
+              ) : citiesError ? (
+                <p className="mt-1 text-xs font-medium text-destructive">{citiesError}</p>
+              ) : null}
+            </div>
             <div className="relative w-full min-w-0">
               <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                className="h-11 ps-9"
+                className="h-11 bg-background ps-9"
                 value={searchQuery}
                 onChange={(event) => {
                   setSearchQuery(event.target.value);
                   setCurrentPage(1);
                 }}
-                placeholder="ابحث عن منطقة أو حالة..."
+                placeholder="البحث عن منطقة"
               />
             </div>
           </div>
@@ -1355,21 +983,6 @@ export function DeliveryZonesPage() {
           )}
         </section>
       ) : null}
-
-      {activeTab === "settings" ? (
-        <SettingsPanel
-          settings={settings}
-          onChange={setSettings}
-          onSave={() =>
-            showSnackbar({ message: "تم حفظ إعدادات التسعير العام." })
-          }
-        />
-      ) : null}
-
-      {activeTab === "tester" ? (
-        <DeliveryFeeTester zones={zones} settings={settings} />
-      ) : null}
-
       {creating ? (
         <ZoneFormDialog
           cities={cities}
@@ -1388,6 +1001,7 @@ export function DeliveryZonesPage() {
       {deleteZone ? (
         <ConfirmDeleteDialog
           zone={deleteZone}
+          busy={deletingZoneId === deleteZone.id}
           onCancel={() => setDeleteZone(null)}
           onConfirm={confirmDeleteZone}
         />

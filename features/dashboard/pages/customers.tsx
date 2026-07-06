@@ -5,13 +5,14 @@ import type { FormEvent, ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import {
   AlertCircle,
+  CheckCircle2,
   Eye,
   EyeOff,
+  Loader2,
   Plus,
   RefreshCcw,
   Trash2,
   Users,
-  X,
 } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
@@ -26,7 +27,18 @@ import type { DashboardUser } from "../users/default-dashboard-users";
 import { DashboardImage } from "../dashboard-image";
 import { Badge, Button, Card, Input, PageTitle, Pagination, Switch } from "../primitives";
 import { useSnackbar } from "../snackbar";
-import { useUndoableDelete } from "../use-undoable-delete";
+import {
+  availabilityMessage,
+  canonicalPhoneValue,
+  isValidEmail,
+  isValidUsername,
+  normalizeEmail,
+  normalizeUsername,
+  passwordRules,
+  useAvailabilityCheck,
+  type AvailabilityField,
+  type AvailabilityState,
+} from "../users/account-fields";
 
 type CustomerPageState = "loading" | "error" | "ready";
 
@@ -62,14 +74,6 @@ function createInitialDraft(): CustomerDraft {
   };
 }
 
-function normalizeComparable(value: string) {
-  return value.trim().toLowerCase();
-}
-
-function normalizePhone(value: string) {
-  return value.replace(/\D/g, "");
-}
-
 function splitFullName(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   const firstName = parts.shift() ?? name.trim();
@@ -84,9 +88,9 @@ function splitFullName(name: string) {
 function createCustomerPayload(draft: CustomerDraft) {
   return {
     ...splitFullName(draft.name),
-    username: draft.username.trim(),
-    email: draft.email.trim(),
-    phone: draft.phone.trim(),
+    username: normalizeUsername(draft.username),
+    email: normalizeEmail(draft.email),
+    phone: canonicalPhoneValue(draft.phone),
     password: draft.password,
     role: "client",
     is_active: true,
@@ -135,11 +139,11 @@ function customerCreateErrorFromApi(data: unknown, fallback: string) {
 export function CustomersPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
-  const queueUndoableDelete = useUndoableDelete();
   const [customers, setCustomers] = useState<DashboardUser[]>([]);
   const [pageState, setPageState] = useState<CustomerPageState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+  const [deleteCustomer, setDeleteCustomer] = useState<DashboardUser | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [activationUserId, setActivationUserId] = useState<string | null>(null);
 
@@ -212,56 +216,40 @@ export function CustomersPage() {
     });
   }
 
-  function restoreCustomer(customer: DashboardUser, index: number) {
-    setCustomers((currentCustomers) => {
-      if (currentCustomers.some((currentCustomer) => currentCustomer.id === customer.id)) {
-        return currentCustomers;
+  async function handleDeleteCustomer() {
+    if (!deleteCustomer || deletingUserId) return;
+
+    const user = deleteCustomer;
+    setDeletingUserId(user.id);
+    try {
+      const response = await apiFetch(`auth/users/${encodeURIComponent(user.id)}/`, {
+        method: "DELETE",
+      });
+      const data = await apiResponseData(response);
+
+      if (!response.ok) {
+        throw new Error(apiErrorMessage(data, "تعذر حذف المستخدم من الباك."));
       }
 
-      const nextCustomers = [...currentCustomers];
-      nextCustomers.splice(Math.max(0, index), 0, customer);
-      return nextCustomers;
-    });
-  }
-
-  function handleDeleteCustomer(userId: string) {
-    const user = customers.find((customer) => customer.id === userId);
-    const userIndex = customers.findIndex((customer) => customer.id === userId);
-
-    if (!user) return;
-
-    setDeletingUserId(userId);
-    queueUndoableDelete({
-      message: `تم حذف ${user.name} من الباك.`,
-      onDelete: () =>
-        setCustomers((currentCustomers) =>
-          currentCustomers.filter((customer) => customer.id !== userId),
-        ),
-      onUndo: () => {
-        restoreCustomer(user, userIndex);
-        setDeletingUserId(null);
-      },
-      onCommit: async () => {
-        const response = await apiFetch(`auth/users/${encodeURIComponent(userId)}/`, {
-          method: "DELETE",
-        });
-        const data = await apiResponseData(response);
-
-        if (!response.ok) {
-          throw new Error(apiErrorMessage(data, "تعذر حذف المستخدم من الباك."));
-        }
-      },
-      onCommitError: (error) => {
-        showSnackbar({
-          message:
-            error instanceof Error
-              ? error.message
-              : "تعذر حذف المستخدم من الباك.",
-          tone: "danger",
-        });
-      },
-    });
-    setDeletingUserId(null);
+      setCustomers((currentCustomers) =>
+        currentCustomers.filter((customer) => customer.id !== user.id),
+      );
+      setDeleteCustomer(null);
+      showSnackbar({
+        message: `تم حذف ${user.name} من الباك.`,
+        tone: "success",
+      });
+    } catch (error) {
+      showSnackbar({
+        message:
+          error instanceof Error
+            ? error.message
+            : "تعذر حذف المستخدم من الباك.",
+        tone: "danger",
+      });
+    } finally {
+      setDeletingUserId(null);
+    }
   }
 
   async function handleActivationChange(userId: string, checked: boolean) {
@@ -358,7 +346,7 @@ export function CustomersPage() {
           customers={customers}
           deletingUserId={deletingUserId}
           activationUserId={activationUserId}
-          onDelete={(userId) => void handleDeleteCustomer(userId)}
+          onDelete={setDeleteCustomer}
           onActivationChange={(userId, checked) =>
             void handleActivationChange(userId, checked)
           }
@@ -367,9 +355,17 @@ export function CustomersPage() {
 
       {addCustomerOpen ? (
         <AddCustomerDialog
-          customers={customers}
           onClose={() => setAddCustomerOpen(false)}
           onCreate={handleCreateCustomer}
+        />
+      ) : null}
+
+      {deleteCustomer ? (
+        <ConfirmDeleteCustomerDialog
+          user={deleteCustomer}
+          busy={deletingUserId === deleteCustomer.id}
+          onCancel={() => setDeleteCustomer(null)}
+          onConfirm={() => void handleDeleteCustomer()}
         />
       ) : null}
     </div>
@@ -412,6 +408,63 @@ function CustomerErrorAlert({
         </Button>
       </div>
     </Card>
+  );
+}
+
+function ConfirmDeleteCustomerDialog({
+  user,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  user: DashboardUser;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  useEffect(() => {
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 px-4 py-6 backdrop-blur-sm">
+      <section
+        dir="rtl"
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-md rounded-xl border bg-background p-5 shadow-2xl"
+      >
+        <div className="flex items-start gap-3">
+          <div className="rounded-full bg-destructive/10 p-2 text-destructive">
+            <AlertCircle className="size-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">حذف المستخدم</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              هل تريد حذف المستخدم {user.name}؟ لا يمكن التراجع عن هذا الإجراء.
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+            إلغاء
+          </Button>
+          <Button type="button" variant="danger" onClick={onConfirm} disabled={busy}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+            حذف
+          </Button>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -458,22 +511,46 @@ function CustomersEmptyState({ onAdd }: { onAdd: () => void }) {
 }
 
 function AddCustomerDialog({
-  customers,
   onClose,
   onCreate,
 }: {
-  customers: DashboardUser[];
   onClose: () => void;
   onCreate: (draft: CustomerDraft) => Promise<void>;
 }) {
+  const { apiFetch } = useAuth();
   const [draft, setDraft] = useState<CustomerDraft>(createInitialDraft);
   const [submitted, setSubmitted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [apiFieldErrors, setApiFieldErrors] = useState<CustomerFieldErrors>({});
-  const errors = validateCustomerDraft(draft, customers);
-  const canCreate = Object.keys(errors).length === 0;
+  const [focusedAvailabilityField, setFocusedAvailabilityField] =
+    useState<AvailabilityField | null>(null);
+  const usernameAvailability = useAvailabilityCheck({
+    apiFetch,
+    field: "username",
+    value: draft.username,
+  });
+  const emailAvailability = useAvailabilityCheck({
+    apiFetch,
+    field: "email",
+    value: draft.email,
+  });
+  const phoneAvailability = useAvailabilityCheck({
+    apiFetch,
+    field: "phone",
+    value: draft.phone,
+  });
+  const availabilityStates = {
+    username: usernameAvailability.state,
+    email: emailAvailability.state,
+    phone: phoneAvailability.state,
+  } satisfies Record<AvailabilityField, AvailabilityState>;
+  const errors = validateCustomerDraftWithBackendAvailability(draft);
+  const availabilityChecksPassed = Object.values(availabilityStates).every(
+    (state) => state === "available",
+  );
+  const canCreate = Object.keys(errors).length === 0 && availabilityChecksPassed;
 
   useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;
@@ -489,7 +566,7 @@ function AddCustomerDialog({
   }, []);
 
   function updateDraft(field: keyof CustomerDraft, value: string) {
-    setDraft((currentDraft) => ({ ...currentDraft, [field]: value }));
+    setDraft((currentDraft) => ({ ...currentDraft, [field]: sanitizeCustomerInput(field, value) }));
     setApiError(null);
     setApiFieldErrors((currentErrors) => {
       const nextErrors = { ...currentErrors };
@@ -526,29 +603,22 @@ function AddCustomerDialog({
   }
 
   function errorFor(field: keyof CustomerDraft) {
+    if (field === "password" && draft.password) {
+      return apiFieldErrors.password;
+    }
     return submitted ? errors[field] ?? apiFieldErrors[field] : apiFieldErrors[field];
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/60 px-4 py-6 backdrop-blur-sm sm:px-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/60 px-3 py-6 backdrop-blur-sm sm:px-5">
       <section
         dir="rtl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-customer-title"
-        className="relative w-full max-w-3xl overflow-hidden rounded-xl border bg-background shadow-2xl"
+        className="relative flex max-h-[calc(100vh-3rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl border bg-background shadow-2xl"
       >
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute left-4 top-4 z-10 inline-flex size-8 items-center justify-center rounded-full border bg-background shadow-sm hover:bg-accent"
-          aria-label="إغلاق"
-          disabled={saving}
-        >
-          <X className="size-4" />
-        </button>
-
-        <div className="border-b bg-muted/20 px-6 py-5 pe-14">
+        <div className="border-b bg-muted/20 px-6 py-5">
           <h2 id="add-customer-title" className="text-xl font-semibold leading-7">
             إضافة مستخدم جديد
           </h2>
@@ -557,10 +627,10 @@ function AddCustomerDialog({
           </p>
         </div>
 
-        <form onSubmit={submitCustomer}>
-          <div className="grid gap-4 p-6 sm:grid-cols-2">
+        <form onSubmit={submitCustomer} autoComplete="off" className="flex min-h-0 flex-1 flex-col">
+          <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-6">
             {apiError ? (
-              <div className="sm:col-span-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">
                 {apiError}
               </div>
             ) : null}
@@ -568,10 +638,10 @@ function AddCustomerDialog({
             <CustomerField
               label="اسم المستخدم الظاهر *"
               error={errorFor("name")}
-              className="sm:col-span-2"
             >
               <Input
                 autoFocus
+                autoComplete="off"
                 dir="rtl"
                 value={draft.name}
                 onChange={(event) => updateDraft("name", event.target.value)}
@@ -582,32 +652,61 @@ function AddCustomerDialog({
 
             <CustomerField label="اسم الدخول *" error={errorFor("username")}>
               <Input
+                autoComplete="off"
                 dir="rtl"
                 value={draft.username}
                 onChange={(event) => updateDraft("username", event.target.value)}
-                placeholder="mustafa.ali"
+                onFocus={() => setFocusedAvailabilityField("username")}
+                onBlur={() => setFocusedAvailabilityField(null)}
+                placeholder="اسم فريد لتسجيل الدخول"
+                className="h-10 text-right"
                 disabled={saving}
+              />
+              <AvailabilityHint
+                field="username"
+                state={usernameAvailability.state}
+                visible={focusedAvailabilityField === "username"}
               />
             </CustomerField>
 
             <CustomerField label="رقم الهاتف *" error={errorFor("phone")}>
               <Input
-                dir="rtl"
+                dir="ltr"
+                autoComplete="off"
+                inputMode="tel"
+                maxLength={11}
                 value={draft.phone}
                 onChange={(event) => updateDraft("phone", event.target.value)}
-                placeholder="+201001234567"
+                onFocus={() => setFocusedAvailabilityField("phone")}
+                onBlur={() => setFocusedAvailabilityField(null)}
+                placeholder="01xxxxxxxxx"
+                className="h-10 text-right"
                 disabled={saving}
+              />
+              <AvailabilityHint
+                field="phone"
+                state={phoneAvailability.state}
+                visible={focusedAvailabilityField === "phone"}
               />
             </CustomerField>
 
             <CustomerField label="البريد الإلكتروني *" error={errorFor("email")}>
               <Input
-                dir="rtl"
+                dir="ltr"
                 type="email"
+                autoComplete="new-password"
                 value={draft.email}
                 onChange={(event) => updateDraft("email", event.target.value)}
-                placeholder="user@example.com"
+                onFocus={() => setFocusedAvailabilityField("email")}
+                onBlur={() => setFocusedAvailabilityField(null)}
+                placeholder="name@example.com"
+                className="h-10 text-right"
                 disabled={saving}
+              />
+              <AvailabilityHint
+                field="email"
+                state={emailAvailability.state}
+                visible={focusedAvailabilityField === "email"}
               />
             </CustomerField>
 
@@ -616,12 +715,13 @@ function AddCustomerDialog({
                 <Input
                   dir="rtl"
                   type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
                   value={draft.password}
                   onChange={(event) =>
                     updateDraft("password", event.target.value)
                   }
-                  placeholder="StrongPassword123!"
-                  className="pe-11"
+                  placeholder="8 أحرف على الأقل"
+                  className="h-10 pe-10"
                   disabled={saving}
                 />
                 <button
@@ -640,15 +740,16 @@ function AddCustomerDialog({
                   )}
                 </button>
               </div>
+              <PasswordRequirementMessages password={draft.password} />
             </CustomerField>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-border/70 px-6 py-4">
+          <div className="flex shrink-0 justify-end gap-2 border-t border-border/70 px-6 py-4">
             <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
               إلغاء
             </Button>
-            <Button type="submit" disabled={saving}>
-              <Plus className="size-4" />
+            <Button type="submit" disabled={saving || !canCreate}>
+              {saving ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
               {saving ? "جاري الإنشاء..." : "إنشاء المستخدم"}
             </Button>
           </div>
@@ -680,60 +781,101 @@ function CustomerField({
   );
 }
 
-function validateCustomerDraft(
-  draft: CustomerDraft,
-  customers: DashboardUser[],
-) {
+function sanitizeCustomerInput(field: keyof CustomerDraft, value: string) {
+  if (field === "phone") return value.replace(/\D/g, "").slice(0, 11);
+  if (field === "username" || field === "email") return value.replace(/\s/g, "").trim();
+  return value;
+}
+
+function AvailabilityHint({
+  field,
+  state,
+  visible,
+}: {
+  field: AvailabilityField;
+  state: AvailabilityState;
+  visible: boolean;
+}) {
+  if (!visible || state === "idle" || state === "invalid") {
+    return null;
+  }
+  if (state === "checking") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+        <Loader2 className="size-3 animate-spin" />
+        جاري التحقق...
+      </span>
+    );
+  }
+  const message = availabilityMessage(field, state);
+  if (!message) {
+    return null;
+  }
+  const isAvailable = state === "available";
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-xs font-semibold ${
+        isAvailable ? "text-emerald-600" : "text-destructive"
+      }`}
+    >
+      {isAvailable ? <CheckCircle2 className="size-3" /> : <AlertCircle className="size-3" />}
+      {message}
+    </span>
+  );
+}
+
+function PasswordRequirementMessages({ password }: { password: string }) {
+  if (!password) return null;
+
+  const missingRequirements = [
+    { message: "أدخل 8 أحرف على الأقل", done: password.length >= 8 },
+    {
+      message: "أدخل حرفاً كبيراً وحرفاً صغيراً",
+      done: /[A-Z]/.test(password) && /[a-z]/.test(password),
+    },
+    {
+      message: "أدخل رقماً ورمزاً خاصاً",
+      done: /\d/.test(password) && /[^A-Za-z0-9]/.test(password),
+    },
+  ].filter((requirement) => !requirement.done);
+
+  if (!missingRequirements.length) return null;
+
+  return (
+    <div className="grid gap-1 text-xs font-semibold text-destructive">
+      {missingRequirements.map((requirement) => (
+        <span key={requirement.message}>{requirement.message}</span>
+      ))}
+    </div>
+  );
+}
+
+function validateCustomerDraftWithBackendAvailability(draft: CustomerDraft) {
   const errors: Partial<Record<keyof CustomerDraft, string>> = {};
-  const email = normalizeComparable(draft.email);
-  const username = normalizeComparable(draft.username);
-  const phone = normalizePhone(draft.phone);
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   if (!draft.name.trim()) {
     errors.name = "اكتب اسم المستخدم.";
   }
-
-  if (!username) {
-    errors.username = "اكتب اسم الدخول.";
-  } else if (!/^[a-zA-Z][a-zA-Z0-9._-]{2,149}$/.test(draft.username.trim())) {
-    errors.username = "اسم الدخول يبدأ بحرف ويكون من 3 إلى 150 حرف.";
-  } else if (
-    customers.some((customer) => normalizeComparable(customer.username) === username)
-  ) {
-    errors.username = "اسم الدخول مستخدم بالفعل.";
+  if (!normalizeUsername(draft.username)) {
+    errors.username = "اكتب اسم المستخدم.";
+  } else if (!isValidUsername(draft.username)) {
+    errors.username = "اسم المستخدم يبدأ بحرف ويكون من 3 إلى 150 حرفًا دون مسافات.";
   }
-
   if (!draft.phone.trim()) {
     errors.phone = "اكتب رقم الهاتف.";
-  } else if (phone.length < 10) {
-    errors.phone = "رقم الهاتف قصير.";
-  } else if (
-    customers.some((customer) => normalizePhone(customer.phone) === phone)
-  ) {
-    errors.phone = "رقم الهاتف مسجل بالفعل.";
+  } else if (!/^01[0125]\d{8}$/.test(draft.phone)) {
+    errors.phone = "اكتب رقم هاتف صحيحًا.";
   }
-
-  if (!email) {
+  if (!normalizeEmail(draft.email)) {
     errors.email = "اكتب البريد الإلكتروني.";
-  } else if (!emailRegex.test(email)) {
-    errors.email = "البريد الإلكتروني غير صحيح.";
-  } else if (
-    customers.some((customer) => normalizeComparable(customer.email) === email)
-  ) {
-    errors.email = "البريد الإلكتروني مسجل بالفعل.";
+  } else if (!isValidEmail(draft.email)) {
+    errors.email = "اكتب بريدًا إلكترونيًا صحيحًا.";
   }
-
   if (!draft.password) {
     errors.password = "اكتب كلمة المرور.";
-  } else if (
-    draft.password.length < 8 ||
-    !/[A-Z]/.test(draft.password) ||
-    !/\d/.test(draft.password) ||
-    !/[^A-Za-z0-9]/.test(draft.password)
-  ) {
-    errors.password =
-      "كلمة المرور 8 أحرف على الأقل وبها حرف كبير ورقم ورمز خاص.";
+  } else if (passwordRules(draft.password).some((rule) => !rule.done)) {
+    errors.password = "كلمة المرور لا تحقق كل الشروط.";
   }
 
   return errors;
@@ -749,7 +891,7 @@ function CustomersTable({
   customers: DashboardUser[];
   deletingUserId: string | null;
   activationUserId: string | null;
-  onDelete: (userId: string) => void;
+  onDelete: (user: DashboardUser) => void;
   onActivationChange: (userId: string, checked: boolean) => void;
 }) {
   const router = useRouter();
@@ -846,7 +988,7 @@ function CustomersTable({
               title="حذف"
               className="text-destructive hover:bg-destructive/10 hover:text-destructive"
               disabled={deletingUserId === customer.id}
-              onClick={() => onDelete(customer.id)}
+              onClick={() => onDelete(customer)}
             >
               <Trash2 className="size-4" />
             </Button>

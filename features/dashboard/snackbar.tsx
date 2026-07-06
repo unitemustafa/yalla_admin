@@ -8,7 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -72,7 +72,7 @@ export function SnackbarProvider({ children }: { children: React.ReactNode }) {
       <div
         aria-live="polite"
         aria-atomic="false"
-        className="fixed bottom-4 left-4 z-[80] flex w-[calc(100%-2rem)] max-w-[380px] flex-col gap-2 sm:w-[380px]"
+        className="fixed inset-x-4 bottom-4 z-[80] flex flex-col items-end gap-2"
       >
         {snackbars.map((snackbar) => (
           <SnackbarItem
@@ -107,9 +107,10 @@ function SnackbarItem({
 
   return (
     <div
+      dir="rtl"
       role={snackbar.tone === "danger" ? "alert" : "status"}
       className={cn(
-        "flex min-h-12 items-start gap-3 rounded-lg border px-4 py-3 text-sm font-medium shadow-lg backdrop-blur",
+        "flex min-h-12 w-fit max-w-full items-start gap-3 rounded-lg border px-4 py-3 text-right text-sm font-medium shadow-lg backdrop-blur sm:max-w-md",
         snackbar.tone === "success" &&
           "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-100",
         snackbar.tone === "danger" &&
@@ -132,14 +133,6 @@ function SnackbarItem({
           {snackbar.actionLabel}
         </button>
       ) : null}
-      <button
-        aria-label="إغلاق التنبيه"
-        className="rounded-md p-0.5 opacity-70 transition-opacity hover:opacity-100"
-        onClick={onClose}
-        type="button"
-      >
-        <X className="size-4" />
-      </button>
     </div>
   );
 }

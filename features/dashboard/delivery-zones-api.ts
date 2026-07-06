@@ -10,15 +10,7 @@ type DeliveryAreaResponse = {
   service_city_name?: string | null;
   name: string;
   delivery_price: string | number;
-  pricing_type: DeliveryZone["pricingType"];
-  base_price: string | number;
-  included_km: string | number;
-  price_per_extra_km: string | number;
-  min_order_amount: string | number;
-  max_distance_km: string | number;
-  estimated_delivery_minutes: number;
-  status: DeliveryZone["status"];
-  notes?: string;
+  is_active?: boolean | null;
   createdAt?: string | null;
   updatedAt?: string | null;
   created_at?: string | null;
@@ -46,16 +38,8 @@ function deliveryZoneFromResponse(area: DeliveryAreaResponse): DeliveryZone {
     cityId: String(cityId),
     cityName: area.service_city_name ?? cityObject?.name_ar ?? cityObject?.name ?? "",
     name: area.name,
-    pricingType: area.pricing_type ?? "fixed",
     fixedDeliveryPrice: numberValue(area.delivery_price),
-    basePrice: numberValue(area.base_price),
-    includedKm: numberValue(area.included_km),
-    pricePerExtraKm: numberValue(area.price_per_extra_km),
-    minOrderAmount: numberValue(area.min_order_amount),
-    maxDistanceKm: numberValue(area.max_distance_km),
-    estimatedDeliveryMinutes: numberValue(area.estimated_delivery_minutes),
-    status: area.status ?? "active",
-    notes: area.notes ?? "",
+    status: area.is_active === false ? "inactive" : "active",
     createdAt: area.createdAt ?? area.created_at ?? null,
     updatedAt: area.updatedAt ?? area.updated_at ?? null,
   };
@@ -66,15 +50,7 @@ function payloadFromDeliveryZone(zone: DeliveryZone) {
     service_city_id: Number(zone.cityId),
     name: zone.name,
     delivery_price: zone.fixedDeliveryPrice,
-    pricing_type: zone.pricingType,
-    base_price: zone.basePrice,
-    included_km: zone.includedKm,
-    price_per_extra_km: zone.pricePerExtraKm,
-    min_order_amount: zone.minOrderAmount,
-    max_distance_km: zone.maxDistanceKm,
-    estimated_delivery_minutes: zone.estimatedDeliveryMinutes,
-    status: zone.status,
-    notes: zone.notes,
+    is_active: zone.status === "active",
   };
 }
 
@@ -86,9 +62,12 @@ async function checkedData(response: Response, fallback: string) {
   return data;
 }
 
-export async function loadDeliveryZones(apiFetch: ApiFetch) {
+export async function loadDeliveryZones(apiFetch: ApiFetch, serviceCityId?: string) {
+  const query = serviceCityId
+    ? `?service_city_id=${encodeURIComponent(serviceCityId)}`
+    : "";
   const data = await checkedData(
-    await apiFetch("locations/delivery-areas/"),
+    await apiFetch(`locations/delivery-areas/${query}`),
     "تعذر تحميل مناطق التوصيل.",
   );
   if (!Array.isArray(data)) {

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -28,12 +28,15 @@ import {
   Upload,
   UserRound,
   UserRoundPlus,
-  X,
 } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { cn } from "@/lib/utils";
 import { DashboardImage } from "../dashboard-image";
+import {
+  assignedRepresentativeId,
+  isActiveAssignedOrder,
+} from "../courier-order-rules";
 import {
   getDeliveryDestination,
   getMarketCount,
@@ -52,14 +55,29 @@ import {
   isBackendDashboardUser,
   type BackendDashboardUser,
 } from "../users/api-users";
+import {
+  availabilityMessage,
+  canonicalPhoneValue,
+  displayLocalPhone,
+  isValidEmail,
+  isValidLocalPhone,
+  isValidUsername,
+  normalizeEmail,
+  normalizeUsername,
+  passwordRules as accountPasswordRules,
+  useAvailabilityCheck,
+  type AvailabilityField,
+  type AvailabilityState,
+} from "../users/account-fields";
 
-type DeliveryArea = { id: number; name: string; is_active: boolean };
+type ServiceCity = { id: number; name: string; name_ar?: string | null; is_active?: boolean | null };
 type AdminOrder = DashboardOrderLike & {
   id: number;
   status: string;
   total_price: string;
   customer?: { first_name?: string; last_name?: string; phone?: string };
-  assigned_representative?: { id: number } | null;
+  assigned_representative?: number | string | { id?: number | string | null } | null;
+  assigned_representative_id?: number | string | null;
 };
 type Draft = {
   firstName: string;
@@ -71,8 +89,9 @@ type Draft = {
   avatarUrl: string;
   vehicleType: string;
   plateNumber: string;
-  deliveryArea: string;
+  serviceCity: string;
   maxActiveOrders: string;
+  isAvailable: string;
 };
 
 const couriersPageSize = 10;
@@ -87,8 +106,9 @@ const emptyDraft: Draft = {
   avatarUrl: "",
   vehicleType: "",
   plateNumber: "",
-  deliveryArea: "",
+  serviceCity: "",
   maxActiveOrders: "1",
+  isAvailable: "true",
 };
 
 function errorMessage(value: unknown, fallback: string) {
@@ -117,9 +137,30 @@ function normalizeSearch(value: string) {
   return value.trim().toLocaleLowerCase("ar-EG");
 }
 
+function orderServiceCityId(order: AdminOrder) {
+  return String(
+    order.service_city_id ??
+      order.service_city?.id ??
+      order.delivery_address?.service_city_id ??
+      order.delivery_address?.service_city?.id ??
+      "",
+  );
+}
+
+function assignmentOrderLabel(order: AdminOrder, courier: BackendDashboardUser) {
+  const currentlyAssigned = assignedRepresentativeId(order) === String(courier.id);
+  const courierCityId = String(courier.courier_profile?.service_city ?? "");
+  const orderCityId = orderServiceCityId(order);
+  const cityMismatch = currentlyAssigned && courierCityId && orderCityId && courierCityId !== orderCityId;
+  return [
+    orderLabel(order),
+    currentlyAssigned ? "مسند حالياً لهذا المندوب" : "",
+    cityMismatch ? "مدينة الطلب لا تطابق مدينة تشغيل المندوب." : "",
+  ].filter(Boolean).join(" - ");
+}
+
 function Modal({
   title,
-  onClose,
   children,
   maxWidth = "max-w-2xl",
 }: {
@@ -133,16 +174,6 @@ function Modal({
       <div className={`w-full ${maxWidth} rounded-xl border bg-background shadow-2xl`}>
         <div className="flex items-center justify-between border-b px-5 py-4">
           <h2 className="text-lg font-bold">{title}</h2>
-          <Button
-            type="button"
-            size="icon"
-            variant="outline"
-            onClick={onClose}
-            aria-label="إغلاق"
-            className="size-9 rounded-full bg-muted/30"
-          >
-            <X className="size-4" />
-          </Button>
         </div>
         {children}
       </div>
@@ -150,9 +181,9 @@ function Modal({
   );
 }
 
-function draftFromCourier(user: BackendDashboardUser | null, areas: DeliveryArea[]): Draft {
+function draftFromCourier(user: BackendDashboardUser | null, cities: ServiceCity[]): Draft {
   if (!user) {
-    return { ...emptyDraft, deliveryArea: String(areas[0]?.id ?? "") };
+    return { ...emptyDraft, serviceCity: String(cities[0]?.id ?? "") };
   }
 
   return {
@@ -160,29 +191,26 @@ function draftFromCourier(user: BackendDashboardUser | null, areas: DeliveryArea
     lastName: user.last_name ?? "",
     username: user.username ?? "",
     email: user.email ?? "",
-    phone: user.phone ?? "",
+    phone: displayLocalPhone(user.phone),
     password: "",
     avatarUrl: user.avatar_url ?? "",
     vehicleType: user.courier_profile?.vehicle_type ?? "",
     plateNumber: user.courier_profile?.plate_number ?? "",
-    deliveryArea: String(user.courier_profile?.delivery_area ?? areas[0]?.id ?? ""),
+    serviceCity: String(user.courier_profile?.service_city ?? cities[0]?.id ?? ""),
     maxActiveOrders: String(user.courier_profile?.max_active_orders ?? 1),
+    isAvailable: user.courier_profile?.is_available === false ? "false" : "true",
   };
 }
 
 type CourierFormErrors = Partial<Record<keyof Draft, string>>;
 
-function normalizedPhone(value: string) {
-  return value.replace(/\D/g, "");
-}
-
 function courierUsernameValid(username: string) {
-  return /^[a-zA-Z][a-zA-Z0-9._-]{2,149}$/.test(username.trim());
+  return isValidUsername(username);
 }
 
 function validateCourierDraft(draft: Draft, isEditing: boolean) {
   const errors: CourierFormErrors = {};
-  const email = draft.email.trim().toLowerCase();
+  const email = normalizeEmail(draft.email);
   const password = draft.password;
 
   if (!draft.firstName.trim()) errors.firstName = "اكتب الاسم الأول.";
@@ -194,24 +222,24 @@ function validateCourierDraft(draft: Draft, isEditing: boolean) {
   }
   if (!draft.phone.trim()) {
     errors.phone = "اكتب رقم الهاتف.";
-  } else if (normalizedPhone(draft.phone).length < 10) {
+  } else if (!isValidLocalPhone(draft.phone)) {
     errors.phone = "رقم الهاتف قصير.";
   }
   if (!email) {
     errors.email = "اكتب البريد الإلكتروني.";
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  } else if (!isValidEmail(email)) {
     errors.email = "البريد الإلكتروني غير صحيح.";
   }
   if (!isEditing || password) {
     if (!password) {
       errors.password = "اكتب كلمة المرور.";
-    } else if (password.length < 8 || !/[A-Z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+    } else if (accountPasswordRules(password).some((rule) => !rule.done)) {
       errors.password = "كلمة المرور 8 أحرف على الأقل وبها حرف كبير ورقم ورمز خاص.";
     }
   }
   if (!draft.vehicleType.trim()) errors.vehicleType = "اكتب نوع المركبة.";
   if (!draft.plateNumber.trim()) errors.plateNumber = "اكتب رقم اللوحة.";
-  if (!draft.deliveryArea) errors.deliveryArea = "اختر مدينة التوصيل.";
+  if (!draft.serviceCity) errors.serviceCity = "اختر مدينة التشغيل.";
   if (!Number.isFinite(Number(draft.maxActiveOrders)) || Number(draft.maxActiveOrders) < 1) {
     errors.maxActiveOrders = "اكتب رقمًا صحيحًا أكبر من صفر.";
   }
@@ -219,51 +247,103 @@ function validateCourierDraft(draft: Draft, isEditing: boolean) {
   return errors;
 }
 
+function AvailabilityLine({
+  field,
+  state,
+  error,
+}: {
+  field: AvailabilityField;
+  state: AvailabilityState;
+  error?: string;
+}) {
+  if (error) {
+    return <span className="text-xs font-semibold text-destructive">{error}</span>;
+  }
+  if (state === "checking") {
+    return <span className="text-xs font-semibold text-muted-foreground">جاري التحقق...</span>;
+  }
+  const message = availabilityMessage(field, state);
+  if (!message || state === "invalid" || state === "taken" || state === "request_error") {
+    return null;
+  }
+  return <span className="text-xs font-semibold text-emerald-600">{message}</span>;
+}
+
 function CourierForm({
-  areas,
+  cities,
   courier,
   onClose,
   onSaved,
 }: {
-  areas: DeliveryArea[];
+  cities: ServiceCity[];
   courier?: BackendDashboardUser | null;
   onClose: () => void;
   onSaved: (user: BackendDashboardUser) => void;
 }) {
   const { apiFetch } = useAuth();
   const isEditing = Boolean(courier);
-  const [draft, setDraft] = useState<Draft>(() => draftFromCourier(courier ?? null, areas));
+  const [draft, setDraft] = useState<Draft>(() => draftFromCourier(courier ?? null, cities));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [deliveryOpen, setDeliveryOpen] = useState(true);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(draft.avatarUrl);
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
   const errors = useMemo(() => validateCourierDraft(draft, isEditing), [draft, isEditing]);
+  const usernameAvailability = useAvailabilityCheck({
+    apiFetch,
+    field: "username",
+    value: draft.username,
+    originalValue: courier?.username ?? null,
+    excludeUserId: courier?.id ?? null,
+  });
+  const emailAvailability = useAvailabilityCheck({
+    apiFetch,
+    field: "email",
+    value: draft.email,
+    originalValue: courier?.email ?? null,
+    excludeUserId: courier?.id ?? null,
+  });
+  const phoneAvailability = useAvailabilityCheck({
+    apiFetch,
+    field: "phone",
+    value: draft.phone,
+    originalValue: courier?.phone ?? null,
+    excludeUserId: courier?.id ?? null,
+  });
+  const availabilityStates = {
+    username: usernameAvailability.state,
+    email: emailAvailability.state,
+    phone: phoneAvailability.state,
+  } satisfies Record<AvailabilityField, AvailabilityState>;
+  const availabilityBlocksSubmit = Object.values(availabilityStates).some((state) =>
+    ["invalid", "checking", "taken", "request_error"].includes(state),
+  );
   const update = (key: keyof Draft, value: string) => {
     setDraft((current) => ({ ...current, [key]: value }));
     setError(null);
     setSubmitted(false);
   };
-  const errorFor = (key: keyof Draft) => (submitted ? errors[key] : undefined);
-  const usernameReady = draft.username.trim().length > 0 && courierUsernameValid(draft.username) && !errorFor("username");
-  const passwordRules = [
-    { label: "8 أحرف", done: draft.password.length >= 8 },
-    { label: "حرف كبير", done: /[A-Z]/.test(draft.password) },
-    { label: "رقم ورمز خاص", done: /\d/.test(draft.password) && /[^A-Za-z0-9]/.test(draft.password) },
-  ];
+  const errorFor = (key: keyof Draft) => {
+    if (key === "username" || key === "email" || key === "phone") {
+      const state = availabilityStates[key];
+      if (state === "invalid" || state === "taken" || state === "request_error") {
+        return availabilityMessage(key, state);
+      }
+    }
+    return submitted ? errors[key] : undefined;
+  };
   function uploadAvatar(file: File | undefined) {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") update("avatarUrl", reader.result);
-    };
-    reader.readAsDataURL(file);
+    setAvatarFile(file);
+    setAvatarPreviewUrl(URL.createObjectURL(file));
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitted(true);
-    if (Object.keys(errors).length > 0) {
+    if (Object.keys(errors).length > 0 || availabilityBlocksSubmit) {
       setError("راجع البيانات المطلوبة ثم حاول مرة أخرى.");
       return;
     }
@@ -273,23 +353,24 @@ function CourierForm({
     const body: Record<string, unknown> = {
       first_name: draft.firstName.trim(),
       last_name: draft.lastName.trim(),
-      username: draft.username.trim(),
-      email: draft.email.trim(),
-      phone: draft.phone.trim(),
-      avatar_url: draft.avatarUrl.trim() || null,
+      username: normalizeUsername(draft.username),
+      email: normalizeEmail(draft.email),
+      phone: canonicalPhoneValue(draft.phone),
+      avatar_url: avatarFile ? undefined : draft.avatarUrl.trim() || null,
       role: "representative",
-      is_active: true,
+      is_active: isEditing ? courier!.is_active !== false : true,
       is_staff: false,
       is_superuser: false,
       courier_profile: {
         vehicle_type: draft.vehicleType.trim(),
         plate_number: draft.plateNumber.trim(),
-        delivery_area: Number(draft.deliveryArea),
+        service_city: Number(draft.serviceCity),
         max_active_orders: Number(draft.maxActiveOrders),
-        is_available: true,
+        is_available: draft.isAvailable === "true",
       },
     };
-    if (draft.password) body.password = draft.password;
+    if (avatarFile) delete body.avatar_url;
+    if (!isEditing && draft.password) body.password = draft.password;
 
     try {
       const response = await apiFetch(
@@ -301,9 +382,28 @@ function CourierForm({
         },
       );
       const data = await apiResponseData(response);
-      if (!response.ok) throw new Error(errorMessage(data, "تعذر حفظ بيانات المندوب."));
-      if (!isBackendDashboardUser(data)) throw new Error("استجابة الباك غير مكتملة.");
-      onSaved(data);
+      if (!response.ok) throw new Error(errorMessage(data, "Could not save courier."));
+      if (!isBackendDashboardUser(data)) throw new Error("Incomplete backend response.");
+      let savedUser: BackendDashboardUser = data;
+
+      if (avatarFile) {
+        const avatarBody = new FormData();
+        avatarBody.append("avatar_image", avatarFile);
+        const avatarResponse = await apiFetch(`auth/users/${data.id}/`, {
+          method: "PATCH",
+          body: avatarBody,
+        });
+        const avatarData = await apiResponseData(avatarResponse);
+        if (!avatarResponse.ok) {
+          throw new Error(errorMessage(avatarData, "Could not upload courier photo."));
+        }
+        if (!isBackendDashboardUser(avatarData)) {
+          throw new Error("Incomplete courier photo response.");
+        }
+        savedUser = avatarData;
+      }
+
+      onSaved(savedUser);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر حفظ بيانات المندوب.");
     } finally {
@@ -340,7 +440,7 @@ function CourierForm({
           </Button>
         </header>
 
-        <form onSubmit={submit} noValidate className="grid items-start gap-6">
+        <form onSubmit={submit} noValidate autoComplete="off" className="grid items-start gap-6">
           <div className="grid items-stretch gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
             <Card className="h-full overflow-hidden border-border/70 shadow-xl shadow-black/5">
               <section className="p-5 sm:p-7 lg:p-8">
@@ -349,16 +449,14 @@ function CourierForm({
                 <div><h2 className="text-lg font-extrabold">بيانات الحساب</h2><p className="mt-1 text-sm text-muted-foreground">معلومات الهوية وبيانات الدخول الأساسية.</p></div>
               </div>
               <div className="grid gap-x-5 gap-y-5 md:grid-cols-2">
-                <Field label="الاسم الأول"><Input required autoComplete="given-name" placeholder="مثال: أحمد" value={draft.firstName} onChange={(e) => update("firstName", e.target.value)} className="h-12 rounded-xl" /></Field>
-                <Field label="اسم العائلة"><Input required autoComplete="family-name" placeholder="مثال: محمد" value={draft.lastName} onChange={(e) => update("lastName", e.target.value)} className="h-12 rounded-xl" /></Field>
-                <Field label="اسم المستخدم"><div className="space-y-2"><div className="relative"><IdCard className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoComplete="username" dir="rtl" placeholder="اسم فريد لتسجيل الدخول" value={draft.username} onChange={(e) => update("username", e.target.value)} className="h-12 rounded-xl pe-11 ps-11 text-right" />{usernameReady ? <CheckCircle2 className="absolute start-4 top-1/2 size-4 -translate-y-1/2 text-emerald-500" /> : null}</div>{errorFor("username") ? <span className="text-xs font-semibold text-destructive">{errorFor("username")}</span> : null}</div></Field>
-                <Field label="رقم الهاتف"><div className="space-y-2"><div className="relative"><Phone className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoComplete="tel" inputMode="tel" dir="rtl" placeholder="01xxxxxxxxx" value={draft.phone} onChange={(e) => update("phone", e.target.value)} className="h-12 rounded-xl pe-11 text-right" /></div>{errorFor("phone") ? <span className="text-xs font-semibold text-destructive">{errorFor("phone")}</span> : null}</div></Field>
-                <Field label="البريد الإلكتروني"><div className="relative"><Mail className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required autoComplete="email" type="email" dir="rtl" placeholder="name@example.com" value={draft.email} onChange={(e) => update("email", e.target.value)} className="h-12 rounded-xl pe-11 text-right" /></div></Field>
-                <Field label={isEditing ? "كلمة المرور الجديدة (اختياري)" : "كلمة المرور"}>
-                  <div className="space-y-3"><div className="relative"><KeyRound className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required={!isEditing} autoComplete="new-password" type={showPassword ? "text" : "password"} dir="rtl" minLength={8} placeholder="8 أحرف على الأقل" value={draft.password} onChange={(e) => update("password", e.target.value)} className="h-12 rounded-xl pe-11 ps-12 text-right" /><button type="button" aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"} title={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"} onClick={() => setShowPassword((visible) => !visible)} className="absolute start-2 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{showPassword ? <Eye className="size-4" /> : <EyeOff className="size-4" />}</button></div>
-                    <div className="flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">{passwordRules.map((rule) => <span key={rule.label} className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 font-bold transition ${rule.done ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300" : "border-border bg-muted/30"}`}><CheckCircle2 className="size-3" />{rule.label}</span>)}</div>
-                  </div>
-                </Field>
+                <Field label="الاسم الأول"><Input required autoComplete="off" placeholder="مثال: أحمد" value={draft.firstName} onChange={(e) => update("firstName", e.target.value)} className="h-10 rounded-xl" /></Field>
+                <Field label="اسم العائلة"><Input required autoComplete="off" placeholder="مثال: محمد" value={draft.lastName} onChange={(e) => update("lastName", e.target.value)} className="h-10 rounded-xl" /></Field>
+                <Field label="اسم المستخدم *"><div className="space-y-2"><div className="relative"><IdCard className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoComplete="off" dir="rtl" placeholder="اسم فريد لتسجيل الدخول" value={draft.username} onChange={(e) => update("username", e.target.value)} className="h-10 rounded-xl pe-11 text-right" /></div><AvailabilityLine field="username" state={usernameAvailability.state} error={errorFor("username")} /></div></Field>
+                <Field label="رقم الهاتف *"><div className="space-y-2"><div className="relative"><Phone className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoComplete="off" inputMode="tel" dir="ltr" placeholder="01xxxxxxxxx" value={draft.phone} onChange={(e) => update("phone", e.target.value)} className="h-10 rounded-xl pe-11 text-right" /></div><AvailabilityLine field="phone" state={phoneAvailability.state} error={errorFor("phone")} /></div></Field>
+                <Field label="البريد الإلكتروني *"><div className="space-y-2"><div className="relative"><Mail className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required autoComplete="new-password" type="email" dir="ltr" placeholder="name@example.com" value={draft.email} onChange={(e) => update("email", e.target.value)} className="h-10 rounded-xl pe-11 text-right" /></div><AvailabilityLine field="email" state={emailAvailability.state} error={errorFor("email")} /></div></Field>
+                {!isEditing ? <Field label="كلمة المرور *">
+                  <div className="relative"><KeyRound className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required={!isEditing} autoComplete="new-password" type={showPassword ? "text" : "password"} dir="rtl" minLength={8} placeholder="8 أحرف على الأقل" value={draft.password} onChange={(e) => update("password", e.target.value)} className="h-10 rounded-xl pe-11 ps-12 text-right" /><button type="button" aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"} title={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"} onClick={() => setShowPassword((visible) => !visible)} className="absolute start-2 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{showPassword ? <Eye className="size-4" /> : <EyeOff className="size-4" />}</button></div>
+                </Field> : null}
               </div>
               </section>
             </Card>
@@ -367,13 +465,13 @@ function CourierForm({
               <div className="h-36 rounded-t-[12px] bg-gradient-to-l from-primary via-primary/80 to-primary/50" />
               <div className="flex flex-1 flex-col px-5 pb-5">
                 <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 text-start">
-                  <div className="relative -mt-12 size-24"><DashboardImage src={draft.avatarUrl || "/default-user-avatar.svg"} alt="صورة المندوب" width={96} height={96} className="size-24 overflow-hidden rounded-2xl border-4 border-card bg-background shadow-lg" imageClassName="object-cover" /><span className="absolute -bottom-1 -start-1 flex size-6 items-center justify-center rounded-full border-2 border-card bg-emerald-500 text-white"><CheckCircle2 className="size-3.5" /></span></div>
+                  <div className="relative -mt-12 size-24"><DashboardImage src={avatarPreviewUrl || draft.avatarUrl || "/default-user-avatar.svg"} alt="صورة المندوب" width={96} height={96} className="size-24 overflow-hidden rounded-2xl border-4 border-card bg-background shadow-lg" imageClassName="object-cover" /><span className="absolute -bottom-1 -start-1 flex size-6 items-center justify-center rounded-full border-2 border-card bg-emerald-500 text-white"><CheckCircle2 className="size-3.5" /></span></div>
                   <div className="min-w-0">
                     <h3 className="truncate text-lg font-extrabold">{[draft.firstName, draft.lastName].filter(Boolean).join(" ") || "اسم المندوب"}</h3>
                     <p className="mt-1 truncate text-xs text-muted-foreground">{draft.phone || "رقم الهاتف سيظهر هنا"}</p>
                   </div>
                 </div>
-                <div className="mt-auto rounded-xl border border-dashed bg-muted/20 p-4 text-start"><div className="mb-3 flex items-center gap-2 text-xs font-bold"><Camera className="size-4 text-primary" />صورة المندوب</div><Input type="text" dir="rtl" value={draft.avatarUrl} onChange={(e) => update("avatarUrl", e.target.value)} placeholder="رابط الصورة" className="h-12 rounded-lg text-right text-sm" /><label className="mt-3 inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border bg-background px-3 text-sm font-bold text-muted-foreground transition hover:bg-accent hover:text-foreground"><Upload className="size-4" />رفع صورة من الجهاز<input type="file" accept="image/*" className="sr-only" onChange={(event) => uploadAvatar(event.target.files?.[0])} /></label></div>
+                <div className="mt-auto rounded-xl border border-dashed bg-muted/20 p-4 text-start"><div className="mb-3 flex items-center gap-2 text-xs font-bold"><Camera className="size-4 text-primary" />صورة المندوب</div><Input type="text" dir="rtl" autoComplete="off" value={draft.avatarUrl} onChange={(e) => { setAvatarFile(null); setAvatarPreviewUrl(e.target.value); update("avatarUrl", e.target.value); }} placeholder="رابط الصورة" className="h-10 rounded-lg text-right text-sm" /><label className="mt-3 inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border bg-background px-3 text-sm font-bold text-muted-foreground transition hover:bg-accent hover:text-foreground"><Upload className="size-4" />رفع صورة من الجهاز<input type="file" accept="image/*" className="sr-only" onChange={(event) => uploadAvatar(event.target.files?.[0])} /></label></div>
               </div>
             </Card>
           </div>
@@ -393,10 +491,11 @@ function CourierForm({
               </button>
               {deliveryOpen ? (
                 <div className="grid gap-x-5 gap-y-5 md:grid-cols-2">
-                  <Field label="نوع المركبة"><Input required placeholder="مثال: دراجة نارية" value={draft.vehicleType} onChange={(e) => update("vehicleType", e.target.value)} className="h-12 rounded-xl" /></Field>
-                  <Field label="رقم اللوحة"><Input required placeholder="مثال: أ ب ج 1234" value={draft.plateNumber} onChange={(e) => update("plateNumber", e.target.value)} className="h-12 rounded-xl" /></Field>
-                  <Field label="مدينة التوصيل"><AppSelect value={draft.deliveryArea} onValueChange={(value) => update("deliveryArea", value)} options={areas.filter((area) => area.is_active).map((area) => ({ value: String(area.id), label: area.name }))} placeholder="اختر مدينة التوصيل" icon={<MapPin className="size-4" />} className="h-12 rounded-xl bg-input" contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl" ariaLabel="مدينة التوصيل" /></Field>
-                  <Field label="الحد الأقصى للطلبات"><Input required min={1} type="number" value={draft.maxActiveOrders} onChange={(e) => update("maxActiveOrders", e.target.value)} className="h-12 rounded-xl" /></Field>
+                  <Field label="نوع المركبة"><Input required autoComplete="off" placeholder="مثال: دراجة نارية" value={draft.vehicleType} onChange={(e) => update("vehicleType", e.target.value)} className="h-10 rounded-xl" /></Field>
+                  <Field label="رقم اللوحة"><Input required autoComplete="off" placeholder="مثال: أ ب ج 1234" value={draft.plateNumber} onChange={(e) => update("plateNumber", e.target.value)} className="h-10 rounded-xl" /></Field>
+                  <Field label="مدينة التشغيل"><AppSelect value={draft.serviceCity} onValueChange={(value) => update("serviceCity", value)} options={cities.filter((city) => city.is_active !== false).map((city) => ({ value: String(city.id), label: city.name_ar || city.name }))} placeholder="اختر مدينة التشغيل" icon={<MapPin className="size-4" />} className="h-10 rounded-xl bg-input" contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl" ariaLabel="مدينة التشغيل" /></Field>
+                  <Field label="التوفر"><AppSelect value={draft.isAvailable} onValueChange={(value) => update("isAvailable", value)} options={[{ value: "true", label: "متاح" }, { value: "false", label: "غير متاح" }]} className="h-10 rounded-xl bg-input" contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl" ariaLabel="التوفر" /></Field>
+                  <Field label="الحد الأقصى للطلبات"><Input required min={1} type="number" autoComplete="off" value={draft.maxActiveOrders} onChange={(e) => update("maxActiveOrders", e.target.value)} className="h-10 rounded-xl" /></Field>
                 </div>
               ) : null}
             </section>
@@ -404,7 +503,7 @@ function CourierForm({
             {error ? <div role="alert" className="flex items-center gap-2 border-t border-destructive/20 bg-destructive/10 px-5 py-4 text-sm font-semibold text-destructive sm:px-8"><AlertCircle className="size-4 shrink-0" />{error}</div> : null}
             <div className="flex flex-col-reverse gap-3 border-t border-border/70 bg-card px-5 py-5 sm:flex-row sm:justify-end sm:px-8">
               <Button type="button" variant="outline" onClick={onClose} disabled={saving} className="h-9 rounded-md sm:min-w-28">إلغاء</Button>
-              <Button disabled={saving} className="h-9 rounded-md px-6 sm:min-w-44">{saving ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}{isEditing ? "حفظ التعديلات" : "إنشاء حساب المندوب"}</Button>
+              <Button disabled={saving || availabilityBlocksSubmit} className="h-9 rounded-md px-6 sm:min-w-44">{saving ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}{isEditing ? "حفظ التعديلات" : "إنشاء حساب المندوب"}</Button>
             </div>
           </Card>
         </form>
@@ -417,7 +516,7 @@ export function CourierFormPage({ courierId }: { courierId?: string }) {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const router = useRouter();
-  const [areas, setAreas] = useState<DeliveryArea[]>([]);
+  const [cities, setCities] = useState<ServiceCity[]>([]);
   const [courier, setCourier] = useState<BackendDashboardUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -427,12 +526,12 @@ export function CourierFormPage({ courierId }: { courierId?: string }) {
       setLoading(true);
       setError(null);
       try {
-        const areasResponse = await apiFetch("locations/delivery-areas/");
-        const areasData = await apiResponseData(areasResponse);
-        if (!areasResponse.ok) {
-          throw new Error(errorMessage(areasData, "تعذر تحميل مناطق التوصيل."));
+        const citiesResponse = await apiFetch("locations/service-cities/");
+        const citiesData = await apiResponseData(citiesResponse);
+        if (!citiesResponse.ok) {
+          throw new Error(errorMessage(citiesData, "Could not load service cities."));
         }
-        setAreas(Array.isArray(areasData) ? areasData as DeliveryArea[] : []);
+        setCities(Array.isArray(citiesData) ? citiesData as ServiceCity[] : []);
 
         if (courierId) {
           const courierResponse = await apiFetch(`auth/users/${encodeURIComponent(courierId)}/`);
@@ -469,7 +568,7 @@ export function CourierFormPage({ courierId }: { courierId?: string }) {
 
   return (
     <CourierForm
-      areas={areas}
+      cities={cities}
       courier={courierId ? courier : null}
       onClose={() => router.push("/delivery/couriers")}
       onSaved={() => {
@@ -569,7 +668,7 @@ export function CouriersPage() {
   const searchParams = useSearchParams();
   const focusedCourier = searchParams.get("courier")?.trim() ?? "";
   const [couriers, setCouriers] = useState<BackendDashboardUser[]>([]);
-  const [areas, setAreas] = useState<DeliveryArea[]>([]);
+  const [cities, setCities] = useState<ServiceCity[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -586,22 +685,22 @@ export function CouriersPage() {
     setLoading(true);
     setError(null);
     try {
-      const [usersResponse, areasResponse, ordersResponse] = await Promise.all([
-        apiFetch("auth/users/"),
-        apiFetch("locations/delivery-areas/"),
+      const [couriersResponse, ordersResponse, citiesResponse] = await Promise.all([
         apiFetch("auth/representatives/"),
+        apiFetch("orders/"),
+        apiFetch("locations/service-cities/"),
       ]);
-      const [usersData, areasData, ordersData] = await Promise.all([
-        apiResponseData(usersResponse),
-        apiResponseData(areasResponse),
+      const [couriersData, ordersData, citiesData] = await Promise.all([
+        apiResponseData(couriersResponse),
         apiResponseData(ordersResponse),
+        apiResponseData(citiesResponse),
       ]);
-      if (!usersResponse.ok) throw new Error(errorMessage(usersData, "تعذر تحميل المندوبين."));
-      if (!areasResponse.ok) throw new Error(errorMessage(areasData, "تعذر تحميل المناطق."));
-      if (!ordersResponse.ok) throw new Error(errorMessage(ordersData, "تعذر تحميل الطلبات."));
-      setCouriers(Array.isArray(usersData) ? usersData.filter(isBackendDashboardUser).filter((user) => user.role === "representative") : []);
-      setAreas(Array.isArray(areasData) ? areasData as DeliveryArea[] : []);
+      if (!couriersResponse.ok) throw new Error(errorMessage(couriersData, "Could not load couriers."));
+      if (!ordersResponse.ok) throw new Error(errorMessage(ordersData, "Could not load orders."));
+      if (!citiesResponse.ok) throw new Error(errorMessage(citiesData, "Could not load service cities."));
+      setCouriers(Array.isArray(couriersData) ? couriersData.filter(isBackendDashboardUser) : []);
       setOrders(Array.isArray(ordersData) ? ordersData as AdminOrder[] : []);
+      setCities(Array.isArray(citiesData) ? citiesData as ServiceCity[] : []);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر تحميل بيانات المندوبين.");
     } finally {
@@ -615,19 +714,44 @@ export function CouriersPage() {
   }, [load]);
 
   const readyOrders = useMemo(
-    () => orders.filter((order) => order.status === "ready" && !order.assigned_representative),
+    () => orders.filter((order) => order.status === "ready" && !assignedRepresentativeId(order)),
     [orders],
   );
+  const assignedActiveOrders = useMemo(() => {
+    const courierId = String(assigning?.id ?? "");
+    if (!courierId) return [];
+    return orders.filter(
+      (order) =>
+        isActiveAssignedOrder(order) &&
+        assignedRepresentativeId(order) === courierId,
+    );
+  }, [assigning, orders]);
+  const assignmentOrders = useMemo(() => {
+    const rows = new Map<string, AdminOrder>();
+    for (const order of assignedActiveOrders) rows.set(String(order.id), order);
+    for (const order of readyOrders) rows.set(String(order.id), order);
+    return Array.from(rows.values());
+  }, [assignedActiveOrders, readyOrders]);
   const filteredReadyOrders = useMemo(() => {
+    const courierCityId = String(assigning?.courier_profile?.service_city ?? "");
+    const cityRows = courierCityId
+      ? assignmentOrders.filter((order) => {
+          if (assignedRepresentativeId(order) === String(assigning?.id ?? "")) {
+            return true;
+          }
+          const orderCityId = orderServiceCityId(order);
+          return !orderCityId || orderCityId === courierCityId;
+        })
+      : assignmentOrders;
     const query = normalizeSearch(orderSearch);
-    if (!query) return readyOrders;
-    return readyOrders.filter((order) => normalizeSearch(orderLabel(order)).includes(query));
-  }, [orderSearch, readyOrders]);
+    if (!query) return cityRows;
+    return cityRows.filter((order) => normalizeSearch(orderLabel(order)).includes(query));
+  }, [assigning, assignmentOrders, orderSearch]);
   const filteredCouriers = useMemo(() => {
     const areaRows =
       areaFilter === "all"
         ? couriers
-        : couriers.filter((courier) => String(courier.courier_profile?.delivery_area ?? "") === areaFilter);
+        : couriers.filter((courier) => String(courier.courier_profile?.service_city ?? "") === areaFilter);
     if (!focusedCourier) return areaRows;
     const focused = normalizeSearch(focusedCourier);
     return areaRows.filter((courier) =>
@@ -700,11 +824,21 @@ export function CouriersPage() {
     });
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!deleteCourier) return;
     const courier = deleteCourier;
     const courierIndex = couriers.findIndex((row) => row.id === courier.id);
     setBusy(`delete-${courier.id}`);
+    const response = await apiFetch(`auth/users/${courier.id}/`, { method: "DELETE" });
+    const data = await apiResponseData(response);
+    if (!response.ok) {
+      showSnackbar({
+        message: errorMessage(data, "تعذر حذف المندوب."),
+        tone: "danger",
+      });
+      setBusy(null);
+      return;
+    }
     queueUndoableDelete({
       message: "تم حذف حساب المندوب.",
       onDelete: () => {
@@ -716,8 +850,8 @@ export function CouriersPage() {
         setBusy(null);
       },
       onCommit: async () => {
-        const response = await apiFetch(`auth/users/${courier.id}/`, { method: "DELETE" });
-        const data = await apiResponseData(response);
+        const response: { ok: boolean } = { ok: true };
+        const data = null;
         if (!response.ok) {
           throw new Error(errorMessage(data, "تعذر حذف المندوب."));
         }
@@ -760,8 +894,8 @@ export function CouriersPage() {
               {focusedCourier
                 ? "تفاصيل المندوب المحدد من الطلب"
                 : areaFilter === "all"
-                  ? "كل المندوبين"
-                  : "مندوبين حسب المدينة"}
+                  ? "إجمالي المندوبين"
+                  : `مندوبو مدينة ${cities.find((city) => String(city.id) === areaFilter)?.name_ar || cities.find((city) => String(city.id) === areaFilter)?.name || ""}`}
             </div>
           </div>
           <div className="w-full md:w-72">
@@ -772,8 +906,8 @@ export function CouriersPage() {
                 setCurrentPage(1);
               }}
               options={[
-                { value: "all", label: "كل المدن" },
-                ...areas.map((area) => ({ value: String(area.id), label: area.name })),
+                { value: "all", label: "جميع مدن الخدمة" },
+                ...cities.map((city) => ({ value: String(city.id), label: city.name_ar || city.name })),
               ]}
               className="h-10 bg-input"
               contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl"
@@ -802,8 +936,8 @@ export function CouriersPage() {
         <div className="mt-8 grid gap-3">
           {pagedCouriers.map((courier, index) => {
             const profile = courier.courier_profile;
-            const active = orders.filter((order) => order.status === "ready" && String(order.assigned_representative?.id) === String(courier.id)).length;
-            const delivered = orders.filter((order) => order.status === "delivered" && String(order.assigned_representative?.id) === String(courier.id)).length;
+            const active = orders.filter((order) => isActiveAssignedOrder(order) && assignedRepresentativeId(order) === String(courier.id)).length;
+            const delivered = orders.filter((order) => order.status === "delivered" && assignedRepresentativeId(order) === String(courier.id)).length;
             const maxActiveOrders = profile?.max_active_orders ?? 0;
             const isAvailable = courier.is_active !== false && profile?.is_available !== false;
             const isAtCapacity = maxActiveOrders > 0 && active >= maxActiveOrders;
@@ -837,7 +971,7 @@ export function CouriersPage() {
                       {isAtCapacity ? <Badge tone="red">ممتلئ</Badge> : null}
                     </div>
                     <p className="mt-1 truncate text-sm text-muted-foreground" dir="ltr">{courier.phone} - {courier.email}</p>
-                    <p className="mt-1 truncate text-sm"><Truck className="me-1 inline size-4 text-primary" />{profile?.vehicle_type ?? "غير محدد"} - {profile?.plate_number ?? "بلا لوحة"} - {profile?.delivery_area_name ?? "بلا منطقة"}</p>
+                    <p className="mt-1 truncate text-sm"><Truck className="me-1 inline size-4 text-primary" />{profile?.vehicle_type ?? "غير محدد"} - {profile?.plate_number ?? "بلا لوحة"} - {profile?.service_city_name ?? "بلا مدينة"}</p>
                   </div>
                 </Link>
                 <div className="grid grid-cols-3 gap-2 text-center text-sm">
@@ -863,7 +997,7 @@ export function CouriersPage() {
                     <Send className="size-4" />إسناد
                   </Button>
                   <Link href={`/delivery/couriers/${courier.id}/edit`} aria-label="تعديل" title="تعديل" className="inline-flex size-9 items-center justify-center rounded-md border border-border bg-background text-muted-foreground shadow-sm transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"><Pencil className="size-4" /></Link>
-                  <Button size="icon" variant="outline" disabled={busy !== null} onClick={() => setPasswordCourier(courier)} aria-label="كلمة المرور"><KeyRound className="size-4" /></Button>
+                  <Button size="icon" variant="outline" disabled aria-disabled="true" title="غير متاح حالياً" className="cursor-not-allowed opacity-50" aria-label="كلمة المرور"><KeyRound className="size-4" /></Button>
                   <Button size="icon" variant="outline" disabled={busy !== null} onClick={() => setDeleteCourier(courier)} aria-label="حذف" className="text-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 className="size-4" /></Button>
                 </div>
               </Card>
@@ -906,7 +1040,10 @@ export function CouriersPage() {
               <AppSelect
                 value={selectedOrder}
                 onValueChange={setSelectedOrder}
-                options={filteredReadyOrders.map((order) => ({ value: String(order.id), label: orderLabel(order) }))}
+                options={filteredReadyOrders.map((order) => ({
+                  value: String(order.id),
+                  label: assignmentOrderLabel(order, assigning),
+                }))}
                 placeholder={filteredReadyOrders.length ? "اختر طلبًا" : "لا توجد طلبات مطابقة"}
                 className="h-10 bg-input"
                 contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl"
