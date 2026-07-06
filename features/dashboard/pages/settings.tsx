@@ -45,7 +45,7 @@ function SettingBlock({
   title,
   children,
   collapsible = false,
-  defaultOpen = true,
+  defaultOpen = false,
 }: {
   icon: React.ReactNode;
   title: string;

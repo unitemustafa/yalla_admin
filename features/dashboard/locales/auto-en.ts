@@ -10,7 +10,7 @@ export const autoTextEn: Record<string, string> = {
     "A streamlined daily operations experience, live work tracking, and faster decisions from one place.",
   "دخول المدير": "Manager sign in",
   "أهلا بيك، كمّل إدارة متجرك": "Welcome back, continue managing your store",
-  "ادخل بياناتك للوصول للطلبات، المنتجات، الفروع، والتقارير من لوحة واحدة.":
+  "ادخل بياناتك للوصول للطلبات، المنتجات، الفروڡ والتقارير من لوحة واحدة.":
     "Enter your details to access orders, products, branches, and reports from one dashboard.",
   "البريد الإلكتروني": "Email",
   "كلمة المرور": "Password",

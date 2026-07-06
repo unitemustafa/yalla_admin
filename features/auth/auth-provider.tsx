@@ -254,14 +254,14 @@ async function fetchCurrentAdminUser(accessToken: string) {
     throw new Error(
       localizedAuthError(
         data,
-        "طھط¹ط°ط± طھط­ط¯ظٹط« ط¨ظٹط§ظ†ط§طھ ط§ظ„ط­ط³ط§ط¨ ظ…ظ† ط§ظ„ط®ط§ط¯ظ….",
+        "تعذر تحديث بيانات الحساب من الخادم.",
       ),
     );
   }
 
   const nextUser = data as AuthUser;
   if (nextUser.role !== "admin") {
-    throw new Error("ظ‡ط°ط§ ط§ظ„ط­ط³ط§ط¨ ظ„ط§ ظٹظ…ظ„ظƒ طµظ„ط§ط­ظٹط© ط¯ط®ظˆظ„ ظ„ظˆط­ط© ط§ظ„ط¥ط¯ط§ط±ط©.");
+    throw new Error("هذا الحساب لا يملك صلاحية دخول لوحة الإدارة.");
   }
 
   return nextUser;

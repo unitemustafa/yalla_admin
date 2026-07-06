@@ -35,6 +35,7 @@ export type OrderItemLike = {
   unit_price?: OrderMoneyValue;
   subtotal?: OrderMoneyValue;
   product_name?: string | null;
+  variant_name?: string | null;
   variant?: {
     id?: string | number | null;
     sku?: string | null;
@@ -120,6 +121,24 @@ export type DashboardOrderLike = {
 export const unknownLabel = "غير محدد";
 export const deliveryLaterLabel = "يحدد لاحقاً";
 
+export const orderStatusLabels = {
+  pending: "قيد الانتظار",
+  confirmed: "مؤكد",
+  under_preparation: "قيد التجهيز",
+  ready: "جاهز للإسناد",
+  picked_up: "تم الاستلام",
+  on_the_way: "في الطريق",
+  delivered: "تم التسليم",
+  failed_delivery: "تعذر التوصيل",
+  cancelled: "ملغي",
+} as const;
+
+export const orderReviewStatusLabels = {
+  pending_review: "قيد المراجعة",
+  approved: "مقبول",
+  rejected: "مرفوض",
+} as const;
+
 export function cleanText(value: unknown) {
   if (typeof value === "string" && value.trim()) return value.trim();
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
@@ -187,16 +206,14 @@ export function getDeliveryPriceLabel(order: DashboardOrderLike) {
 export function getServiceCityName(order: DashboardOrderLike) {
   return (
     objectName(order.service_city) ||
-    objectName(order.delivery_address?.service_city) ||
-    (order.service_city_id ? `City #${order.service_city_id}` : "")
+    objectName(order.delivery_address?.service_city)
   );
 }
 
 export function getDeliveryAreaName(order: DashboardOrderLike) {
   return (
     objectName(order.delivery_area) ||
-    objectName(order.delivery_address?.delivery_area) ||
-    (order.delivery_area_id ? `Area #${order.delivery_area_id}` : "")
+    objectName(order.delivery_address?.delivery_area)
   );
 }
 
@@ -250,11 +267,11 @@ export function getOrderMarketsSummary(order: DashboardOrderLike) {
   if (explicit) return explicit;
 
   const sectionNames = getMarketSections(order)
-    .map((section) => objectName(section.market) || cleanText(section.market_id && `Market #${section.market_id}`))
+    .map((section) => objectName(section.market))
     .filter(Boolean);
   if (sectionNames.length > 0) return sectionNames.join(", ");
 
-  return objectName(order.market) || (order.market_id ? `Market #${order.market_id}` : unknownLabel);
+  return objectName(order.market) || unknownLabel;
 }
 
 export function isMultiMarket(order: DashboardOrderLike) {

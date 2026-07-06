@@ -2384,7 +2384,7 @@ function ProductLocationDialog({
   const { cities: serviceCities } = useServiceCities({ activeOnly: true });
   const regionOptions = [
     t.allRegions,
-    ...serviceCities.map((city) => city.name_ar || city.name),
+    ...serviceCities.map((city) => city.name),
   ];
   const filteredLocationShops =
     selectedRegion === t.allRegions

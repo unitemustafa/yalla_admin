@@ -497,7 +497,7 @@ export function OrderDetailPage({ order }: { order: DashboardOrder }) {
     setCurrentStatus(nextStatus);
     setSavingStatus(true);
     showSnackbar({
-      message: "تم تحديث العرض التجريبي فقط؛ الطلبات غير مربوطة بالـ backend.",
+      message: "تم تحديث العرض التجريبي فقغ الطلبات غير مربوطة بالـ backend.",
     });
     setSavingStatus(false);
   }

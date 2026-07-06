@@ -15,6 +15,10 @@ function ClickHandler({ onCenterChange }: Pick<CityCoverageMapProps, "onCenterCh
     click(event) {
       onCenterChange(event.latlng.lat, event.latlng.lng);
     },
+    moveend(event) {
+      const center = event.target.getCenter();
+      onCenterChange(center.lat, center.lng);
+    },
   });
   return null;
 }

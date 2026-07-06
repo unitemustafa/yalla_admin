@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MapPin, Plus, Search, Store, X } from "lucide-react";
+import { Edit, MapPin, Plus, Search, Store, X } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
 import {
@@ -26,6 +26,7 @@ import {
   Switch,
 } from "../primitives";
 import { categoryRows } from "../data";
+import { useServiceCities, type ServiceCity } from "../cities-api";
 
 const initialShopRows: ShopRow[] = [
   {
@@ -64,18 +65,50 @@ const initialShopRows: ShopRow[] = [
 
 const shopsPageSize = 10;
 
+type ShopFormValues = {
+  name: string;
+  category: string;
+  appearsInGeneral: boolean;
+  appearsInServiceCities: boolean;
+  serviceCityIds: string[];
+};
+
 function AddShopDrawer({
   categories,
+  initialShop,
+  serviceCities,
+  serviceCitiesLoading,
   onClose,
   onSave,
 }: {
   categories: string[];
+  initialShop?: ShopRow | null;
+  serviceCities: ServiceCity[];
+  serviceCitiesLoading: boolean;
   onClose: () => void;
-  onSave: (shop: ShopRow) => void;
+  onSave: (values: ShopFormValues) => void;
 }) {
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("");
-  const canSave = name.trim() && category.trim();
+  const [name, setName] = useState(initialShop?.name ?? "");
+  const [category, setCategory] = useState(initialShop?.category ?? "");
+  const [appearsInGeneral, setAppearsInGeneral] = useState(initialShop?.scope !== "service_city");
+  const [appearsInServiceCities, setAppearsInServiceCities] = useState(
+    Boolean(initialShop?.serviceCityIds?.length) || initialShop?.scope === "service_city",
+  );
+  const [selectedServiceCityIds, setSelectedServiceCityIds] = useState<string[]>(
+    initialShop?.serviceCityIds ?? [],
+  );
+  const canSave =
+    name.trim() &&
+    category.trim() &&
+    (appearsInGeneral || (appearsInServiceCities && selectedServiceCityIds.length > 0));
+  const mode = initialShop ? "edit" : "create";
+  const scopeDescription = appearsInGeneral && appearsInServiceCities
+    ? "هذا المحل يظهر في القسم العام وكذلك داخل مدن الخدمة المختارة."
+    : appearsInGeneral
+      ? "هذا المحل عام ويظهر دون ربطه بمدن خدمة محددة."
+      : appearsInServiceCities
+        ? "هذا المحل يظهر في مدن الخدمة المختارة فقط."
+        : "اختر نطاق ظهور واحد على الأقل.";
 
   useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;
@@ -90,6 +123,21 @@ function AddShopDrawer({
     };
   }, []);
 
+  function toggleServiceCity(cityId: string) {
+    setSelectedServiceCityIds((currentIds) =>
+      currentIds.includes(cityId)
+        ? currentIds.filter((currentId) => currentId !== cityId)
+        : [...currentIds, cityId],
+    );
+  }
+
+  function setServiceCitiesEnabled(enabled: boolean) {
+    setAppearsInServiceCities(enabled);
+    if (!enabled) {
+      setSelectedServiceCityIds([]);
+    }
+  }
+
   function submitShop(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -98,23 +146,22 @@ function AddShopDrawer({
     }
 
     onSave({
-      id: `shop-${Date.now()}`,
       name: name.trim(),
       category: category.trim(),
-      branch: "",
-      products: "0",
-      active: true,
+      appearsInGeneral,
+      appearsInServiceCities,
+      serviceCityIds: appearsInServiceCities ? selectedServiceCityIds : [],
     });
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain bg-background/80 px-4 py-6 backdrop-blur-sm sm:px-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-contain bg-background/80 px-4 py-6 backdrop-blur-sm sm:px-6">
       <section
         dir="rtl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-shop-title"
-        className="relative w-full max-w-2xl overflow-hidden rounded-xl border bg-background shadow-2xl"
+        className="relative flex max-h-[calc(100vh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl"
       >
         <button
           type="button"
@@ -127,15 +174,15 @@ function AddShopDrawer({
 
         <div className="border-b bg-muted/20 px-6 py-5 pe-14">
           <h2 id="add-shop-title" className="text-xl font-semibold leading-7">
-            إضافة محل
+            {mode === "edit" ? "تعديل محل" : "إضافة محل"}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             أضف بيانات المحل التي ستظهر في قائمة المحلات وربط المنتجات.
           </p>
         </div>
 
-        <form onSubmit={submitShop}>
-          <div className="grid gap-4 p-6 sm:grid-cols-2">
+        <form onSubmit={submitShop} className="flex min-h-0 flex-1 flex-col">
+          <div className="grid min-h-0 gap-4 overflow-y-auto p-6 sm:grid-cols-2">
             <label className="grid gap-2 text-sm font-medium sm:col-span-2">
               اسم المحل *
               <Input
@@ -154,7 +201,7 @@ function AddShopDrawer({
                 onValueChange={setCategory}
                 placeholder="اختر الفئة"
                 ariaLabel="اختيار الفئة"
-                side="top"
+                side="bottom"
                 contentClassName="max-h-44"
                 options={categories.map((category) => ({
                   value: category,
@@ -162,15 +209,76 @@ function AddShopDrawer({
                 }))}
               />
             </label>
+
+            <div className="grid gap-3 sm:col-span-2">
+              <div className="text-sm font-medium">نطاق ظهور المحل *</div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex min-h-16 cursor-pointer items-center justify-between gap-3 rounded-md border bg-background px-4 py-3 shadow-sm transition hover:border-primary/40">
+                  <span>
+                    <span className="block text-sm font-semibold">يظهر في العام</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">القسم العام داخل التطبيق.</span>
+                  </span>
+                  <Switch checked={appearsInGeneral} onCheckedChange={setAppearsInGeneral} />
+                </label>
+                <label className="flex min-h-16 cursor-pointer items-center justify-between gap-3 rounded-md border bg-background px-4 py-3 shadow-sm transition hover:border-primary/40">
+                  <span>
+                    <span className="block text-sm font-semibold">يظهر في مدن الخدمة</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">اختر مدينة واحدة أو أكثر.</span>
+                  </span>
+                  <Switch checked={appearsInServiceCities} onCheckedChange={setServiceCitiesEnabled} />
+                </label>
+              </div>
+            </div>
+
+            {appearsInServiceCities ? (
+              <div className="grid gap-3 sm:col-span-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-medium">مدن الخدمة *</div>
+                  <span className="text-xs text-muted-foreground">
+                    {serviceCitiesLoading ? "جاري التحميل..." : `${selectedServiceCityIds.length} محددة`}
+                  </span>
+                </div>
+                <div className="grid max-h-48 gap-2 overflow-y-auto rounded-md border bg-muted/10 p-2 sm:grid-cols-2">
+                  {serviceCities.map((city) => {
+                    const cityId = String(city.id);
+                    const selected = selectedServiceCityIds.includes(cityId);
+
+                    return (
+                      <label
+                        key={cityId}
+                        className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border bg-background px-3 py-2 text-sm font-semibold shadow-sm transition hover:border-primary/40"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleServiceCity(cityId)}
+                          className="size-4 accent-primary"
+                        />
+                        <span>{city.name}</span>
+                      </label>
+                    );
+                  })}
+                  {!serviceCitiesLoading && serviceCities.length === 0 ? (
+                    <div className="sm:col-span-2 rounded-md border border-dashed bg-background px-3 py-4 text-center text-sm text-muted-foreground">
+                      لا توجد مدن خدمة نشطة من الخادم.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="sm:col-span-2 rounded-md border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+              {scopeDescription}
+            </div>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-border/70 px-6 py-4">
+          <div className="flex shrink-0 justify-end gap-2 border-t border-border/70 px-6 py-4">
             <Button type="button" variant="outline" onClick={onClose}>
               إلغاء
             </Button>
             <Button type="submit" disabled={!canSave}>
               <Plus className="size-4" />
-              حفظ المحل
+              {mode === "edit" ? "حفظ التعديل" : "حفظ المحل"}
             </Button>
           </div>
         </form>
@@ -205,6 +313,7 @@ function ShopIdentity({ shop }: { shop: ShopRow }) {
 
 export function ShopsPage() {
   const { apiFetch } = useAuth();
+  const { cities: serviceCities, loading: serviceCitiesLoading } = useServiceCities({ activeOnly: true });
   const [currentPage, setCurrentPage] = useState(1);
   const [shops, setShops] = useState(initialShopRows);
   const [searchTerm, setSearchTerm] = useState("");
@@ -215,6 +324,7 @@ export function ShopsPage() {
     Record<string, string | number>
   >({});
   const [addShopOpen, setAddShopOpen] = useState(false);
+  const [editingShop, setEditingShop] = useState<ShopRow | null>(null);
   const filteredShops = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLocaleLowerCase("ar-EG");
     if (!normalizedSearch) return shops;
@@ -278,12 +388,21 @@ export function ShopsPage() {
     return index >= 0 ? index + 1 : 1;
   }
 
-  async function createShop(shop: ShopRow) {
+  function shopPayload(values: ShopFormValues) {
     const payload = {
-      classification_id: classificationIdByName(shop.category),
-      name: shop.name,
+      classification_id: classificationIdByName(values.category),
+      name: values.name,
+      scope: values.appearsInGeneral ? "general" : "service_city",
+      service_city_ids: values.appearsInServiceCities
+        ? values.serviceCityIds.map(Number).filter(Number.isFinite)
+        : [],
       status: "active",
     };
+    return payload;
+  }
+
+  async function createShop(values: ShopFormValues) {
+    const payload = shopPayload(values);
     try {
       const data = await sendAdminJson(apiFetch, adminApiPaths.markets, {
         method: "POST",
@@ -295,6 +414,29 @@ export function ShopsPage() {
       setAddShopOpen(false);
     } catch {
       // The snackbar layer is not used on this page; keep the drawer open for correction/retry.
+    }
+  }
+
+  async function updateShop(values: ShopFormValues) {
+    if (!editingShop) return;
+
+    const payload = shopPayload(values);
+    try {
+      const data = await sendAdminJson(
+        apiFetch,
+        `${adminApiPaths.markets}${encodeURIComponent(editingShop.id)}/`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        },
+      );
+      const updatedShop = shopRowFromApi(data as BackendRecord, 0);
+      setShops((current) =>
+        current.map((shop) => (shop.id === editingShop.id ? updatedShop : shop)),
+      );
+      setEditingShop(null);
+    } catch {
+      // Keep the drawer open for correction/retry.
     }
   }
 
@@ -399,8 +541,8 @@ export function ShopsPage() {
         </div>
         <div className="p-6 pt-4">
           <DataTable
-            minWidth={980}
-            columnWidths={[84, 300, 180, 240, 120, 110]}
+            minWidth={1154}
+            columnWidths={[84, 300, 180, 240, 120, 110, 120]}
             headers={[
               "",
               "المحل",
@@ -409,6 +551,9 @@ export function ShopsPage() {
               "المنتجات",
               <span key="status" className="block text-center">
                 نشط
+              </span>,
+              <span key="actions" className="block text-center">
+                تعديل
               </span>,
             ]}
             rows={pagedShops.map((shop, rowPosition) => [
@@ -426,6 +571,17 @@ export function ShopsPage() {
                   checked={shop.active}
                   onCheckedChange={(checked) => void toggleShopStatus(shop, checked)}
                 />
+              </div>,
+              <div key={`edit-${shop.id}`} className="flex justify-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 px-3"
+                  onClick={() => setEditingShop(shop)}
+                >
+                  <Edit className="size-4" />
+                  تعديل
+                </Button>
               </div>,
             ])}
           />
@@ -449,8 +605,20 @@ export function ShopsPage() {
       {addShopOpen ? (
         <AddShopDrawer
           categories={marketClassifications}
+          serviceCities={serviceCities}
+          serviceCitiesLoading={serviceCitiesLoading}
           onClose={() => setAddShopOpen(false)}
           onSave={(shop) => void createShop(shop)}
+        />
+      ) : null}
+      {editingShop ? (
+        <AddShopDrawer
+          categories={marketClassifications}
+          initialShop={editingShop}
+          serviceCities={serviceCities}
+          serviceCitiesLoading={serviceCitiesLoading}
+          onClose={() => setEditingShop(null)}
+          onSave={(shop) => void updateShop(shop)}
         />
       ) : null}
     </div>

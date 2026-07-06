@@ -267,14 +267,14 @@ function ZoneFormDialog({
       .filter((city) => city.is_active !== false)
       .map((city) => ({
         value: String(city.id),
-        label: city.name_ar || city.name,
+        label: city.name,
       }));
     const currentCity = cities.find((city) => String(city.id) === draft.cityId);
     if (isEditing && currentCity?.is_active === false) {
       return [
         {
           value: String(currentCity.id),
-          label: `${currentCity.name_ar || currentCity.name} (غير مفعلة)`,
+          label: `${currentCity.name} (غير مفعلة)`,
         },
         ...activeOptions.filter((option) => option.value !== String(currentCity.id)),
       ];
@@ -303,7 +303,7 @@ function ZoneFormDialog({
     const selectedCity = cities.find((city) => String(city.id) === draft.cityId);
     onSave({
       ...zoneFromDraft(draft, zone),
-      cityName: selectedCity?.name_ar || selectedCity?.name || zone?.cityName || "",
+      cityName: selectedCity?.name || zone?.cityName || "",
     });
   }
 
@@ -395,7 +395,6 @@ function ZoneFormDialog({
                 <PreviewRow
                   label="مدينة التوصيل"
                   value={
-                    cities.find((city) => String(city.id) === draft.cityId)?.name_ar ||
                     cities.find((city) => String(city.id) === draft.cityId)?.name ||
                     "-"
                   }
@@ -682,7 +681,7 @@ export function DeliveryZonesPage() {
       { value: allCitiesFilterValue, label: "كل المدن" },
       ...cities.map((city) => ({
         value: String(city.id),
-        label: city.name_ar || city.name,
+        label: city.name,
       })),
     ],
     [cities],

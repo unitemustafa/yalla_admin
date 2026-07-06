@@ -4,25 +4,17 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useAuth } from "@/features/auth/auth-provider";
 
-export type ServiceCityCoverage = {
-  id?: number;
-  center_latitude: string;
-  center_longitude: string;
-  radius_km: string;
-  is_active: boolean;
-};
-
 export type ServiceCity = {
   id: number;
   name: string;
-  name_ar: string;
-  slug: string;
+  center_latitude: string | null;
+  center_longitude: string | null;
+  radius_km: string | null;
+  delivery_price: string;
   is_active: boolean;
-  coverages: ServiceCityCoverage[];
+  delivery_area_count: number;
   market_count: number;
   offer_count: number;
-  created_at: string;
-  updated_at: string;
 };
 
 export type ServiceCityPayload = {
@@ -78,17 +70,14 @@ async function responseJson(response: Response) {
 type ServiceCityResponse = {
   id?: number | string;
   name?: string | null;
-  name_ar?: string | null;
-  slug?: string | null;
   center_latitude?: string | number | null;
   center_longitude?: string | number | null;
   radius_km?: string | number | null;
+  delivery_price?: string | number | null;
   is_active?: boolean | null;
-  coverages?: ServiceCityCoverage[] | null;
+  delivery_area_count?: number | null;
   market_count?: number | null;
   offer_count?: number | null;
-  created_at?: string | null;
-  updated_at?: string | null;
 };
 
 type DeliveryAreaResponse = {
@@ -146,29 +135,18 @@ function cityFromResponse(value: unknown): ServiceCity | null {
   if (!Number.isFinite(id) || !name) return null;
 
   const active = city.is_active !== false;
-  const coverages =
-    Array.isArray(city.coverages) && city.coverages.length
-      ? city.coverages
-      : [
-          {
-            center_latitude: normalizeNumberText(city.center_latitude, "30.0444000"),
-            center_longitude: normalizeNumberText(city.center_longitude, "31.2357000"),
-            radius_km: normalizeNumberText(city.radius_km, "25.00"),
-            is_active: active,
-          },
-        ];
 
   return {
     id,
     name,
-    name_ar: normalizeText(city.name_ar).trim() || name,
-    slug: normalizeText(city.slug).trim() || String(id),
+    center_latitude: nullableNumberText(city.center_latitude),
+    center_longitude: nullableNumberText(city.center_longitude),
+    radius_km: nullableNumberText(city.radius_km),
+    delivery_price: normalizeNumberText(city.delivery_price, "0.00"),
     is_active: active,
-    coverages,
+    delivery_area_count: normalizeCount(city.delivery_area_count),
     market_count: normalizeCount(city.market_count),
     offer_count: normalizeCount(city.offer_count),
-    created_at: normalizeText(city.created_at),
-    updated_at: normalizeText(city.updated_at),
   };
 }
 
@@ -234,7 +212,7 @@ export function useServiceCities({ activeOnly = false } = {}) {
 
 export async function saveServiceCity(
   apiFetch: (path: string, init?: RequestInit) => Promise<Response>,
-  payload: ServiceCityPayload,
+  payload: ServiceCityPayload | Partial<ServiceCityPayload>,
   cityId?: number,
 ) {
   const response = await apiFetch(

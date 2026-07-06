@@ -110,7 +110,7 @@ function SnackbarItem({
       dir="rtl"
       role={snackbar.tone === "danger" ? "alert" : "status"}
       className={cn(
-        "flex min-h-12 w-fit max-w-full items-start gap-3 rounded-lg border px-4 py-3 text-right text-sm font-medium shadow-lg backdrop-blur sm:max-w-md",
+        "flex min-h-12 w-full max-w-full items-start gap-3 rounded-lg border px-4 py-3 text-right text-sm font-medium shadow-lg backdrop-blur sm:max-w-xl",
         snackbar.tone === "success" &&
           "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-100",
         snackbar.tone === "danger" &&
@@ -123,7 +123,12 @@ function SnackbarItem({
       <div className="min-w-0 flex-1 leading-5">{snackbar.message}</div>
       {snackbar.actionLabel && snackbar.onAction ? (
         <button
-          className="shrink-0 rounded-md px-2 py-0.5 text-xs font-bold underline-offset-4 transition hover:underline"
+          className={cn(
+            "shrink-0 rounded-md border px-3 py-1 text-xs font-bold transition",
+            snackbar.tone === "danger"
+              ? "border-red-200 bg-red-100 text-red-900 hover:bg-red-200 dark:border-red-300/40 dark:bg-red-400/20 dark:text-red-50 dark:hover:bg-red-400/30"
+              : "border-current/30 bg-background/70 hover:bg-background",
+          )}
           onClick={() => {
             snackbar.onAction?.();
             onClose();

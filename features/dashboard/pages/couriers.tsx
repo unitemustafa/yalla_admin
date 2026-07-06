@@ -493,7 +493,7 @@ function CourierForm({
                 <div className="grid gap-x-5 gap-y-5 md:grid-cols-2">
                   <Field label="نوع المركبة"><Input required autoComplete="off" placeholder="مثال: دراجة نارية" value={draft.vehicleType} onChange={(e) => update("vehicleType", e.target.value)} className="h-10 rounded-xl" /></Field>
                   <Field label="رقم اللوحة"><Input required autoComplete="off" placeholder="مثال: أ ب ج 1234" value={draft.plateNumber} onChange={(e) => update("plateNumber", e.target.value)} className="h-10 rounded-xl" /></Field>
-                  <Field label="مدينة التشغيل"><AppSelect value={draft.serviceCity} onValueChange={(value) => update("serviceCity", value)} options={cities.filter((city) => city.is_active !== false).map((city) => ({ value: String(city.id), label: city.name_ar || city.name }))} placeholder="اختر مدينة التشغيل" icon={<MapPin className="size-4" />} className="h-10 rounded-xl bg-input" contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl" ariaLabel="مدينة التشغيل" /></Field>
+                  <Field label="مدينة التشغيل"><AppSelect value={draft.serviceCity} onValueChange={(value) => update("serviceCity", value)} options={cities.filter((city) => city.is_active !== false).map((city) => ({ value: String(city.id), label: city.name }))} placeholder="اختر مدينة التشغيل" icon={<MapPin className="size-4" />} className="h-10 rounded-xl bg-input" contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl" ariaLabel="مدينة التشغيل" /></Field>
                   <Field label="التوفر"><AppSelect value={draft.isAvailable} onValueChange={(value) => update("isAvailable", value)} options={[{ value: "true", label: "متاح" }, { value: "false", label: "غير متاح" }]} className="h-10 rounded-xl bg-input" contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl" ariaLabel="التوفر" /></Field>
                   <Field label="الحد الأقصى للطلبات"><Input required min={1} type="number" autoComplete="off" value={draft.maxActiveOrders} onChange={(e) => update("maxActiveOrders", e.target.value)} className="h-10 rounded-xl" /></Field>
                 </div>
@@ -895,7 +895,7 @@ export function CouriersPage() {
                 ? "تفاصيل المندوب المحدد من الطلب"
                 : areaFilter === "all"
                   ? "إجمالي المندوبين"
-                  : `مندوبو مدينة ${cities.find((city) => String(city.id) === areaFilter)?.name_ar || cities.find((city) => String(city.id) === areaFilter)?.name || ""}`}
+                  : `مندوبو مدينة ${cities.find((city) => String(city.id) === areaFilter)?.name || ""}`}
             </div>
           </div>
           <div className="w-full md:w-72">
@@ -907,7 +907,7 @@ export function CouriersPage() {
               }}
               options={[
                 { value: "all", label: "جميع مدن الخدمة" },
-                ...cities.map((city) => ({ value: String(city.id), label: city.name_ar || city.name })),
+                ...cities.map((city) => ({ value: String(city.id), label: city.name })),
               ]}
               className="h-10 bg-input"
               contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl"

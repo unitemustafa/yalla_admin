@@ -41,12 +41,13 @@ import {
   getOrderMarketsSummary,
   getOrderScopeLabel,
   getPickupStatusLabel,
-  getPickupStops,
   getServiceCityName as orderServiceCityName,
   isGeneralOrder,
   isMultiMarket,
   numberValue,
   objectName,
+  orderReviewStatusLabels,
+  orderStatusLabels,
   type OrderMarketSectionLike,
 } from "../order-display";
 import {
@@ -144,6 +145,11 @@ type BackendOrder = {
   delivery_price?: string | null;
   subtotal_price?: string | null;
   total_price?: string | null;
+  assigned_at?: string | null;
+  delivered_at?: string | null;
+  approved_at?: string | null;
+  rejected_at?: string | null;
+  rejection_reason?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   items?: BackendOrderItem[];
@@ -158,6 +164,7 @@ type BackendOrderItem = {
   unit_price: string;
   subtotal?: string | number | null;
   product_name?: string | null;
+  variant_name?: string | null;
   product?: {
     id?: number | string | null;
     name?: string | null;
@@ -269,23 +276,8 @@ const orderRouteStatuses: BackendOrderStatus[] = [
 
 const ordersPageSize = 10;
 
-const statusLabels: Record<BackendOrderStatus, string> = {
-  pending: "قيد الانتظار",
-  confirmed: "مؤكد",
-  under_preparation: "قيد التجهيز",
-  ready: "جاهز للإسناد",
-  picked_up: "تم الاستلام",
-  on_the_way: "في الطريق",
-  delivered: "تم التسليم",
-  failed_delivery: "فشل التوصيل",
-  cancelled: "ملغي",
-};
-
-const reviewStatusLabels: Record<BackendReviewStatus, string> = {
-  pending_review: "قيد المراجعة",
-  approved: "مقبول",
-  rejected: "مرفوض",
-};
+const statusLabels: Record<BackendOrderStatus, string> = orderStatusLabels;
+const reviewStatusLabels: Record<BackendReviewStatus, string> = orderReviewStatusLabels;
 
 function statusTone(status: BackendOrderStatus): "blue" | "green" | "red" | "secondary" {
   if (status === "delivered") return "green";
@@ -345,7 +337,7 @@ function customerName(order: BackendOrder) {
   return [order.customer?.first_name, order.customer?.last_name]
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)
-    .join(" ") || `User #${order.user_id ?? order.customer?.id ?? "-"}`;
+    .join(" ") || "عميل غير معروف";
 }
 
 function DeliveryTypeBadge({ order }: { order: BackendOrder }) {
@@ -381,7 +373,7 @@ function OrderDeliveryIcon({ order }: { order: BackendOrder }) {
 }
 
 function orderNumber(order: BackendOrder) {
-  return order.order_number || `YM-${order.id}`;
+  return order.order_number || `طلب #${order.id}`;
 }
 
 function apiListData<T>(value: unknown): T[] {
@@ -454,12 +446,12 @@ function canMoveToStatus(currentStatus: BackendOrderStatus, nextStatus: BackendO
 function representativeName(order: BackendOrder) {
   const representative = order.assigned_representative;
   if (!representative) {
-    return order.assigned_representative_id ? `Representative #${order.assigned_representative_id}` : "Unassigned";
+    return "لم يتم تعيين مندوب";
   }
   return [representative.first_name, representative.last_name]
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)
-    .join(" ") || `مندوب #${representative.id}`;
+    .join(" ") || "مندوب غير معروف";
 }
 
 function customerDisplayName(user: BackendDashboardUser) {
@@ -2009,10 +2001,6 @@ function SummaryRow({ label, value, strong }: { label: string; value: string; st
   );
 }
 
-function sectionMarketName(section: OrderMarketSectionLike) {
-  return objectName(section.market) || (section.market_id ? `Market #${section.market_id}` : "محل غير محدد");
-}
-
 function sectionTotal(section: OrderMarketSectionLike) {
   const explicitTotal = numberValue(section.total_price);
   if (explicitTotal !== null) return money(explicitTotal);
@@ -2020,15 +2008,6 @@ function sectionTotal(section: OrderMarketSectionLike) {
   const subtotal = numberValue(section.subtotal_price) ?? 0;
   const discount = numberValue(section.discount) ?? 0;
   return money(Math.max(0, subtotal - discount));
-}
-
-function orderItemName(item: BackendOrderItem) {
-  return (
-    cleanText(item.product?.name) ||
-    cleanText(item.product_name) ||
-    cleanText(item.variant?.product?.name) ||
-    `Variant #${item.variant_id ?? item.variant?.id ?? item.id}`
-  );
 }
 
 function orderItemSubtotal(item: BackendOrderItem) {
@@ -2040,59 +2019,28 @@ function orderItemSubtotal(item: BackendOrderItem) {
   return money(unitPrice * quantity);
 }
 
+function orderItemDisplayName(item: BackendOrderItem) {
+  return (
+    cleanText(item.product_name) ||
+    cleanText(item.product?.name) ||
+    cleanText(item.variant?.product?.name) ||
+    "منتج غير مسمى"
+  );
+}
+
+function orderItemVariantLabel(item: BackendOrderItem) {
+  return cleanText(item.variant_name) || cleanText(item.variant?.sku) || "-";
+}
+
+function sectionMarketDisplayName(section: OrderMarketSectionLike) {
+  return objectName(section.market) || "محل غير محدد";
+}
+
 function orderOfferTitle(offer: BackendOrderOffer, index: number) {
   return (
     cleanText(offer.offer?.title) ||
     cleanText(offer.title) ||
-    `Offer #${offer.offer_id ?? offer.offer?.id ?? offer.id ?? index + 1}`
-  );
-}
-
-function PickupStopsCard({ order }: { order: BackendOrder }) {
-  const stops = getPickupStops(order).slice().sort((first, second) => {
-    const firstOrder = numberValue(first.sort_order) ?? 0;
-    const secondOrder = numberValue(second.sort_order) ?? 0;
-    return firstOrder - secondOrder;
-  });
-  if (stops.length === 0) return null;
-
-  return (
-    <Card className="overflow-hidden">
-      <div className="flex items-center justify-between gap-3 border-b bg-muted/25 px-5 py-4">
-        <div>
-          <div className="font-semibold">نقاط الاستلام</div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            طلب أب واحد مع {stops.length.toLocaleString("en-US")} نقطة استلام
-          </div>
-        </div>
-        <Badge tone={isMultiMarket(order) ? "green" : "secondary"}>
-          {isMultiMarket(order) ? "متعدد المحلات" : "محل واحد"}
-        </Badge>
-      </div>
-      <div className="grid gap-3 p-5 md:grid-cols-2">
-        {stops.map((stop, index) => (
-          <div key={`${stop.market_id ?? index}-${stop.sort_order ?? index}`} className="rounded-md border bg-muted/10 p-4 text-sm">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="truncate font-bold">
-                  {objectName(stop.market) || (stop.market_id ? `Market #${stop.market_id}` : "محل غير محدد")}
-                </div>
-                {cleanText(stop.market?.branch) ? (
-                  <div className="mt-1 text-xs text-muted-foreground">{cleanText(stop.market?.branch)}</div>
-                ) : null}
-              </div>
-              <Badge tone={cleanText(stop.pickup_status) === "picked_up" ? "green" : "secondary"}>
-                {getPickupStatusLabel(stop.pickup_status)}
-              </Badge>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-              <span>الترتيب: {cleanText(stop.sort_order) || index + 1}</span>
-              <span>وقت الاستلام: {dateTime(cleanText(stop.picked_up_at) || null)}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
+    `عرض ${index + 1}`
   );
 }
 
@@ -2121,24 +2069,20 @@ function MarketSectionsCard({ order }: { order: BackendOrder }) {
         <div className="grid gap-4 p-5">
           {sections.map((section, sectionIndex) => {
             const items = (section.items ?? []) as BackendOrderItem[];
-            const offers = (section.offers ?? []) as BackendOrderOffer[];
-
+            const offers = [] as BackendOrderOffer[];
             return (
               <section key={`${section.id ?? section.market_id ?? sectionIndex}`} className="overflow-hidden rounded-lg border bg-card">
                 <div className="border-b bg-muted/15 p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="truncate text-base font-bold">{sectionMarketName(section)}</h3>
+                        <h3 className="truncate text-base font-bold">{sectionMarketDisplayName(section)}</h3>
                         {cleanText(section.market?.branch) ? (
                           <Badge tone="secondary">{cleanText(section.market?.branch)}</Badge>
                         ) : null}
                         <Badge tone={cleanText(section.pickup_status) === "picked_up" ? "green" : "secondary"}>
                           {getPickupStatusLabel(section.pickup_status)}
                         </Badge>
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        market_id: {cleanText(section.market_id) || section.market?.id || "-"}
                       </div>
                     </div>
                     <div className="grid gap-2 text-xs sm:grid-cols-3">
@@ -2155,7 +2099,7 @@ function MarketSectionsCard({ order }: { order: BackendOrder }) {
                       <tr className="border-b text-xs text-muted-foreground">
                         <th className="w-16 px-4 py-3 text-start">#</th>
                         <th className="px-4 py-3 text-start">المنتج</th>
-                        <th className="px-4 py-3 text-start">variant_id</th>
+                        <th className="px-4 py-3 text-start">المتغير</th>
                         <th className="px-4 py-3 text-start">السعر</th>
                         <th className="px-4 py-3 text-start">الكمية</th>
                         <th className="px-4 py-3 text-start">الإجمالي</th>
@@ -2172,8 +2116,8 @@ function MarketSectionsCard({ order }: { order: BackendOrder }) {
                         items.map((item, index) => (
                           <tr key={`${item.id ?? item.variant_id ?? index}`} className="border-b last:border-0">
                             <td className="px-4 py-4 text-muted-foreground">{index + 1}</td>
-                            <td className="px-4 py-4 font-medium">{orderItemName(item)}</td>
-                            <td className="px-4 py-4">{cleanText(item.variant_id) || item.variant?.id || "-"}</td>
+                            <td className="px-4 py-4 font-medium">{orderItemDisplayName(item)}</td>
+                            <td className="px-4 py-4 text-muted-foreground">{orderItemVariantLabel(item)}</td>
                             <td className="px-4 py-4"><CurrencyText>{money(item.unit_price)}</CurrencyText></td>
                             <td className="px-4 py-4">{cleanText(item.quantity) || "-"}</td>
                             <td className="px-4 py-4"><CurrencyText>{orderItemSubtotal(item)}</CurrencyText></td>
@@ -2184,8 +2128,8 @@ function MarketSectionsCard({ order }: { order: BackendOrder }) {
                   </table>
                 </div>
 
-                <div className="border-t p-4">
-                  <div className="mb-3 font-semibold">عروض الطلب</div>
+                <div className="hidden">
+                  <div className="mb-3 font-semibold" />
                   {offers.length === 0 ? (
                     <div className="rounded-md border bg-muted/10 px-3 py-3 text-sm text-muted-foreground">
                       لا توجد عروض لهذا المحل.
@@ -2196,7 +2140,7 @@ function MarketSectionsCard({ order }: { order: BackendOrder }) {
                         <div key={`${offer.id ?? offer.offer_id ?? index}`} className="flex items-center justify-between gap-3 rounded-md border bg-muted/10 px-3 py-2 text-sm">
                           <span className="font-medium">{orderOfferTitle(offer, index)}</span>
                           <span className="text-muted-foreground">
-                            offer_id: {cleanText(offer.offer_id) || offer.offer?.id || "-"} · {money(offer.discount_amount)}
+                            {money(offer.discount_amount)}
                           </span>
                         </div>
                       ))}
@@ -2219,7 +2163,9 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
   const [loading, setLoading] = useState(true);
   const [savingStatus, setSavingStatus] = useState(false);
   const [savingAssignment, setSavingAssignment] = useState(false);
-  const [orderDetailsOpen, setOrderDetailsOpen] = useState(true);
+  const [deliveryPriceDraft, setDeliveryPriceDraft] = useState("");
+  const [savingDeliveryPrice, setSavingDeliveryPrice] = useState(false);
+  const [orderDetailsOpen, setOrderDetailsOpen] = useState(false);
   const [representativeOpen, setRepresentativeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -2233,6 +2179,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
       const nextOrder = apiOrderData(data);
       if (!nextOrder) throw new Error("تعذر قراءة تفاصيل الطلب من استجابة الباك.");
       setOrder(nextOrder);
+      setDeliveryPriceDraft(nextOrder.delivery_price ?? "");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر تحميل تفاصيل الطلب.");
     } finally {
@@ -2287,6 +2234,37 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
       });
     } finally {
       setSavingAssignment(false);
+    }
+  }
+
+  async function updateDeliveryPrice() {
+    if (!order || savingDeliveryPrice) return;
+    const parsedPrice = Number(deliveryPriceDraft);
+    if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+      showSnackbar({ message: "سعر التوصيل يجب أن يكون رقمًا غير سالب.", tone: "danger" });
+      return;
+    }
+
+    setSavingDeliveryPrice(true);
+    try {
+      const response = await apiFetch(`orders/${order.id}/delivery-price/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ delivery_price: parsedPrice.toFixed(2) }),
+      });
+      const data = await apiResponseData(response);
+      if (!response.ok) throw new Error(apiError(data, "تعذر حفظ سعر التوصيل."));
+      const nextOrder = apiOrderData(data) ?? (data as BackendOrder);
+      setOrder(nextOrder);
+      setDeliveryPriceDraft(nextOrder.delivery_price ?? "");
+      showSnackbar({ message: "تم حفظ سعر التوصيل وتحديث الإجمالي.", tone: "success" });
+    } catch (reason) {
+      showSnackbar({
+        message: reason instanceof Error ? reason.message : "تعذر حفظ سعر التوصيل.",
+        tone: "danger",
+      });
+    } finally {
+      setSavingDeliveryPrice(false);
     }
   }
 
@@ -2353,7 +2331,6 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
 
       <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="grid gap-5">
-          <PickupStopsCard order={order} />
           <MarketSectionsCard order={order} />
           <FinancialSummaryCard order={order} />
         </div>
@@ -2408,14 +2385,9 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
             {orderDetailsOpen ? (
               <div className="mt-3">
                 <SummaryRow label="رقم الطلب" value={orderNumber(order)} />
-                <SummaryRow label="ID" value={String(order.id)} />
-                <SummaryRow label="user_id" value={String(order.user_id ?? "-")} />
-                <SummaryRow label="market_id" value={String(order.market_id ?? order.market?.id ?? "-")} />
-                <SummaryRow label="delivery_address_id" value={String(order.delivery_address_id ?? order.delivery_address?.id ?? "-")} />
-                <SummaryRow label="assigned_representative_id" value={String(assignedRepresentativeId(order) ?? "Unassigned")} />
-                <SummaryRow label="status" value={order.status} />
-                <SummaryRow label="review_status" value={reviewStatusLabel(order.review_status)} />
-                <SummaryRow label="payment_method" value={order.payment_method ?? "-"} />
+                <SummaryRow label="حالة الطلب" value={statusLabels[order.status]} />
+                <SummaryRow label="حالة المراجعة" value={reviewStatusLabel(order.review_status)} />
+                <SummaryRow label="طريقة الدفع" value={order.payment_method ?? "-"} />
                 <SummaryRow label="العميل" value={customerName(order)} />
                 <SummaryRow label="الهاتف" value={order.customer?.phone ?? "-"} />
                 <SummaryRow label="نوع الطلب" value={getOrderScopeLabel(order)} />
@@ -2431,13 +2403,13 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                   </>
                 ) : null}
                 <SummaryRow label="نوع التوصيل" value={deliveryTypeLabel(order)} />
-                <SummaryRow label="subtotal_price" value={money(order.subtotal_price)} />
-                <SummaryRow label="delivery_price" value={deliveryFeeLabel(order)} />
-                <SummaryRow label="discount" value={money(order.discount)} />
-                <SummaryRow label="total_price" value={money(order.total_price)} strong />
-                <SummaryRow label="description" value={order.description?.trim() || "-"} />
-                <SummaryRow label="delivery_note" value={order.delivery_note?.trim() || "-"} />
-                <SummaryRow label="created_at" value={dateTime(order.created_at)} />
+                <SummaryRow label="إجمالي المنتجات" value={money(order.subtotal_price)} />
+                <SummaryRow label="سعر التوصيل" value={deliveryFeeLabel(order)} />
+                <SummaryRow label="الخصم" value={money(order.discount)} />
+                <SummaryRow label="الإجمالي النهائي" value={money(order.total_price)} strong />
+                <SummaryRow label="ملاحظات الطلب" value={order.description?.trim() || "-"} />
+                <SummaryRow label="ملاحظة التوصيل" value={order.delivery_note?.trim() || "-"} />
+                <SummaryRow label="تاريخ الإنشاء" value={dateTime(order.created_at)} />
                 {order.custom_delivery_area ? (
                   <SummaryRow label="منطقة الدليفري" value={order.custom_delivery_area} />
                 ) : null}
@@ -2480,7 +2452,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
             ) : null}
           </Card>
 
-          {order.delivery_price == null ? (
+          {false ? (
             <Card className="p-5 text-sm">
               <div className="mb-1 font-semibold">سعر التوصيل</div>
               <p className="text-muted-foreground">
@@ -2488,6 +2460,42 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
               </p>
             </Card>
           ) : null}
+          <Card className="p-5 text-sm">
+            <div className="mb-3 font-semibold">سعر التوصيل</div>
+            <div className="flex items-stretch gap-2">
+              <Input
+                min={0}
+                step="0.01"
+                type="number"
+                value={deliveryPriceDraft}
+                onChange={(event) => setDeliveryPriceDraft(event.target.value)}
+                placeholder={deliveryLaterLabel}
+                disabled={savingDeliveryPrice || ["delivered", "cancelled"].includes(order.status)}
+                className="h-10"
+              />
+              <span className="inline-flex h-10 shrink-0 items-center rounded-md border bg-muted/20 px-3 text-xs font-semibold text-muted-foreground">
+                EGP
+              </span>
+            </div>
+            <Button
+              type="button"
+              className="mt-3 w-full"
+              disabled={
+                savingDeliveryPrice ||
+                ["delivered", "cancelled"].includes(order.status) ||
+                deliveryPriceDraft.trim() === ""
+              }
+              onClick={() => void updateDeliveryPrice()}
+            >
+              {savingDeliveryPrice ? <Loader2 className="size-4 animate-spin" /> : <Truck className="size-4" />}
+              حفظ سعر التوصيل
+            </Button>
+            {["delivered", "cancelled"].includes(order.status) ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                لا يمكن تعديل سعر التوصيل بعد التسليم أو الإلغاء.
+              </p>
+            ) : null}
+          </Card>
         </div>
       </div>
     </div>
@@ -2495,16 +2503,18 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
 }
 
 function FinancialSummaryCard({ order }: { order: BackendOrder }) {
+  const discount = numberValue(order.discount) ?? 0;
+
   return (
-    <div className="m-5 rounded-lg border border-cyan-400/25 bg-cyan-500/10 p-5 text-sm shadow-sm shadow-cyan-950/10">
-      <div className="mb-3 font-semibold text-cyan-700 dark:text-cyan-200">ملخص مالي</div>
+    <Card className="p-5 text-sm">
+      <div className="mb-3 font-semibold">ملخص مالي</div>
       <SummaryRow label="المنتجات" value={money(order.subtotal_price)} />
       <SummaryRow label="التوصيل" value={deliveryFeeLabel(order)} />
-      <SummaryRow label="الخصم" value={money(order.discount)} />
-      <div className="mt-3 border-t border-cyan-400/25 pt-3">
+      {discount > 0 ? <SummaryRow label="الخصم" value={money(order.discount)} /> : null}
+      <div className="mt-3 border-t pt-3">
         <SummaryRow label="الإجمالي" value={money(order.total_price)} strong />
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -2526,6 +2536,28 @@ function AssignedRepresentativeDetails({ order }: { order: BackendOrder }) {
 function OrderRouteCard({ order }: { order: BackendOrder }) {
   const activeIndex = orderRouteIndex(order.status);
   const isCancelled = order.status === "cancelled";
+  const timelineEvents = [
+    order.created_at
+      ? { key: "created", label: "تم إنشاء الطلب", time: order.created_at, active: order.status === "pending" }
+      : null,
+    order.approved_at
+      ? { key: "approved", label: "تمت الموافقة على الطلب", time: order.approved_at, active: order.review_status === "approved" }
+      : null,
+    order.assigned_at
+      ? { key: "assigned", label: "تم تعيين مندوب", time: order.assigned_at, active: order.status === "ready" }
+      : null,
+    order.delivered_at
+      ? { key: "delivered", label: "تم تسليم الطلب", time: order.delivered_at, active: order.status === "delivered" }
+      : null,
+    order.rejected_at
+      ? { key: "cancelled", label: "تم إلغاء الطلب", time: order.rejected_at, active: order.status === "cancelled" }
+      : order.status === "cancelled" && order.updated_at
+        ? { key: "cancelled", label: "تم إلغاء الطلب", time: order.updated_at, active: true }
+        : null,
+    order.updated_at && order.status !== "cancelled" && !order.delivered_at
+      ? { key: "current", label: `الحالة الحالية: ${statusLabels[order.status]}`, time: order.updated_at, active: true }
+      : null,
+  ].filter((event): event is { key: string; label: string; time: string; active: boolean } => Boolean(event));
 
   return (
     <Card className="mt-6 overflow-hidden">
@@ -2543,10 +2575,35 @@ function OrderRouteCard({ order }: { order: BackendOrder }) {
         </div>
         <Badge tone={statusTone(order.status)}>{statusLabels[order.status]}</Badge>
       </div>
-      {isCancelled ? (
+      <ol className="grid gap-3 px-5 py-5">
+        {timelineEvents.map((event, index) => (
+          <li key={`${event.key}-${event.time}-${index}`} className="flex items-start gap-3 text-sm">
+            <span
+              className={cn(
+                "mt-1 flex size-7 shrink-0 items-center justify-center rounded-full border-2",
+                event.active ? "border-emerald-500 bg-emerald-500 text-white" : "border-border bg-card text-muted-foreground",
+              )}
+            >
+              <Check className="size-3.5" />
+            </span>
+            <span className="min-w-0">
+              <span className={cn("block font-semibold", event.active && "text-emerald-600 dark:text-emerald-300")}>
+                {event.label}
+              </span>
+              <time className="mt-1 block text-xs text-muted-foreground">{dateTime(event.time)}</time>
+              {event.key === "cancelled" && order.rejection_reason?.trim() ? (
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  سبب الإلغاء: {order.rejection_reason.trim()}
+                </span>
+              ) : null}
+            </span>
+          </li>
+        ))}
+      </ol>
+      {false && isCancelled ? (
         <div className="flex min-h-24 items-center gap-3 px-5 py-5 text-sm text-destructive">
           <XCircle className="size-5" />
-          تم فصل الإلغاء عن مسار الحالات الأساسية لهذا الطلب.
+          تم إلغاء الطلب.
         </div>
       ) : (
         <ol className="grid gap-y-5 px-5 py-6 md:grid-cols-7 md:gap-y-0">

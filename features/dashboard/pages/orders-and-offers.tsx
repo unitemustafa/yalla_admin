@@ -58,6 +58,7 @@ import {
   PageTitle,
   Pagination,
   SelectBox,
+  Switch,
 } from "../primitives";
 import { cn } from "@/lib/utils";
 import { useSnackbar } from "../snackbar";
@@ -1168,7 +1169,7 @@ export function CreateOrderPage() {
   const [customer, setCustomer] = useState("");
   const [phone, setPhone] = useState("");
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
-  const [orderProductsOpen, setOrderProductsOpen] = useState(true);
+  const [orderProductsOpen, setOrderProductsOpen] = useState(false);
   const [orderProductSearchOpen, setOrderProductSearchOpen] = useState(false);
   const [activeOrderPanel, setActiveOrderPanel] =
     useState<"delivery" | "summary">("delivery");
@@ -3469,7 +3470,7 @@ function itemMatchesCityFilter(item: ItemRow, cityId: string, cities: ServiceCit
   const selectedCity = cities.find((city) => String(city.id) === cityId);
   if (!selectedCity) return true;
 
-  const cityTokens = [selectedCity.name, selectedCity.name_ar, selectedCity.slug]
+  const cityTokens = [selectedCity.name]
     .map(normalizeFilterText)
     .filter(Boolean);
   const itemTokens = [...(item.regionNames ?? []), ...(item.regionSlugs ?? [])]
@@ -3692,7 +3693,7 @@ function PackageProductSearchModal({
                 { value: "all", label: citiesLoading ? "جاري تحميل المدن..." : "كل المدن" },
                 ...cities.map((cityOption) => ({
                   value: String(cityOption.id),
-                  label: cityOption.name_ar || cityOption.name,
+                  label: cityOption.name,
                 })),
               ]}
             />
@@ -4481,7 +4482,8 @@ export function CreateOfferPage() {
   const [markets, setMarkets] = useState<OfferMarket[]>([]);
   const [allOfferProducts, setAllOfferProducts] = useState<ItemRow[]>([]);
   const [selectedMarketId, setSelectedMarketId] = useState("");
-  const [selectedScope, setSelectedScope] = useState<OfferScope>("general");
+  const [offerAppearsInGeneral, setOfferAppearsInGeneral] = useState(true);
+  const [offerAppearsInServiceCity, setOfferAppearsInServiceCity] = useState(false);
   const [savingOffer, setSavingOffer] = useState(false);
   const [offerStatus, setOfferStatus] = useState<OfferStatus>("active");
   const [offerTitle, setOfferTitle] = useState(editingOffer?.title ?? "");
@@ -4505,8 +4507,10 @@ export function CreateOfferPage() {
   const [bundleItems, setBundleItems] = useState<BundleLine[]>([]);
   const [packageProductsOpen, setPackageProductsOpen] = useState(false);
   const [packageProductSearchOpen, setPackageProductSearchOpen] = useState(false);
+  const effectiveOfferScope: OfferScope =
+    offerAppearsInServiceCity && !offerAppearsInGeneral ? "service_city" : "general";
   const marketsForScope = useMemo(() => {
-    if (selectedScope === "general") {
+    if (effectiveOfferScope === "general") {
       return markets.filter((market) => market.scope === "general" && market.status === "active");
     }
 
@@ -4518,13 +4522,31 @@ export function CreateOfferPage() {
         market.status === "active" &&
         market.serviceCityIds.some((cityId) => Number(cityId) === Number(selectedOfferCityId)),
     );
-  }, [markets, selectedOfferCityId, selectedScope]);
+  }, [effectiveOfferScope, markets, selectedOfferCityId]);
+  const selectedMarketIsAvailable = marketsForScope.some(
+    (market) => Number(market.id) === Number(selectedMarketId),
+  );
+  const isEditingWithOriginalMarket =
+    formMode === "edit" &&
+    Boolean(selectedMarketId) &&
+    selectedMarketId === editingOffer?.marketId;
+  const canUseSelectedMarket = selectedMarketIsAvailable || isEditingWithOriginalMarket;
+  const effectiveMarketId = canUseSelectedMarket
+    ? selectedMarketId
+    : marketsForScope[0]?.id ?? "";
+  const offerScopeDescription = offerAppearsInGeneral && offerAppearsInServiceCity
+    ? "عقد العروض الحالي لا يدعم حفظ عام + مدينة خدمة في السجل نفسه. احفظ أحد النطاقين فقط إلى أن يتم تحديث backend."
+    : offerAppearsInGeneral
+      ? "سيظهر العرض في النطاق العام فقط."
+      : offerAppearsInServiceCity
+        ? "سيظهر العرض داخل مدينة الخدمة المختارة فقط."
+        : "اختر الظهور في العام أو مدينة خدمة واحدة على الأقل.";
   const offerProducts = useMemo(
     () =>
-      selectedMarketId
-        ? allOfferProducts.filter((product) => Number(product.marketId) === Number(selectedMarketId))
+      effectiveMarketId
+        ? allOfferProducts.filter((product) => Number(product.marketId) === Number(effectiveMarketId))
         : [],
-    [allOfferProducts, selectedMarketId],
+    [allOfferProducts, effectiveMarketId],
   );
   const discountRate = clampDiscountPercent(Number(discountPercent) || 0);
   const flashDiscountRate = clampDiscountPercent(Number(flashDiscountPercent) || 0);
@@ -4614,9 +4636,17 @@ export function CreateOfferPage() {
     setPackageProductSearchOpen(false);
   }
 
-  function changeOfferScope(nextScope: OfferScope) {
-    setSelectedScope(nextScope);
-    setSelectedOfferCityId("");
+  function setOfferGeneralEnabled(enabled: boolean) {
+    setOfferAppearsInGeneral(enabled);
+    setSelectedMarketId("");
+    clearOfferProductSelection();
+  }
+
+  function setOfferServiceCityEnabled(enabled: boolean) {
+    setOfferAppearsInServiceCity(enabled);
+    if (!enabled) {
+      setSelectedOfferCityId("");
+    }
     setSelectedMarketId("");
     clearOfferProductSelection();
   }
@@ -4624,11 +4654,6 @@ export function CreateOfferPage() {
   function changeOfferCity(cityId: string) {
     setSelectedOfferCityId(cityId);
     setSelectedMarketId("");
-    clearOfferProductSelection();
-  }
-
-  function changeOfferMarket(marketId: string) {
-    setSelectedMarketId(marketId);
     clearOfferProductSelection();
   }
 
@@ -4723,28 +4748,31 @@ export function CreateOfferPage() {
       showSnackbar({ message: "العنوان مطلوب", tone: "danger" });
       return;
     }
-    if (!selectedScope) {
-      showSnackbar({ message: "اختر نطاق العرض", tone: "danger" });
+    if (!offerAppearsInGeneral && !offerAppearsInServiceCity) {
+      showSnackbar({ message: "اختر الظهور في العام أو مدينة خدمة واحدة على الأقل.", tone: "danger" });
       return;
     }
-    if (selectedScope === "service_city" && !selectedOfferCityId) {
-      showSnackbar({ message: "اختر مدينة الخدمة", tone: "danger" });
-      return;
-    }
-    if (!selectedMarketId) {
+    if (offerAppearsInGeneral && offerAppearsInServiceCity) {
       showSnackbar({
-        message:
-          selectedScope === "general" && marketsForScope.length === 0
-            ? "لا توجد محلات عامة. أنشئ محلًا عامًا من صفحة المحلات أولاً."
-            : selectedScope === "service_city" && selectedOfferCityId && marketsForScope.length === 0
-              ? "لا توجد محلات في هذه المدينة"
-              : "اختر السوق",
+        message: "الـ backend الحالي للعروض لا يدعم حفظ عام + مدينة خدمة معًا.",
         tone: "danger",
       });
       return;
     }
-    if (!marketsForScope.some((market) => Number(market.id) === Number(selectedMarketId))) {
-      showSnackbar({ message: "اختر السوق", tone: "danger" });
+    if (offerAppearsInServiceCity && !selectedOfferCityId) {
+      showSnackbar({ message: "اختر مدينة الخدمة", tone: "danger" });
+      return;
+    }
+    if (!effectiveMarketId) {
+      showSnackbar({
+        message:
+          effectiveOfferScope === "general" && marketsForScope.length === 0
+            ? "لا توجد محلات عامة. أنشئ محلًا عامًا من صفحة المحلات أولاً."
+            : effectiveOfferScope === "service_city" && selectedOfferCityId && marketsForScope.length === 0
+              ? "لا توجد محلات في هذه المدينة"
+              : "تعذر تحديد سوق مناسب للعرض تلقائيًا.",
+        tone: "danger",
+      });
       return;
     }
     if (!selectedType) {
@@ -4787,10 +4815,10 @@ export function CreateOfferPage() {
     const endTimeIso = endDateTime.toISOString();
 
     const payload = {
-      market_id: Number(selectedMarketId),
-      scope: selectedScope,
+      market_id: Number(effectiveMarketId),
+      scope: effectiveOfferScope,
       service_city_id:
-        selectedScope === "service_city" ? Number(selectedOfferCityId) : null,
+        effectiveOfferScope === "service_city" ? Number(selectedOfferCityId) : null,
       product_ids: productIds,
       title: offerTitle.trim(),
       description: offerDescription.trim(),
@@ -4881,7 +4909,8 @@ export function CreateOfferPage() {
         setOfferImagePreview("");
         setOfferImageName("");
         setOfferImageFile(null);
-        setSelectedScope("general");
+        setOfferAppearsInGeneral(true);
+        setOfferAppearsInServiceCity(false);
         setSelectedOfferCityId("");
         setSelectedMarketId("");
         clearOfferProductSelection();
@@ -4947,7 +4976,8 @@ export function CreateOfferPage() {
           setOfferDescription(String(record.description ?? ""));
           setSelectedType(card.type);
           setSelectedMarketId(String(market?.id ?? record.market_id ?? ""));
-          setSelectedScope(card.scope);
+          setOfferAppearsInGeneral(card.scope === "general");
+          setOfferAppearsInServiceCity(card.scope === "service_city");
           setSelectedOfferCityId(card.serviceCityId);
           setOfferImageFile(null);
           setOfferImagePreview(card.image ?? "");
@@ -5054,20 +5084,37 @@ export function CreateOfferPage() {
                   />
                 </Field>
               </div>
-              <div className="grid gap-4 lg:grid-cols-4">
-                <Field label="النطاق *">
-                  <AppSelect
-                    ariaLabel="نطاق العرض"
-                    className="h-11 bg-input"
-                    onValueChange={(value) => changeOfferScope(value as OfferScope)}
-                    options={[
-                      { value: "general", label: "عام" },
-                      { value: "service_city", label: "مدينة خدمة" },
-                    ]}
-                    value={selectedScope}
-                  />
-                </Field>
-                {selectedScope === "service_city" ? (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="grid gap-3 lg:col-span-2">
+                  <div className="text-sm font-medium">نطاق العرض *</div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="flex min-h-16 cursor-pointer items-center justify-between gap-3 rounded-md border bg-background px-4 py-3 shadow-sm transition hover:border-primary/40">
+                      <span>
+                        <span className="block text-sm font-semibold">يظهر في العام</span>
+                        <span className="mt-1 block text-xs text-muted-foreground">العروض العامة فقط.</span>
+                      </span>
+                      <Switch checked={offerAppearsInGeneral} onCheckedChange={setOfferGeneralEnabled} />
+                    </label>
+                    <label className="flex min-h-16 cursor-pointer items-center justify-between gap-3 rounded-md border bg-background px-4 py-3 shadow-sm transition hover:border-primary/40">
+                      <span>
+                        <span className="block text-sm font-semibold">يظهر في مدينة خدمة</span>
+                        <span className="mt-1 block text-xs text-muted-foreground">العقد الحالي يدعم مدينة واحدة.</span>
+                      </span>
+                      <Switch checked={offerAppearsInServiceCity} onCheckedChange={setOfferServiceCityEnabled} />
+                    </label>
+                  </div>
+                  <div
+                    className={cn(
+                      "rounded-md border px-3 py-2 text-sm",
+                      offerAppearsInGeneral && offerAppearsInServiceCity
+                        ? "border-destructive/40 bg-destructive/10 text-destructive"
+                        : "border-border bg-muted/20 text-muted-foreground",
+                    )}
+                  >
+                    {offerScopeDescription}
+                  </div>
+                </div>
+                {offerAppearsInServiceCity ? (
                 <Field label="مدينة الخدمة">
                   <AppSelect
                     ariaLabel="مدينة الخدمة"
@@ -5075,40 +5122,13 @@ export function CreateOfferPage() {
                     onValueChange={changeOfferCity}
                     options={serviceCities.map((city) => ({
                       value: String(city.id),
-                      label: city.name_ar || city.name,
+                      label: city.name,
                     }))}
                     placeholder={serviceCitiesLoading ? "جاري تحميل المدن..." : "اختر مدينة"}
                     value={selectedOfferCityId}
                   />
                 </Field>
                 ) : null}
-                <Field label="السوق *">
-                  <AppSelect
-                    ariaLabel="السوق"
-                    className="h-11 bg-input"
-                    disabled={selectedScope === "service_city" && !selectedOfferCityId}
-                    onValueChange={changeOfferMarket}
-                    options={marketsForScope.map((market) => ({
-                      value: market.id,
-                      label: market.name,
-                    }))}
-                    placeholder={
-                      selectedScope === "general"
-                        ? "اختر محلًا عامًا"
-                        : selectedOfferCityId
-                          ? "اختر محلًا في المدينة"
-                          : "اختر المدينة أولاً"
-                    }
-                    value={selectedMarketId}
-                  />
-                  {selectedScope === "general" && marketsForScope.length === 0 ? (
-                    <p className="text-xs text-destructive">
-                      لا توجد محلات عامة. أنشئ محلًا عامًا من صفحة المحلات أولاً.
-                    </p>
-                  ) : selectedScope === "service_city" && selectedOfferCityId && marketsForScope.length === 0 ? (
-                    <p className="text-xs text-destructive">لا توجد محلات في هذه المدينة</p>
-                  ) : null}
-                </Field>
                 <Field label="الحالة *">
                   <AppSelect
                     ariaLabel="حالة العرض"

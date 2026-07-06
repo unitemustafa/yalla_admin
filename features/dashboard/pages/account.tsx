@@ -29,6 +29,7 @@ import { resolveMediaUrl, shouldUnoptimizeMediaUrl } from "@/lib/media-url";
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const ACCOUNT_PASSWORD_CHANGE_ENABLED = false;
 
 function displayName(firstName?: string, lastName?: string, username?: string) {
   return [firstName, lastName].filter(Boolean).join(" ") || username || currentUser.fullName;
@@ -305,6 +306,7 @@ export function AccountPage() {
   }
 
   async function requestResetCode(isResend = false) {
+    if (!ACCOUNT_PASSWORD_CHANGE_ENABLED) return;
     if (!email || busyAction || resendCooldown > 0) return;
 
     setBusyAction("request");
@@ -511,7 +513,8 @@ export function AccountPage() {
                 type="button"
                 variant="outline"
                 className="mt-5"
-                disabled={busyAction !== null}
+                title={ACCOUNT_PASSWORD_CHANGE_ENABLED ? undefined : "غير متاح حالياً"}
+                disabled={!ACCOUNT_PASSWORD_CHANGE_ENABLED || busyAction !== null}
                 onClick={() => void requestResetCode()}
               >
                 {busyAction === "request" ? (
