@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   type FormEvent,
@@ -26,6 +25,7 @@ import { logoSrc } from "@/features/dashboard/data";
 import { DashboardAutoTranslate } from "@/features/dashboard/auto-translate";
 import { DashboardI18nProvider } from "@/features/dashboard/i18n";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SafeImage } from "@/components/safe-image";
 import {
   hasLoginSplashBeenSeen,
   LoginSplash,
@@ -209,7 +209,7 @@ function LoginPageContent({
 
           <div className="relative z-10 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Image
+              <SafeImage
                 alt="Yalla Market"
                 src={logoSrc}
                 width={56}
@@ -264,7 +264,7 @@ function LoginPageContent({
               <div>
                 <div className="grid grid-cols-4 gap-3">
                   {productImages.map((src, index) => (
-                    <Image
+                    <SafeImage
                       key={src}
                       alt={`منتج من يلا ماركت ${index + 1}`}
                       src={src}
@@ -285,7 +285,7 @@ function LoginPageContent({
         <section className="flex h-dvh items-center justify-center overflow-hidden px-5 py-8 sm:px-8 lg:px-12">
           <div className="w-full max-w-md">
             <div className="mb-9 flex items-center gap-3 lg:hidden">
-              <Image
+              <SafeImage
                 alt="Yalla Market"
                 src={logoSrc}
                 width={52}

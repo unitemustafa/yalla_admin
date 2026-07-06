@@ -1,5 +1,5 @@
 import type { DashboardUser } from "./default-dashboard-users";
-import { resolveMediaUrl } from "@/lib/media-url";
+import { normalizeImageSrc } from "@/lib/media-url";
 import { displayLocalPhone } from "./account-fields";
 
 export type BackendDashboardUser = {
@@ -93,7 +93,7 @@ export function dashboardUserFromBackend(user: BackendDashboardUser): DashboardU
     username: user.username?.trim() || unavailable,
     phone: displayLocalPhone(user.phone),
     email: user.email?.trim() || unavailable,
-    avatar: resolveMediaUrl(user.avatar_url?.trim() || defaultAvatar),
+    avatar: normalizeImageSrc(user.avatar_url, defaultAvatar),
     role: roleLabel(user.role),
     branch: unset,
     location: unset,

@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   type ChangeEvent,
@@ -23,13 +22,15 @@ import {
 import { useAuth } from "@/features/auth/auth-provider";
 import { currentUser } from "@/features/dashboard/profile-data";
 import { Button, Card, Input, PageTitle } from "@/features/dashboard/primitives";
+import { DashboardImage } from "@/features/dashboard/dashboard-image";
 import { useSnackbar } from "@/features/dashboard/snackbar";
 import type { AuthUser } from "@/lib/auth";
-import { resolveMediaUrl, shouldUnoptimizeMediaUrl } from "@/lib/media-url";
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ACCOUNT_PASSWORD_CHANGE_ENABLED = false;
+const DEFAULT_AVATAR_SRC = "/default-user-avatar.svg";
+const AVATAR_UPLOAD_FIELD = "avatar_image";
 
 function displayName(firstName?: string, lastName?: string, username?: string) {
   return [firstName, lastName].filter(Boolean).join(" ") || username || currentUser.fullName;
@@ -51,6 +52,10 @@ function preventWhitespaceInput(event: KeyboardEvent<HTMLInputElement>) {
   if (/\s/.test(event.key)) {
     event.preventDefault();
   }
+}
+
+function avatarSrc(user?: Pick<AuthUser, "avatar_url"> | null) {
+  return user?.avatar_url?.trim() || DEFAULT_AVATAR_SRC;
 }
 
 async function responseData(response: Response) {
@@ -144,9 +149,7 @@ export function AccountPage() {
     displayName(user?.first_name, user?.last_name, user?.username),
   );
   const [profileEmail, setProfileEmail] = useState(() => user?.email ?? currentUser.email);
-  const [avatarUrl, setAvatarUrl] = useState(
-    () => user?.avatar_url?.trim() || "/default-user-avatar.svg",
-  );
+  const [avatarUrl, setAvatarUrl] = useState(() => avatarSrc(user));
   const [selectedAvatar, setSelectedAvatar] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
   const [profileError, setProfileError] = useState("");
@@ -154,11 +157,6 @@ export function AccountPage() {
   const [busyAction, setBusyAction] = useState<"request" | "reset" | null>(null);
   const name = displayName(user?.first_name, user?.last_name, user?.username);
   const email = profileEmail || user?.email || currentUser.email;
-  const avatarImageUrl = resolveMediaUrl(avatarPreviewUrl || avatarUrl);
-  const avatarImageUnoptimized =
-    avatarImageUrl.startsWith("data:") ||
-    avatarImageUrl.startsWith("blob:") ||
-    shouldUnoptimizeMediaUrl(avatarImageUrl);
 
   useEffect(() => {
     let active = true;
@@ -168,7 +166,7 @@ export function AccountPage() {
         if (!active) return;
         setProfileName(displayName(nextUser.first_name, nextUser.last_name, nextUser.username));
         setProfileEmail(nextUser.email);
-        setAvatarUrl(nextUser.avatar_url?.trim() || "/default-user-avatar.svg");
+        setAvatarUrl(avatarSrc(nextUser));
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -233,7 +231,7 @@ export function AccountPage() {
             method: "PATCH",
             body: (() => {
               const formData = new FormData();
-              formData.set("avatar", selectedAvatar);
+              formData.append(AVATAR_UPLOAD_FIELD, selectedAvatar);
               formData.set("first_name", textPayload.first_name);
               formData.set("last_name", textPayload.last_name);
               formData.set("email", textPayload.email);
@@ -255,25 +253,33 @@ export function AccountPage() {
 
       const returnedUser = data as AuthUser;
       updateUser(returnedUser);
-      setProfileName(displayName(returnedUser.first_name, returnedUser.last_name, returnedUser.username));
-      setProfileEmail(returnedUser.email);
-      setAvatarUrl(returnedUser.avatar_url?.trim() || "/default-user-avatar.svg");
+
+      try {
+        const refreshedUser = await reloadUser();
+        setProfileName(
+          displayName(refreshedUser.first_name, refreshedUser.last_name, refreshedUser.username),
+        );
+        setProfileEmail(refreshedUser.email);
+        setAvatarUrl(avatarSrc(refreshedUser));
+        showSnackbar({ message: "تم تحديث بيانات الحساب." });
+      } catch {
+        setProfileName(
+          displayName(returnedUser.first_name, returnedUser.last_name, returnedUser.username),
+        );
+        setProfileEmail(returnedUser.email);
+        setAvatarUrl(avatarSrc(returnedUser));
+        showSnackbar({
+          message: "تم حفظ البيانات، لكن تعذر إعادة تحميل حالة الحساب الآن.",
+          tone: "info",
+        });
+      }
+
       setSelectedAvatar(null);
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current);
         objectUrlRef.current = null;
       }
       setAvatarPreviewUrl("");
-
-      try {
-        await reloadUser();
-        showSnackbar({ message: "تم تحديث بيانات الحساب." });
-      } catch {
-        showSnackbar({
-          message: "تم حفظ البيانات، لكن تعذر إعادة تحميل حالة الحساب الآن.",
-          tone: "info",
-        });
-      }
     } catch (error) {
       setProfileError(
         error instanceof Error ? error.message : "تعذر تحديث بيانات الحساب.",
@@ -418,13 +424,14 @@ export function AccountPage() {
         <Card className="overflow-hidden">
           <div className="border-b bg-muted/20 px-5 py-6 text-center">
             <div className="relative mx-auto size-28 overflow-hidden rounded-xl border bg-background shadow-sm">
-              <Image
+              <DashboardImage
                 alt={name}
-                src={avatarImageUrl}
-                fill
+                src={avatarPreviewUrl || avatarUrl}
+                width={112}
+                height={112}
                 sizes="112px"
-                unoptimized={avatarImageUnoptimized}
-                className="object-cover"
+                className="size-full"
+                imageClassName="object-cover"
               />
               <button
                 type="button"

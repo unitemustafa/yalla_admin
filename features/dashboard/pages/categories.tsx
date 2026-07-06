@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent, FormEvent, ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Edit,
-  GripVertical,
-  Pencil,
+  Eye,
   ImagePlus,
+  Layers3,
   Plus,
   Search,
   Trash2,
@@ -14,15 +15,17 @@ import {
 
 import { useAuth } from "@/features/auth/auth-provider";
 import {
-  adminApiPaths,
-  apiList,
-  categoryRowFromApi,
-  fetchAdminRows,
-  readApiData,
-  sendAdminJson,
-  type BackendRecord,
+  AdminApiError,
+  createProductCategory,
+  deleteProductCategory,
+  getProductCategory,
+  listCategoryClassifications,
+  listProductCategories,
+  updateProductCategory,
+  type CategoryClassification,
+  type NormalizedProductCategory,
+  type ProductCategoryWritePayload,
 } from "../admin-api";
-import { categoryRows, type CategoryRow } from "../data";
 import { DashboardImage } from "../dashboard-image";
 import {
   ActionMenu,
@@ -30,208 +33,90 @@ import {
   Button,
   Card,
   DataTable,
-  Field,
   Input,
   Pagination,
-  Switch,
 } from "../primitives";
-import { useDisclosure } from "../hooks";
+import { useItemTableState } from "../hooks";
 import { useSnackbar } from "../snackbar";
-
-type CategoryStatusFilter = "all" | "active" | "inactive";
-type CategoryKind = "normal" | "featured" | "popular";
-type CategoryTypeFilter = "all" | CategoryKind;
-type CategorySectionFilter = string;
-type CategoryDraft = {
-  name: string;
-  classificationName: string;
-  type: CategoryKind;
-  description: string;
-};
-
-const initialCategorySectionOptions: CategorySectionFilter[] = [
-  "all",
-  "الطازج",
-  "الأكل",
-  "التسوق",
-  "البيت",
-  "الموضة",
-  "الخدمات",
-];
+import { cn } from "@/lib/utils";
 
 const categoriesPageSize = 10;
-const categoryTypeOptions: Array<{
-  value: CategoryKind;
-  label: string;
-  backendValue: string;
-}> = [
-  { value: "normal", label: "فئة عادية", backendValue: "فئات عادية" },
-  { value: "featured", label: "فئة مميزة", backendValue: "فئات مميزة" },
-  { value: "popular", label: "فئة شائعة", backendValue: "فئات شائعة" },
-];
 
-function categoryTypeOption(value: CategoryKind) {
-  return categoryTypeOptions.find((option) => option.value === value) ?? categoryTypeOptions[0];
+const categoryTypeOptions = [
+  { value: "فئات عادية", label: "فئة عادية" },
+  { value: "فئات مميزة", label: "فئة مميزة" },
+  { value: "فئات شائعة", label: "فئة شائعة" },
+] as const;
+
+type CategoryFormState = {
+  id?: number;
+  mode: "create" | "edit";
+  name: string;
+  classificationId: string;
+  type: string;
+  description: string;
+  imagePreview: string | null;
+  imageFile: File | null;
+  imageRemovedLocally: boolean;
+};
+
+function emptyFormState(): CategoryFormState {
+  return {
+    mode: "create",
+    name: "",
+    classificationId: "",
+    type: categoryTypeOptions[0].value,
+    description: "",
+    imagePreview: null,
+    imageFile: null,
+    imageRemovedLocally: false,
+  };
 }
 
-function categoryTypeKind(value: string | undefined | null): CategoryKind | null {
-  const normalized = String(value ?? "").trim();
-  if (!normalized || normalized === "فئة عادية" || normalized === "فئات عادية") return "normal";
-  if (normalized === "فئة مميزة" || normalized === "فئات مميزة") return "featured";
-  if (normalized === "فئة شائعة" || normalized === "فئات شائعة") return "popular";
-  return null;
+function classificationName(value: NormalizedProductCategory) {
+  return typeof value.classification?.name === "string" && value.classification.name.trim()
+    ? value.classification.name.trim()
+    : "-";
 }
 
-function initialCategoryType(category?: CategoryRow | null): CategoryKind {
-  const kind = categoryTypeKind(category?.type);
-  if (kind) return kind;
+function categoryTypeLabel(value: string) {
+  return categoryTypeOptions.find((option) => option.value === value)?.label || value || "-";
+}
 
-  if (category?.type?.trim()) {
-    console.warn(`Unknown product category type "${category.type}" for category "${category.name}".`);
+function productCategoryPayload(
+  form: CategoryFormState,
+): ProductCategoryWritePayload {
+  return {
+    classification_id: Number(form.classificationId),
+    name: form.name.trim(),
+    type: form.type.trim(),
+    description: form.description.trim(),
+  };
+}
+
+function normalizeError(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function fieldErrors(value: unknown): string[] {
+  if (typeof value === "string" && value.trim()) return [value.trim()];
+  if (Array.isArray(value)) return value.flatMap(fieldErrors);
+  if (value && typeof value === "object") {
+    return Object.entries(value).flatMap(([key, entry]) =>
+      fieldErrors(entry).map((message) =>
+        key === "detail" ? message : `${key}: ${message}`,
+      ),
+    );
   }
-
-  return "normal";
+  return [];
 }
 
-function categoryTypeBackendValue(value: CategoryKind) {
-  return categoryTypeOption(value).backendValue;
-}
-
-function categoryTypeLabel(value: string | undefined | null) {
-  const kind = categoryTypeKind(value);
-  if (kind) return categoryTypeOption(kind).label;
-
-  const rawValue = String(value ?? "").trim();
-  return rawValue || categoryTypeOptions[0].label;
-}
-
-function categoryMatchesType(row: CategoryRow, filter: CategoryTypeFilter) {
-  return filter === "all" || categoryTypeKind(row.type) === filter;
-}
-
-function CategoryTypeSelector({
-  value,
-  onChange,
-  customType,
-}: {
-  value: CategoryKind;
-  onChange: (value: CategoryKind) => void;
-  customType?: string;
-}) {
-  return (
-    <div className="grid gap-2">
-      <div className="grid gap-2 sm:grid-cols-3">
-        {categoryTypeOptions.map((option) => {
-          const selected = value === option.value;
-
-          return (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => onChange(option.value)}
-              className={`min-h-11 rounded-md border px-3 py-2 text-sm font-bold transition ${
-                selected
-                  ? "border-primary bg-primary/10 text-primary shadow-sm"
-                  : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-accent hover:text-foreground"
-              }`}
-            >
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
-      {customType ? (
-        <p className="text-xs leading-5 text-muted-foreground">
-          القيمة الحالية من الباك: {customType}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function CategoryTypeBadge({ row }: { row: CategoryRow }) {
-  const kind = categoryTypeKind(row.type);
-  const label = categoryTypeLabel(row.type);
-  const toneClass =
-    kind === "featured"
-      ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
-      : kind === "popular"
-        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-        : kind === "normal"
-          ? "bg-muted text-muted-foreground"
-          : "bg-sky-500/10 text-sky-700 dark:text-sky-300";
-
-  return (
-    <span className={`rounded-md px-2 py-0.5 text-xs font-bold ${toneClass}`}>
-      {label}
-    </span>
-  );
-}
-
-function CategoryDrawer({
-  category,
-  onClose,
-  onSubmit,
-}: {
-  category?: CategoryRow | null;
-  onClose: () => void;
-  onSubmit: (draft: CategoryDraft) => void;
-}) {
-  const isEditing = Boolean(category);
-  const selectedSection = category?.sections[0] ?? "الطازج";
-  const categoryImageObjectUrlRef = useRef<string | null>(null);
-  const [categoryImagePreview, setCategoryImagePreview] = useState(category?.image ?? "");
-  const [categoryImageName, setCategoryImageName] = useState("");
-  const [name, setName] = useState(category?.name ?? "");
-  const [categoryType, setCategoryType] = useState<CategoryKind>(() => initialCategoryType(category));
-  const [description, setDescription] = useState("");
-  const customCategoryType =
-    category?.type?.trim() && !categoryTypeKind(category.type) ? category.type.trim() : "";
-
-  function revokeCategoryImageObjectUrl() {
-    if (categoryImageObjectUrlRef.current) {
-      URL.revokeObjectURL(categoryImageObjectUrlRef.current);
-      categoryImageObjectUrlRef.current = null;
-    }
-  }
-
-  function handleCategoryImageChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    revokeCategoryImageObjectUrl();
-    const nextPreview = URL.createObjectURL(file);
-    categoryImageObjectUrlRef.current = nextPreview;
-    setCategoryImagePreview(nextPreview);
-    setCategoryImageName(file.name);
-    event.target.value = "";
-  }
-
-  function resetCategoryImage() {
-    revokeCategoryImageObjectUrl();
-    setCategoryImagePreview(category?.image ?? "");
-    setCategoryImageName("");
-  }
-
+function useBodyScrollLock(locked: boolean) {
   useEffect(() => {
-    const objectUrlRef = categoryImageObjectUrlRef;
+    if (!locked) return;
 
-    return () => {
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-        objectUrlRef.current = null;
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;
     const previousHtmlOverflow = document.documentElement.style.overflow;
-
     document.body.style.overflow = "hidden";
     document.documentElement.style.overflow = "hidden";
 
@@ -239,25 +124,88 @@ function CategoryDrawer({
       document.body.style.overflow = previousBodyOverflow;
       document.documentElement.style.overflow = previousHtmlOverflow;
     };
-  }, []);
+  }, [locked]);
+}
+
+function TypeSelector({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const known = categoryTypeOptions.some((option) => option.value === value);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="add-category-title"
-      className="fixed inset-0 z-40 flex items-center justify-center overflow-hidden bg-foreground/30 p-4 backdrop-blur-[1px]"
-    >
-      <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-[980px] flex-col rounded-lg border bg-background p-6 shadow-lg">
-        <div className="flex items-start justify-between gap-4">
+    <div className="grid gap-2">
+      <div className="grid gap-2 sm:grid-cols-3">
+        {categoryTypeOptions.map((option) => {
+          const selected = option.value === value;
+
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onChange(option.value)}
+              className={cn(
+                "min-h-11 rounded-md border px-3 py-2 text-sm font-bold transition",
+                selected
+                  ? "border-primary bg-primary/10 text-primary shadow-sm"
+                  : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-accent hover:text-foreground",
+              )}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+      {!known && value ? (
+        <p className="text-xs leading-5 text-muted-foreground">
+          القيمة الحالية من الباك: {value}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="grid gap-1 rounded-md bg-muted/35 px-3 py-2 text-sm">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="min-w-0 font-semibold">{value}</span>
+    </div>
+  );
+}
+
+function CategoryDetailDialog({
+  category,
+  error,
+  loading,
+  onClose,
+}: {
+  category: NormalizedProductCategory | null;
+  error: string;
+  loading: boolean;
+  onClose: () => void;
+}) {
+  useBodyScrollLock(true);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-foreground/35 p-4 backdrop-blur-[1px]">
+      <div
+        aria-labelledby="category-detail-title"
+        aria-modal="true"
+        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border bg-background shadow-2xl"
+        role="dialog"
+      >
+        <div className="flex items-start justify-between gap-4 border-b px-5 py-4">
           <div>
-            <h2 id="add-category-title" className="text-lg font-semibold">
-              {isEditing ? "تعديل الفئة" : "إضافة فئة جديدة"}
+            <h2 id="category-detail-title" className="text-lg font-semibold">
+              بيانات الفئة
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {isEditing
-                ? "عدّل بيانات الفئة ونوع ظهورها."
-                : "أنشئ فئة جديدة تظهر داخل القسم المناسب في تطبيق العملاء."}
+              تفاصيل الفئة من الباك مباشرة.
             </p>
           </div>
           <button
@@ -270,6 +218,150 @@ function CategoryDrawer({
           </button>
         </div>
 
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          {loading ? (
+            <div className="flex h-28 items-center justify-center text-sm text-muted-foreground">
+              جاري تحميل بيانات الفئة...
+            </div>
+          ) : error ? (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-200">
+              {error}
+            </div>
+          ) : category ? (
+            <div className="grid gap-5 md:grid-cols-[180px_minmax(0,1fr)]">
+              <DashboardImage
+                alt={category.name}
+                src={category.image}
+                width={180}
+                height={180}
+                sizes="180px"
+                className="h-44 w-full rounded-md border bg-muted/30 md:w-44"
+                imageClassName="object-contain p-2"
+              />
+              <div className="grid gap-3">
+                <div>
+                  <h3 className="text-xl font-black">{category.name || "-"}</h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {category.description || "-"}
+                  </p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <DetailRow label="رقم الفئة" value={`#${category.id}`} />
+                  <DetailRow label="النوع" value={categoryTypeLabel(category.type)} />
+                  <DetailRow label="تصنيف الفئة" value={classificationName(category)} />
+                  <DetailRow
+                    label="رقم التصنيف"
+                    value={category.classificationId === null ? "-" : `#${category.classificationId}`}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CategoryFormDialog({
+  classifications,
+  error,
+  form,
+  loading,
+  onChange,
+  onClose,
+  onSubmit,
+}: {
+  classifications: CategoryClassification[];
+  error: string;
+  form: CategoryFormState;
+  loading: boolean;
+  onChange: (nextForm: CategoryFormState) => void;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const imageObjectUrlRef = useRef<string | null>(null);
+  useBodyScrollLock(true);
+
+  useEffect(
+    () => () => {
+      if (imageObjectUrlRef.current) URL.revokeObjectURL(imageObjectUrlRef.current);
+    },
+    [],
+  );
+
+  function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (imageObjectUrlRef.current) URL.revokeObjectURL(imageObjectUrlRef.current);
+    const previewUrl = URL.createObjectURL(file);
+    imageObjectUrlRef.current = previewUrl;
+    onChange({
+      ...form,
+      imagePreview: previewUrl,
+      imageFile: file,
+      imageRemovedLocally: false,
+    });
+    event.target.value = "";
+  }
+
+  function clearLocalPreview() {
+    if (imageObjectUrlRef.current) {
+      URL.revokeObjectURL(imageObjectUrlRef.current);
+      imageObjectUrlRef.current = null;
+    }
+    onChange({
+      ...form,
+      imagePreview: null,
+      imageFile: null,
+      imageRemovedLocally: true,
+    });
+  }
+
+  const classificationOptions = classifications.map((classification) => ({
+    value: String(classification.id),
+    label: classification.name,
+  }));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-foreground/35 p-4 backdrop-blur-[1px]">
+      <form
+        aria-labelledby="category-form-title"
+        aria-modal="true"
+        className="flex max-h-[92vh] w-full max-w-[980px] flex-col overflow-hidden rounded-lg border bg-background p-6 shadow-2xl"
+        onSubmit={onSubmit}
+        role="dialog"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id="category-form-title" className="text-lg font-semibold">
+              {form.mode === "edit" ? "تعديل الفئة" : "إضافة فئة جديدة"}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {form.mode === "edit"
+                ? "عدّل بيانات الفئة وصورتها."
+                : "أنشئ فئة منتجات جديدة من بيانات الباك."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border p-2 hover:bg-accent"
+            aria-label="إغلاق"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        {error ? (
+          <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-200">
+            {error.split("\n").map((line) => (
+              <div key={line}>{line}</div>
+            ))}
+          </div>
+        ) : null}
+
         <div className="mt-5 grid min-h-0 flex-1 gap-5 overflow-y-auto pr-1 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start">
           <div className="grid gap-3 text-sm font-medium lg:sticky lg:top-0">
             <div className="text-sm font-medium leading-5">صورة الفئة</div>
@@ -278,17 +370,17 @@ function CategoryDrawer({
                 <input
                   accept="image/*"
                   className="sr-only"
-                  onChange={handleCategoryImageChange}
+                  onChange={handleImageChange}
                   type="file"
                 />
-                {categoryImagePreview ? (
+                {form.imagePreview ? (
                   <>
                     <DashboardImage
-                      src={categoryImagePreview}
+                      src={form.imagePreview}
                       alt="معاينة صورة الفئة"
-                      width={300}
-                      height={300}
-                      sizes="150px"
+                      width={360}
+                      height={225}
+                      sizes="360px"
                       className="absolute inset-0 size-full"
                       imageClassName="object-cover"
                     />
@@ -306,82 +398,88 @@ function CategoryDrawer({
                   </span>
                 )}
               </label>
-              <div className="flex min-w-0 flex-col gap-3">
-                <p className="text-xs leading-5 text-muted-foreground">
-                  استخدم صورة مربعة وواضحة. الصيغ المدعومة PNG, JPG, WEBP.
-                </p>
-                <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground">
-                  <span className="min-w-0 truncate">
-                    {categoryImageName ||
-                      (category?.image ? "الصورة الحالية مستخدمة" : "لم يتم اختيار صورة")}
-                  </span>
-                  {categoryImagePreview && categoryImageName ? (
-                    <button
-                      type="button"
-                      onClick={resetCategoryImage}
-                      className="inline-flex shrink-0 items-center gap-1 font-semibold text-destructive transition hover:text-destructive/80"
-                    >
-                      <X className="size-3.5" />
-                      حذف
-                    </button>
-                  ) : null}
-                </div>
+              <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground">
+                <span className="min-w-0 truncate">
+                  {form.imageFile
+                    ? form.imageFile.name
+                    : form.imagePreview
+                      ? "الصورة الحالية مستخدمة"
+                      : "لم يتم اختيار صورة"}
+                </span>
+                {form.imagePreview ? (
+                  <button
+                    type="button"
+                    onClick={clearLocalPreview}
+                    className="inline-flex shrink-0 items-center gap-1 font-semibold text-destructive transition hover:text-destructive/80"
+                  >
+                    <X className="size-3.5" />
+                    إزالة المعاينة
+                  </button>
+                ) : null}
               </div>
+              {form.imageRemovedLocally && form.mode === "edit" ? (
+                <p className="text-xs leading-5 text-muted-foreground">
+                  إزالة الصورة من الباك غير موثقة؛ الحفظ بدون صورة جديدة سيحافظ على صورة الباك الحالية.
+                </p>
+              ) : null}
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="flex h-[76px] flex-col gap-3 text-sm font-medium sm:col-span-2">
-              <span className="leading-5">اسم الفئة</span>
+            <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+              اسم الفئة
               <Input
                 className="h-11"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="مثلاً: طيور، أسماك، لحوم فريش..."
+                value={form.name}
+                onChange={(event) => onChange({ ...form, name: event.target.value })}
+                placeholder="اسم الفئة مطلوب"
               />
             </label>
-            <div className="grid gap-3 rounded-md border bg-muted/15 px-4 py-3 text-sm font-medium sm:col-span-2">
-              <span className="leading-5">تصنيف الفئة</span>
-              <CategoryTypeSelector
-                value={categoryType}
-                onChange={setCategoryType}
-                customType={customCategoryType}
+            <label className="grid gap-2 text-sm font-medium">
+              تصنيف الفئة
+              <AppSelect
+                value={form.classificationId}
+                onValueChange={(classificationId) =>
+                  onChange({ ...form, classificationId })
+                }
+                options={classificationOptions}
+                disabled={!classificationOptions.length}
+                icon={<Layers3 className="size-4" />}
+                placeholder="اختر التصنيف"
+                className="h-11"
+                ariaLabel="تصنيف الفئة"
               />
-            </div>
-            <label className="flex min-h-[124px] flex-col gap-3 text-sm font-medium sm:col-span-2">
-              <span className="leading-5">وصف الفئة</span>
+            </label>
+            <label className="grid gap-2 text-sm font-medium">
+              نوع الفئة
+              <TypeSelector
+                value={form.type}
+                onChange={(type) => onChange({ ...form, type })}
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+              وصف الفئة
               <textarea
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                className="min-h-24 resize-none rounded-md border border-border bg-input px-3 py-2 text-sm font-normal leading-6 text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/40 focus:ring-2 focus:ring-primary/15"
-                placeholder="اكتب وصف مختصر للفئة..."
+                value={form.description}
+                onChange={(event) =>
+                  onChange({ ...form, description: event.target.value })
+                }
+                className="min-h-24 resize-none rounded-md border border-border bg-input px-3 py-2 text-sm leading-6 text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/40 focus:ring-2 focus:ring-primary/15"
+                placeholder="الوصف اختياري"
               />
             </label>
           </div>
         </div>
+
         <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-border/70 pt-4">
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} type="button">
             إلغاء
           </Button>
-          <Button
-            onClick={() =>
-              onSubmit({
-                name,
-                classificationName: selectedSection,
-                type: categoryType,
-                description,
-              })
-            }
-          >
-            {isEditing ? (
-              <Pencil className="size-4" />
-            ) : (
-              <Plus className="size-4" />
-            )}
-            {isEditing ? "حفظ التعديلات" : "إنشاء"}
+          <Button disabled={loading} type="submit">
+            {loading ? "جاري الحفظ..." : form.mode === "edit" ? "حفظ التعديلات" : "إنشاء"}
           </Button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }
@@ -390,12 +488,14 @@ function CategoryActionsMenu({
   name,
   open,
   onToggle,
+  onView,
   onEdit,
   onDelete,
 }: {
   name: string;
   open: boolean;
   onToggle: () => void;
+  onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -408,8 +508,9 @@ function CategoryActionsMenu({
         label={`إجراءات ${name}`}
         title="بيانات الفئة"
         triggerClassName="h-8 w-12"
-        menuClassName="w-40"
+        menuClassName="w-48"
         items={[
+          { label: "بيانات الفئة", icon: Eye, onClick: onView },
           { label: "تعديل", icon: Edit, onClick: onEdit },
           { label: "حذف", icon: Trash2, onClick: onDelete, tone: "danger" },
         ]}
@@ -418,488 +519,310 @@ function CategoryActionsMenu({
   );
 }
 
-function CategoryInlineEditPanel({
-  category,
-  onCancel,
-  onSave,
-}: {
-  category: CategoryRow;
-  onCancel: () => void;
-  onSave: (draft: CategoryDraft) => void;
-}) {
-  const [name, setName] = useState(category.name);
-  const [categoryType, setCategoryType] = useState<CategoryKind>(() => initialCategoryType(category));
-  const customCategoryType =
-    category.type?.trim() && !categoryTypeKind(category.type) ? category.type.trim() : "";
-  const categoryImageObjectUrlRef = useRef<string | null>(null);
-  const [imagePreview, setImagePreview] = useState(category.image);
-
-  function revokeCategoryImageObjectUrl() {
-    if (categoryImageObjectUrlRef.current) {
-      URL.revokeObjectURL(categoryImageObjectUrlRef.current);
-      categoryImageObjectUrlRef.current = null;
-    }
-  }
-
-  function handleImageChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    revokeCategoryImageObjectUrl();
-    const nextPreview = URL.createObjectURL(file);
-    categoryImageObjectUrlRef.current = nextPreview;
-    setImagePreview(nextPreview);
-    event.target.value = "";
-  }
-
-  useEffect(() => revokeCategoryImageObjectUrl, []);
-
-  return (
-    <form
-      className="rounded-md border border-primary/25 bg-primary/5 p-3 shadow-sm"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSave({
-          name,
-          classificationName: category.sections[0] ?? "الطازج",
-          type: categoryType,
-          description: "",
-        });
-      }}
-    >
-      <div className="grid gap-3 lg:grid-cols-[76px_minmax(0,1fr)_auto] lg:items-end">
-        <label className="grid gap-2 text-sm font-medium leading-none">
-          الصورة
-          <span className="group relative flex size-16 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-background text-center transition hover:border-primary/50 hover:bg-accent/40">
-            <input
-              accept="image/*"
-              className="sr-only"
-              onChange={handleImageChange}
-              type="file"
-            />
-            <DashboardImage
-              alt={category.name}
-              src={imagePreview}
-              width={96}
-              height={96}
-              sizes="64px"
-              className="absolute inset-0 size-full"
-              imageClassName="object-contain"
-            />
-            <span className="absolute inset-0 z-20 bg-black/0 transition group-hover:bg-black/30" />
-            <span className="relative z-30 rounded-md bg-background/95 px-2 py-1 text-[11px] font-semibold opacity-0 shadow-sm transition group-hover:opacity-100">
-              تغيير
-            </span>
-          </span>
-        </label>
-        <div className="grid gap-3 md:grid-cols-2">
-          <Field label="اسم الفئة">
-            <Input
-              value={name}
-              className="h-9"
-              onChange={(event) => setName(event.target.value)}
-            />
-          </Field>
-          <Field label="تصنيف الفئة">
-            <CategoryTypeSelector
-              value={categoryType}
-              onChange={setCategoryType}
-              customType={customCategoryType}
-            />
-          </Field>
-        </div>
-        <div className="flex gap-2 lg:pb-0">
-          <Button type="button" variant="outline" className="h-9" onClick={onCancel}>
-            إلغاء
-          </Button>
-          <Button type="submit" className="h-9">
-            حفظ
-          </Button>
-        </div>
-      </div>
-    </form>
-  );
-}
-
 export function CategoriesPage() {
   const { apiFetch } = useAuth();
+  const { openRow, toggleRow } = useItemTableState();
   const { showSnackbar } = useSnackbar();
-  const categoryDrawer = useDisclosure(false);
-  const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
-  const [orderedRows, setOrderedRows] = useState(() => categoryRows);
-  const [categorySectionOptions, setCategorySectionOptions] = useState(
-    () => initialCategorySectionOptions,
-  );
-  const [categoryClassificationIds, setCategoryClassificationIds] = useState<
-    Record<string, string | number>
-  >({});
-  const [editingCategory, setEditingCategory] = useState<CategoryRow | null>(
-    null,
-  );
-  const [inlineEditingCategory, setInlineEditingCategory] = useState<CategoryRow | null>(null);
-  const [draggingRowIndex, setDraggingRowIndex] = useState<string | null>(null);
-  const [dragOverRowIndex, setDragOverRowIndex] = useState<string | null>(null);
+  const [categories, setCategories] = useState<NormalizedProductCategory[]>([]);
+  const [classifications, setClassifications] = useState<CategoryClassification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] =
-    useState<CategoryStatusFilter>("all");
-  const [typeFilter, setTypeFilter] = useState<CategoryTypeFilter>("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
+  const [form, setForm] = useState<CategoryFormState | null>(null);
+  const [formError, setFormError] = useState("");
+  const [formSaving, setFormSaving] = useState(false);
+  const [detailCategory, setDetailCategory] = useState<NormalizedProductCategory | null>(null);
+  const [detailError, setDetailError] = useState("");
+  const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
 
-    async function loadCategoryData() {
+    async function loadCategories() {
+      setLoading(true);
+      setError("");
+
       try {
-        const [categories, classificationsResponse] = await Promise.all([
-          fetchAdminRows(
-            apiFetch,
-            adminApiPaths.productCategories,
-            categoryRowFromApi,
-          ),
-          apiFetch(adminApiPaths.categoryClassifications),
+        const [nextCategories, nextClassifications] = await Promise.all([
+          listProductCategories(apiFetch),
+          listCategoryClassifications(apiFetch),
         ]);
-        const classificationsData = await readApiData(classificationsResponse);
 
         if (!active) return;
-        setOrderedRows(categories);
-
-        if (classificationsResponse.ok) {
-          const nextSections = apiList(classificationsData)
-            .map((item) => String(item.name ?? "").trim())
-            .filter(Boolean);
-          const nextSectionIds = Object.fromEntries(
-            apiList(classificationsData)
-              .map((item) => [String(item.name ?? "").trim(), item.id])
-              .filter(([name, id]) => Boolean(name) && (typeof id === "string" || typeof id === "number")),
-          ) as Record<string, string | number>;
-
-          if (nextSections.length) {
-            setCategorySectionOptions(["all", ...nextSections]);
-            setCategoryClassificationIds(nextSectionIds);
-          }
-        }
-      } catch (error) {
-        if (!active) return;
-        showSnackbar({
-          message:
-            error instanceof Error
-              ? error.message
-              : "تعذر تحميل الفئات من الباك.",
-          tone: "danger",
-        });
+        setCategories(nextCategories);
+        setClassifications(nextClassifications);
+      } catch (loadError) {
+        if (active) setError(normalizeError(loadError, "تعذر تحميل الفئات"));
+      } finally {
+        if (active) setLoading(false);
       }
     }
 
-    void loadCategoryData();
+    void loadCategories();
 
     return () => {
       active = false;
     };
-  }, [apiFetch, showSnackbar]);
+  }, [apiFetch]);
 
-  const visibleRows = orderedRows.filter((row) => {
-    const matchesSearch = row.name
-      .toLocaleLowerCase("ar-EG")
-      .includes(searchTerm.trim().toLocaleLowerCase("ar-EG"));
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "active" ? row.active : !row.active);
-    const matchesType = categoryMatchesType(row, typeFilter);
-
-    return matchesSearch && matchesStatus && matchesType;
-  });
-  const totalPages = Math.max(
-    1,
-    Math.ceil(visibleRows.length / categoriesPageSize),
+  const typeOptions = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...categoryTypeOptions.map((option) => option.value),
+          ...categories.map((category) => category.type).filter(Boolean),
+        ]),
+      ),
+    [categories],
   );
+
+  const visibleRows = useMemo(() => {
+    const search = searchTerm.trim().toLocaleLowerCase("ar-EG");
+
+    return categories.filter((category) => {
+      const matchesSearch =
+        !search ||
+        [
+          category.name,
+          category.type,
+          category.description,
+          classificationName(category),
+        ]
+          .join(" ")
+          .toLocaleLowerCase("ar-EG")
+          .includes(search);
+      const matchesType = typeFilter === "all" || category.type === typeFilter;
+
+      return matchesSearch && matchesType;
+    });
+  }, [categories, searchTerm, typeFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleRows.length / categoriesPageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStartIndex = (safeCurrentPage - 1) * categoriesPageSize;
-  const pagedRows = visibleRows.slice(
-    pageStartIndex,
-    pageStartIndex + categoriesPageSize,
-  );
-
-  function moveCategoryTo(rowIndex: string, targetRowIndex: string) {
-    if (rowIndex === targetRowIndex) return;
-
-    const sourceVisibleIndex = visibleRows.findIndex(
-      (row) => row.index === rowIndex,
-    );
-    const targetVisibleIndex = visibleRows.findIndex(
-      (row) => row.index === targetRowIndex,
-    );
-
-    if (sourceVisibleIndex === -1 || targetVisibleIndex === -1) return;
-
-    setOrderedRows((currentRows) => {
-      const sourceIndex = currentRows.findIndex((row) => row.index === rowIndex);
-      const targetIndex = currentRows.findIndex(
-        (row) => row.index === targetRowIndex,
-      );
-
-      if (sourceIndex === -1 || targetIndex === -1) return currentRows;
-
-      const [sourceRow] = currentRows.slice(sourceIndex, sourceIndex + 1);
-      const rowsWithoutSource = currentRows.filter(
-        (row) => row.index !== rowIndex,
-      );
-      const targetIndexAfterRemoval = rowsWithoutSource.findIndex(
-        (row) => row.index === targetRowIndex,
-      );
-      const insertIndex =
-        sourceVisibleIndex < targetVisibleIndex
-          ? targetIndexAfterRemoval + 1
-          : targetIndexAfterRemoval;
-
-      return [
-        ...rowsWithoutSource.slice(0, insertIndex),
-        sourceRow,
-        ...rowsWithoutSource.slice(insertIndex),
-      ];
-    });
-    setOpenActionMenu(null);
-    showSnackbar({ message: "تم تحديث ترتيب الفئات." });
-  }
+  const pagedRows = visibleRows.slice(pageStartIndex, pageStartIndex + categoriesPageSize);
+  const detailDialogOpen = detailLoading || Boolean(detailError) || Boolean(detailCategory);
 
   function resetToFirstPage() {
     setCurrentPage(1);
   }
 
-  function openCreateDrawer() {
-    setEditingCategory(null);
-    setInlineEditingCategory(null);
-    categoryDrawer.open();
+  function openCreateForm() {
+    setFormError("");
+    setForm({
+      ...emptyFormState(),
+      classificationId: classifications[0] ? String(classifications[0].id) : "",
+    });
+    toggleRow("");
   }
 
-  function openEditDrawer(category: CategoryRow) {
-    setEditingCategory(category);
-    setInlineEditingCategory(null);
-    setOpenActionMenu(null);
-    categoryDrawer.open();
-  }
-
-  function closeCategoryDrawer() {
-    categoryDrawer.close();
-    setEditingCategory(null);
-  }
-
-  async function toggleCategoryStatus(rowIndex: string, checked: boolean) {
-    const previousRows = orderedRows;
-    setOrderedRows((currentRows) =>
-      currentRows.map((row) =>
-        row.index === rowIndex ? { ...row, active: checked } : row,
-      ),
-    );
+  async function openEditForm(category: NormalizedProductCategory) {
+    setOpenDetailClosed();
+    setFormError("");
+    setFormSaving(false);
 
     try {
-      await sendAdminJson(
-        apiFetch,
-        `${adminApiPaths.productCategories}${encodeURIComponent(rowIndex)}/`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ is_active: checked }),
-        },
-      );
-      showSnackbar({
-        message: checked ? "تم تفعيل الفئة في الباك." : "تم إيقاف الفئة في الباك.",
+      const detail = await getProductCategory(apiFetch, category.id);
+      const fallbackClassification =
+        detail.classificationId !== null &&
+        !classifications.some((item) => item.id === detail.classificationId)
+          ? {
+              id: detail.classificationId,
+              name: classificationName(detail),
+            }
+          : null;
+
+      if (fallbackClassification) {
+        setClassifications((current) => [...current, fallbackClassification]);
+      }
+      setForm({
+        id: detail.id,
+        mode: "edit",
+        name: detail.name,
+        classificationId: detail.classificationId === null ? "" : String(detail.classificationId),
+        type: detail.type || categoryTypeOptions[0].value,
+        description: detail.description,
+        imagePreview: detail.image,
+        imageFile: null,
+        imageRemovedLocally: false,
       });
-    } catch (error) {
-      setOrderedRows(previousRows);
+    } catch (editError) {
       showSnackbar({
         message:
-          error instanceof Error
-            ? error.message
-            : "تعذر تحديث حالة الفئة في الباك.",
+          editError instanceof AdminApiError && editError.status === 404
+            ? "تعذر العثور على الفئة"
+            : normalizeError(editError, "تعذر تحميل بيانات الفئة"),
         tone: "danger",
       });
     }
   }
 
-  async function deleteCategory(category: CategoryRow) {
-    const previousRows = orderedRows;
-    setOrderedRows((currentRows) =>
-      currentRows.filter((row) => row.index !== category.index),
-    );
+  function closeForm() {
+    setForm(null);
+    setFormError("");
+    setFormSaving(false);
+  }
+
+  function validateForm(currentForm: CategoryFormState) {
+    if (!currentForm.name.trim()) return "اسم الفئة مطلوب";
+    if (!currentForm.classificationId || !Number.isFinite(Number(currentForm.classificationId))) {
+      return "تصنيف الفئة مطلوب";
+    }
+    if (!currentForm.type.trim()) return "نوع الفئة مطلوب";
+    return "";
+  }
+
+  async function submitForm(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!form || formSaving) return;
+
+    const validationError = validateForm(form);
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
+
+    const payload = productCategoryPayload(form);
+    setFormSaving(true);
+    setFormError("");
 
     try {
-      await sendAdminJson(
-        apiFetch,
-        `${adminApiPaths.productCategories}${encodeURIComponent(category.index)}/`,
-        { method: "DELETE" },
+      const savedCategory =
+        form.mode === "edit" && form.id !== undefined
+          ? await updateProductCategory(apiFetch, form.id, payload, form.imageFile)
+          : await createProductCategory(apiFetch, payload, form.imageFile);
+
+      setCategories((current) =>
+        form.mode === "edit"
+          ? current.map((category) =>
+              category.id === savedCategory.id ? savedCategory : category,
+            )
+          : [savedCategory, ...current],
+      );
+      closeForm();
+      showSnackbar({
+        message:
+          form.mode === "edit"
+            ? "تم حفظ تعديلات الفئة في الباك."
+            : "تم إنشاء الفئة في الباك.",
+      });
+    } catch (saveError) {
+      if (saveError instanceof AdminApiError) {
+        const messages = fieldErrors(saveError.data);
+        setFormError(messages.length ? messages.join("\n") : saveError.message);
+      } else {
+        setFormError(normalizeError(saveError, "تعذر حفظ الفئة"));
+      }
+    } finally {
+      setFormSaving(false);
+    }
+  }
+
+  async function openDetail(category: NormalizedProductCategory) {
+    setDetailCategory(null);
+    setDetailError("");
+    setDetailLoading(true);
+
+    try {
+      const detail = await getProductCategory(apiFetch, category.id);
+      setDetailCategory(detail);
+    } catch (detailLoadError) {
+      setDetailError(
+        detailLoadError instanceof AdminApiError && detailLoadError.status === 404
+          ? "تعذر العثور على الفئة"
+          : normalizeError(detailLoadError, "تعذر تحميل بيانات الفئة"),
+      );
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  function setOpenDetailClosed() {
+    setDetailCategory(null);
+    setDetailError("");
+    setDetailLoading(false);
+  }
+
+  async function deleteCategory(category: NormalizedProductCategory) {
+    try {
+      await deleteProductCategory(apiFetch, category.id);
+      setCategories((current) =>
+        current.filter((currentCategory) => currentCategory.id !== category.id),
       );
       showSnackbar({
         message: `تم حذف ${category.name} من الباك.`,
         tone: "danger",
       });
-    } catch (error) {
-      setOrderedRows(previousRows);
+    } catch (deleteError) {
       showSnackbar({
-        message:
-          error instanceof Error
-            ? error.message
-            : "تعذر حذف الفئة من الباك.",
+        message: normalizeError(deleteError, "تعذر حذف الفئة"),
         tone: "danger",
       });
     }
   }
 
-  function classificationIdByName(name: string) {
-    if (categoryClassificationIds[name]) return categoryClassificationIds[name];
-
-    const sectionIndex = categorySectionOptions
-      .filter((section) => section !== "all")
-      .findIndex((section) => section === name);
-
-    return sectionIndex >= 0 ? sectionIndex + 1 : 1;
-  }
-
-  async function saveCategoryDraft(draft: CategoryDraft) {
-    if (!draft.name.trim()) {
-      showSnackbar({ message: "اسم الفئة مطلوب", tone: "danger" });
-      return;
-    }
-
-    if (!draft.classificationName.trim()) {
-      showSnackbar({ message: "تصنيف الفئة مطلوب", tone: "danger" });
-      return;
-    }
-
-    if (!draft.type) {
-      showSnackbar({ message: "نوع الفئة مطلوب", tone: "danger" });
-      return;
-    }
-
-    const payload = {
-      classification_id: classificationIdByName(draft.classificationName),
-      name: draft.name.trim(),
-      type: categoryTypeBackendValue(draft.type),
-      description: draft.description.trim(),
-    };
-    const path = editingCategory
-      ? `${adminApiPaths.productCategories}${encodeURIComponent(editingCategory.index)}/`
-      : adminApiPaths.productCategories;
-    try {
-      const data = await sendAdminJson(apiFetch, path, {
-        method: editingCategory ? "PATCH" : "POST",
-        body: JSON.stringify(payload),
-      });
-      const nextRow = categoryRowFromApi(data as BackendRecord, orderedRows.length);
-
-      setOrderedRows((currentRows) =>
-        editingCategory
-          ? currentRows.map((row) =>
-              row.index === editingCategory.index ? nextRow : row,
-            )
-          : [nextRow, ...currentRows],
-      );
-      closeCategoryDrawer();
-      setInlineEditingCategory(null);
-      showSnackbar({
-        message: editingCategory
-          ? "تم حفظ تعديلات الفئة في الباك."
-          : "تم إنشاء الفئة في الباك.",
-      });
-    } catch (error) {
-      showSnackbar({
-        message:
-          error instanceof Error ? error.message : "تعذر حفظ الفئة في الباك.",
-        tone: "danger",
-      });
-    }
-  }
-
-  const rowsForCategoriesTable = pagedRows.flatMap((row, visibleIndex) => {
-    const baseRow = [
-      <div
-        key={`order-${row.index}`}
-        className="flex items-center justify-center gap-3 px-3"
-      >
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">
-          {pageStartIndex + visibleIndex + 1}
-        </span>
-        <span
-          className="inline-flex size-8 cursor-grab items-center justify-center rounded-md border bg-background text-muted-foreground active:cursor-grabbing"
-          aria-label={`تحريك ${row.name}`}
-          title="اسحب لتغيير الترتيب"
-        >
-          <GripVertical className="size-4" />
-        </span>
-      </div>,
-      <div key={`image-${row.index}`} className="flex justify-center">
-        <DashboardImage
-          alt={row.name}
-          src={row.image}
-          width={40}
-          height={40}
-          sizes="40px"
-          className="size-10 rounded-sm"
-        />
-      </div>,
-      <div key={`name-${row.index}`} className="min-w-0">
-        <p className="truncate font-semibold">{row.name}</p>
-        <p className="mt-1">
-          <CategoryTypeBadge row={row} />
-        </p>
-      </div>,
-      <div key={`status-${row.index}`} className="flex justify-center">
-        <Switch
-          checked={row.active}
-          onCheckedChange={(checked) => toggleCategoryStatus(row.index, checked)}
-        />
-      </div>,
-      <CategoryActionsMenu
-        key={`actions-${row.index}`}
-        name={row.name}
-        open={openActionMenu === row.index}
-        onToggle={() =>
-          setOpenActionMenu((current) =>
-            current === row.index ? null : row.index,
-          )
-        }
-        onEdit={() => openEditDrawer(row)}
-        onDelete={() => {
-          setOpenActionMenu(null);
-          void deleteCategory(row);
-        }}
-      />,
-    ];
-
-    if (inlineEditingCategory?.index !== row.index) {
-      return [baseRow];
-    }
-
-    return [
-      baseRow,
-      [
-        <CategoryInlineEditPanel
-          key={`edit-${row.index}`}
-          category={inlineEditingCategory}
-          onCancel={() => {
-            setInlineEditingCategory(null);
-            setEditingCategory(null);
-          }}
-          onSave={(draft) => void saveCategoryDraft(draft)}
-        />,
-        null,
-        null,
-        null,
-        null,
-      ],
-    ];
-  });
+  const tableRows = (loading ? [] : pagedRows).map((row, rowPosition) => [
+    <span
+      key={`order-${row.id}`}
+      className="mx-auto flex size-10 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary"
+    >
+      {pageStartIndex + rowPosition + 1}
+    </span>,
+    <div key={`image-${row.id}`} className="flex justify-center">
+      <DashboardImage
+        alt={row.name}
+        src={row.image}
+        width={48}
+        height={48}
+        sizes="48px"
+        className="size-12 rounded-sm border bg-muted/30"
+        imageClassName="object-contain p-1"
+      />
+    </div>,
+    <div key={`name-${row.id}`} className="min-w-0">
+      <p className="truncate font-semibold">{row.name || "-"}</p>
+      <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+        {row.description || "-"}
+      </p>
+    </div>,
+    <span
+      key={`type-${row.id}`}
+      className="inline-flex rounded-md bg-muted px-2 py-0.5 text-xs font-bold text-muted-foreground"
+    >
+      {categoryTypeLabel(row.type)}
+    </span>,
+    <span key={`classification-${row.id}`} className="text-sm font-medium">
+      {classificationName(row)}
+    </span>,
+    <CategoryActionsMenu
+      key={`actions-${row.id}`}
+      name={row.name}
+      open={openRow === String(row.id)}
+      onToggle={() => toggleRow(String(row.id))}
+      onView={() => {
+        toggleRow(String(row.id));
+        void openDetail(row);
+      }}
+      onEdit={() => {
+        toggleRow(String(row.id));
+        void openEditForm(row);
+      }}
+      onDelete={() => {
+        toggleRow(String(row.id));
+        void deleteCategory(row);
+      }}
+    />,
+  ]);
 
   return (
     <div className="px-6 py-6">
       <div className="flex min-h-[57px] items-start">
         <div>
-          <h1 className="text-2xl font-semibold leading-8">
-            الفئات
-          </h1>
+          <h1 className="text-2xl font-semibold leading-8">الفئات</h1>
           <p className="mt-1 text-sm leading-[21px] text-muted-foreground">
-            إدارة فئات المنتجات وحالة ظهورها داخل تطبيق العملاء.
+            إدارة فئات المنتجات وصورها من باك كتالوج المنتجات.
           </p>
         </div>
       </div>
@@ -909,17 +832,22 @@ export function CategoriesPage() {
           <div>
             <div className="text-base font-semibold">كل الفئات</div>
             <div className="mt-1 text-xs text-muted-foreground">
-              أنشئ فئة جديدة لتنظيم المنتجات.
+              الصور والبيانات تأتي من /catalog/product-categories/.
             </div>
           </div>
-          <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
-            <Button size="sm" onClick={openCreateDrawer}>
-              <Plus className="size-4" />
-              إضافة فئة جديدة
-            </Button>
-          </div>
+          <Button size="sm" onClick={openCreateForm}>
+            <Plus className="size-4" />
+            إضافة فئة جديدة
+          </Button>
         </div>
+
         <div className="p-6 pt-4">
+          {error ? (
+            <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-200">
+              {error}
+            </div>
+          ) : null}
+
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <label className="flex flex-col gap-2 md:flex-1">
               <span className="text-sm leading-5">بحث</span>
@@ -936,135 +864,59 @@ export function CategoriesPage() {
                 />
               </div>
             </label>
-            <label className="flex flex-col gap-2 md:w-[150px]">
-              <span className="text-sm leading-5">الحالة</span>
-              <AppSelect
-                value={statusFilter}
-                onValueChange={(value) => {
-                  setStatusFilter(value as CategoryStatusFilter);
-                  setOpenActionMenu(null);
-                  resetToFirstPage();
-                }}
-                options={[
-                  { value: "all", label: "كل الحالات" },
-                  { value: "active", label: "نشط" },
-                  { value: "inactive", label: "غير نشط" },
-                ]}
-                className="h-9"
-                contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl"
-                ariaLabel="الحالة"
-              />
-            </label>
-            <label className="flex flex-col gap-2 md:w-[170px]">
-              <span className="text-sm leading-5">تصنيف الفئة</span>
+            <label className="flex flex-col gap-2 md:w-[220px]">
+              <span className="text-sm leading-5">نوع الفئة</span>
               <AppSelect
                 value={typeFilter}
                 onValueChange={(value) => {
-                  setTypeFilter(value as CategoryTypeFilter);
-                  setOpenActionMenu(null);
+                  setTypeFilter(value);
                   resetToFirstPage();
                 }}
                 options={[
                   { value: "all", label: "الكل" },
-                  { value: "normal", label: "فئة عادية" },
-                  { value: "featured", label: "فئة مميزة" },
-                  { value: "popular", label: "فئة شائعة" },
+                  ...typeOptions.map((type) => ({
+                    value: type,
+                    label: categoryTypeLabel(type),
+                  })),
                 ]}
                 className="h-9"
-                contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl"
-                ariaLabel="تصنيف الفئة"
+                ariaLabel="نوع الفئة"
               />
             </label>
           </div>
+
           <div className="mt-4 overflow-x-auto rounded-md border">
             <DataTable
-              minWidth={1120}
+              minWidth={980}
               rowHeight="tall"
-              columnWidths={[110, 120, 430, 150, 140]}
+              columnWidths={[90, 110, 310, 150, 220, 110]}
               headers={[
                 <span key="order" className="block text-center">
-                  الترتيب
+                  #
                 </span>,
                 <span key="image" className="block text-center">
                   الصورة
                 </span>,
                 "الاسم",
-                <span key="status" className="block text-center">
-                  الحالة
-                </span>,
+                "النوع",
+                "تصنيف الفئة",
                 <span key="actions" className="block text-center">
                   إجراءات
                 </span>,
               ]}
-              getRowProps={(rowIndex) => {
-                const tableRow = rowsForCategoriesTable[rowIndex];
-                if (!tableRow || tableRow[1] === null) {
-                  return undefined;
-                }
-                let row: CategoryRow | null = null;
-                let tableIndex = 0;
-                for (const pagedRow of pagedRows) {
-                  if (tableIndex === rowIndex) {
-                    row = pagedRow;
-                    break;
-                  }
-                  tableIndex += 1;
-                  if (inlineEditingCategory?.index === pagedRow.index) {
-                    tableIndex += 1;
-                  }
-                }
-                if (!row) return undefined;
-
-                return {
-                  draggable: true,
-                  onDragStart: (event) => {
-                    event.dataTransfer.effectAllowed = "move";
-                    event.dataTransfer.setData("text/plain", row.index);
-                    setDraggingRowIndex(row.index);
-                    setDragOverRowIndex(null);
-                  },
-                  onDragOver: (event) => {
-                    event.preventDefault();
-                    event.dataTransfer.dropEffect = "move";
-                    setDragOverRowIndex(row.index);
-                  },
-                  onDragLeave: () => {
-                    setDragOverRowIndex((current) =>
-                      current === row.index ? null : current,
-                    );
-                  },
-                  onDrop: (event) => {
-                    event.preventDefault();
-                    const sourceRowIndex =
-                      event.dataTransfer.getData("text/plain") ??
-                      draggingRowIndex;
-                    if (sourceRowIndex) {
-                      moveCategoryTo(sourceRowIndex, row.index);
-                    }
-                    setDraggingRowIndex(null);
-                    setDragOverRowIndex(null);
-                  },
-                  onDragEnd: () => {
-                    setDraggingRowIndex(null);
-                    setDragOverRowIndex(null);
-                  },
-                  className:
-                    dragOverRowIndex === row.index &&
-                    draggingRowIndex !== row.index
-                      ? "bg-accent/60"
-                      : draggingRowIndex === row.index
-                        ? "opacity-60"
-                        : undefined,
-                };
-              }}
-              rows={rowsForCategoriesTable}
-              getCellProps={(_rowIndex, cellIndex, row) =>
-                row[1] === null && cellIndex === 0
-                  ? { colSpan: 5, className: "p-3" }
-                  : undefined
-              }
+              rows={tableRows}
             />
+            {loading ? (
+              <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
+                جاري تحميل الفئات...
+              </div>
+            ) : !visibleRows.length ? (
+              <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
+                لا توجد فئات مطابقة.
+              </div>
+            ) : null}
           </div>
+
           <Pagination
             text={`عرض ${pagedRows.length} من ${visibleRows.length} نتيجة`}
             pages={`${safeCurrentPage} / ${totalPages}`}
@@ -1072,9 +924,7 @@ export function CategoriesPage() {
             previousDisabled={safeCurrentPage === 1}
             nextDisabled={safeCurrentPage === totalPages}
             onPrevious={() =>
-              setCurrentPage((page) =>
-                Math.max(1, Math.min(page, totalPages) - 1),
-              )
+              setCurrentPage((page) => Math.max(1, Math.min(page, totalPages) - 1))
             }
             onNext={() =>
               setCurrentPage((page) =>
@@ -1084,11 +934,25 @@ export function CategoriesPage() {
           />
         </div>
       </Card>
-      {categoryDrawer.isOpen ? (
-        <CategoryDrawer
-          category={editingCategory}
-          onClose={closeCategoryDrawer}
-          onSubmit={(draft) => void saveCategoryDraft(draft)}
+
+      {form ? (
+        <CategoryFormDialog
+          classifications={classifications}
+          error={formError}
+          form={form}
+          loading={formSaving}
+          onChange={setForm}
+          onClose={closeForm}
+          onSubmit={submitForm}
+        />
+      ) : null}
+
+      {detailDialogOpen ? (
+        <CategoryDetailDialog
+          category={detailCategory}
+          error={detailError}
+          loading={detailLoading}
+          onClose={setOpenDetailClosed}
         />
       ) : null}
     </div>

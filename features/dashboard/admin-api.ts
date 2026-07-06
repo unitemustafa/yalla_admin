@@ -1,6 +1,6 @@
 import type { AddonRow, CategoryRow, ItemRow, ProductVariant } from "./data";
 import { firstApiError } from "./users/api-users";
-import { resolveMediaUrl } from "@/lib/media-url";
+import { normalizeImageSrc } from "@/lib/media-url";
 
 export const adminApiPaths = {
   products: "catalog/products/",
@@ -24,6 +24,89 @@ export type BackendRecord = Record<string, unknown>;
 export type ProductLike = {
   variants?: unknown;
 };
+
+export type NormalizedProductVariant = BackendRecord & {
+  id?: number | string | null;
+  price?: string | number | null;
+  sku?: string | null;
+  attribute_values?: unknown[];
+};
+
+export type NormalizedProduct = {
+  id: number;
+  name: string;
+  description: string;
+  marketId: number | null;
+  market: BackendRecord | null;
+  categoryId: number | null;
+  category: BackendRecord | null;
+  image: string | null;
+  discount: string | number;
+  isAvailable: boolean;
+  additions: number[];
+  variants: NormalizedProductVariant[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ProductAttributeValuePayload = {
+  id?: number;
+  attribute_id: number;
+  option_id: number;
+};
+
+export type ProductVariantPayload = {
+  id?: number;
+  price: string;
+  sku?: string;
+  attribute_values: ProductAttributeValuePayload[];
+};
+
+export type ProductWritePayload = {
+  market_id?: number;
+  category_id?: number;
+  is_available?: boolean;
+  name?: string;
+  description?: string;
+  discount?: string;
+  additions?: number[];
+  attribute_values?: ProductAttributeValuePayload[];
+  variants?: ProductVariantPayload[];
+};
+
+export type NormalizedProductCategory = {
+  id: number;
+  classificationId: number | null;
+  classification: BackendRecord | null;
+  name: string;
+  type: string;
+  description: string;
+  image: string | null;
+};
+
+export type CategoryClassification = {
+  id: number;
+  name: string;
+};
+
+export type ProductCategoryWritePayload = {
+  classification_id: number;
+  name: string;
+  type: string;
+  description: string;
+};
+
+export class AdminApiError extends Error {
+  status: number;
+  data: unknown;
+
+  constructor(message: string, status: number, data: unknown) {
+    super(message);
+    this.name = "AdminApiError";
+    this.status = status;
+    this.data = data;
+  }
+}
 
 export type DashboardOverview = {
   range?: {
@@ -144,6 +227,257 @@ export function apiList(value: unknown): BackendRecord[] {
   );
 }
 
+function backendRecord(value: unknown): BackendRecord | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as BackendRecord)
+    : null;
+}
+
+function nullableNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+export function normalizeIds(values: unknown) {
+  return (Array.isArray(values) ? values : [])
+    .map((value) => {
+      if (typeof value === "number") return value;
+      if (typeof value === "string" && value.trim() !== "") return Number(value);
+      const record = backendRecord(value);
+      if (record && "id" in record) return Number(record.id);
+      return Number.NaN;
+    })
+    .filter((id) => Number.isFinite(id));
+}
+
+function normalizeAdditionId(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  const record = backendRecord(value);
+  return record ? nullableNumber(record.id) : null;
+}
+
+function normalizeProductImage(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const lower = trimmed.toLowerCase();
+  if (lower === "null" || lower === "undefined" || lower === "[object object]") {
+    return null;
+  }
+  return normalizeImageSrc(trimmed);
+}
+
+export function normalizeProduct(raw: unknown): NormalizedProduct {
+  const record = backendRecord(raw) ?? {};
+  const market = backendRecord(record.market);
+  const category = backendRecord(record.category);
+  const variants = Array.isArray(record.variants)
+    ? record.variants
+        .map((variant) => backendRecord(variant))
+        .filter((variant): variant is BackendRecord => Boolean(variant))
+        .map((variant) => ({
+          ...variant,
+          id: nullableNumber(variant.id) ?? (typeof variant.id === "string" ? variant.id : null),
+          price:
+            typeof variant.price === "number" || typeof variant.price === "string"
+              ? variant.price
+              : "",
+          sku: typeof variant.sku === "string" ? variant.sku : null,
+          attribute_values: Array.isArray(variant.attribute_values)
+            ? variant.attribute_values
+            : [],
+        }))
+    : [];
+
+  return {
+    id: Number(record.id),
+    name: typeof record.name === "string" ? record.name : "",
+    description: typeof record.description === "string" ? record.description : "",
+    marketId: nullableNumber(record.market_id ?? record.marketId ?? market?.id),
+    market,
+    categoryId: nullableNumber(record.category_id ?? record.categoryId ?? category?.id),
+    category,
+    image: normalizeProductImage(record.image),
+    discount:
+      typeof record.discount === "number" || typeof record.discount === "string"
+        ? record.discount
+        : "0.00",
+    isAvailable:
+      typeof record.is_available === "boolean"
+        ? record.is_available
+        : typeof record.isAvailable === "boolean"
+          ? record.isAvailable
+          : Boolean(record.is_available),
+    additions: Array.isArray(record.additions)
+      ? record.additions
+          .map(normalizeAdditionId)
+          .filter((additionId): additionId is number => additionId !== null)
+      : [],
+    variants,
+    createdAt:
+      typeof record.created_at === "string"
+        ? record.created_at
+        : typeof record.createdAt === "string"
+          ? record.createdAt
+          : "",
+    updatedAt:
+      typeof record.updated_at === "string"
+        ? record.updated_at
+        : typeof record.updatedAt === "string"
+          ? record.updatedAt
+          : "",
+  };
+}
+
+export function normalizeProductCategory(raw: unknown): NormalizedProductCategory {
+  const record = backendRecord(raw) ?? {};
+  const classification = backendRecord(record.classification);
+
+  return {
+    id: Number(record.id),
+    classificationId: nullableNumber(record.classification_id ?? classification?.id),
+    classification,
+    name: typeof record.name === "string" ? record.name : "",
+    type: typeof record.type === "string" ? record.type : "",
+    description: typeof record.description === "string" ? record.description : "",
+    image: typeof record.image === "string" && record.image.trim() ? record.image : null,
+  };
+}
+
+function assertReadableProductCategory(
+  category: NormalizedProductCategory,
+  fallback: string,
+) {
+  if (!Number.isFinite(category.id)) {
+    throw new AdminApiError(fallback, 200, category);
+  }
+
+  return category;
+}
+
+function normalizeCategoryClassification(raw: unknown): CategoryClassification | null {
+  const record = backendRecord(raw);
+  const id = nullableNumber(record?.id);
+
+  if (!record || id === null) return null;
+
+  return {
+    id,
+    name:
+      typeof record.name === "string" && record.name.trim()
+        ? record.name.trim()
+        : `تصنيف #${id}`,
+  };
+}
+
+function assertReadableProduct(product: NormalizedProduct, fallback: string) {
+  if (!Number.isFinite(product.id)) {
+    throw new AdminApiError(fallback, 200, product);
+  }
+
+  return product;
+}
+
+async function parseAdminResponse(
+  response: Response,
+  fallback: string,
+): Promise<unknown> {
+  const data = await readApiData(response);
+
+  if (!response.ok) {
+    throw new AdminApiError(apiErrorMessage(data, fallback), response.status, data);
+  }
+
+  return data;
+}
+
+function productPayloadFormData(payload: ProductWritePayload, imageFile: File) {
+  const formData = new FormData();
+
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value === undefined) return;
+    if (key === "additions") {
+      normalizeIds(value).forEach((id) => {
+        formData.append("additions", String(id));
+      });
+      return;
+    }
+    if (Array.isArray(value)) {
+      formData.set(key, JSON.stringify(value));
+      return;
+    }
+    formData.set(key, typeof value === "boolean" ? String(value) : String(value ?? ""));
+  });
+  formData.set("image", imageFile);
+
+  return formData;
+}
+
+function productRequestInit(
+  method: "POST" | "PATCH",
+  payload: ProductWritePayload,
+  imageFile?: File | null,
+): RequestInit {
+  if (imageFile) {
+    return {
+      method,
+      body: productPayloadFormData(payload, imageFile),
+    };
+  }
+
+  return {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  };
+}
+
+function productCategoryPayloadFormData(
+  payload: ProductCategoryWritePayload,
+  imageFile: File,
+) {
+  const formData = new FormData();
+
+  formData.append("classification_id", String(Number(payload.classification_id)));
+  formData.append("name", payload.name);
+  formData.append("type", payload.type);
+  formData.append("description", payload.description);
+  formData.append("image", imageFile);
+
+  return formData;
+}
+
+function productCategoryRequestInit(
+  method: "POST" | "PATCH",
+  payload: ProductCategoryWritePayload,
+  imageFile?: File | null,
+): RequestInit {
+  if (imageFile) {
+    return {
+      method,
+      body: productCategoryPayloadFormData(payload, imageFile),
+    };
+  }
+
+  return {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  };
+}
+
 function text(record: BackendRecord, keys: string[], fallback = "") {
   for (const key of keys) {
     const value = record[key];
@@ -173,8 +507,9 @@ function id(record: BackendRecord, index: number) {
 }
 
 function image(record: BackendRecord) {
-  return resolveMediaUrl(
+  return normalizeImageSrc(
     text(record, ["image", "image_url", "thumbnail", "thumbnail_url", "avatar_url"], fallbackImage),
+    fallbackImage,
   );
 }
 
@@ -232,21 +567,27 @@ function nestedName(value: unknown) {
   return "";
 }
 
-export function productRowFromApi(record: BackendRecord, index: number): ItemRow {
+export function productRowFromApi(value: unknown, index: number): ItemRow {
+  const record = backendRecord(value) ?? {};
+  const product = normalizeProduct(record);
   const category =
-    nestedName(record.category) ||
+    nestedName(product.category) ||
     nestedName(record.product_category) ||
     nestedName(record.classification) ||
     text(record, ["category_name", "product_category_name"], "غير مصنف");
-  const market =
-    record.market && typeof record.market === "object"
-      ? (record.market as BackendRecord)
-      : null;
-  const marketId = text(record, ["market_id"], text(market ?? {}, ["id"]));
+  const market = product.market;
+  const marketId = product.marketId === null ? "" : String(product.marketId);
   const shopName =
     nestedName(market) ||
     nestedName(record.shop) ||
     text(record, ["market_name", "shop_name"], "");
+  const marketScope = typeof market?.scope === "string" ? market.scope : "";
+  const scopeLabel =
+    marketScope === "general"
+      ? "عام"
+      : marketScope === "service_city"
+        ? text(market ?? {}, ["branch"], "مدينة خدمة")
+        : text(market ?? {}, ["scope"], "");
   const rawRegionNames =
     Array.isArray(record.region_names)
       ? record.region_names
@@ -271,21 +612,22 @@ export function productRowFromApi(record: BackendRecord, index: number): ItemRow
             : Array.isArray(market?.service_city_slugs)
               ? market.service_city_slugs
               : [];
-  const variants = productVariants(record);
-  const displayPrice = getProductDisplayPrice(record);
-  const displayPriceLabel = formatProductPrice(record);
+  const variants = productVariants(product);
+  const displayPrice = getProductDisplayPrice(product);
+  const displayPriceLabel = formatProductPrice(product);
 
   return {
     index: String(index + 1),
-    id: id(record, index),
+    id: Number.isFinite(product.id) ? String(product.id) : id(record, index),
     code: text(record, ["code", "sku"], id(record, index)),
-    image: image(record),
-    name: text(record, ["name", "name_ar", "name_en", "title"], `منتج #${index + 1}`),
-    description: text(record, ["description", "details"], ""),
+    image: normalizeImageSrc(product.image, fallbackImage),
+    name: product.name || text(record, ["name", "name_ar", "name_en", "title"], `منتج #${index + 1}`),
+    description: product.description || text(record, ["description", "details"], ""),
     category,
     subcategory: text(record, ["subcategory", "subcategory_name"], category),
     marketId,
     shopName,
+    scopeLabel,
     calories: text(record, ["stock", "quantity", "calories"], ""),
     regionSlugs: rawRegionSlugs.map(String).filter(Boolean),
     regionNames: rawRegionNames.map(String).filter(Boolean),
@@ -294,7 +636,8 @@ export function productRowFromApi(record: BackendRecord, index: number): ItemRow
     displayPriceLabel,
     variants,
     featured: bool(record, ["is_featured", "featured"], false) ? "نعم" : "لا",
-    active: bool(record, ["is_active", "active", "available", "status"], true),
+    active: product.isAvailable,
+    visibilityMode: marketScope === "service_city" ? "regions" : "general",
   };
 }
 
@@ -380,6 +723,157 @@ export async function fetchAdminRows<T>(
   }
 
   return apiList(data).map(mapper);
+}
+
+export async function listProducts(apiFetch: ApiFetch) {
+  const response = await apiFetch(adminApiPaths.products);
+  const data = await parseAdminResponse(response, "تعذر تحميل المنتجات");
+
+  return apiList(data).map((record) => normalizeProduct(record));
+}
+
+export async function getProduct(apiFetch: ApiFetch, productId: string | number) {
+  const response = await apiFetch(
+    `${adminApiPaths.products}${encodeURIComponent(String(productId))}/`,
+  );
+  const data = await parseAdminResponse(
+    response,
+    response.status === 404 ? "تعذر العثور على المنتج" : "تعذر تحميل بيانات المنتج",
+  );
+
+  return assertReadableProduct(normalizeProduct(data), "تعذر قراءة بيانات المنتج");
+}
+
+export async function createProduct(
+  apiFetch: ApiFetch,
+  payload: ProductWritePayload,
+  imageFile?: File | null,
+) {
+  const response = await apiFetch(
+    adminApiPaths.products,
+    productRequestInit("POST", payload, imageFile),
+  );
+  const data = await parseAdminResponse(response, "تعذر حفظ المنتج");
+
+  return assertReadableProduct(normalizeProduct(data), "تعذر قراءة بيانات المنتج");
+}
+
+export async function updateProduct(
+  apiFetch: ApiFetch,
+  productId: string | number,
+  payload: ProductWritePayload,
+  imageFile?: File | null,
+) {
+  const response = await apiFetch(
+    `${adminApiPaths.products}${encodeURIComponent(String(productId))}/`,
+    productRequestInit("PATCH", payload, imageFile),
+  );
+  const data = await parseAdminResponse(response, "تعذر حفظ المنتج");
+
+  return assertReadableProduct(normalizeProduct(data), "تعذر قراءة بيانات المنتج");
+}
+
+export async function deleteProduct(
+  apiFetch: ApiFetch,
+  productId: string | number,
+) {
+  const response = await apiFetch(
+    `${adminApiPaths.products}${encodeURIComponent(String(productId))}/`,
+    { method: "DELETE" },
+  );
+  await parseAdminResponse(response, "تعذر حذف المنتج");
+}
+
+export async function toggleProductAvailability(
+  apiFetch: ApiFetch,
+  productId: string | number,
+  isAvailable: boolean,
+) {
+  return updateProduct(apiFetch, productId, {
+    is_available: isAvailable,
+  });
+}
+
+export async function listProductCategories(apiFetch: ApiFetch) {
+  const response = await apiFetch(adminApiPaths.productCategories);
+  const data = await parseAdminResponse(response, "تعذر تحميل الفئات");
+
+  return apiList(data).map((record) => normalizeProductCategory(record));
+}
+
+export async function getProductCategory(
+  apiFetch: ApiFetch,
+  categoryId: string | number,
+) {
+  const response = await apiFetch(
+    `${adminApiPaths.productCategories}${encodeURIComponent(String(categoryId))}/`,
+  );
+  const data = await parseAdminResponse(
+    response,
+    response.status === 404 ? "تعذر العثور على الفئة" : "تعذر تحميل بيانات الفئة",
+  );
+
+  return assertReadableProductCategory(
+    normalizeProductCategory(data),
+    "تعذر قراءة بيانات الفئة",
+  );
+}
+
+export async function createProductCategory(
+  apiFetch: ApiFetch,
+  payload: ProductCategoryWritePayload,
+  imageFile?: File | null,
+) {
+  const response = await apiFetch(
+    adminApiPaths.productCategories,
+    productCategoryRequestInit("POST", payload, imageFile),
+  );
+  const data = await parseAdminResponse(response, "تعذر حفظ الفئة");
+
+  return assertReadableProductCategory(
+    normalizeProductCategory(data),
+    "تعذر قراءة بيانات الفئة",
+  );
+}
+
+export async function updateProductCategory(
+  apiFetch: ApiFetch,
+  categoryId: string | number,
+  payload: ProductCategoryWritePayload,
+  imageFile?: File | null,
+) {
+  const response = await apiFetch(
+    `${adminApiPaths.productCategories}${encodeURIComponent(String(categoryId))}/`,
+    productCategoryRequestInit("PATCH", payload, imageFile),
+  );
+  const data = await parseAdminResponse(response, "تعذر حفظ الفئة");
+
+  return assertReadableProductCategory(
+    normalizeProductCategory(data),
+    "تعذر قراءة بيانات الفئة",
+  );
+}
+
+export async function deleteProductCategory(
+  apiFetch: ApiFetch,
+  categoryId: string | number,
+) {
+  const response = await apiFetch(
+    `${adminApiPaths.productCategories}${encodeURIComponent(String(categoryId))}/`,
+    { method: "DELETE" },
+  );
+  await parseAdminResponse(response, "تعذر حذف الفئة");
+}
+
+export async function listCategoryClassifications(apiFetch: ApiFetch) {
+  const response = await apiFetch(adminApiPaths.categoryClassifications);
+  const data = await parseAdminResponse(response, "تعذر تحميل تصنيفات الفئات");
+
+  return apiList(data)
+    .map(normalizeCategoryClassification)
+    .filter((classification): classification is CategoryClassification =>
+      Boolean(classification),
+    );
 }
 
 export async function getDashboardOverview(

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -8,6 +9,7 @@ import {
   CheckCircle,
   Copy,
   Edit,
+  Eye,
   MapPin,
   Package,
   Plus,
@@ -21,10 +23,18 @@ import {
 import { itemRows, type ItemRow } from "../data";
 import { useAuth } from "@/features/auth/auth-provider";
 import {
+  AdminApiError,
   adminApiPaths,
-  fetchAdminRows,
+  addonRowFromApi,
+  apiList,
+  deleteProduct,
+  getProduct,
+  listProducts,
   productRowFromApi,
-  sendAdminJson,
+  readApiData,
+  toggleProductAvailability,
+  type BackendRecord,
+  type NormalizedProduct,
 } from "../admin-api";
 import { DashboardImage } from "../dashboard-image";
 import {
@@ -32,6 +42,7 @@ import {
   AppSelect,
   Button,
   Card,
+  CurrencyText,
   DataTable,
   PageTitle,
   Pagination,
@@ -142,6 +153,7 @@ function normalizeItemRow(row: ItemRow): ItemRow {
 }
 
 function itemVisibilityLabel(row: ItemRow) {
+  if (row.scopeLabel?.trim()) return row.scopeLabel;
   if (row.visibilityMode !== "regions") return "عام";
   const names = row.regionNames?.length ? row.regionNames : row.regionSlugs;
   return names?.length ? names.join("، ") : "مناطق محددة";
@@ -394,12 +406,14 @@ function RowActions({
   row,
   open,
   onOpen,
+  onView,
   onDuplicate,
   onDelete,
 }: {
   row: ItemRow;
   open: boolean;
   onOpen: () => void;
+  onView: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
@@ -412,6 +426,14 @@ function RowActions({
       triggerClassName="h-8 w-12"
       menuClassName="w-56"
       items={[
+        {
+          label: "بيانات المنتج",
+          icon: Eye,
+          onClick: () => {
+            onView();
+            onOpen();
+          },
+        },
         {
           label: "\u062a\u0639\u062f\u064a\u0644",
           icon: Edit,
@@ -552,6 +574,214 @@ function DeleteDialog({
   );
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function detailText(value: unknown, fallback = "-") {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return fallback;
+}
+
+function nestedDetailName(value: unknown, fallback = "-") {
+  const record = asRecord(value);
+  if (!record) return fallback;
+  return detailText(record.name ?? record.name_ar ?? record.name_en ?? record.title, fallback);
+}
+
+function productDetailDate(value: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("ar-EG", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function variantAttributeLabel(value: unknown) {
+  const record = asRecord(value);
+  if (!record) return "";
+  const attribute = asRecord(record.attribute);
+  const option = asRecord(record.option);
+  const attributeName = nestedDetailName(attribute, "");
+  const optionValue = detailText(option?.value ?? record.option_value ?? record.value, "");
+
+  if (attributeName && optionValue) return `${attributeName}: ${optionValue}`;
+  return optionValue || attributeName;
+}
+
+function productAdditionLabel(
+  additionId: number,
+  additionsById: Map<string, string>,
+) {
+  return additionsById.get(String(additionId)) ?? `#${additionId}`;
+}
+
+function DetailRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="grid gap-1 rounded-md bg-muted/35 px-3 py-2 text-sm">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="min-w-0 font-semibold">{value}</span>
+    </div>
+  );
+}
+
+function ProductDetailDialog({
+  additionsById,
+  error,
+  loading,
+  onClose,
+  product,
+}: {
+  additionsById: Map<string, string>;
+  error: string;
+  loading: boolean;
+  onClose: () => void;
+  product: NormalizedProduct | null;
+}) {
+  useBodyScrollLock(true);
+
+  const variants = product?.variants ?? [];
+  const additions = product?.additions ?? [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-none bg-foreground/45 px-4 py-6 backdrop-blur-sm">
+      <div
+        aria-labelledby="product-detail-title"
+        aria-modal="true"
+        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border bg-background text-foreground shadow-2xl"
+        role="dialog"
+      >
+        <div className="flex items-center justify-between gap-4 border-b px-5 py-4">
+          <div className="min-w-0">
+            <h2 id="product-detail-title" className="truncate text-lg font-semibold">
+              بيانات المنتج
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {product?.name || "تفاصيل المنتج من الباك"}
+            </p>
+          </div>
+          <button
+            aria-label="إغلاق"
+            className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
+            onClick={onClose}
+            type="button"
+          >
+            <XCircle className="size-4" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          {loading ? (
+            <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+              جاري تحميل بيانات المنتج...
+            </div>
+          ) : error ? (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-200">
+              {error}
+            </div>
+          ) : product ? (
+            <div className="grid gap-5">
+              <div className="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)]">
+                <DashboardImage
+                  alt={product.name}
+                  src={product.image}
+                  width={180}
+                  height={180}
+                  sizes="180px"
+                  className="h-44 w-full rounded-md border bg-muted/30 md:w-44"
+                  imageClassName="object-contain p-2"
+                />
+                <div className="grid gap-3">
+                  <div>
+                    <h3 className="text-xl font-black leading-8">{product.name || "-"}</h3>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      {product.description || "-"}
+                    </p>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    <DetailRow label="السوق" value={nestedDetailName(product.market)} />
+                    <DetailRow label="فرع السوق" value={detailText(product.market?.branch)} />
+                    <DetailRow label="الفئة" value={nestedDetailName(product.category)} />
+                    <DetailRow label="الحالة" value={product.isAvailable ? "متاح" : "غير متاح"} />
+                    <DetailRow label="الخصم" value={`${detailText(product.discount, "0.00")}%`} />
+                    <DetailRow label="رقم المنتج" value={`#${product.id}`} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border">
+                <div className="border-b bg-muted/20 px-4 py-3 text-sm font-semibold">
+                  المتغيرات والأسعار
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[620px] text-sm">
+                    <thead className="bg-muted/30 text-xs text-muted-foreground">
+                      <tr>
+                        <th className="px-4 py-2 text-start">SKU</th>
+                        <th className="px-4 py-2 text-start">السعر</th>
+                        <th className="px-4 py-2 text-start">الخصائص</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {variants.length ? (
+                        variants.map((variant, index) => {
+                          const attributes = Array.isArray(variant.attribute_values)
+                            ? variant.attribute_values.map(variantAttributeLabel).filter(Boolean)
+                            : [];
+
+                          return (
+                            <tr key={`${variant.id ?? "variant"}-${index}`} className="border-t">
+                              <td className="px-4 py-3 font-medium" dir="ltr">
+                                {detailText(variant.sku, "-")}
+                              </td>
+                              <td className="px-4 py-3">
+                                <CurrencyText>{formatItemPrice(`EGP ${detailText(variant.price, "0.00")}`)}</CurrencyText>
+                              </td>
+                              <td className="px-4 py-3">
+                                {attributes.length ? attributes.join("، ") : "-"}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td className="px-4 py-6 text-center text-muted-foreground" colSpan={3}>
+                            لا توجد متغيرات.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <DetailRow
+                  label="الإضافات"
+                  value={
+                    additions.length
+                      ? additions.map((additionId) =>
+                          productAdditionLabel(additionId, additionsById),
+                        ).join("، ")
+                      : "-"
+                  }
+                />
+                <DetailRow label="تاريخ الإنشاء" value={productDetailDate(product.createdAt)} />
+                <DetailRow label="آخر تحديث" value={productDetailDate(product.updatedAt)} />
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ItemsMobileCards({
   rows,
   selectedRows,
@@ -559,6 +789,7 @@ function ItemsMobileCards({
   onToggleRow,
   onToggleSelected,
   onToggleActive,
+  onView,
   onDuplicate,
   onDelete,
 }: {
@@ -568,6 +799,7 @@ function ItemsMobileCards({
   onToggleRow: (rowIndex: string) => void;
   onToggleSelected: (rowIndex: string) => void;
   onToggleActive: (row: ItemRow, active: boolean) => void;
+  onView: (row: ItemRow) => void;
   onDuplicate: (row: ItemRow) => void;
   onDelete: (rowId: string) => void;
 }) {
@@ -603,6 +835,7 @@ function ItemsMobileCards({
                   row={row}
                   open={openRow === row.index}
                   onOpen={() => onToggleRow(row.index)}
+                  onView={() => onView(row)}
                   onDuplicate={() => onDuplicate(row)}
                   onDelete={() => onDelete(row.id)}
                 />
@@ -645,16 +878,21 @@ function ItemsMobileCards({
 
 export function ItemsPage() {
   const { apiFetch } = useAuth();
+  const router = useRouter();
   const { openRow, toggleRow } = useItemTableState();
   const { showSnackbar } = useSnackbar();
   const [rows, setRows] = useState<ItemRow[]>(() =>
     itemRows.map(normalizeItemRow),
   );
+  const [additionRows, setAdditionRows] = useState(() => new Map<string, string>());
   const [filters, setFilters] = useState<ItemFilters>(defaultFilters);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [detailProduct, setDetailProduct] = useState<NormalizedProduct | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const visibleRows = useMemo(
     () =>
@@ -682,6 +920,7 @@ export function ItemsPage() {
     filters.region !== defaultFilters.region ||
     filters.status !== defaultFilters.status;
   const deleteRow = rows.find((row) => row.id === deleteId);
+  const detailDialogOpen = detailLoading || Boolean(detailError) || Boolean(detailProduct);
 
   useEffect(() => {
     let active = true;
@@ -691,20 +930,29 @@ export function ItemsPage() {
       setError("");
 
       try {
-        const products = await fetchAdminRows(
-          apiFetch,
-          adminApiPaths.products,
-          productRowFromApi,
-        );
+        const [products, additionsResponse] = await Promise.all([
+          listProducts(apiFetch),
+          apiFetch(adminApiPaths.productAdditions),
+        ]);
+        const additionsData = await readApiData(additionsResponse);
 
         if (!active) return;
-        setRows(products.map(normalizeItemRow));
+        setRows(products.map((product, index) => normalizeItemRow(productRowFromApi(product, index))));
+        if (additionsResponse.ok) {
+          setAdditionRows(
+            new Map(
+              apiList(additionsData)
+                .map((record, index) => addonRowFromApi(record as BackendRecord, index))
+                .map((addon) => [addon.id, addon.nameAr || addon.name]),
+            ),
+          );
+        }
       } catch (loadError) {
         if (!active) return;
         setError(
           loadError instanceof Error
             ? loadError.message
-            : "تعذر تحميل المنتجات من الباك.",
+            : "تعذر تحميل المنتجات",
         );
       } finally {
         if (active) setLoading(false);
@@ -742,10 +990,7 @@ export function ItemsPage() {
     setError("");
 
     try {
-      await sendAdminJson(apiFetch, `${adminApiPaths.products}${encodeURIComponent(row.id)}/`, {
-        method: "PATCH",
-        body: JSON.stringify({ is_active: active }),
-      });
+      await toggleProductAvailability(apiFetch, row.id, active);
       showSnackbar({
         message: active ? "تم تفعيل المنتج في الباك." : "تم إيقاف المنتج في الباك.",
       });
@@ -761,16 +1006,38 @@ export function ItemsPage() {
     }
   }
 
-  function duplicateRow(row: ItemRow) {
+  async function openProductDetail(row: ItemRow) {
     setError("");
-    const duplicate = {
-      ...row,
-      id: `${row.id}-copy-${Date.now()}`,
-      index: `copy-${Date.now()}`,
-      name: `${row.name} (نسخة)`,
-    };
-    setRows((currentRows) => [duplicate, ...currentRows]);
-    showSnackbar({ message: "تم إنشاء نسخة محلية. استخدم حفظ المنتج لإنشائها في الباك." });
+    setDetailProduct(null);
+    setDetailError("");
+    setDetailLoading(true);
+
+    try {
+      const product = await getProduct(apiFetch, row.id);
+      setDetailProduct(product);
+    } catch (detailLoadError) {
+      if (detailLoadError instanceof AdminApiError && detailLoadError.status === 404) {
+        setDetailError("تعذر العثور على المنتج");
+      } else {
+        setDetailError(
+          detailLoadError instanceof Error
+            ? detailLoadError.message
+            : "تعذر تحميل بيانات المنتج",
+        );
+      }
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  function closeProductDetail() {
+    setDetailProduct(null);
+    setDetailError("");
+    setDetailLoading(false);
+  }
+
+  function duplicateRow(row: ItemRow) {
+    router.push(`/items/create?duplicate=${encodeURIComponent(row.id)}`);
   }
 
   async function confirmDelete() {
@@ -791,9 +1058,7 @@ export function ItemsPage() {
     setError("");
 
     try {
-      await sendAdminJson(apiFetch, `${adminApiPaths.products}${encodeURIComponent(deleteRow.id)}/`, {
-        method: "DELETE",
-      });
+      await deleteProduct(apiFetch, deleteRow.id);
       showSnackbar({
         message: `تم حذف ${deletedItemName} من الباك.`,
         tone: "danger",
@@ -862,6 +1127,7 @@ export function ItemsPage() {
             onToggleRow={toggleRow}
             onToggleSelected={toggleSelectedRow}
             onToggleActive={toggleActive}
+            onView={openProductDetail}
             onDuplicate={duplicateRow}
             onDelete={setDeleteId}
           />
@@ -926,6 +1192,7 @@ export function ItemsPage() {
                   row={row}
                   open={openRow === row.index}
                   onOpen={() => toggleRow(row.index)}
+                  onView={() => openProductDetail(row)}
                   onDuplicate={() => duplicateRow(row)}
                   onDelete={() => setDeleteId(row.id)}
                 />
@@ -957,6 +1224,16 @@ export function ItemsPage() {
           }
         />
       </div>
+
+      {detailDialogOpen ? (
+        <ProductDetailDialog
+          additionsById={additionRows}
+          error={detailError}
+          loading={detailLoading}
+          onClose={closeProductDetail}
+          product={detailProduct}
+        />
+      ) : null}
 
       {deleteRow ? (
         <DeleteDialog

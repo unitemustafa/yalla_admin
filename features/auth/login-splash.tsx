@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect } from "react";
 
+import { SafeImage } from "@/components/safe-image";
 import { logoSrc } from "@/features/dashboard/data";
 
 const splashStorageKey = "yalla-login-splash-seen";
@@ -38,7 +38,7 @@ export function LoginSplash({ onDone }: { onDone: () => void }) {
       <div className="absolute inset-0 bg-primary" />
       <div className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(to_left,white_1px,transparent_1px),linear-gradient(to_bottom,white_1px,transparent_1px)] [background-size:54px_54px]" />
       <div className="relative z-10 flex w-full max-w-sm flex-col items-center px-8 text-center text-primary-foreground">
-        <Image
+        <SafeImage
           alt="Yalla Market"
           src={logoSrc}
           width={92}

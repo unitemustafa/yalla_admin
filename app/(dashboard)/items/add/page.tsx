@@ -1,5 +1,5 @@
 import { ProductFormPage } from "@/features/dashboard/pages/product-form";
 
-export default function EditItemRoute() {
+export default function AddItemRoute() {
   return <ProductFormPage />;
 }

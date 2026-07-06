@@ -1,13 +1,13 @@
 "use client";
 
-import Image, { type ImageProps } from "next/image";
 import { useState } from "react";
 import { ImageIcon } from "lucide-react";
 
-import { resolveMediaUrl, shouldUnoptimizeMediaUrl } from "@/lib/media-url";
+import { SafeImage, type SafeImageProps } from "@/components/safe-image";
+import { defaultImageFallback, normalizeImageSrc } from "@/lib/media-url";
 import { cn } from "@/lib/utils";
 
-type DashboardImageProps = Omit<ImageProps, "className" | "onError" | "onLoad"> & {
+type DashboardImageProps = Omit<SafeImageProps, "className" | "onError" | "onLoad"> & {
   className?: string;
   imageClassName?: string;
 };
@@ -21,14 +21,12 @@ export function DashboardImage({
   className,
   imageClassName,
   unoptimized,
+  fallbackSrc,
   ...props
 }: DashboardImageProps) {
-  const resolvedSrc = typeof src === "string" ? resolveMediaUrl(src) : src;
-  const resolvedStringSrc = typeof resolvedSrc === "string" ? resolvedSrc : "";
-  const sourceKey = typeof resolvedSrc === "string" ? resolvedSrc : "static";
-  const isBlobSource = resolvedStringSrc.startsWith("blob:");
-  const isInlineSource =
-    resolvedStringSrc.startsWith("data:") || resolvedStringSrc.startsWith("blob:");
+  const resolvedSrc = normalizeImageSrc(src, fallbackSrc);
+  const sourceKey = resolvedSrc;
+  const isBlobSource = resolvedSrc.startsWith("blob:");
   const [imageState, setImageState] = useState({
     failed: false,
     loaded: false,
@@ -36,7 +34,7 @@ export function DashboardImage({
   });
   const loaded = imageState.sourceKey === sourceKey && imageState.loaded;
   const failed = imageState.sourceKey === sourceKey && imageState.failed;
-  const canRender = Boolean(resolvedSrc) && !failed;
+  const canRender = !failed;
 
   return (
     <span
@@ -48,7 +46,21 @@ export function DashboardImage({
       {canRender && !loaded ? (
         <span className="absolute inset-0 animate-pulse bg-muted" />
       ) : null}
-      {canRender && isBlobSource ? (
+      {failed ? (
+        <SafeImage
+          alt={alt}
+          fallbackSrc={defaultImageFallback}
+          height={height}
+          sizes={sizes}
+          src={fallbackSrc ?? defaultImageFallback}
+          unoptimized={unoptimized}
+          width={width}
+          className={cn(
+            "relative z-10 size-full object-cover opacity-100",
+            imageClassName,
+          )}
+        />
+      ) : canRender && isBlobSource ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           alt={alt}
@@ -58,7 +70,7 @@ export function DashboardImage({
           onLoad={() =>
             setImageState({ failed: false, loaded: true, sourceKey })
           }
-          src={resolvedStringSrc}
+          src={resolvedSrc}
           className={cn(
             "relative z-10 size-full object-cover transition-opacity duration-150",
             loaded ? "opacity-100" : "opacity-0",
@@ -66,9 +78,10 @@ export function DashboardImage({
           )}
         />
       ) : canRender ? (
-        <Image
+        <SafeImage
           {...props}
           alt={alt}
+          fallbackSrc={fallbackSrc}
           height={height}
           onError={() =>
             setImageState({ failed: true, loaded: false, sourceKey })
@@ -78,7 +91,7 @@ export function DashboardImage({
           }
           sizes={sizes}
           src={resolvedSrc}
-          unoptimized={Boolean(unoptimized || isInlineSource || shouldUnoptimizeMediaUrl(resolvedSrc))}
+          unoptimized={unoptimized}
           width={width}
           className={cn(
             "relative z-10 size-full object-cover transition-opacity duration-150",

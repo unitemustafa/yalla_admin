@@ -210,6 +210,7 @@ export type ItemRow = {
   subcategory: string;
   marketId?: string;
   shopName?: string;
+  scopeLabel?: string;
   calories: string;
   price: string;
   displayPrice?: number;

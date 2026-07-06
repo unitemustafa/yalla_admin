@@ -1,4 +1,5 @@
 const mediaPathPattern = /^\/?media\//i;
+export const defaultImageFallback = "/default-user-avatar.svg";
 
 function configuredBackendUrl() {
   return (
@@ -23,6 +24,24 @@ export function isMediaPath(value: string) {
   return mediaPathPattern.test(value.trim());
 }
 
+function cleanImageSrc(src: unknown) {
+  if (typeof src !== "string") return "";
+
+  const value = src.trim();
+  if (!value) return "";
+
+  const normalized = value.toLowerCase();
+  if (
+    normalized === "null" ||
+    normalized === "undefined" ||
+    normalized === "[object object]"
+  ) {
+    return "";
+  }
+
+  return value;
+}
+
 export function resolveMediaUrl<T extends string | null | undefined>(src: T): T | string {
   if (typeof src !== "string") return src;
 
@@ -33,6 +52,43 @@ export function resolveMediaUrl<T extends string | null | undefined>(src: T): T 
   if (!backendOrigin) return src;
 
   return `${backendOrigin}${value.startsWith("/") ? value : `/${value}`}`;
+}
+
+export function normalizeImageSrc(
+  src: unknown,
+  fallbackSrc = defaultImageFallback,
+) {
+  const value = cleanImageSrc(src);
+  const fallback = cleanImageSrc(fallbackSrc) || defaultImageFallback;
+
+  if (!value) return resolveMediaUrl(fallback);
+
+  return resolveMediaUrl(value);
+}
+
+export function isExternalUrl(src: unknown) {
+  return typeof src === "string" && /^https?:\/\//i.test(src.trim());
+}
+
+export function isCloudinaryUrl(src: unknown) {
+  return (
+    typeof src === "string" &&
+    src.toLowerCase().includes("res.cloudinary.com")
+  );
+}
+
+export function shouldUnoptimizeImageSrc(src: unknown) {
+  if (typeof src !== "string") return false;
+
+  const value = normalizeImageSrc(src);
+
+  return (
+    value.startsWith("data:") ||
+    value.startsWith("blob:") ||
+    isCloudinaryUrl(value) ||
+    isExternalUrl(value) ||
+    shouldUnoptimizeMediaUrl(value)
+  );
 }
 
 function isLocalBackendHostname(hostname: string) {
