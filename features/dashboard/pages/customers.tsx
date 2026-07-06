@@ -20,10 +20,11 @@ import {
   dashboardUserFromBackend,
   firstApiError,
   isBackendDashboardUser,
+  translateApiMessage,
 } from "../users/api-users";
 import type { DashboardUser } from "../users/default-dashboard-users";
 import { DashboardImage } from "../dashboard-image";
-import { Badge, Button, Card, Input, PageTitle, Pagination } from "../primitives";
+import { Badge, Button, Card, Input, PageTitle, Pagination, Switch } from "../primitives";
 import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
 
@@ -38,6 +39,18 @@ type CustomerDraft = {
   email: string;
   password: string;
 };
+
+type CustomerFieldErrors = Partial<Record<keyof CustomerDraft, string>>;
+
+class CustomerCreateError extends Error {
+  fieldErrors: CustomerFieldErrors;
+
+  constructor(message: string, fieldErrors: CustomerFieldErrors = {}) {
+    super(message);
+    this.name = "CustomerCreateError";
+    this.fieldErrors = fieldErrors;
+  }
+}
 
 function createInitialDraft(): CustomerDraft {
   return {
@@ -86,6 +99,39 @@ function apiErrorMessage(data: unknown, fallback: string) {
   return firstApiError(data) ?? fallback;
 }
 
+function collectApiMessages(value: unknown): string[] {
+  if (typeof value === "string" && value.trim()) return [translateApiMessage(value)];
+  if (Array.isArray(value)) return value.flatMap(collectApiMessages);
+  if (value && typeof value === "object") {
+    return Object.values(value).flatMap(collectApiMessages);
+  }
+  return [];
+}
+
+function customerCreateErrorFromApi(data: unknown, fallback: string) {
+  const fieldErrors: CustomerFieldErrors = {};
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    for (const field of ["username", "email", "phone", "password"] as const) {
+      const messages = collectApiMessages((data as Record<string, unknown>)[field]);
+      if (messages.length) fieldErrors[field] = messages.join(" ");
+    }
+  }
+  const topMessages =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? collectApiMessages({
+          detail: (data as Record<string, unknown>).detail,
+          message: (data as Record<string, unknown>).message,
+          error: (data as Record<string, unknown>).error,
+          non_field_errors: (data as Record<string, unknown>).non_field_errors,
+        })
+      : collectApiMessages(data);
+
+  return new CustomerCreateError(
+    topMessages[0] ?? Object.values(fieldErrors)[0] ?? fallback,
+    fieldErrors,
+  );
+}
+
 export function CustomersPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
@@ -95,6 +141,7 @@ export function CustomersPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [activationUserId, setActivationUserId] = useState<string | null>(null);
 
   const loadCustomers = useCallback(async () => {
     setPageState("loading");
@@ -149,9 +196,7 @@ export function CustomersPage() {
     const data = await apiResponseData(response);
 
     if (!response.ok) {
-      throw new Error(
-        apiErrorMessage(data, "تعذر إنشاء المستخدم في الباك."),
-      );
+      throw customerCreateErrorFromApi(data, "تعذر إنشاء المستخدم في الباك.");
     }
 
     if (!isBackendDashboardUser(data)) {
@@ -219,6 +264,46 @@ export function CustomersPage() {
     setDeletingUserId(null);
   }
 
+  async function handleActivationChange(userId: string, checked: boolean) {
+    if (activationUserId) return;
+
+    setActivationUserId(userId);
+    try {
+      const response = await apiFetch(`auth/users/${encodeURIComponent(userId)}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: checked }),
+      });
+      const data = await apiResponseData(response);
+
+      if (!response.ok) {
+        throw new Error(apiErrorMessage(data, "تعذر تحديث حالة المستخدم."));
+      }
+      if (!isBackendDashboardUser(data)) {
+        throw new Error("استجابة الباك غير مكتملة.");
+      }
+
+      const updatedCustomer = dashboardUserFromBackend(data);
+      setCustomers((currentCustomers) =>
+        currentCustomers.map((customer) =>
+          customer.id === userId ? updatedCustomer : customer,
+        ),
+      );
+      showSnackbar({
+        message: checked ? "تم تفعيل المستخدم." : "تم تعطيل المستخدم.",
+        tone: "success",
+      });
+    } catch (error) {
+      showSnackbar({
+        message:
+          error instanceof Error ? error.message : "تعذر تحديث حالة المستخدم.",
+        tone: "danger",
+      });
+    } finally {
+      setActivationUserId(null);
+    }
+  }
+
   const isLoading = pageState === "loading";
   const hasError = pageState === "error";
   const hasCustomers = customers.length > 0;
@@ -272,7 +357,11 @@ export function CustomersPage() {
         <CustomersTable
           customers={customers}
           deletingUserId={deletingUserId}
+          activationUserId={activationUserId}
           onDelete={(userId) => void handleDeleteCustomer(userId)}
+          onActivationChange={(userId, checked) =>
+            void handleActivationChange(userId, checked)
+          }
         />
       ) : null}
 
@@ -382,6 +471,7 @@ function AddCustomerDialog({
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [apiFieldErrors, setApiFieldErrors] = useState<CustomerFieldErrors>({});
   const errors = validateCustomerDraft(draft, customers);
   const canCreate = Object.keys(errors).length === 0;
 
@@ -401,12 +491,18 @@ function AddCustomerDialog({
   function updateDraft(field: keyof CustomerDraft, value: string) {
     setDraft((currentDraft) => ({ ...currentDraft, [field]: value }));
     setApiError(null);
+    setApiFieldErrors((currentErrors) => {
+      const nextErrors = { ...currentErrors };
+      delete nextErrors[field];
+      return nextErrors;
+    });
   }
 
   async function submitCustomer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitted(true);
     setApiError(null);
+    setApiFieldErrors({});
 
     if (!canCreate) {
       return;
@@ -416,6 +512,9 @@ function AddCustomerDialog({
     try {
       await onCreate(draft);
     } catch (error) {
+      if (error instanceof CustomerCreateError) {
+        setApiFieldErrors(error.fieldErrors);
+      }
       setApiError(
         error instanceof Error
           ? error.message
@@ -427,7 +526,7 @@ function AddCustomerDialog({
   }
 
   function errorFor(field: keyof CustomerDraft) {
-    return submitted ? errors[field] : undefined;
+    return submitted ? errors[field] ?? apiFieldErrors[field] : apiFieldErrors[field];
   }
 
   return (
@@ -643,11 +742,15 @@ function validateCustomerDraft(
 function CustomersTable({
   customers,
   deletingUserId,
+  activationUserId,
   onDelete,
+  onActivationChange,
 }: {
   customers: DashboardUser[];
   deletingUserId: string | null;
+  activationUserId: string | null;
   onDelete: (userId: string) => void;
+  onActivationChange: (userId: string, checked: boolean) => void;
 }) {
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
@@ -668,7 +771,7 @@ function CustomersTable({
       {pagedCustomers.map((customer, index) => (
         <Card
           key={customer.id}
-          className="grid gap-4 p-4 xl:grid-cols-[minmax(280px,1fr)_420px_120px] xl:items-center"
+          className="grid gap-4 p-4 xl:grid-cols-[minmax(280px,1fr)_300px_120px] xl:items-center"
         >
           <button
             type="button"
@@ -690,7 +793,7 @@ function CustomersTable({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-bold text-foreground">{customer.name}</h3>
-                <Badge tone={customer.status === "نشط" ? "green" : "red"}>
+                <Badge tone={customer.active !== false ? "green" : "red"}>
                   {customer.status}
                 </Badge>
               </div>
@@ -703,14 +806,10 @@ function CustomersTable({
             </div>
           </button>
 
-          <div className="grid grid-cols-3 gap-2 text-center text-sm">
+          <div className="grid grid-cols-2 gap-2 text-center text-sm">
             <div className="rounded-md bg-muted px-3 py-2">
               <div className="truncate font-bold" dir="ltr">@{customer.username}</div>
               <div className="text-xs text-muted-foreground">اسم الدخول</div>
-            </div>
-            <div className="rounded-md bg-muted px-3 py-2">
-              <div className="font-bold">{customer.status}</div>
-              <div className="text-xs text-muted-foreground">الحالة</div>
             </div>
             <div className="rounded-md bg-muted px-3 py-2">
               <div className="truncate font-bold">{customer.joinedAt}</div>
@@ -719,6 +818,16 @@ function CustomersTable({
           </div>
 
           <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
+            <div className="flex items-center gap-2 rounded-md border px-2 py-1">
+              <Switch
+                checked={customer.active !== false}
+                disabled={activationUserId === customer.id}
+                onCheckedChange={(checked) => onActivationChange(customer.id, checked)}
+              />
+              <span className="text-xs font-semibold">
+                {customer.active !== false ? "مفعّل" : "معطّل"}
+              </span>
+            </div>
             <Button
               type="button"
               variant="outline"

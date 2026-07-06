@@ -17,8 +17,23 @@ export type BackendDashboardUser = {
   is_active?: boolean | null;
   is_staff?: boolean | null;
   is_superuser?: boolean | null;
+  last_login?: string | null;
+  date_joined?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  customer_stats?: {
+    orders_count?: number | string | null;
+    completed_orders_count?: number | string | null;
+    total_spent?: string | number | null;
+    last_order_at?: string | null;
+  } | null;
+  recent_orders?: Array<{
+    id?: string | number | null;
+    number?: string | number | null;
+    status?: string | null;
+    total?: string | number | null;
+    created_at?: string | null;
+  }> | null;
   courier_profile?: {
     vehicle_type?: string | null;
     plate_number?: string | null;
@@ -67,6 +82,8 @@ export function formatBackendDate(value: string | null | undefined) {
 }
 
 export function dashboardUserFromBackend(user: BackendDashboardUser): DashboardUser {
+  const active = user.is_active !== false;
+
   return {
     id: String(user.id),
     name: fullNameFromBackendUser(user),
@@ -77,13 +94,18 @@ export function dashboardUserFromBackend(user: BackendDashboardUser): DashboardU
     role: roleLabel(user.role),
     branch: unset,
     location: unset,
-    joinedAt: formatBackendDate(user.created_at),
-    lastLogin: unavailable,
-    orders: 0,
-    totalSpent: unavailable,
-    lastOrder: unavailable,
+    joinedAt: formatBackendDate(user.date_joined ?? user.created_at),
+    lastLogin: formatBackendDate(user.last_login),
+    updatedAt: formatBackendDate(user.updated_at),
+    orders: Number(user.customer_stats?.orders_count ?? 0),
+    totalSpent:
+      user.customer_stats?.total_spent == null
+        ? unavailable
+        : String(user.customer_stats.total_spent),
+    lastOrder: formatBackendDate(user.customer_stats?.last_order_at),
     status: user.is_active === false ? "غير مفعل" : "نشط",
-    notes: "بيانات الحساب قادمة من الباك. إحصائيات الطلبات ستظهر بعد توفير endpoint إداري لها.",
+    notes: "بيانات الحساب قادمة من الباك.",
+    active,
     hasPassword: Boolean(user.has_password),
   };
 }
@@ -93,7 +115,7 @@ export async function apiResponseData(response: Response) {
 }
 
 export function firstApiError(value: unknown): string | null {
-  if (typeof value === "string" && value.trim()) return value;
+  if (typeof value === "string" && value.trim()) return translateApiMessage(value);
 
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -110,4 +132,29 @@ export function firstApiError(value: unknown): string | null {
   }
 
   return null;
+}
+
+export function translateApiMessage(message: string) {
+  const normalized = message
+    .trim()
+    .toLowerCase()
+    .replace(/[.!؟?]+$/u, "");
+  const translations: Record<string, string> = {
+    "this username is already taken": "اسم الدخول مستخدم بالفعل.",
+    "user with this username already exists": "اسم الدخول مستخدم بالفعل.",
+    "an account with this username already exists": "اسم الدخول مستخدم بالفعل.",
+    "user with this email already exists": "البريد الإلكتروني مسجل بالفعل.",
+    "an account with this email already exists": "البريد الإلكتروني مسجل بالفعل.",
+    "user with this phone already exists": "رقم الهاتف مسجل بالفعل.",
+    "user with this phone number already exists": "رقم الهاتف مسجل بالفعل.",
+    "an account with this phone already exists": "رقم الهاتف مسجل بالفعل.",
+    "an account with this phone number already exists": "رقم الهاتف مسجل بالفعل.",
+    "account is inactive": "الحساب غير نشط حاليًا.",
+    "This username is already taken.": "اسم الدخول مستخدم بالفعل.",
+    "An account with this email already exists.": "البريد الإلكتروني مسجل بالفعل.",
+    "An account with this phone number already exists.": "رقم الهاتف مسجل بالفعل.",
+    "Account is inactive.": "الحساب غير نشط حاليًا.",
+  };
+
+  return translations[normalized] ?? message.trim();
 }

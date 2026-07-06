@@ -10,10 +10,12 @@ export type DashboardUser = {
   location: string;
   joinedAt: string;
   lastLogin: string;
+  updatedAt?: string;
   orders: number;
   totalSpent: string;
   lastOrder: string;
   status: string;
+  active?: boolean;
   notes: string;
   hasPassword?: boolean;
   isLocal?: boolean;

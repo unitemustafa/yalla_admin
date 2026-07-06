@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
-import type { DashboardOrder } from "@/features/dashboard/static-data";
+import { formatMoney, translateOrderStatus } from "../admin-api";
 import {
   apiResponseData,
   dashboardUserFromBackend,
@@ -25,26 +25,42 @@ import {
 } from "../users/api-users";
 import type { DashboardUser } from "../users/default-dashboard-users";
 import { DashboardImage } from "../dashboard-image";
-import { Badge, Button, Card, CurrencyText, PageTitle } from "../primitives";
+import { Badge, Button, Card, CurrencyText, PageTitle, Switch } from "../primitives";
+import { useSnackbar } from "../snackbar";
 
-const currency = new Intl.NumberFormat("en-US", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+type CustomerRecentOrder = {
+  id: string;
+  number: string;
+  status: string;
+  total: string;
+  created_at: string | null;
+};
 
-function formatCurrency(value: number) {
-  return `${currency.format(value)} EGP`;
+function recentOrdersFromBackend(value: unknown): CustomerRecentOrder[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+    .map((item) => ({
+      id: String(item.id ?? item.number ?? ""),
+      number: String(item.number ?? item.id ?? ""),
+      status: typeof item.status === "string" ? item.status : "",
+      total: String(item.total ?? "0.00"),
+      created_at: typeof item.created_at === "string" ? item.created_at : null,
+    }))
+    .filter((order) => order.id && order.number);
 }
 
-function unavailableOrderCount(user: DashboardUser) {
-  return user.orders > 0 ? user.orders.toLocaleString("en-US") : "غير متاح";
-}
+const unavailable = "غير متاح";
 
 export function UserDetailApiPage({ userId }: { userId: string }) {
   const { apiFetch } = useAuth();
+  const { showSnackbar } = useSnackbar();
   const [user, setUser] = useState<DashboardUser | null>(null);
+  const [orders, setOrders] = useState<CustomerRecentOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activationPending, setActivationPending] = useState(false);
 
   const loadUser = useCallback(async () => {
     setLoading(true);
@@ -69,8 +85,10 @@ export function UserDetailApiPage({ userId }: { userId: string }) {
       }
 
       setUser(dashboardUserFromBackend(data));
+      setOrders(recentOrdersFromBackend(data.recent_orders));
     } catch (loadError) {
       setUser(null);
+      setOrders([]);
       setError(
         loadError instanceof Error
           ? loadError.message
@@ -89,6 +107,49 @@ export function UserDetailApiPage({ userId }: { userId: string }) {
     return () => window.clearTimeout(timer);
   }, [loadUser]);
 
+  async function handleActivationChange(checked: boolean) {
+    if (!user || activationPending) return;
+
+    setActivationPending(true);
+    try {
+      const response = await apiFetch(`auth/users/${encodeURIComponent(userId)}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: checked }),
+      });
+      const data = await apiResponseData(response);
+
+      if (!response.ok) {
+        throw new Error(firstApiError(data) ?? "تعذر تحديث حالة المستخدم.");
+      }
+
+      if (!isBackendDashboardUser(data)) {
+        throw new Error("استجابة الباك غير مكتملة.");
+      }
+
+      if (Array.isArray(data.recent_orders) && "customer_stats" in data) {
+        setUser(dashboardUserFromBackend(data));
+        setOrders(recentOrdersFromBackend(data.recent_orders));
+      } else {
+        await loadUser();
+      }
+      showSnackbar({
+        message: checked ? "تم تفعيل المستخدم." : "تم تعطيل المستخدم.",
+        tone: "success",
+      });
+    } catch (activationError) {
+      showSnackbar({
+        message:
+          activationError instanceof Error
+            ? activationError.message
+            : "تعذر تحديث حالة المستخدم.",
+        tone: "danger",
+      });
+    } finally {
+      setActivationPending(false);
+    }
+  }
+
   if (loading) {
     return <UserDetailLoadingState />;
   }
@@ -102,7 +163,14 @@ export function UserDetailApiPage({ userId }: { userId: string }) {
     );
   }
 
-  return <UserDetailPage user={user} orders={[]} />;
+  return (
+    <UserDetailPage
+      user={user}
+      orders={orders}
+      activationPending={activationPending}
+      onActivationChange={handleActivationChange}
+    />
+  );
 }
 
 function UserDetailLoadingState() {
@@ -186,17 +254,19 @@ function UserDetailErrorState({
 export function UserDetailPage({
   user,
   orders,
+  activationPending,
+  onActivationChange,
 }: {
   user: DashboardUser;
-  orders: DashboardOrder[];
+  orders: CustomerRecentOrder[];
+  activationPending: boolean;
+  onActivationChange: (checked: boolean) => void;
 }) {
   const hasOrderData = orders.length > 0;
-  const totalSpent = orders.reduce((sum, order) => sum + order.total, 0);
-  const orderCount = hasOrderData
-    ? orders.length.toLocaleString("en-US")
-    : unavailableOrderCount(user);
-  const totalSpentValue = hasOrderData ? formatCurrency(totalSpent) : user.totalSpent;
+  const orderCount = user.orders.toLocaleString("en-US");
+  const totalSpentValue = user.totalSpent === unavailable ? unavailable : formatMoney(user.totalSpent);
   const lastOrder = hasOrderData ? orders[0].number : user.lastOrder;
+  const active = user.active !== false;
   const statusTone = user.status === "نشط" ? "green" : "secondary";
 
   return (
@@ -234,6 +304,16 @@ export function UserDetailPage({
               </div>
               <p className="mt-1 text-sm text-muted-foreground">{user.role}</p>
             </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
+            <Switch
+              checked={active}
+              disabled={activationPending}
+              onCheckedChange={onActivationChange}
+            />
+            <span className="text-sm font-semibold">
+              {active ? "مفعّل" : "معطّل"}
+            </span>
           </div>
         </div>
 
@@ -278,7 +358,7 @@ export function UserDetailPage({
         <InfoCard title="التوقيتات" icon={<CalendarClock className="size-4" />}>
           <InfoRow label="تاريخ الانضمام" value={user.joinedAt} />
           <InfoRow label="آخر تسجيل دخول" value={user.lastLogin} />
-          <InfoRow label="آخر تحديث" value="غير متاح" />
+          <InfoRow label="آخر تحديث" value={user.updatedAt ?? unavailable} />
         </InfoCard>
       </div>
 
@@ -376,7 +456,7 @@ function UserOrdersSection({
   orders,
   hasOrderData,
 }: {
-  orders: DashboardOrder[];
+  orders: CustomerRecentOrder[];
   hasOrderData: boolean;
 }) {
   return (
@@ -385,11 +465,8 @@ function UserOrdersSection({
         <div className="flex flex-col gap-2 border-b p-5 md:flex-row md:items-center md:justify-between">
           <div>
             <h3 className="text-base font-semibold">طلبات المستخدم</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              إحصائيات الطلبات تحتاج endpoint إداري في الباك، لذلك تظهر كغير متاحة الآن.
-            </p>
           </div>
-          <Badge>{hasOrderData ? `${orders.length.toLocaleString("en-US")} طلب` : "غير متاح"}</Badge>
+          <Badge>{hasOrderData ? `${orders.length.toLocaleString("en-US")} طلب` : "0 طلب"}</Badge>
         </div>
 
         {orders.length ? (
@@ -399,8 +476,6 @@ function UserOrdersSection({
                 <tr className="h-10 border-b bg-muted/30 text-xs text-muted-foreground">
                   <th className="px-4 text-start font-medium">رقم الطلب</th>
                   <th className="px-4 text-start font-medium">الحالة</th>
-                  <th className="px-4 text-start font-medium">نوع الطلب</th>
-                  <th className="px-4 text-start font-medium">طريقة الدفع</th>
                   <th className="px-4 text-start font-medium">الإجمالي</th>
                   <th className="px-4 text-start font-medium">التاريخ</th>
                   <th className="px-4 text-start font-medium">التفاصيل</th>
@@ -411,27 +486,22 @@ function UserOrdersSection({
                   <tr key={order.number} className="h-14 border-b last:border-0">
                     <td className="px-4 font-medium">
                       <Link
-                        href={`/orders/view/${encodeURIComponent(order.number)}`}
+                        href={`/orders/view/${encodeURIComponent(order.id)}`}
                         className="hover:text-primary"
                       >
                         {order.number}
                       </Link>
                     </td>
-                    <td className="px-4">{order.status}</td>
-                    <td className="px-4">{order.type}</td>
-                    <td className="px-4">{order.payment}</td>
+                    <td className="px-4">{translateOrderStatus(order.status)}</td>
                     <td className="px-4 font-semibold">
-                      <CurrencyText>{formatCurrency(order.total)}</CurrencyText>
+                      <CurrencyText>{formatMoney(order.total)}</CurrencyText>
                     </td>
                     <td className="px-4">
-                      <div>{order.date}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {order.time}
-                      </div>
+                      <div>{order.created_at ? new Intl.DateTimeFormat("ar-EG-u-nu-latn", { dateStyle: "medium", timeStyle: "short" }).format(new Date(order.created_at)) : unavailable}</div>
                     </td>
                     <td className="px-4">
                       <Link
-                        href={`/orders/view/${encodeURIComponent(order.number)}`}
+                        href={`/orders/view/${encodeURIComponent(order.id)}`}
                         className="inline-flex h-8 items-center justify-center rounded-md border bg-background px-3 text-xs font-semibold shadow-sm hover:bg-accent"
                       >
                         عرض الطلب
@@ -444,7 +514,7 @@ function UserOrdersSection({
           </div>
         ) : (
           <div className="p-8 text-center text-sm text-muted-foreground">
-            لا توجد بيانات طلبات إدارية لهذا المستخدم في الربط الحالي.
+            لا توجد طلبات لهذا المستخدم حتى الآن.
           </div>
         )}
       </Card>
