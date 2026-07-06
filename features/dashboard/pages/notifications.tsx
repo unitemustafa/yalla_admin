@@ -9,12 +9,14 @@ import {
   CheckCheck,
   Circle,
   CircleAlert,
+  ExternalLink,
   Inbox,
   Info,
   Loader2,
   RefreshCw,
   ShieldCheck,
   ShoppingCart,
+  Trash2,
   Truck,
 } from "lucide-react";
 
@@ -29,7 +31,7 @@ import {
 } from "@/features/dashboard/primitives";
 import { useDashboardNotifications } from "@/features/dashboard/notifications-context";
 import { useSnackbar } from "@/features/dashboard/snackbar";
-import { apiResponseData, firstApiError } from "@/features/dashboard/users/api-users";
+import { apiResponseData } from "@/features/dashboard/users/api-users";
 import { cn } from "@/lib/utils";
 
 const notificationsPageSize = 10;
@@ -50,6 +52,10 @@ type DashboardNotification = {
   isResolved: boolean;
   createdAt: string;
 };
+
+type DeleteDialogTarget =
+  | { kind: "single"; notification: DashboardNotification }
+  | { kind: "clear-read" };
 
 const filterPaths: Record<NotificationFilter, string> = {
   all: "notifications/",
@@ -107,22 +113,63 @@ function notificationFromApi(record: NotificationRecord): DashboardNotification 
   };
 }
 
-function apiErrorMessage(value: unknown, fallback: string) {
-  return firstApiError(value) ?? fallback;
+function numericOrderId(notification: DashboardNotification) {
+  return /^\d+$/.test(notification.orderId) ? notification.orderId : "";
 }
 
-function typeLabel(type: string) {
+function formatMessage(template: string, values: Record<string, string | number>) {
+  return Object.entries(values).reduce(
+    (message, [key, value]) => message.replaceAll(`{${key}}`, String(value)),
+    template,
+  );
+}
+
+function displayTitle(
+  notification: DashboardNotification,
+  t: (key: string) => string,
+) {
+  if (notification.type === "new_order_review") {
+    return t("notifications.known.newOrderReview.title");
+  }
+  return notification.title;
+}
+
+function displayMessage(
+  notification: DashboardNotification,
+  t: (key: string) => string,
+) {
+  if (notification.type === "new_order_review") {
+    return t("notifications.known.newOrderReview.message");
+  }
+  return notification.message;
+}
+
+function displayOrderLabel(
+  notification: DashboardNotification,
+  t: (key: string) => string,
+) {
+  const orderId = numericOrderId(notification);
+  return orderId
+    ? formatMessage(t("notifications.known.orderNumber"), { id: orderId })
+    : "";
+}
+
+function apiErrorMessage(_value: unknown, fallback: string) {
+  return fallback;
+}
+
+function typeLabel(type: string, t: (key: string) => string) {
   const labels: Record<string, string> = {
-    order_review: "الطلبات",
-    new_order_review: "مراجعة الطلبات",
-    stock_alert: "المخزون",
-    delivery: "التوصيل",
-    system: "النظام",
-    security: "الأمان",
-    reports: "التقارير",
+    order_review: t("notifications.category.orderReview"),
+    new_order_review: t("notifications.category.ordersReview"),
+    stock_alert: t("notifications.category.stock"),
+    delivery: t("notifications.category.deliveryGeneric"),
+    system: t("notifications.category.systemGeneric"),
+    security: t("notifications.category.securityGeneric"),
+    reports: t("notifications.category.reportsGeneric"),
   };
 
-  return labels[type] ?? (type || "النظام");
+  return labels[type] ?? (type || t("notifications.category.systemGeneric"));
 }
 
 function typeTone(type: string): "default" | "blue" | "green" | "red" | "secondary" {
@@ -179,10 +226,10 @@ function relativeTime(value: string) {
   return formatter.format(Math.round(diffDays / 365), "year");
 }
 
-function emptyMessage(filter: NotificationFilter) {
-  if (filter === "unread") return "لا توجد إشعارات غير مقروءة";
-  if (filter === "read") return "لا توجد إشعارات مقروءة";
-  return "لا توجد إشعارات حالياً";
+function emptyMessage(filter: NotificationFilter, t: (key: string) => string) {
+  if (filter === "unread") return t("notifications.empty.unread");
+  if (filter === "read") return t("notifications.empty.read");
+  return t("notifications.empty.all");
 }
 
 export function NotificationsPage() {
@@ -190,11 +237,8 @@ export function NotificationsPage() {
   const router = useRouter();
   const { t } = useDashboardI18n();
   const { showSnackbar } = useSnackbar();
-  const {
-    unreadCount,
-    refreshUnreadCount,
-    setUnreadCount,
-  } = useDashboardNotifications();
+  const { unreadCount, refreshUnreadCount, setUnreadCount } =
+    useDashboardNotifications();
   const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
   const [activeFilter, setActiveFilter] = useState<NotificationFilter>("all");
   const [currentPage, setCurrentPage] = useState(1);
@@ -203,6 +247,10 @@ export function NotificationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [clearingRead, setClearingRead] = useState(false);
+  const [deleteDialogTarget, setDeleteDialogTarget] =
+    useState<DeleteDialogTarget | null>(null);
   const requestIdRef = useRef(0);
 
   const shouldRun = status === "authenticated" && user?.role === "admin";
@@ -262,9 +310,7 @@ export function NotificationsPage() {
         const data = await apiResponseData(response);
 
         if (!response.ok) {
-          throw new Error(
-            apiErrorMessage(data, "تعذر تحميل الإشعارات، حاول مرة أخرى"),
-          );
+          throw new Error(apiErrorMessage(data, t("notifications.error.load")));
         }
 
         if (requestId !== requestIdRef.current) return;
@@ -274,9 +320,7 @@ export function NotificationsPage() {
         if (requestId !== requestIdRef.current) return;
 
         setError(
-          reason instanceof Error
-            ? reason.message
-            : "تعذر تحميل الإشعارات، حاول مرة أخرى",
+          reason instanceof Error ? reason.message : t("notifications.error.load"),
         );
       } finally {
         if (requestId === requestIdRef.current) {
@@ -285,7 +329,7 @@ export function NotificationsPage() {
         }
       }
     },
-    [activeFilter, apiFetch, shouldRun],
+    [activeFilter, apiFetch, shouldRun, t],
   );
 
   useEffect(() => {
@@ -324,7 +368,15 @@ export function NotificationsPage() {
   }, [shouldRun]);
 
   async function markAsRead(notification: DashboardNotification) {
-    if (notification.isRead || markingId || markingAll) return;
+    if (
+      notification.isRead ||
+      markingId ||
+      markingAll ||
+      deletingId ||
+      clearingRead
+    ) {
+      return;
+    }
 
     setMarkingId(notification.id);
     setError(null);
@@ -336,7 +388,7 @@ export function NotificationsPage() {
       const data = await apiResponseData(response);
 
       if (!response.ok) {
-        throw new Error(apiErrorMessage(data, "تعذر تعليم الإشعار كمقروء."));
+        throw new Error(apiErrorMessage(data, t("notifications.error.update")));
       }
 
       setNotifications((currentNotifications) => {
@@ -355,7 +407,7 @@ export function NotificationsPage() {
         message:
           reason instanceof Error
             ? reason.message
-            : "تعذر تعليم الإشعار كمقروء.",
+            : t("notifications.error.update"),
         tone: "danger",
       });
     } finally {
@@ -364,14 +416,17 @@ export function NotificationsPage() {
   }
 
   async function openNotification(notification: DashboardNotification) {
-    await markAsRead(notification);
-    if (notification.orderId) {
-      router.push(`/orders/view/${encodeURIComponent(notification.orderId)}`);
+    if (!notification.isRead) {
+      void markAsRead(notification);
+    }
+    const orderId = numericOrderId(notification);
+    if (orderId) {
+      router.push(`/orders/view/${orderId}`);
     }
   }
 
   async function markAllAsRead() {
-    if (markingAll) return;
+    if (markingAll || deletingId || clearingRead) return;
 
     setMarkingAll(true);
     setError(null);
@@ -383,7 +438,7 @@ export function NotificationsPage() {
       const data = await apiResponseData(response);
 
       if (!response.ok) {
-        throw new Error(apiErrorMessage(data, "تعذر تعليم كل الإشعارات كمقروءة."));
+        throw new Error(apiErrorMessage(data, t("notifications.error.update")));
       }
 
       setNotifications((currentNotifications) =>
@@ -395,7 +450,7 @@ export function NotificationsPage() {
             })),
       );
       setUnreadCount(0);
-      showSnackbar({ message: "تم تعليم كل الإشعارات كمقروءة." });
+      showSnackbar({ message: t("notifications.success.markAllRead") });
       await Promise.all([
         refreshUnreadCount(),
         loadNotifications(activeFilter, { showLoading: false }),
@@ -405,11 +460,109 @@ export function NotificationsPage() {
         message:
           reason instanceof Error
             ? reason.message
-            : "تعذر تعليم كل الإشعارات كمقروءة.",
+            : t("notifications.error.update"),
         tone: "danger",
       });
     } finally {
       setMarkingAll(false);
+    }
+  }
+
+  async function deleteNotification(notification: DashboardNotification) {
+    if (deletingId || markingId || markingAll || clearingRead) return;
+    if (notification.isBlocking && !notification.isResolved) {
+      showSnackbar({
+        message: t("notifications.error.protectedDelete"),
+        tone: "danger",
+      });
+      return;
+    }
+
+    setDeletingId(notification.id);
+    setError(null);
+
+    try {
+      const response = await apiFetch(`notifications/${notification.id}/`, {
+        method: "DELETE",
+      });
+      const data = response.status === 204 ? null : await apiResponseData(response);
+
+      if (!response.ok) {
+        if (response.status === 409) {
+          throw new Error(t("notifications.error.protectedDelete"));
+        }
+        throw new Error(apiErrorMessage(data, t("notifications.error.delete")));
+      }
+
+      setNotifications((currentNotifications) =>
+        currentNotifications.filter((item) => item.id !== notification.id),
+      );
+      if (!notification.isRead) {
+        setUnreadCount((count) => Math.max(0, count - 1));
+      }
+      setDeleteDialogTarget(null);
+      showSnackbar({ message: t("notifications.success.delete") });
+      await refreshUnreadCount();
+    } catch (reason) {
+      showSnackbar({
+        message:
+          reason instanceof Error
+            ? reason.message
+            : t("notifications.error.delete"),
+        tone: "danger",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function clearReadNotifications() {
+    if (clearingRead || deletingId || markingId || markingAll) return;
+
+    setClearingRead(true);
+    setError(null);
+
+    try {
+      const response = await apiFetch("notifications/clear-read/", {
+        method: "DELETE",
+      });
+      const data = await apiResponseData(response);
+
+      if (!response.ok) {
+        throw new Error(apiErrorMessage(data, t("notifications.error.clearRead")));
+      }
+
+      const deletedIds = new Set(
+        notifications
+          .filter(
+            (notification) =>
+              notification.isRead &&
+              (!notification.isBlocking || notification.isResolved),
+          )
+          .map((notification) => notification.id),
+      );
+      setNotifications((currentNotifications) =>
+        currentNotifications.filter(
+          (notification) => !deletedIds.has(notification.id),
+        ),
+      );
+      setDeleteDialogTarget(null);
+      showSnackbar({
+        message: formatMessage(t("notifications.success.clearRead"), {
+          count: textValue((data as NotificationRecord).deleted_count, "0"),
+        }),
+      });
+      await refreshUnreadCount();
+    } catch (reason) {
+      showSnackbar({
+        message:
+          reason instanceof Error
+            ? reason.message
+            : t("notifications.error.clearRead"),
+        tone: "danger",
+      });
+    } finally {
+      setClearingRead(false);
     }
   }
 
@@ -421,7 +574,9 @@ export function NotificationsPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
-              disabled={markingAll || unreadCount === 0}
+              disabled={
+                markingAll || deletingId !== null || clearingRead || unreadCount === 0
+              }
               onClick={() => void markAllAsRead()}
               type="button"
               variant="outline"
@@ -431,7 +586,20 @@ export function NotificationsPage() {
               ) : (
                 <CheckCheck className="size-4" />
               )}
-              تعليم الكل كمقروء
+              {t("notifications.action.markAllRead")}
+            </Button>
+            <Button
+              disabled={clearingRead || deletingId !== null || readCount === 0}
+              onClick={() => setDeleteDialogTarget({ kind: "clear-read" })}
+              type="button"
+              variant="outline"
+            >
+              {clearingRead ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
+              {t("notifications.action.clearRead")}
             </Button>
             <Button
               disabled={loading || refreshing}
@@ -447,7 +615,7 @@ export function NotificationsPage() {
               ) : (
                 <RefreshCw className="size-4" />
               )}
-              تحديث
+              {t("notifications.action.refresh")}
             </Button>
           </div>
         }
@@ -463,7 +631,9 @@ export function NotificationsPage() {
               <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                 {t("notifications.center.title")}
                 <Badge tone={unreadCount > 0 ? "blue" : "secondary"}>
-                  غير مقروء: {unreadCount}
+                  {formatMessage(t("notifications.unreadCount"), {
+                    count: unreadCount,
+                  })}
                 </Badge>
               </div>
               <div className="text-xs text-muted-foreground">
@@ -510,10 +680,16 @@ export function NotificationsPage() {
                 type="button"
                 variant="outline"
                 disabled={loading}
-                onClick={() => void loadNotifications(activeFilter, { showLoading: true })}
+                onClick={() =>
+                  void loadNotifications(activeFilter, { showLoading: true })
+                }
               >
-                {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-                حاول مرة أخرى
+                {loading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="size-4" />
+                )}
+                {t("notifications.retry")}
               </Button>
             </div>
           </div>
@@ -523,7 +699,7 @@ export function NotificationsPage() {
           <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 px-6 py-12 text-center">
             <Loader2 className="size-7 animate-spin text-primary" />
             <div className="text-sm font-semibold text-muted-foreground">
-              جارٍ تحميل الإشعارات...
+              {t("notifications.loading")}
             </div>
           </div>
         ) : hasNotifications ? (
@@ -532,6 +708,11 @@ export function NotificationsPage() {
               {pagedNotifications.map((notification) => {
                 const Icon = iconForType(notification.type);
                 const markingThis = markingId === notification.id;
+                const deletingThis = deletingId === notification.id;
+                const orderId = numericOrderId(notification);
+                const orderLabel = displayOrderLabel(notification, t);
+                const canDelete =
+                  !notification.isBlocking || notification.isResolved;
 
                 return (
                   <article
@@ -565,15 +746,15 @@ export function NotificationsPage() {
                               <Circle className="size-2.5 fill-primary text-primary" />
                             ) : null}
                             <h2 className="truncate text-sm font-semibold">
-                              {notification.title}
+                              {displayTitle(notification, t)}
                             </h2>
                           </div>
                           <p className="mt-1 text-sm leading-5 text-muted-foreground">
-                            {notification.message}
+                            {displayMessage(notification, t)}
                           </p>
-                          {notification.orderId ? (
-                            <p className="mt-1 text-xs text-muted-foreground" dir="ltr">
-                              order_id: {notification.orderId} · parent order
+                          {orderLabel ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {orderLabel}
                             </p>
                           ) : null}
                         </div>
@@ -587,25 +768,66 @@ export function NotificationsPage() {
                       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge tone={typeTone(notification.type)}>
-                            {typeLabel(notification.type)}
+                            {typeLabel(notification.type, t)}
                           </Badge>
-                          {notification.isBlocking ? <Badge tone="red">حاجب</Badge> : null}
-                          {notification.isResolved ? <Badge tone="green">تم الحل</Badge> : null}
+                          {notification.isResolved ? (
+                            <Badge tone="green">
+                              {t("notifications.state.resolved")}
+                            </Badge>
+                          ) : notification.isBlocking ? (
+                            <Badge tone="red">
+                              {t("notifications.state.requiresAction")}
+                            </Badge>
+                          ) : null}
                         </div>
-                        <span
-                          className={cn(
-                            "text-xs font-medium",
-                            notification.isRead
-                              ? "text-muted-foreground"
-                              : "text-primary",
-                          )}
-                        >
-                          {notification.orderId
-                            ? "فتح الطلب"
-                            : notification.isRead
-                              ? t("notifications.state.read")
-                              : t("notifications.state.unread")}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {orderId ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void openNotification(notification);
+                              }}
+                            >
+                              <ExternalLink className="size-4" />
+                              {t("notifications.action.openOrder")}
+                            </Button>
+                          ) : null}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={!canDelete || deletingThis}
+                            title={
+                              canDelete
+                                ? t("notifications.delete.title")
+                                : t("notifications.delete.protected")
+                            }
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (canDelete) {
+                                setDeleteDialogTarget({
+                                  kind: "single",
+                                  notification,
+                                });
+                              }
+                            }}
+                          >
+                            {deletingThis ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="size-4" />
+                            )}
+                            {t("notifications.action.delete")}
+                          </Button>
+                        </div>
+                        {!canDelete ? (
+                          <div className="basis-full text-xs font-medium text-destructive">
+                            {t("notifications.delete.protected")}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </article>
@@ -614,7 +836,10 @@ export function NotificationsPage() {
             </div>
             <div className="px-5">
               <Pagination
-                text={`عرض ${pagedNotifications.length} من ${notifications.length} نتيجة`}
+                text={formatMessage(t("notifications.pagination.summary"), {
+                  shown: pagedNotifications.length,
+                  total: notifications.length,
+                })}
                 pages={`${safeCurrentPage} / ${totalPages}`}
                 previousDisabled={safeCurrentPage === 1}
                 nextDisabled={safeCurrentPage === totalPages}
@@ -637,7 +862,7 @@ export function NotificationsPage() {
               <Inbox className="size-5" />
             </span>
             <div className="mt-4 text-base font-semibold">
-              {emptyMessage(activeFilter)}
+              {emptyMessage(activeFilter, t)}
             </div>
             <p className="mt-1 max-w-sm text-sm leading-5 text-muted-foreground">
               {t("notifications.empty.description")}
@@ -645,6 +870,65 @@ export function NotificationsPage() {
           </div>
         )}
       </Card>
+      {deleteDialogTarget ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          role="presentation"
+          onClick={() => {
+            if (!deletingId && !clearingRead) {
+              setDeleteDialogTarget(null);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-notification-title"
+            className="w-full max-w-md rounded-lg border bg-background p-5 text-start shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="delete-notification-title" className="text-base font-bold">
+              {deleteDialogTarget.kind === "clear-read"
+                ? t("notifications.clearRead.title")
+                : t("notifications.delete.title")}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {deleteDialogTarget.kind === "clear-read"
+                ? t("notifications.clearRead.message")
+                : t("notifications.delete.message")}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={deletingId !== null || clearingRead}
+                onClick={() => setDeleteDialogTarget(null)}
+              >
+                {t("notifications.action.cancel")}
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                disabled={deletingId !== null || clearingRead}
+                onClick={() => {
+                  if (deleteDialogTarget.kind === "clear-read") {
+                    void clearReadNotifications();
+                  } else {
+                    void deleteNotification(deleteDialogTarget.notification);
+                  }
+                }}
+              >
+                {deletingId !== null || clearingRead ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Trash2 className="size-4" />
+                )}
+                {t("notifications.action.delete")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
