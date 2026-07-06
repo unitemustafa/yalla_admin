@@ -227,10 +227,73 @@ export function getAddressDetails(order: DashboardOrderLike) {
   );
 }
 
+function unknownList(value: unknown) {
+  return Array.isArray(value) ? value : [];
+}
+
+function unknownRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function groupedMarketSections(order: DashboardOrderLike): OrderMarketSectionLike[] {
+  const sections = new Map<string, OrderMarketSectionLike>();
+
+  function ensureSection(value: unknown, index: number) {
+    const record = unknownRecord(value);
+    if (!record) return null;
+    const market = unknownRecord(record.market) as OrderNamedObject | null;
+    const marketId = record.market_id ?? market?.id ?? `group-${index}`;
+    const key = cleanText(marketId) || `group-${index}`;
+    const existing = sections.get(key);
+    if (existing) return existing;
+
+    const section: OrderMarketSectionLike = {
+      id: key,
+      market_id: marketId as string | number | null,
+      market,
+      subtotal_price: null,
+      discount: null,
+      total_price: null,
+      pickup_status: null,
+      picked_up_at: null,
+      sort_order: index,
+      items: [],
+      offers: [],
+    };
+    sections.set(key, section);
+    return section;
+  }
+
+  unknownList(order.grouped_items).forEach((value, index) => {
+    const section = ensureSection(value, index);
+    const record = unknownRecord(value);
+    if (!section || !record) return;
+    section.items = unknownList(record.items) as OrderItemLike[];
+  });
+
+  unknownList(order.grouped_offers).forEach((value, index) => {
+    const section = ensureSection(value, index);
+    const record = unknownRecord(value);
+    if (!section || !record) return;
+    section.offers = unknownList(record.offers) as OrderOfferLike[];
+  });
+
+  return Array.from(sections.values()).sort((first, second) => {
+    const firstOrder = numberValue(first.sort_order) ?? 0;
+    const secondOrder = numberValue(second.sort_order) ?? 0;
+    return firstOrder - secondOrder;
+  });
+}
+
 export function getMarketSections(order: DashboardOrderLike): OrderMarketSectionLike[] {
   if (Array.isArray(order.market_sections) && order.market_sections.length > 0) {
     return order.market_sections;
   }
+
+  const groupedSections = groupedMarketSections(order);
+  if (groupedSections.length > 0) return groupedSections;
 
   const hasFlatLines =
     (Array.isArray(order.items) && order.items.length > 0) ||

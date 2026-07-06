@@ -199,14 +199,44 @@ type BackendOrderOffer = {
   } | null;
 };
 
+type BackendServiceCityRef = {
+  id?: number | string | null;
+  name?: string | null;
+  name_ar?: string | null;
+};
+
+type BackendDeliveryAreaRef = {
+  id?: number | string | null;
+  name?: string | null;
+  service_city_id?: number | string | null;
+  service_city?: BackendServiceCityRef | null;
+  delivery_price?: string | number | null;
+};
+
+type BackendVariantAttribute = {
+  attribute?: { name?: string | null } | null;
+  option?: { value?: string | null } | null;
+  value?: string | null;
+};
+
 type BackendProduct = {
   id: number;
   name: string;
-  market?: { id: number; name?: string | null } | null;
+  market_id?: number | string | null;
+  market?: { id?: number | string | null; name?: string | null } | null;
   category?: { id: number; name?: string | null; type?: string | null } | null;
   is_available?: boolean;
-  variants?: Array<{ id: number; price: string; sku?: string | null }>;
+  variants?: Array<{
+    id: number | string;
+    price: string | number;
+    sku?: string | null;
+    name?: string | null;
+    label?: string | null;
+    attribute_values?: BackendVariantAttribute[] | null;
+  }>;
 };
+
+type BackendProductVariant = NonNullable<BackendProduct["variants"]>[number];
 
 type BackendMarket = {
   id: number;
@@ -214,6 +244,12 @@ type BackendMarket = {
   branch?: string | null;
   scope?: string | null;
   status?: string | null;
+  is_active?: boolean | null;
+  service_city_ids?: Array<number | string>;
+  service_cities?: BackendServiceCityRef[];
+  delivery_area_ids?: Array<number | string>;
+  deliveryAreaIds?: Array<number | string>;
+  delivery_areas?: Array<number | string | BackendDeliveryAreaRef>;
 };
 
 type BackendOffer = {
@@ -222,8 +258,17 @@ type BackendOffer = {
   type?: string | null;
   discount?: string | number | null;
   status?: string | null;
+  scope?: string | null;
+  service_city_id?: number | string | null;
+  service_city?: BackendServiceCityRef | null;
   market_id?: number | string | null;
-  market?: { id: number; name?: string | null } | null;
+  market?: { id?: number | string | null; name?: string | null; scope?: string | null } | null;
+  product_ids?: Array<number | string>;
+  products?: Array<{
+    id?: number | string | null;
+    market_id?: number | string | null;
+    market?: { id?: number | string | null; scope?: string | null } | null;
+  }>;
 };
 
 type OrderLineDraft = {
@@ -236,13 +281,20 @@ type OrderLineDraft = {
 type OrderOfferDraft = {
   id: string;
   offerId: string;
-  discountAmount: string;
+};
+
+type MarketSectionDraft = {
+  id: string;
+  marketId: string;
+  lines: OrderLineDraft[];
+  offers: OrderOfferDraft[];
 };
 
 type ProductVariantOption = {
   id: string;
   productId: number;
   productName: string;
+  variantLabel: string;
   categoryName: string;
   marketId?: number;
   marketName: string;
@@ -315,6 +367,10 @@ function draftLineId() {
 
 function draftOfferId() {
   return `offer-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function draftSectionId() {
+  return `section-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function money(value: string | number | null | undefined) {
@@ -398,8 +454,8 @@ function apiOrderData(value: unknown): BackendOrder | null {
   }
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as { data?: unknown };
-  if (record.data && typeof record.data === "object" && !Array.isArray(record.data)) {
-    return record.data as BackendOrder;
+  if (record.data) {
+    return apiOrderData(record.data);
   }
   return value as BackendOrder;
 }
@@ -473,6 +529,177 @@ function customerSearchText(user: BackendDashboardUser) {
 
 function addressLabel(address: BackendAddress) {
   return address.name?.trim() || address.line1?.trim() || `عنوان #${address.id}`;
+}
+
+function toNumberId(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function uniqueNumberIds(values: unknown[]) {
+  const ids: number[] = [];
+  for (const value of values) {
+    const id = toNumberId(value);
+    if (id !== null && !ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
+function getAddressServiceCityId(address: BackendAddress | null | undefined) {
+  return toNumberId(address?.service_city_id ?? address?.service_city?.id);
+}
+
+function getAddressOrderScope(address: BackendAddress | null | undefined): "general" | "service_city" {
+  return getAddressServiceCityId(address) !== null ? "service_city" : "general";
+}
+
+function isGeneralAddress(address: BackendAddress | null | undefined) {
+  return getAddressOrderScope(address) === "general";
+}
+
+function getMarketScope(market: BackendMarket | null | undefined) {
+  return market?.scope === "service_city" ? "service_city" : "general";
+}
+
+function marketServiceCityIds(market: BackendMarket) {
+  const values: unknown[] = [];
+  if (Array.isArray(market.service_city_ids)) values.push(...market.service_city_ids);
+  if (Array.isArray(market.service_cities)) {
+    for (const city of market.service_cities) values.push(city.id);
+  }
+  if (Array.isArray(market.delivery_areas)) {
+    for (const area of market.delivery_areas) {
+      if (area && typeof area === "object") {
+        values.push(area.service_city_id ?? area.service_city?.id);
+      }
+    }
+  }
+  return uniqueNumberIds(values);
+}
+
+function marketServesCity(market: BackendMarket, cityId: number | null) {
+  if (cityId === null) return false;
+  return marketServiceCityIds(market).includes(cityId);
+}
+
+function marketIsActive(market: BackendMarket) {
+  if (market.is_active === false) return false;
+  if (!market.status) return true;
+  return market.status === "active";
+}
+
+function filterMarketsForAddress(markets: BackendMarket[], address: BackendAddress | null) {
+  if (!address) return [];
+  if (isGeneralAddress(address)) {
+    return markets.filter((market) => getMarketScope(market) === "general" && marketIsActive(market));
+  }
+
+  const cityId = getAddressServiceCityId(address);
+  return markets.filter(
+    (market) =>
+      getMarketScope(market) === "service_city" &&
+      marketIsActive(market) &&
+      marketServesCity(market, cityId),
+  );
+}
+
+function productMarketId(product: BackendProduct) {
+  return toNumberId(product.market_id ?? product.market?.id);
+}
+
+function filterProductsForMarket(products: BackendProduct[], marketId: string) {
+  const selectedMarketId = toNumberId(marketId);
+  if (selectedMarketId === null) return [];
+  return products.filter((product) => productMarketId(product) === selectedMarketId);
+}
+
+function offerMarketId(offer: BackendOffer) {
+  return toNumberId(offer.market_id ?? offer.market?.id);
+}
+
+function getOfferScope(offer: BackendOffer) {
+  return offer.scope === "service_city" ? "service_city" : "general";
+}
+
+function offerMatchesMarket(offer: BackendOffer, marketId: string) {
+  const selectedMarketId = toNumberId(marketId);
+  if (selectedMarketId === null) return false;
+  const directMarketId = offerMarketId(offer);
+  if (directMarketId !== null) return directMarketId === selectedMarketId;
+  if (Array.isArray(offer.products) && offer.products.length > 0) {
+    return offer.products.some((product) => toNumberId(product.market_id ?? product.market?.id) === selectedMarketId);
+  }
+  return true;
+}
+
+function filterOffersForMarketAndAddress(
+  offers: BackendOffer[],
+  marketId: string,
+  address: BackendAddress | null,
+) {
+  if (!address || !marketId) return [];
+
+  if (isGeneralAddress(address)) {
+    return offers.filter(
+      (offer) =>
+        getOfferScope(offer) === "general" &&
+        toNumberId(offer.service_city_id ?? offer.service_city?.id) === null &&
+        offerMatchesMarket(offer, marketId),
+    );
+  }
+
+  const cityId = getAddressServiceCityId(address);
+  return offers.filter(
+    (offer) =>
+      getOfferScope(offer) === "service_city" &&
+      cityId !== null &&
+      toNumberId(offer.service_city_id ?? offer.service_city?.id) === cityId &&
+      offerMatchesMarket(offer, marketId),
+  );
+}
+
+function variantAttributeLabel(attribute: BackendVariantAttribute) {
+  const attributeName = cleanText(attribute.attribute?.name);
+  const optionValue = cleanText(attribute.option?.value) || cleanText(attribute.value);
+  return [attributeName, optionValue].filter(Boolean).join(": ");
+}
+
+function getVariantPrice(variant: { price?: string | number | null }) {
+  const price = Number(variant.price ?? 0);
+  return Number.isFinite(price) ? price : 0;
+}
+
+function getVariantLabel(variant: BackendProductVariant) {
+  const explicit = cleanText(variant.label) || cleanText(variant.name);
+  if (explicit) return explicit;
+  const attributes = Array.isArray(variant.attribute_values)
+    ? variant.attribute_values.map(variantAttributeLabel).filter(Boolean)
+    : [];
+  if (attributes.length > 0) return attributes.join("، ");
+  return cleanText(variant.sku) || `Variant #${variant.id}`;
+}
+
+function marketLabel(market: BackendMarket) {
+  return [market.name?.trim() || `محل #${market.id}`, market.branch?.trim()]
+    .filter(Boolean)
+    .join(" - ");
+}
+
+function offerLabel(offer: BackendOffer) {
+  return [
+    offer.title?.trim() || `عرض #${offer.id}`,
+    offer.type,
+    money(offer.discount),
+  ].filter(Boolean).join(" - ");
+}
+
+function emptyMarketSection(): MarketSectionDraft {
+  return {
+    id: draftSectionId(),
+    marketId: "",
+    lines: [],
+    offers: [],
+  };
 }
 
 function representativeHref(order: BackendOrder) {
@@ -841,7 +1068,7 @@ export function BackendCreateOrderPage() {
   const [addresses, setAddresses] = useState<BackendAddress[]>([]);
   const [selectedUser, setSelectedUser] = useState("");
   const [selectedAddress, setSelectedAddress] = useState("");
-  const [selectedMarketId, setSelectedMarketId] = useState("");
+  const [marketSections, setMarketSections] = useState<MarketSectionDraft[]>([]);
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   const [customerQuery, setCustomerQuery] = useState("");
   const [createAddressOpen, setCreateAddressOpen] = useState(false);
@@ -852,13 +1079,8 @@ export function BackendCreateOrderPage() {
   const [paymentMethod, setPaymentMethod] = useState("cash_on_delivery");
   const [description, setDescription] = useState("");
   const [deliveryNote, setDeliveryNote] = useState("");
-  const [lines, setLines] = useState<OrderLineDraft[]>([
-    { id: draftLineId(), variantId: "", quantity: "1", unitPrice: "" },
-  ]);
-  const [orderOffers, setOrderOffers] = useState<OrderOfferDraft[]>([]);
-  const [pickerLineId, setPickerLineId] = useState<string | null>(null);
+  const [pickerTarget, setPickerTarget] = useState<{ sectionId: string; lineId: string } | null>(null);
   const [productQuery, setProductQuery] = useState("");
-  const [productMarketFilter, setProductMarketFilter] = useState("all");
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
   const [productAvailabilityFilter, setProductAvailabilityFilter] = useState<"all" | "available" | "unavailable">("all");
   const [loading, setLoading] = useState(true);
@@ -891,9 +1113,7 @@ export function BackendCreateOrderPage() {
           .filter((user) => user.role === "client"),
       );
       setProducts(apiListData<BackendProduct>(productsData));
-      const nextMarkets = apiListData<BackendMarket>(marketsData);
-      setMarkets(nextMarkets);
-      setSelectedMarketId((current) => current || (nextMarkets[0]?.id ? String(nextMarkets[0].id) : ""));
+      setMarkets(apiListData<BackendMarket>(marketsData));
       setOffers(apiListData<BackendOffer>(offersData));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر تحميل بيانات إنشاء الطلب.");
@@ -905,6 +1125,8 @@ export function BackendCreateOrderPage() {
   async function loadAddresses(userId: string) {
     setSelectedAddress("");
     setAddresses([]);
+    setMarketSections([]);
+    setPickerTarget(null);
     if (!userId) return;
     const response = await apiFetch(`addresses/?user_id=${encodeURIComponent(userId)}`);
     const data = await apiResponseData(response);
@@ -928,6 +1150,8 @@ export function BackendCreateOrderPage() {
     setCustomerPickerOpen(false);
     setCustomerQuery("");
     setCreateAddressOpen(false);
+    setMarketSections([]);
+    setPickerTarget(null);
     resetAddressDraft();
     void loadAddresses(userId);
   }
@@ -956,6 +1180,8 @@ export function BackendCreateOrderPage() {
       const rows = apiListData<BackendAddress>(data);
       setAddresses(rows);
       setSelectedAddress(rows[0]?.id ? String(rows[0].id) : "");
+      setMarketSections([]);
+      setPickerTarget(null);
       setCreateAddressOpen(false);
       resetAddressDraft();
       showSnackbar({ message: "تمت إضافة عنوان العميل.", tone: "success" });
@@ -983,30 +1209,20 @@ export function BackendCreateOrderPage() {
         id: String(variant.id),
         productId: product.id,
         productName: product.name,
+        variantLabel: getVariantLabel(variant),
         categoryName: product.category?.name?.trim() || "بدون تصنيف",
-        marketName: product.market?.name?.trim() || "بدون محل",
-        label: `${product.name} - ${money(variant.price)}${variant.sku ? ` - ${variant.sku}` : ""}`,
-        price: Number(variant.price),
-        marketId: product.market?.id,
+        marketName:
+          product.market?.name?.trim() ||
+          markets.find((market) => toNumberId(market.id) === productMarketId(product))?.name?.trim() ||
+          "بدون محل",
+        label: `${product.name} - ${getVariantLabel(variant)} - ${money(variant.price)}${variant.sku ? ` - ${variant.sku}` : ""}`,
+        price: getVariantPrice(variant),
+        marketId: productMarketId(product) ?? undefined,
         sku: variant.sku,
         available: product.is_available !== false,
       })),
     );
-  }, [products]);
-
-  const productMarkets = useMemo(() => {
-    const map = new Map<string, string>();
-    variants.forEach((variant) => {
-      if (variant.marketId) map.set(String(variant.marketId), variant.marketName);
-    });
-    return Array.from(map, ([value, label]) => ({ value, label }));
-  }, [variants]);
-
-  const productCategories = useMemo(() => {
-    return Array.from(new Set(variants.map((variant) => variant.categoryName)))
-      .filter(Boolean)
-      .sort((first, second) => first.localeCompare(second, "ar"));
-  }, [variants]);
+  }, [markets, products]);
 
   const selectedCustomer = useMemo(
     () => users.find((user) => String(user.id) === selectedUser) ?? null,
@@ -1018,9 +1234,9 @@ export function BackendCreateOrderPage() {
     [addresses, selectedAddress],
   );
 
-  const selectedMarket = useMemo(
-    () => markets.find((market) => String(market.id) === selectedMarketId) ?? null,
-    [markets, selectedMarketId],
+  const eligibleMarkets = useMemo(
+    () => filterMarketsForAddress(markets, selectedAddressRecord),
+    [markets, selectedAddressRecord],
   );
 
   const filteredCustomers = useMemo(() => {
@@ -1030,107 +1246,309 @@ export function BackendCreateOrderPage() {
     return users.filter((user) => customerSearchText(user).includes(normalizedQuery));
   }, [customerQuery, users]);
 
+  const selectedMarketIds = marketSections
+    .map((section) => section.marketId)
+    .filter(Boolean);
+  const selectedMarketIdSet = new Set(selectedMarketIds);
+  const hasDuplicateMarkets = selectedMarketIdSet.size !== selectedMarketIds.length;
+  const primaryMarketId = selectedMarketIds[0] ?? "";
+  const selectedMarketRecords = marketSections
+    .map((section) => eligibleMarkets.find((market) => String(market.id) === section.marketId))
+    .filter((market): market is BackendMarket => Boolean(market));
+  const selectedMarketSummary = selectedMarketRecords.map(marketLabel).join("، ");
+  const selectedProductLines = marketSections.flatMap((section) =>
+    section.lines
+      .filter((line) => line.variantId)
+      .map((line) => ({ section, line })),
+  );
+  const selectedOfferLines = marketSections.flatMap((section) =>
+    section.offers
+      .filter((offer) => offer.offerId)
+      .map((offer) => ({ section, offer })),
+  );
+  const subtotal = selectedProductLines.reduce((sum, { line }) => {
+    const variant = variants.find((item) => item.id === line.variantId);
+    return sum + (variant?.price ?? 0) * Math.max(1, Number(line.quantity) || 1);
+  }, 0);
+  const activePickerSection = pickerTarget
+    ? marketSections.find((section) => section.id === pickerTarget.sectionId) ?? null
+    : null;
+  const activePickerMarket = activePickerSection?.marketId
+    ? eligibleMarkets.find((market) => String(market.id) === activePickerSection.marketId) ?? null
+    : null;
+  const activePickerVariantIds = useMemo(() => {
+    const marketProductIds = new Set(
+      filterProductsForMarket(products, activePickerSection?.marketId ?? "").map((product) => product.id),
+    );
+    return new Set(variants.filter((variant) => marketProductIds.has(variant.productId)).map((variant) => variant.id));
+  }, [activePickerSection?.marketId, products, variants]);
+  const productCategories = useMemo(() => {
+    return Array.from(
+      new Set(
+        variants
+          .filter((variant) => activePickerVariantIds.has(variant.id))
+          .map((variant) => variant.categoryName),
+      ),
+    )
+      .filter(Boolean)
+      .sort((first, second) => first.localeCompare(second, "ar"));
+  }, [activePickerVariantIds, variants]);
   const filteredVariants = useMemo(() => {
     const normalizedQuery = productQuery.trim().toLowerCase();
 
     return variants.filter((variant) => {
+      if (!activePickerVariantIds.has(variant.id)) return false;
       const matchesQuery =
         !normalizedQuery ||
-        [variant.productName, variant.sku, variant.marketName, variant.categoryName]
+        [variant.productName, variant.variantLabel, variant.sku, variant.marketName, variant.categoryName]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(normalizedQuery));
-      const matchesMarket =
-        productMarketFilter === "all" || String(variant.marketId ?? "") === productMarketFilter;
       const matchesCategory =
         productCategoryFilter === "all" || variant.categoryName === productCategoryFilter;
       const matchesAvailability =
         productAvailabilityFilter === "all" ||
         (productAvailabilityFilter === "available" ? variant.available : !variant.available);
 
-      return matchesQuery && matchesMarket && matchesCategory && matchesAvailability;
+      return matchesQuery && matchesCategory && matchesAvailability;
     });
-  }, [productAvailabilityFilter, productCategoryFilter, productMarketFilter, productQuery, variants]);
+  }, [activePickerVariantIds, productAvailabilityFilter, productCategoryFilter, productQuery, variants]);
+  const selectedAddressIsGeneral = selectedAddressRecord ? isGeneralAddress(selectedAddressRecord) : false;
+  const addressScopeLabel = selectedAddressIsGeneral ? "عام" : "مدينة خدمة";
+  const addressDeliveryTypeLabel = selectedAddressRecord
+    ? selectedAddressIsGeneral
+      ? "دليفري يدوي"
+      : selectedAddressRecord.delivery_area
+        ? "توصيل ثابت"
+        : "دليفري يدوي"
+    : "-";
+  const addressDeliveryPriceLabel = selectedAddressRecord
+    ? selectedAddressRecord.delivery_area
+      ? money(selectedAddressRecord.delivery_price_preview ?? selectedAddressRecord.delivery_area.delivery_price)
+      : "يحدد لاحقاً"
+    : "-";
 
-  const subtotal = lines.reduce((sum, line) => {
-    const variant = variants.find((item) => item.id === line.variantId);
-    const unitPrice = Number(line.unitPrice || variant?.price || 0);
-    return sum + unitPrice * Math.max(1, Number(line.quantity) || 1);
-  }, 0);
-  const selectedVariants = lines.map((line) => line.variantId).filter(Boolean);
-  const selectedVariantMarketIds = lines
-    .map((line) => variants.find((variant) => variant.id === line.variantId)?.marketId)
-    .filter((marketId): marketId is number => typeof marketId === "number");
-  const selectedVariantMarketId = selectedVariantMarketIds[0];
-  const selectedVariantMarketCount = new Set(selectedVariantMarketIds).size;
-  const selectedMarketInOrder =
-    selectedMarketId && selectedVariantMarketIds.some((marketId) => String(marketId) === selectedMarketId);
-  const primaryMarketId =
-    selectedVariantMarketIds.length > 0
-      ? selectedMarketInOrder
-        ? selectedMarketId
-        : selectedVariantMarketId
-          ? String(selectedVariantMarketId)
-          : ""
-      : selectedMarketId;
-  const primaryMarket = useMemo(
-    () => markets.find((market) => String(market.id) === primaryMarketId) ?? selectedMarket,
-    [markets, primaryMarketId, selectedMarket],
-  );
-  const hasMixedMarkets = selectedVariantMarketCount > 1;
-  const selectedVariantMarketSummary = Array.from(new Set(
-    lines
-      .map((line) => variants.find((variant) => variant.id === line.variantId)?.marketName)
-      .filter((name): name is string => Boolean(name)),
-  )).join(", ");
-  function updateLine(id: string, patch: Partial<OrderLineDraft>) {
-    setLines((current) =>
-      current.map((line) => (line.id === id ? { ...line, ...patch } : line)),
+  function resetProductPicker() {
+    setPickerTarget(null);
+    setProductQuery("");
+    setProductCategoryFilter("all");
+    setProductAvailabilityFilter("all");
+  }
+
+  function selectAddress(addressId: string) {
+    setSelectedAddress(addressId);
+    setMarketSections([]);
+    resetProductPicker();
+  }
+
+  function addMarketSection() {
+    if (!selectedAddressRecord) {
+      showSnackbar({ message: "اختر عنوان التوصيل", tone: "danger" });
+      return;
+    }
+    if (marketSections.length >= eligibleMarkets.length) {
+      showSnackbar({ message: "لا توجد محلات متاحة أخرى لهذا العنوان.", tone: "danger" });
+      return;
+    }
+    setMarketSections((current) => [...current, emptyMarketSection()]);
+  }
+
+  function removeMarketSection(sectionId: string) {
+    setMarketSections((current) => current.filter((section) => section.id !== sectionId));
+    if (pickerTarget?.sectionId === sectionId) resetProductPicker();
+  }
+
+  function updateSectionMarket(sectionId: string, marketId: string) {
+    const duplicate = marketSections.some((section) => section.id !== sectionId && section.marketId === marketId);
+    if (duplicate) {
+      showSnackbar({ message: "لا يمكن اختيار نفس المحل مرتين.", tone: "danger" });
+      return;
+    }
+    setMarketSections((current) =>
+      current.map((section) =>
+        section.id === sectionId
+          ? { ...section, marketId, lines: [], offers: [] }
+          : section,
+      ),
+    );
+    if (pickerTarget?.sectionId === sectionId) resetProductPicker();
+  }
+
+  function marketOptionsForSection(sectionId: string) {
+    const selectedByOtherSections = new Set(
+      marketSections
+        .filter((section) => section.id !== sectionId)
+        .map((section) => section.marketId)
+        .filter(Boolean),
+    );
+    return eligibleMarkets.map((market) => ({
+      value: String(market.id),
+      label: marketLabel(market),
+      disabled: selectedByOtherSections.has(String(market.id)),
+    }));
+  }
+
+  function addLine(sectionId: string) {
+    const section = marketSections.find((item) => item.id === sectionId);
+    if (!section?.marketId) {
+      showSnackbar({ message: "اختر المحل أولاً.", tone: "danger" });
+      return;
+    }
+    setMarketSections((current) =>
+      current.map((item) =>
+        item.id === sectionId
+          ? {
+              ...item,
+              lines: [...item.lines, { id: draftLineId(), variantId: "", quantity: "1", unitPrice: "" }],
+            }
+          : item,
+      ),
     );
   }
 
-  function removeLine(id: string) {
-    setLines((current) => current.filter((line) => line.id !== id));
+  function updateLine(sectionId: string, lineId: string, patch: Partial<OrderLineDraft>) {
+    setMarketSections((current) =>
+      current.map((section) =>
+        section.id === sectionId
+          ? {
+              ...section,
+              lines: section.lines.map((line) => (line.id === lineId ? { ...line, ...patch } : line)),
+            }
+          : section,
+      ),
+    );
   }
+
+  function removeLine(sectionId: string, lineId: string) {
+    setMarketSections((current) =>
+      current.map((section) =>
+        section.id === sectionId
+          ? { ...section, lines: section.lines.filter((line) => line.id !== lineId) }
+          : section,
+      ),
+    );
+    if (pickerTarget?.sectionId === sectionId && pickerTarget.lineId === lineId) resetProductPicker();
+  }
+
+  function addOffer(sectionId: string) {
+    const section = marketSections.find((item) => item.id === sectionId);
+    if (!section?.marketId) {
+      showSnackbar({ message: "اختر المحل أولاً.", tone: "danger" });
+      return;
+    }
+    setMarketSections((current) =>
+      current.map((item) =>
+        item.id === sectionId
+          ? { ...item, offers: [...item.offers, { id: draftOfferId(), offerId: "" }] }
+          : item,
+      ),
+    );
+  }
+
+  function updateOffer(sectionId: string, offerLineId: string, offerId: string) {
+    setMarketSections((current) =>
+      current.map((section) =>
+        section.id === sectionId
+          ? {
+              ...section,
+              offers: section.offers.map((offer) => (offer.id === offerLineId ? { ...offer, offerId } : offer)),
+            }
+          : section,
+      ),
+    );
+  }
+
+  function removeOffer(sectionId: string, offerLineId: string) {
+    setMarketSections((current) =>
+      current.map((section) =>
+        section.id === sectionId
+          ? { ...section, offers: section.offers.filter((offer) => offer.id !== offerLineId) }
+          : section,
+      ),
+    );
+  }
+
+  function invalidMarketMessage(market: BackendMarket) {
+    if (!selectedAddressRecord) return "اختر عنوان التوصيل";
+    if (selectedAddressIsGeneral && getMarketScope(market) === "service_city") {
+      return "لا يمكن دمج محلات عامة مع محلات مدينة في نفس الطلب";
+    }
+    if (!selectedAddressIsGeneral && getMarketScope(market) === "general") {
+      return "لا يمكن دمج محلات عامة مع محلات مدينة في نفس الطلب";
+    }
+    return "لا يمكن دمج منتجات من مدن مختلفة في نفس الطلب";
+  }
+
+  function invalidOfferMessage(offer: BackendOffer) {
+    if (selectedAddressIsGeneral && getOfferScope(offer) === "service_city") {
+      return "لا يمكن استخدام عرض مدينة داخل طلب عام";
+    }
+    if (!selectedAddressIsGeneral && getOfferScope(offer) === "general") {
+      return "لا يمكن استخدام عرض عام داخل طلب مدينة";
+    }
+    return "لا يمكن دمج منتجات من مدن مختلفة في نفس الطلب";
+  }
+
+  function validateOrderDraft() {
+    if (!selectedUser) return "اختر العميل";
+    if (!selectedAddressRecord) return "اختر عنوان التوصيل";
+    if (!paymentMethod.trim()) return "اختر طريقة الدفع";
+    if (marketSections.length === 0) return "اختر محل واحد على الأقل";
+    if (marketSections.some((section) => !section.marketId)) return "اختر محل واحد على الأقل";
+    if (hasDuplicateMarkets) return "لا يمكن اختيار نفس المحل مرتين.";
+
+    for (const section of marketSections) {
+      const market = markets.find((item) => String(item.id) === section.marketId);
+      if (!market) return "اختر محل واحد على الأقل";
+      const allowed = eligibleMarkets.some((item) => String(item.id) === section.marketId);
+      if (!allowed) return invalidMarketMessage(market);
+    }
+
+    if (selectedProductLines.length === 0) {
+      return selectedOfferLines.length > 0
+        ? "أضف منتجاً واحداً على الأقل"
+        : "أضف منتجاً أو عرضاً واحداً على الأقل";
+    }
+
+    for (const { section, line } of selectedProductLines) {
+      const variant = variants.find((item) => item.id === line.variantId);
+      if (!variant || String(variant.marketId ?? "") !== section.marketId) {
+        return "لا يمكن دمج منتجات من مدن مختلفة في نفس الطلب";
+      }
+      if (Math.max(1, Number(line.quantity) || 0) < 1) {
+        return "كمية المنتج يجب أن تكون 1 أو أكثر.";
+      }
+    }
+
+    for (const { section, offer } of selectedOfferLines) {
+      const selectedOffer = offers.find((item) => String(item.id) === offer.offerId);
+      if (!selectedOffer) return "أكمل بيانات العروض أو احذف العرض غير المكتمل.";
+      const allowedOffers = filterOffersForMarketAndAddress(offers, section.marketId, selectedAddressRecord);
+      if (!allowedOffers.some((item) => item.id === selectedOffer.id)) {
+        return invalidOfferMessage(selectedOffer);
+      }
+    }
+
+    return null;
+  }
+
+  const validationMessage = validateOrderDraft();
 
   async function submitOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (
-      !selectedUser ||
-      !selectedAddress ||
-      !primaryMarketId ||
-      !paymentMethod.trim() ||
-      !selectedVariants.length
-    ) return;
-
-    const items = lines
-      .filter((line) => line.variantId)
-      .map((line) => {
-        const variant = variants.find((item) => item.id === line.variantId);
-        const unitPrice = Number(line.unitPrice || variant?.price || 0);
-
-        return {
-          variant_id: Number(line.variantId),
-          quantity: Math.max(1, Number(line.quantity) || 1),
-          unit_price: unitPrice.toFixed(2),
-        };
-      });
-
-    if (!items.length || items.some((item) => !item.variant_id || item.quantity < 1 || Number(item.unit_price) < 0)) {
-      showSnackbar({ message: "أكمل بيانات منتجات الطلب.", tone: "danger" });
+    const draftError = validateOrderDraft();
+    if (draftError) {
+      showSnackbar({ message: draftError, tone: "danger" });
       return;
     }
 
-    const selectedOfferPayload = orderOffers
-      .filter((offer) => offer.offerId)
-      .map((offer) => ({
-        offer_id: Number(offer.offerId),
-        discount_amount: Number(offer.discountAmount || 0).toFixed(2),
-      }));
-
-    if (selectedOfferPayload.some((offer) => !offer.offer_id || Number(offer.discount_amount) < 0)) {
-      showSnackbar({ message: "أكمل بيانات العروض أو احذف العرض غير المكتمل.", tone: "danger" });
-      return;
-    }
+    const items = selectedProductLines.map(({ line }) => ({
+      variant_id: Number(line.variantId),
+      quantity: Math.max(1, Number(line.quantity) || 1),
+      unit_price: "0.00",
+    }));
+    const selectedOfferPayload = selectedOfferLines.map(({ offer }) => ({
+      offer_id: Number(offer.offerId),
+    }));
 
     setSaving(true);
     try {
@@ -1150,7 +1568,9 @@ export function BackendCreateOrderPage() {
       });
       const data = await apiResponseData(response);
       if (!response.ok) throw new Error(apiError(data, "تعذر إنشاء الطلب."));
-      const order = apiOrderData(data) ?? (data as BackendOrder);
+      const responseOrder = Array.isArray(data) ? data[0] : data;
+      const order = apiOrderData(responseOrder) ?? apiOrderData(data);
+      if (!order?.id) throw new Error("تم إنشاء الطلب لكن استجابة الباك غير مكتملة.");
       showSnackbar({
         message: `تم إنشاء الطلب. الإجمالي ${money(order.total_price)}، التوصيل ${deliveryFeeLabel(order)}.`,
         tone: "success",
@@ -1225,7 +1645,7 @@ export function BackendCreateOrderPage() {
                   <div className="flex gap-2">
                     <AppSelect
                       value={selectedAddress}
-                      onValueChange={setSelectedAddress}
+                      onValueChange={selectAddress}
                       placeholder="اختر العنوان"
                       ariaLabel="اختيار عنوان التوصيل"
                       className="h-10 bg-input"
@@ -1297,67 +1717,39 @@ export function BackendCreateOrderPage() {
               </Field>
 
               {selectedAddressRecord ? (
-                <div className="grid gap-2 rounded-md border bg-muted/10 p-3 text-sm md:grid-cols-2 xl:grid-cols-4">
-                  <SummaryPill
-                    label="نوع الطلب"
-                    value={
-                      selectedAddressRecord.service_city_id || selectedAddressRecord.service_city
-                        ? "مدينة خدمة"
-                        : "عام"
-                    }
-                  />
-                  <SummaryPill
-                    label="وجهة التوصيل"
-                    value={[
-                      selectedAddressRecord.service_city?.name_ar?.trim() ||
-                        selectedAddressRecord.service_city?.name?.trim() ||
-                        selectedAddressRecord.manual_city?.trim(),
-                      selectedAddressRecord.delivery_area?.name?.trim() ||
-                        selectedAddressRecord.manual_area?.trim(),
-                      selectedAddressRecord.details?.trim() ||
-                        selectedAddressRecord.line1?.trim() ||
-                        selectedAddressRecord.street?.trim() ||
-                        selectedAddressRecord.name?.trim(),
-                    ].filter(Boolean).join(" - ") || "-"}
-                  />
-                  <SummaryPill
-                    label="المنطقة"
-                    value={selectedAddressRecord.delivery_area?.name?.trim() || selectedAddressRecord.manual_area?.trim() || "-"}
-                  />
-                  <SummaryPill
-                    label="نوع التوصيل"
-                    value={selectedAddressRecord.delivery_type === "fixed_area" ? "توصيل ثابت" : "دليفري يدوي"}
-                  />
-                  <SummaryPill
-                    label={selectedAddressRecord.delivery_type === "fixed_area" ? "سعر التوصيل المتوقع" : "سعر التوصيل"}
-                    value={
-                      selectedAddressRecord.delivery_type === "fixed_area"
-                        ? money(selectedAddressRecord.delivery_price_preview ?? selectedAddressRecord.delivery_area?.delivery_price)
-                        : "يحدد لاحقاً"
-                    }
-                  />
+                <div className="grid gap-3 rounded-md border bg-muted/10 p-3 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={selectedAddressIsGeneral ? "secondary" : "blue"}>{addressScopeLabel}</Badge>
+                    <Badge tone={selectedAddressRecord.delivery_area ? "green" : "secondary"}>{addressDeliveryTypeLabel}</Badge>
+                  </div>
+                  {selectedAddressIsGeneral ? (
+                    <div className="grid gap-2 md:grid-cols-3">
+                      <SummaryPill label="المدينة اليدوية" value={selectedAddressRecord.manual_city?.trim() || "-"} />
+                      <SummaryPill label="المنطقة اليدوية" value={selectedAddressRecord.manual_area?.trim() || "-"} />
+                      <SummaryPill label="سعر التوصيل" value="يحدد لاحقاً" />
+                    </div>
+                  ) : (
+                    <div className="grid gap-2 md:grid-cols-3">
+                      <SummaryPill
+                        label="مدينة الخدمة"
+                        value={
+                          selectedAddressRecord.service_city?.name_ar?.trim() ||
+                          selectedAddressRecord.service_city?.name?.trim() ||
+                          `City #${selectedAddressRecord.service_city_id ?? "-"}`
+                        }
+                      />
+                      {selectedAddressRecord.delivery_area ? (
+                        <SummaryPill label="منطقة التوصيل" value={selectedAddressRecord.delivery_area.name?.trim() || "-"} />
+                      ) : (
+                        <SummaryPill label="المنطقة اليدوية" value={selectedAddressRecord.manual_area?.trim() || "-"} />
+                      )}
+                      <SummaryPill label="سعر التوصيل" value={addressDeliveryPriceLabel} />
+                    </div>
+                  )}
                 </div>
               ) : null}
 
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="المحل الأساسي">
-                  <AppSelect
-                    value={selectedMarketId}
-                    onValueChange={(marketId) => {
-                      setSelectedMarketId(marketId);
-                      setProductMarketFilter("all");
-                    }}
-                    placeholder="اختر المحل"
-                    ariaLabel="اختيار المحل الأساسي"
-                    className="h-11 bg-input"
-                    options={markets.map((market) => ({
-                      value: String(market.id),
-                      label: [market.name?.trim() || `محل #${market.id}`, market.branch?.trim()]
-                        .filter(Boolean)
-                        .join(" - "),
-                    }))}
-                  />
-                </Field>
                 <Field label="طريقة الدفع">
                   <Input
                     value={paymentMethod}
@@ -1371,163 +1763,219 @@ export function BackendCreateOrderPage() {
 
               <div className="grid gap-3">
                 <div className="flex items-center justify-between">
-                  <div className="font-semibold">منتجات الطلب</div>
+                  <div>
+                    <div className="font-semibold">محلات الطلب</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {selectedAddressRecord
+                        ? `${eligibleMarkets.length.toLocaleString("en-US")} محل متاح لهذا العنوان`
+                        : "اختر عنوان التوصيل قبل إضافة المحلات."}
+                    </div>
+                  </div>
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() =>
-                      setLines((current) => [
-                        ...current,
-                        { id: draftLineId(), variantId: "", quantity: "1", unitPrice: "" },
-                      ])
-                    }
+                    disabled={!selectedAddressRecord || eligibleMarkets.length <= marketSections.length}
+                    onClick={addMarketSection}
                   >
                     <Plus className="size-4" />
-                    إضافة منتج
+                    إضافة محل
                   </Button>
                 </div>
-                {lines.map((line, index) => {
-                  const selectedVariant = variants.find((variant) => variant.id === line.variantId);
+                {marketSections.length === 0 ? (
+                  <div className="rounded-md border bg-muted/10 px-3 py-3 text-sm text-muted-foreground">
+                    لم يتم اختيار محلات بعد
+                  </div>
+                ) : null}
+                {marketSections.map((section, sectionIndex) => {
+                  const sectionMarket = eligibleMarkets.find((market) => String(market.id) === section.marketId) ?? null;
+                  const sectionOffers = filterOffersForMarketAndAddress(offers, section.marketId, selectedAddressRecord);
+                  const sectionSubtotal = section.lines.reduce((sum, line) => {
+                    const variant = variants.find((item) => item.id === line.variantId);
+                    return sum + (variant?.price ?? 0) * Math.max(1, Number(line.quantity) || 1);
+                  }, 0);
+                  const selectedSectionOffersCount = section.offers.filter((offer) => offer.offerId).length;
 
                   return (
-                  <div key={line.id} className="grid gap-3 rounded-md border bg-muted/10 p-3 md:grid-cols-[minmax(0,1fr)_130px_150px_44px] md:items-center">
-                    <input required type="hidden" value={line.variantId} readOnly />
-                    <button
-                      type="button"
-                      onClick={() => setPickerLineId(line.id)}
-                      className={cn(
-                        "flex h-14 w-full items-center justify-between gap-3 rounded-md border bg-input px-3 py-2 text-start text-sm shadow-sm transition hover:border-primary/45 hover:bg-accent/60",
-                        !selectedVariant && "text-muted-foreground",
-                      )}
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate font-semibold">
-                          {selectedVariant?.productName ?? "اختر المنتج"}
-                        </span>
-                        <span className="mt-1 block truncate text-xs text-muted-foreground">
-                          {selectedVariant
-                            ? `${selectedVariant.marketName} - ${selectedVariant.categoryName} - ${money(selectedVariant.price)}${selectedVariant.sku ? ` - ${selectedVariant.sku}` : ""}`
-                            : "افتح قائمة المنتجات وابحث بالاسم أو الكود أو المحل."}
-                        </span>
-                      </span>
-                      <Search className="size-4 shrink-0 text-primary" />
-                    </button>
-                    <Input
-                      readOnly
-                      value={line.unitPrice || (selectedVariant ? Number(selectedVariant.price || 0).toFixed(2) : "")}
-                      className="h-14 text-center text-base font-semibold"
-                      placeholder="unit_price"
-                      dir="ltr"
-                    />
-                    <Input
-                      required
-                      min={1}
-                      type="number"
-                      value={line.quantity}
-                      onChange={(event) => updateLine(line.id, { quantity: event.target.value })}
-                      className="h-14 text-center text-base font-semibold"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-11"
-                      disabled={lines.length === 1}
-                      onClick={() => removeLine(line.id)}
-                      aria-label={`حذف المنتج ${index + 1}`}
-                    >
-                      <Trash2 className="size-4 text-destructive" />
-                    </Button>
-                  </div>
-                  );
-                })}
-                {hasMixedMarkets ? (
-                  <p className="text-sm font-semibold text-primary">
-                    سيتم إنشاء طلب متعدد المحلات: {selectedVariantMarketSummary}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="grid gap-3">
-                <div className="flex items-center justify-between">
-                  <div className="font-semibold">العروض</div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() =>
-                      setOrderOffers((current) => [
-                        ...current,
-                        { id: draftOfferId(), offerId: "", discountAmount: "0" },
-                      ])
-                    }
-                  >
-                    <Plus className="size-4" />
-                    إضافة عرض
-                  </Button>
-                </div>
-                {orderOffers.length === 0 ? (
-                  <div className="rounded-md border bg-muted/10 px-3 py-3 text-sm text-muted-foreground">
-                    يمكن ترك العروض فارغة.
-                  </div>
-                ) : (
-                  <div className="grid gap-2">
-                    {orderOffers.map((offerLine, index) => (
-                      <div
-                        key={offerLine.id}
-                        className="grid gap-3 rounded-md border bg-muted/10 p-3 md:grid-cols-[minmax(0,1fr)_150px_44px] md:items-center"
-                      >
-                        <AppSelect
-                          value={offerLine.offerId}
-                          onValueChange={(offerId) =>
-                            setOrderOffers((current) =>
-                              current.map((line) =>
-                                line.id === offerLine.id ? { ...line, offerId } : line,
-                              ),
-                            )
-                          }
-                          placeholder="اختر العرض"
-                          ariaLabel={`اختيار العرض ${index + 1}`}
-                          className="h-11 bg-input"
-                          options={offers.map((offer) => ({
-                            value: String(offer.id),
-                            label: `${offer.title?.trim() || `عرض #${offer.id}`} - ${offer.type ?? "-"} - ${money(offer.discount)}`,
-                          }))}
-                        />
-                        <Input
-                          min={0}
-                          step="0.01"
-                          type="number"
-                          value={offerLine.discountAmount}
-                          onChange={(event) =>
-                            setOrderOffers((current) =>
-                              current.map((line) =>
-                                line.id === offerLine.id
-                                  ? { ...line, discountAmount: event.target.value }
-                                  : line,
-                              ),
-                            )
-                          }
-                          className="h-11 text-center"
-                          placeholder="discount_amount"
-                        />
+                    <section key={section.id} className="grid gap-4 rounded-lg border bg-muted/10 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="font-bold">محل {sectionIndex + 1}</div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {sectionMarket ? marketLabel(sectionMarket) : "اختر المحل لهذا القسم"}
+                          </div>
+                        </div>
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="size-11"
-                          onClick={() =>
-                            setOrderOffers((current) =>
-                              current.filter((line) => line.id !== offerLine.id),
-                            )
-                          }
-                          aria-label={`حذف العرض ${index + 1}`}
+                          className="size-9"
+                          onClick={() => removeMarketSection(section.id)}
+                          aria-label={`حذف المحل ${sectionIndex + 1}`}
                         >
                           <Trash2 className="size-4 text-destructive" />
                         </Button>
                       </div>
-                    ))}
-                  </div>
-                )}
+
+                      <Field label="اختر المحل">
+                        <AppSelect
+                          value={section.marketId}
+                          onValueChange={(marketId) => updateSectionMarket(section.id, marketId)}
+                          placeholder="اختر المحل"
+                          ariaLabel={`اختيار المحل ${sectionIndex + 1}`}
+                          className="h-11 bg-input"
+                          options={marketOptionsForSection(section.id)}
+                        />
+                      </Field>
+
+                      <div className="grid gap-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="font-semibold">المنتجات</div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={!section.marketId}
+                            onClick={() => addLine(section.id)}
+                          >
+                            <Plus className="size-4" />
+                            إضافة منتج
+                          </Button>
+                        </div>
+                        {section.lines.length === 0 ? (
+                          <div className="rounded-md border bg-background/60 px-3 py-3 text-sm text-muted-foreground">
+                            لا توجد منتجات مختارة
+                          </div>
+                        ) : (
+                          <div className="grid gap-2">
+                            {section.lines.map((line, index) => {
+                              const selectedVariant = variants.find((variant) => variant.id === line.variantId);
+
+                              return (
+                                <div
+                                  key={line.id}
+                                  className="grid gap-3 rounded-md border bg-background/60 p-3 md:grid-cols-[minmax(0,1fr)_130px_130px_44px] md:items-center"
+                                >
+                                  <input type="hidden" value={line.variantId} readOnly />
+                                  <button
+                                    type="button"
+                                    disabled={!section.marketId}
+                                    onClick={() => {
+                                      setPickerTarget({ sectionId: section.id, lineId: line.id });
+                                      setProductQuery("");
+                                      setProductCategoryFilter("all");
+                                      setProductAvailabilityFilter("all");
+                                    }}
+                                    className={cn(
+                                      "flex h-14 w-full items-center justify-between gap-3 rounded-md border bg-input px-3 py-2 text-start text-sm shadow-sm transition hover:border-primary/45 hover:bg-accent/60 disabled:cursor-not-allowed disabled:opacity-60",
+                                      !selectedVariant && "text-muted-foreground",
+                                    )}
+                                  >
+                                    <span className="min-w-0">
+                                      <span className="block truncate font-semibold">
+                                        {selectedVariant?.productName ?? "اختر المنتج"}
+                                      </span>
+                                      <span className="mt-1 block truncate text-xs text-muted-foreground">
+                                        {selectedVariant
+                                          ? `${selectedVariant.variantLabel} - ${money(selectedVariant.price)}${selectedVariant.sku ? ` - ${selectedVariant.sku}` : ""}`
+                                          : "منتجات هذا المحل فقط"}
+                                      </span>
+                                    </span>
+                                    <Search className="size-4 shrink-0 text-primary" />
+                                  </button>
+                                  <Input
+                                    readOnly
+                                    value={selectedVariant ? money(selectedVariant.price) : ""}
+                                    className="h-14 text-center text-sm font-semibold"
+                                    placeholder="سعر الوحدة"
+                                  />
+                                  <Input
+                                    min={1}
+                                    type="number"
+                                    value={line.quantity}
+                                    onChange={(event) => updateLine(section.id, line.id, { quantity: event.target.value })}
+                                    className="h-14 text-center text-base font-semibold"
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-11"
+                                    onClick={() => removeLine(section.id, line.id)}
+                                    aria-label={`حذف المنتج ${index + 1}`}
+                                  >
+                                    <Trash2 className="size-4 text-destructive" />
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid gap-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="font-semibold">العروض</div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={!section.marketId || sectionOffers.length === 0}
+                            onClick={() => addOffer(section.id)}
+                          >
+                            <Plus className="size-4" />
+                            إضافة عرض
+                          </Button>
+                        </div>
+                        {section.offers.length === 0 ? (
+                          <div className="rounded-md border bg-background/60 px-3 py-3 text-sm text-muted-foreground">
+                            لا توجد عروض مختارة
+                          </div>
+                        ) : (
+                          <div className="grid gap-2">
+                            {section.offers.map((offerLine, index) => (
+                              <div
+                                key={offerLine.id}
+                                className="grid gap-3 rounded-md border bg-background/60 p-3 md:grid-cols-[minmax(0,1fr)_44px] md:items-center"
+                              >
+                                <AppSelect
+                                  value={offerLine.offerId}
+                                  onValueChange={(offerId) => updateOffer(section.id, offerLine.id, offerId)}
+                                  placeholder="اختر العرض"
+                                  ariaLabel={`اختيار العرض ${index + 1}`}
+                                  className="h-11 bg-input"
+                                  options={sectionOffers.map((offer) => ({
+                                    value: String(offer.id),
+                                    label: offerLabel(offer),
+                                  }))}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-11"
+                                  onClick={() => removeOffer(section.id, offerLine.id)}
+                                  aria-label={`حذف العرض ${index + 1}`}
+                                >
+                                  <Trash2 className="size-4 text-destructive" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid gap-2 text-xs md:grid-cols-3">
+                        <SummaryPill label="إجمالي منتجات القسم" value={money(sectionSubtotal)} />
+                        <SummaryPill
+                          label="العروض"
+                          value={selectedSectionOffersCount ? `${selectedSectionOffersCount}` : "لا توجد عروض مختارة"}
+                        />
+                        <SummaryPill
+                          label="الخصم"
+                          value={selectedSectionOffersCount ? "يحسبه الباك" : money(0)}
+                        />
+                      </div>
+                    </section>
+                  );
+                })}
               </div>
 
               <Field label="ملاحظات">
@@ -1554,79 +2002,58 @@ export function BackendCreateOrderPage() {
               ملخص الطلب
             </div>
             <div className="flex flex-1 flex-col">
-              <SummaryRow label="المحل الأساسي" value={primaryMarket?.name?.trim() || "-"} />
-              <SummaryRow label="محلات المنتجات" value={selectedVariantMarketSummary || "-"} />
-              <SummaryRow label="إجمالي المنتجات" value={money(subtotal)} />
-              <SummaryRow
-                label="نوع التوصيل"
-                value={
-                  selectedAddressRecord?.delivery_type === "fixed_area"
-                    ? "توصيل ثابت"
-                    : selectedAddressRecord
-                      ? "دليفري يدوي"
-                      : "-"
-                }
-              />
-              <SummaryRow
-                label="سعر التوصيل المتوقع"
-                value={
-                  selectedAddressRecord?.delivery_type === "fixed_area"
-                    ? money(selectedAddressRecord.delivery_price_preview ?? selectedAddressRecord.delivery_area?.delivery_price)
-                    : selectedAddressRecord
-                      ? "يحدد لاحقاً"
-                      : "-"
-                }
-              />
-              <SummaryRow label="عدد العروض" value={`${orderOffers.filter((offer) => offer.offerId).length}`} />
+              <SummaryRow label="عدد المحلات" value={selectedMarketRecords.length ? `${selectedMarketRecords.length}` : "لم يتم اختيار محلات بعد"} />
+              <SummaryRow label="أسماء المحلات" value={selectedMarketSummary || "لم يتم اختيار محلات بعد"} />
+              <SummaryRow label="إجمالي المنتجات" value={selectedProductLines.length ? `${selectedProductLines.length}` : "لا توجد منتجات مختارة"} />
+              <SummaryRow label="عدد العروض" value={selectedOfferLines.length ? `${selectedOfferLines.length}` : "لا توجد عروض مختارة"} />
+              <SummaryRow label="نوع التوصيل" value={selectedAddressRecord ? addressDeliveryTypeLabel : "-"} />
+              <SummaryRow label="سعر التوصيل" value={selectedAddressRecord ? addressDeliveryPriceLabel : "-"} />
+              <SummaryRow label="الإجمالي المتوقع" value={money(subtotal)} strong />
               <div className="mt-auto border-t pt-4" />
             </div>
             <Button
               className="mt-5 w-full"
-              disabled={
-                saving ||
-                !selectedUser ||
-                !selectedAddress ||
-                !primaryMarketId ||
-                !paymentMethod.trim() ||
-                !selectedVariants.length
-              }
+              disabled={saving || Boolean(validationMessage)}
             >
               {saving ? <Loader2 className="size-4 animate-spin" /> : <ClipboardList className="size-4" />}
               حفظ الطلب
             </Button>
+            {validationMessage ? (
+              <div className="mt-3 rounded-md border bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+                {validationMessage}
+              </div>
+            ) : null}
           </Card>
           <ProductVariantPicker
-            open={pickerLineId !== null}
+            open={pickerTarget !== null}
             variants={filteredVariants}
-            allVariantsCount={variants.length}
-            selectedVariantId={pickerLineId ? lines.find((line) => line.id === pickerLineId)?.variantId ?? "" : ""}
+            allVariantsCount={activePickerVariantIds.size}
+            selectedVariantId={
+              pickerTarget
+                ? activePickerSection?.lines.find((line) => line.id === pickerTarget.lineId)?.variantId ?? ""
+                : ""
+            }
             query={productQuery}
             onQueryChange={setProductQuery}
-            marketFilter={productMarketFilter}
-            onMarketFilterChange={setProductMarketFilter}
-            marketOptions={productMarkets}
+            marketFilter="all"
+            onMarketFilterChange={() => undefined}
+            marketOptions={activePickerMarket ? [{ value: String(activePickerMarket.id), label: marketLabel(activePickerMarket) }] : []}
             categoryFilter={productCategoryFilter}
             onCategoryFilterChange={setProductCategoryFilter}
             categoryOptions={productCategories}
             availabilityFilter={productAvailabilityFilter}
             onAvailabilityFilterChange={setProductAvailabilityFilter}
-            onClose={() => setPickerLineId(null)}
+            showMarketFilter={false}
+            onClose={resetProductPicker}
             onSelect={(variantId) => {
               const variant = variants.find((item) => item.id === variantId);
-              const otherSelectedMarketIds = lines
-                .filter((line) => line.id !== pickerLineId)
-                .map((line) => variants.find((item) => item.id === line.variantId)?.marketId)
-                .filter((marketId): marketId is number => typeof marketId === "number");
-              if (variant?.marketId && (!selectedMarketId || otherSelectedMarketIds.length === 0)) {
-                setSelectedMarketId(String(variant.marketId));
-              }
-              if (pickerLineId) {
-                updateLine(pickerLineId, {
+              if (pickerTarget && variant) {
+                updateLine(pickerTarget.sectionId, pickerTarget.lineId, {
                   variantId,
-                  unitPrice: variant ? Number(variant.price || 0).toFixed(2) : "",
+                  unitPrice: variant.price.toFixed(2),
                 });
               }
-              setPickerLineId(null);
+              resetProductPicker();
             }}
           />
           <CustomerPicker
@@ -1798,6 +2225,7 @@ function ProductVariantPicker({
   categoryOptions,
   availabilityFilter,
   onAvailabilityFilterChange,
+  showMarketFilter = true,
   onClose,
   onSelect,
 }: {
@@ -1815,6 +2243,7 @@ function ProductVariantPicker({
   categoryOptions: string[];
   availabilityFilter: "all" | "available" | "unavailable";
   onAvailabilityFilterChange: (value: "all" | "available" | "unavailable") => void;
+  showMarketFilter?: boolean;
   onClose: () => void;
   onSelect: (variantId: string) => void;
 }) {
@@ -1860,7 +2289,7 @@ function ProductVariantPicker({
               اختيار منتج للطلب
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              ابحث بالاسم أو الكود، وفلتر حسب المحل أو التصنيف قبل الإضافة.
+              ابحث بالاسم أو الكود، والنتائج مقصورة على محل هذا القسم.
             </p>
           </div>
           <Button
@@ -1875,7 +2304,12 @@ function ProductVariantPicker({
           </Button>
         </div>
 
-        <div className="grid gap-3 border-b bg-muted/15 p-4 lg:grid-cols-[minmax(260px,1fr)_200px_190px_170px]">
+        <div className={cn(
+          "grid gap-3 border-b bg-muted/15 p-4",
+          showMarketFilter
+            ? "lg:grid-cols-[minmax(260px,1fr)_200px_190px_170px]"
+            : "lg:grid-cols-[minmax(260px,1fr)_190px_170px]",
+        )}>
           <label className="grid gap-2 text-sm font-medium">
             بحث
             <div className="relative">
@@ -1890,16 +2324,18 @@ function ProductVariantPicker({
             </div>
           </label>
 
-          <label className="grid gap-2 text-sm font-medium">
-            المحل
-            <AppSelect
-              value={marketFilter}
-              onValueChange={onMarketFilterChange}
-              ariaLabel="فلتر المحل"
-              className="h-10 bg-input"
-              options={[{ value: "all", label: "كل المحلات" }, ...marketOptions]}
-            />
-          </label>
+          {showMarketFilter ? (
+            <label className="grid gap-2 text-sm font-medium">
+              المحل
+              <AppSelect
+                value={marketFilter}
+                onValueChange={onMarketFilterChange}
+                ariaLabel="فلتر المحل"
+                className="h-10 bg-input"
+                options={[{ value: "all", label: "كل المحلات" }, ...marketOptions]}
+              />
+            </label>
+          ) : null}
 
           <label className="grid gap-2 text-sm font-medium">
             التصنيف
@@ -1950,7 +2386,9 @@ function ProductVariantPicker({
                     <span className="flex items-start justify-between gap-3">
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-bold">{variant.productName}</span>
-                        <span className="mt-1 block truncate text-xs text-muted-foreground">{variant.sku || `#${variant.id}`}</span>
+                        <span className="mt-1 block truncate text-xs text-muted-foreground">
+                          {variant.variantLabel}{variant.sku ? ` - ${variant.sku}` : ""}
+                        </span>
                       </span>
                       {selected ? (
                         <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
