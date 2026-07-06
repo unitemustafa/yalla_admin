@@ -27,8 +27,8 @@ import { DashboardAutoTranslate } from "@/features/dashboard/auto-translate";
 import { DashboardI18nProvider } from "@/features/dashboard/i18n";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
+  hasLoginSplashBeenSeen,
   LoginSplash,
-  getInitialLoginSplashVisibility,
   markLoginSplashSeen,
 } from "@/features/auth/login-splash";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -69,9 +69,7 @@ function LoginPageContent({
 }) {
   const router = useRouter();
   const { login } = useAuth();
-  const [showSplash, setShowSplash] = useState(
-    getInitialLoginSplashVisibility,
-  );
+  const [showSplash, setShowSplash] = useState(true);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -85,6 +83,16 @@ function LoginPageContent({
   const finishSplash = useCallback(() => {
     markLoginSplashSeen();
     setShowSplash(false);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (hasLoginSplashBeenSeen()) {
+        setShowSplash(false);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {

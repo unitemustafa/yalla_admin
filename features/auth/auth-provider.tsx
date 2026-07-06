@@ -141,11 +141,6 @@ function clearSessionLifetime(announceExpired: boolean) {
   }
 }
 
-function readUser(): AuthUser | null {
-  const value = cookies.get(AUTH_COOKIE_NAMES.user);
-  return value && typeof value === "object" ? (value as AuthUser) : null;
-}
-
 function persistTokens(tokens: AuthTokens, remember = readRemember()) {
   const options = cookieOptions(remember);
   cookies.set(AUTH_COOKIE_NAMES.accessToken, tokens.accessToken, options);
@@ -248,6 +243,29 @@ async function refreshTokens() {
   }
 }
 
+async function fetchCurrentAdminUser(accessToken: string) {
+  const response = await fetch(`${API_BASE_URL}/auth/me/`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const data = await responseData(response);
+
+  if (!response.ok || !data || typeof data !== "object") {
+    throw new Error(
+      localizedAuthError(
+        data,
+        "طھط¹ط°ط± طھط­ط¯ظٹط« ط¨ظٹط§ظ†ط§طھ ط§ظ„ط­ط³ط§ط¨ ظ…ظ† ط§ظ„ط®ط§ط¯ظ….",
+      ),
+    );
+  }
+
+  const nextUser = data as AuthUser;
+  if (nextUser.role !== "admin") {
+    throw new Error("ظ‡ط°ط§ ط§ظ„ط­ط³ط§ط¨ ظ„ط§ ظٹظ…ظ„ظƒ طµظ„ط§ط­ظٹط© ط¯ط®ظˆظ„ ظ„ظˆط­ط© ط§ظ„ط¥ط¯ط§ط±ط©.");
+  }
+
+  return nextUser;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -311,7 +329,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let active = true;
 
     void Promise.resolve().then(async () => {
-      const savedUser = readUser();
       const accessToken = cookies.get(AUTH_COOKIE_NAMES.accessToken, {
         doNotParse: true,
       }) as string | undefined;
@@ -321,7 +338,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const remember = readRemember();
 
       if (!active) return;
-      if (!savedUser || savedUser.role !== "admin" || !refreshToken) {
+      if (!refreshToken) {
         clearSession();
         return;
       }
@@ -339,19 +356,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      setUser(savedUser);
       scheduleSessionExpiry(remember);
-      if (isAccessTokenUsable(accessToken)) {
-        setStatus("authenticated");
-        scheduleRefresh(accessToken!);
-        return;
-      }
 
       try {
-        const tokens = await refreshTokens();
+        const usableAccessToken = isAccessTokenUsable(accessToken)
+          ? accessToken!
+          : (await refreshTokens()).accessToken;
         if (!active) return;
+
+        const nextUser = await fetchCurrentAdminUser(usableAccessToken);
+        if (!active) return;
+        persistUser(nextUser);
+        setUser(nextUser);
         setStatus("authenticated");
-        scheduleRefresh(tokens.accessToken);
+        scheduleRefresh(usableAccessToken);
       } catch {
         if (active) clearSession(true);
       }

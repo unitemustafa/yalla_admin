@@ -7,15 +7,11 @@ import { logoSrc } from "@/features/dashboard/data";
 
 const splashStorageKey = "yalla-login-splash-seen";
 
-export function getInitialLoginSplashVisibility() {
-  if (typeof window === "undefined") {
-    return true;
-  }
-
+export function hasLoginSplashBeenSeen() {
   try {
-    return sessionStorage.getItem(splashStorageKey) !== "true";
+    return sessionStorage.getItem(splashStorageKey) === "true";
   } catch {
-    return true;
+    return false;
   }
 }
 
