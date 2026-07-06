@@ -4,24 +4,27 @@ type ImageRemotePattern = NonNullable<
   NonNullable<NextConfig["images"]>["remotePatterns"]
 >[number];
 
-function backendMediaRemotePattern(): ImageRemotePattern | null {
-  const backendUrl =
-    process.env.NEXT_PUBLIC_BACKEND_URL?.trim() ||
-    process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+function makeMediaRemotePattern(rawUrl?: string): ImageRemotePattern | null {
+  const value = rawUrl?.trim();
 
-  if (!backendUrl) return null;
+  if (!value) return null;
 
   try {
-    const url = new URL(backendUrl);
-    const protocol: "http" | "https" | null =
-      url.protocol === "http:" ? "http" : url.protocol === "https:" ? "https" : null;
+    const url = new URL(value);
+
+    const protocol =
+      url.protocol === "http:"
+        ? "http"
+        : url.protocol === "https:"
+          ? "https"
+          : null;
 
     if (!protocol) return null;
 
     return {
       protocol,
       hostname: url.hostname,
-      port: url.port,
+      ...(url.port ? { port: url.port } : {}),
       pathname: "/media/**",
     };
   } catch {
@@ -29,20 +32,30 @@ function backendMediaRemotePattern(): ImageRemotePattern | null {
   }
 }
 
-const backendMediaPattern = backendMediaRemotePattern();
+const backendMediaPattern =
+  makeMediaRemotePattern(process.env.NEXT_PUBLIC_MEDIA_BASE_URL) ||
+  makeMediaRemotePattern(process.env.NEXT_PUBLIC_BACKEND_URL) ||
+  makeMediaRemotePattern(process.env.NEXT_PUBLIC_API_BASE_URL);
+
+const remotePatterns: ImageRemotePattern[] = [
+  {
+    protocol: "https",
+    hostname: "res.cloudinary.com",
+    pathname: "/**",
+  },
+  {
+    protocol: "https",
+    hostname: "bucket.ammenu.com",
+    pathname: "/**",
+  },
+  ...(backendMediaPattern ? [backendMediaPattern] : []),
+];
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["127.0.0.1"],
+  allowedDevOrigins: ["localhost", "127.0.0.1"],
   devIndicators: false,
   images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "bucket.ammenu.com",
-        pathname: "/**",
-      },
-      ...(backendMediaPattern ? [backendMediaPattern] : []),
-    ],
+    remotePatterns,
     formats: ["image/webp", "image/avif"],
   },
   turbopack: {
