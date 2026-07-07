@@ -56,3 +56,4 @@ dev-server.err.log
 dev-server.out.log 
 
 .serena
+.env.local
