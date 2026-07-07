@@ -2681,12 +2681,18 @@ type ActiveDay =
 type OfferDisplayStatus = "نشط" | "متوقف" | "مجدول" | "منتهي";
 
 const offerTypeOptions = [
-  { label: "باكج", icon: Package, accent: "text-sky-400", bg: "bg-sky-500/15" },
-  { label: "فلاش", icon: Zap, accent: "text-amber-400", bg: "bg-amber-500/15" },
-  { label: "خصم", icon: Percent, accent: "text-rose-400", bg: "bg-rose-500/15" },
-  { label: "إعلان", icon: Megaphone, accent: "text-fuchsia-400", bg: "bg-fuchsia-500/15" },
-  { label: "توصيل", icon: Truck, accent: "text-emerald-400", bg: "bg-emerald-500/15" },
-] as const;
+  { label: "باكج", icon: Package, accent: "text-sky-400", bg: "bg-sky-500/15", disabled: false },
+  { label: "فلاش", icon: Zap, accent: "text-amber-400", bg: "bg-amber-500/15", disabled: false },
+  { label: "خصم", icon: Percent, accent: "text-rose-400", bg: "bg-rose-500/15", disabled: false },
+  { label: "توصيل", icon: Truck, accent: "text-emerald-400", bg: "bg-emerald-500/15", disabled: false },
+  { label: "إعلان", icon: Megaphone, accent: "text-fuchsia-400", bg: "bg-fuchsia-500/15", disabled: true },
+] as const satisfies readonly {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  accent: string;
+  bg: string;
+  disabled?: boolean;
+}[];
 
 type ArabicOfferType = (typeof offerTypeOptions)[number]["label"];
 
@@ -2732,6 +2738,16 @@ type OfferMarket = {
 
 const allOffersFilterValue = "all";
 const generalOffersFilterValue = "general";
+
+function translateOfferErrorMessage(message: string) {
+  const normalized = message.trim();
+
+  if (/cannot delete offer while orders are using it/i.test(normalized)) {
+    return "لا يمكن حذف العرض لأنه مستخدم في طلبات حالية.";
+  }
+
+  return message;
+}
 
 const offerTypeLabels: Record<OfferType, ArabicOfferType> = {
   package: "باكج",
@@ -3084,6 +3100,7 @@ export function OffersPage() {
   const [offerSearch, setOfferSearch] = useState("");
   const [offerTypeFilter, setOfferTypeFilter] = useState(allOffersFilterValue);
   const [offerCityFilter, setOfferCityFilter] = useState(allOffersFilterValue);
+  const [offerMarketFilter, setOfferMarketFilter] = useState(allOffersFilterValue);
   const [expandedOfferIds, setExpandedOfferIds] = useState<Record<string, boolean>>({});
   const activeOffers = offers.filter(
     (offer) => offer.backendStatus === "active" && offerDateLifecycle(offer.startsAt, offer.endsAt) === "current",
@@ -3110,6 +3127,19 @@ export function OffersPage() {
       ...Array.from(cityOptions, ([value, label]) => ({ value, label })),
     ];
   }, [offers]);
+  const offerMarketOptions = useMemo(() => {
+    const marketOptions = new Map<string, string>();
+
+    offers.forEach((offer) => {
+      if (!offer.marketId) return;
+      marketOptions.set(offer.marketId, offer.marketName || `محل #${offer.marketId}`);
+    });
+
+    return [
+      { value: allOffersFilterValue, label: "جميع المحلات" },
+      ...Array.from(marketOptions, ([value, label]) => ({ value, label })),
+    ];
+  }, [offers]);
   const filteredOffers = useMemo(() => {
     const search = normalizeOfferFilterText(offerSearch);
 
@@ -3132,10 +3162,12 @@ export function OffersPage() {
         (offerCityFilter === generalOffersFilterValue
           ? offer.showInGeneral
           : offer.serviceCityIds.includes(offerCityFilter));
+      const matchesMarket =
+        offerMarketFilter === allOffersFilterValue || offer.marketId === offerMarketFilter;
 
-      return matchesSearch && matchesType && matchesCity;
+      return matchesSearch && matchesType && matchesCity && matchesMarket;
     });
-  }, [offers, offerSearch, offerTypeFilter, offerCityFilter]);
+  }, [offers, offerSearch, offerTypeFilter, offerCityFilter, offerMarketFilter]);
 
   useEffect(() => {
     const updateCountdown = () => setNow(Date.now());
@@ -3244,7 +3276,7 @@ export function OffersPage() {
       showSnackbar({ message: "تم حذف العرض.", tone: "success" });
     } catch (error) {
       showSnackbar({
-        message: error instanceof Error ? error.message : "تعذر حذف العرض.",
+        message: error instanceof Error ? translateOfferErrorMessage(error.message) : "تعذر حذف العرض.",
         tone: "danger",
       });
     } finally {
@@ -3277,19 +3309,20 @@ export function OffersPage() {
         ]}
       />
       <Card className="mt-6 p-4">
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_220px]">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_200px_200px_220px]">
           <div className="relative">
             <Search className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={offerSearch}
               onChange={(event) => setOfferSearch(event.target.value)}
               placeholder="ابحث في العروض..."
-              className="pr-9"
+              className="h-12 pr-9"
             />
           </div>
           <AppSelect
             value={offerTypeFilter}
             onValueChange={setOfferTypeFilter}
+            className="h-12"
             ariaLabel="فلترة حسب نوع العرض"
             options={[
               { value: allOffersFilterValue, label: "كل الأنواع" },
@@ -3302,8 +3335,16 @@ export function OffersPage() {
           <AppSelect
             value={offerCityFilter}
             onValueChange={setOfferCityFilter}
+            className="h-12"
             ariaLabel="فلترة حسب المدينة"
             options={offerCityOptions}
+          />
+          <AppSelect
+            value={offerMarketFilter}
+            onValueChange={setOfferMarketFilter}
+            className="h-12"
+            ariaLabel="فلترة حسب المحل"
+            options={offerMarketOptions}
           />
         </div>
         <div className="hidden">
@@ -3521,12 +3562,18 @@ type OfferProductsContextValue = {
   products: ItemRow[];
   cities: ServiceCity[];
   citiesLoading: boolean;
+  markets: OfferMarket[];
+  selectedMarketFilter: string;
+  onMarketFilterChange: (marketId: string) => void;
 };
 
 const OfferProductsContext = createContext<OfferProductsContextValue>({
   products: selectableItems,
   cities: [],
   citiesLoading: false,
+  markets: [],
+  selectedMarketFilter: allOffersFilterValue,
+  onMarketFilterChange: () => undefined,
 });
 type BundleLine = {
   id: string;
@@ -3686,17 +3733,27 @@ function PackageProductSearchModal({
   onClose: () => void;
   onSelect: (itemId: string) => void;
 }) {
-  const { products } = useContext(OfferProductsContext);
+  const { products, markets, selectedMarketFilter, onMarketFilterChange } = useContext(OfferProductsContext);
   const [query, setQuery] = useState("");
   const normalizedQuery = normalizeProductSearch(query);
+  const marketOptions = useMemo(
+    () => [
+      { value: allOffersFilterValue, label: "جميع المحلات" },
+      ...markets.map((market) => ({ value: market.id, label: market.name })),
+    ],
+    [markets],
+  );
   const filteredItems = useMemo(
     () =>
       products.filter((item) => {
         const matchesSearch = itemMatchesProductSearch(item, normalizedQuery);
+        const matchesMarket =
+          selectedMarketFilter === allOffersFilterValue ||
+          String(item.marketId ?? "") === selectedMarketFilter;
 
-        return matchesSearch;
+        return matchesSearch && matchesMarket;
       }),
-    [normalizedQuery, products],
+    [normalizedQuery, products, selectedMarketFilter],
   );
 
   useEffect(() => {
@@ -3759,6 +3816,7 @@ function PackageProductSearchModal({
         </div>
 
         <div className="grid gap-3 border-b bg-muted/15 p-4">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
           <label className="grid gap-2 text-sm font-medium">
             بحث
             <div className="relative">
@@ -3772,6 +3830,17 @@ function PackageProductSearchModal({
               />
             </div>
           </label>
+          <label className="grid gap-2 text-sm font-medium">
+            المحل
+            <AppSelect
+              value={selectedMarketFilter}
+              onValueChange={onMarketFilterChange}
+              ariaLabel="فلترة المنتجات حسب المحل"
+              className="h-10 border-border bg-background text-foreground hover:border-border hover:bg-background hover:text-foreground focus:border-border focus:ring-0 data-[state=open]:border-border data-[state=open]:bg-background data-[state=open]:text-foreground"
+              options={marketOptions}
+            />
+          </label>
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
@@ -4540,7 +4609,7 @@ export function CreateOfferPage() {
   const { apiFetch } = useAuth();
   const router = useRouter();
   const { showSnackbar } = useSnackbar();
-  const { cities: serviceCities, loading: serviceCitiesLoading } = useServiceCities({ activeOnly: true });
+  const { cities: serviceCities, loading: serviceCitiesLoading } = useServiceCities();
   const [editingOfferId, setEditingOfferId] = useState("");
   const [editingOffer, setEditingOffer] = useState<OfferCard | null>(null);
   const formMode = editingOfferId ? "edit" : "create";
@@ -4552,6 +4621,7 @@ export function CreateOfferPage() {
   const [offerTitle, setOfferTitle] = useState(editingOffer?.title ?? "");
   const [offerDescription, setOfferDescription] = useState("");
   const [selectedOfferCityIds, setSelectedOfferCityIds] = useState<string[]>([]);
+  const [selectedOfferMarketFilter, setSelectedOfferMarketFilter] = useState(allOffersFilterValue);
   const offerImageObjectUrlRef = useRef<string | null>(null);
   const [offerImagePreview, setOfferImagePreview] = useState(editingOffer?.image ?? "");
   const [offerImageName, setOfferImageName] = useState(
@@ -4594,6 +4664,11 @@ export function CreateOfferPage() {
       ),
     [allOfferProducts, marketIdsForScope],
   );
+  const effectiveOfferMarketFilter =
+    selectedOfferMarketFilter !== allOffersFilterValue &&
+    marketsForScope.some((market) => market.id === selectedOfferMarketFilter)
+      ? selectedOfferMarketFilter
+      : allOffersFilterValue;
   const discountRate = clampDiscountPercent(Number(discountPercent) || 0);
   const flashDiscountRate = clampDiscountPercent(Number(flashDiscountPercent) || 0);
   const packageDiscountRate = clampDiscountPercent(Number(packageDiscountPercent) || 0);
@@ -4694,6 +4769,7 @@ export function CreateOfferPage() {
 
   function setOfferGeneralEnabled(enabled: boolean) {
     setOfferAppearsInGeneral(enabled);
+    setSelectedOfferMarketFilter(allOffersFilterValue);
     clearOfferProductSelectionWithReason();
   }
 
@@ -4707,6 +4783,7 @@ export function CreateOfferPage() {
     if (!enabled) {
       setSelectedOfferCityIds([]);
     }
+    setSelectedOfferMarketFilter(allOffersFilterValue);
     clearOfferProductSelectionWithReason();
   }
 
@@ -4714,6 +4791,7 @@ export function CreateOfferPage() {
     setServiceCityClearConfirmOpen(false);
     setOfferAppearsInServiceCity(false);
     setSelectedOfferCityIds([]);
+    setSelectedOfferMarketFilter(allOffersFilterValue);
     clearOfferProductSelectionWithReason();
   }
 
@@ -4723,10 +4801,16 @@ export function CreateOfferPage() {
         ? currentCityIds.filter((currentCityId) => currentCityId !== cityId)
         : [...currentCityIds, cityId],
     );
+    setSelectedOfferMarketFilter(allOffersFilterValue);
     clearOfferProductSelectionWithReason();
   }
 
   function selectOfferType(nextType: ArabicOfferType) {
+    if (offerTypeOptions.find((option) => option.label === nextType)?.disabled) {
+      showSnackbar({ message: "نوع الإعلان معطل حاليا.", tone: "danger" });
+      return;
+    }
+
     setSelectedType(nextType);
   }
 
@@ -4818,11 +4902,11 @@ export function CreateOfferPage() {
       return;
     }
     if (!offerAppearsInGeneral && !offerAppearsInServiceCity) {
-      showSnackbar({ message: "اختر الظهور في العام أو مدينة خدمة واحدة على الأقل.", tone: "danger" });
+      showSnackbar({ message: "اختر الظهور في العام أو المدن واحدة على الأقل.", tone: "danger" });
       return;
     }
     if (offerAppearsInServiceCity && !selectedOfferCityIds.length) {
-      showSnackbar({ message: "اختر مدينة الخدمة", tone: "danger" });
+      showSnackbar({ message: "اختر المدن", tone: "danger" });
       return;
     }
     if (!marketsForScope.length) {
@@ -4839,6 +4923,10 @@ export function CreateOfferPage() {
     }
     if (!selectedType) {
       showSnackbar({ message: "نوع العرض مطلوب", tone: "danger" });
+      return;
+    }
+    if (offerTypeOptions.find((option) => option.label === selectedType)?.disabled) {
+      showSnackbar({ message: "نوع الإعلان معطل حاليا.", tone: "danger" });
       return;
     }
     const selectedItems = selectedOfferItems();
@@ -5007,6 +5095,7 @@ export function CreateOfferPage() {
         setOfferAppearsInGeneral(true);
         setOfferAppearsInServiceCity(false);
         setSelectedOfferCityIds([]);
+        setSelectedOfferMarketFilter(allOffersFilterValue);
         clearOfferProductSelection();
         setStartDate(nextScheduleValues.date);
         setEndDate(nextScheduleValues.date);
@@ -5112,6 +5201,9 @@ export function CreateOfferPage() {
         products: offerProducts,
         cities: serviceCities,
         citiesLoading: serviceCitiesLoading,
+        markets: marketsForScope,
+        selectedMarketFilter: effectiveOfferMarketFilter,
+        onMarketFilterChange: setSelectedOfferMarketFilter,
       }}
     >
     <div className="px-6 py-8">
@@ -5186,7 +5278,7 @@ export function CreateOfferPage() {
                     </label>
                     <label className="flex min-h-16 cursor-pointer items-center justify-between gap-3 rounded-md border bg-background px-4 py-3 shadow-sm transition hover:border-primary/40">
                       <span>
-                        <span className="block text-sm font-semibold">يظهر في مدينة خدمة</span>
+                        <span className="block text-sm font-semibold">يظهر في المدن</span>
                       </span>
                       <Switch checked={offerAppearsInServiceCity} onCheckedChange={setOfferServiceCityEnabled} />
                     </label>
@@ -5195,13 +5287,13 @@ export function CreateOfferPage() {
                 {offerAppearsInServiceCity ? (
                   <div className="grid gap-3 lg:col-span-2">
                     <div className="flex items-center justify-between gap-3">
-                      <div className="text-sm font-medium">مدن الخدمة</div>
+                      <div className="text-sm font-medium">المدن</div>
                       <RefBadge tone="blue">{selectedOfferCityIds.length} مدن</RefBadge>
                     </div>
-                    <div className="overflow-x-auto pb-2">
-                      <div className="flex min-w-0 flex-nowrap gap-2">
+                    <div>
+                      <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                         {serviceCitiesLoading ? (
-                          <div className="flex h-14 min-w-40 shrink-0 items-center justify-center rounded-md border bg-muted/20 text-xs font-semibold text-muted-foreground">
+                          <div className="flex h-14 items-center justify-center rounded-md border bg-muted/20 text-xs font-semibold text-muted-foreground">
                             جاري تحميل المدن...
                           </div>
                         ) : serviceCities.length ? (
@@ -5216,7 +5308,7 @@ export function CreateOfferPage() {
                                 aria-pressed={selected}
                                 onClick={() => changeOfferCity(cityId)}
                                 className={cn(
-                                  "flex h-14 min-w-40 shrink-0 items-center justify-between gap-3 rounded-md border px-3 text-sm font-semibold shadow-sm transition",
+                                  "flex h-14 w-full items-center justify-between gap-3 rounded-md border px-3 text-sm font-semibold shadow-sm transition",
                                   selected
                                     ? "border-primary bg-primary/10 text-primary"
                                     : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-accent",
@@ -5237,7 +5329,7 @@ export function CreateOfferPage() {
                             );
                           })
                         ) : (
-                          <div className="flex h-14 min-w-56 shrink-0 items-center justify-center rounded-md border bg-muted/20 text-xs font-semibold text-muted-foreground">
+                          <div className="flex h-14 items-center justify-center rounded-md border bg-muted/20 text-xs font-semibold text-muted-foreground sm:col-span-2 lg:col-span-3 xl:col-span-4">
                             لا توجد مدن خدمة نشطة.
                           </div>
                         )}
@@ -5314,22 +5406,31 @@ export function CreateOfferPage() {
                 {offerTypeOptions.map((option) => {
                   const Icon = option.icon;
                   const active = selectedType === option.label;
+                  const disabled = Boolean(option.disabled);
 
                   return (
                     <button
                       key={option.label}
                       type="button"
                       aria-pressed={active}
+                      disabled={disabled}
                       onClick={() => selectOfferType(option.label)}
                       className={cn(
-                        "flex h-16 items-center gap-3 rounded-md border bg-background px-3 text-sm font-semibold shadow-sm transition hover:border-primary/40 hover:bg-accent",
+                        "flex h-16 items-center gap-3 rounded-md border bg-background px-3 text-sm font-semibold shadow-sm transition hover:border-primary/40 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:bg-background",
                         active && "border-primary bg-primary/10 text-primary",
                       )}
                     >
                       <span className={cn("flex size-9 items-center justify-center rounded-md", option.bg, option.accent)}>
                         <Icon className="size-4" />
                       </span>
-                      {option.label}
+                      <span className="min-w-0">
+                        <span className="block truncate">{option.label}</span>
+                        {disabled ? (
+                          <span className="mt-0.5 block text-[10px] font-semibold text-muted-foreground">
+                            معطل حاليا
+                          </span>
+                        ) : null}
+                      </span>
                     </button>
                   );
                 })}

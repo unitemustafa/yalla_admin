@@ -372,7 +372,7 @@ export function CustomersPage() {
   return (
     <div className="space-y-6 px-6 py-10">
       <PageTitle
-        title="المستخدمين"
+        title="العملاء"
         description="إدارة عملاء تطبيق يلا ماركت المسجلين في الباك"
         size="compact"
         actions={
@@ -389,7 +389,7 @@ export function CustomersPage() {
             </Button>
             <Button size="sm" onClick={() => setAddCustomerOpen(true)}>
               <Plus className="size-4" />
-              إضافة مستخدم
+              إضافة عميل
             </Button>
           </div>
         }
@@ -400,7 +400,7 @@ export function CustomersPage() {
           <div className="text-start">
             <div className="text-2xl font-extrabold">{customers.length}</div>
             <div className="text-xs font-bold text-muted-foreground">
-              إجمالي المستخدمين
+              إجمالي العملاء
             </div>
           </div>
           <div className="relative w-full sm:max-w-[550px]">
@@ -417,7 +417,7 @@ export function CustomersPage() {
 
       {hasError ? (
         <CustomerErrorAlert
-          message={loadError ?? "تعذر تحميل المستخدمين."}
+          message={loadError ?? "تعذر تحميل العملاء."}
           onRetry={() => void loadCustomers()}
         />
       ) : null}
@@ -481,7 +481,7 @@ function CustomerErrorAlert({
           </div>
           <div>
             <div className="font-semibold text-foreground">
-              تعذر تحميل المستخدمين
+              تعذر تحميل العملاء
             </div>
             <p className="mt-1 text-sm text-muted-foreground">{message}</p>
           </div>
@@ -538,9 +538,9 @@ function ConfirmDeleteCustomerDialog({
             <AlertCircle className="size-5" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold">حذف المستخدم</h2>
+            <h2 className="text-lg font-semibold">حذف العميل</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              هل تريد حذف المستخدم {user.name}؟ لا يمكن التراجع عن هذا الإجراء.
+              هل تريد حذف العميل {user.name}؟ لا يمكن التراجع عن هذا الإجراء.
             </p>
           </div>
         </div>
@@ -584,7 +584,7 @@ function CustomersEmptyState({ onAdd }: { onAdd: () => void }) {
           <Users className="size-8" />
         </div>
         <h2 className="mt-6 text-xl font-semibold leading-7">
-          لا يوجد مستخدمين حتى الآن
+          لا يوجد عملاء حتى الآن
         </h2>
         <p className="mt-2 max-w-[430px] text-sm leading-6 text-muted-foreground">
           سيظهر هنا عملاء تطبيق يلا ماركت بعد تسجيلهم في الباك.
@@ -592,7 +592,7 @@ function CustomersEmptyState({ onAdd }: { onAdd: () => void }) {
         <div className="mt-6 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row">
           <Button type="button" onClick={onAdd} className="h-10">
             <Plus className="size-4" />
-            إضافة أول مستخدم
+            إضافة أول عميل
           </Button>
         </div>
       </div>
@@ -724,10 +724,10 @@ function AddCustomerDialog({
       >
         <div className="border-b bg-muted/20 px-6 py-5">
           <h2 id="add-customer-title" className="text-xl font-semibold leading-7">
-            إضافة مستخدم جديد
+            إضافة عميل جديد
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            سيتم إنشاء حساب عميل في الباك ليظهر ضمن مستخدمي تطبيق يلا ماركت.
+            سيتم إنشاء حساب عميل في الباك ليظهر ضمن عملاء تطبيق يلا ماركت.
           </p>
         </div>
 
@@ -861,7 +861,7 @@ function AddCustomerDialog({
             </Button>
             <Button type="submit" disabled={saving || !canCreate}>
               {saving ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-              {saving ? "جاري الإنشاء..." : "إنشاء المستخدم"}
+              {saving ? "جاري الإنشاء..." : "إنشاء العميل"}
             </Button>
           </div>
         </form>

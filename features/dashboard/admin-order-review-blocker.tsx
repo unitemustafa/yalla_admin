@@ -161,6 +161,19 @@ function orderLike(order: ApiRecord): DashboardOrderLike {
   return order as DashboardOrderLike;
 }
 
+function deliveryTypeValue(order: ApiRecord) {
+  return textAt(
+    order,
+    [["delivery_type"], ["deliveryType"], ["delivery_address", "delivery_type"], ["deliveryAddress", "deliveryType"]],
+    "",
+  ).toLowerCase();
+}
+
+function orderSkipsRepresentativeAssignment(order: ApiRecord) {
+  const deliveryType = deliveryTypeValue(order);
+  return deliveryType === "delivery" || deliveryType === "manual_quote";
+}
+
 function customerName(order: ApiRecord) {
   const customer = recordAt(order, ["customer"]);
   if (customer) {
@@ -362,18 +375,22 @@ function playAlarmBeep(context: AudioContext) {
   if (context.state !== "running") return;
 
   const now = context.currentTime;
-  [0, 0.22].forEach((offset) => {
+  [0, 0.16, 0.32].forEach((offset, index) => {
     const oscillator = context.createOscillator();
     const gain = context.createGain();
+    const filter = context.createBiquadFilter();
     oscillator.type = "square";
-    oscillator.frequency.setValueAtTime(offset === 0 ? 880 : 660, now + offset);
+    oscillator.frequency.setValueAtTime([1240, 980, 1240][index], now + offset);
+    filter.type = "highpass";
+    filter.frequency.setValueAtTime(420, now + offset);
     gain.gain.setValueAtTime(0.0001, now + offset);
-    gain.gain.exponentialRampToValueAtTime(0.12, now + offset + 0.025);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.18);
-    oscillator.connect(gain);
+    gain.gain.exponentialRampToValueAtTime(0.75, now + offset + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.14);
+    oscillator.connect(filter);
+    filter.connect(gain);
     gain.connect(context.destination);
     oscillator.start(now + offset);
-    oscillator.stop(now + offset + 0.2);
+    oscillator.stop(now + offset + 0.16);
   });
 }
 
@@ -417,7 +434,7 @@ function useOrderReviewAlarm(active: boolean) {
         playAlarmBeep(context);
         intervalRef.current = window.setInterval(
           () => playAlarmBeep(context),
-          1_250,
+          850,
         );
         runningRef.current = true;
       } catch {
@@ -501,13 +518,14 @@ function OrderDetails({ order }: { order: ApiRecord }) {
         <DetailItem label="عدد المحلات" value={String(getMarketCount(typedOrder) || "-")} />
         <DetailItem label="نوع التجميع" value={isMultiMarket(typedOrder) ? "متعدد المحلات" : "محل واحد"} />
         <DetailItem label="مدينة الخدمة" value={isGeneralOrder(typedOrder) ? "-" : serviceCityName(order)} />
-        <DetailItem label={isGeneralOrder(typedOrder) ? "المدينة اليدوية" : "المنطقة"} value={isGeneralOrder(typedOrder) ? getManualCity(typedOrder) : deliveryAreaName(order) || "-"} />
+        {isGeneralOrder(typedOrder) ? (
+          <DetailItem label="المدينة اليدوية" value={getManualCity(typedOrder)} />
+        ) : null}
         <DetailItem label={isGeneralOrder(typedOrder) ? "المنطقة اليدوية" : "الفرع"} value={isGeneralOrder(typedOrder) ? getManualArea(typedOrder) : marketBranch(order)} />
         <DetailItem
           label="عنوان التوصيل"
           value={delivery.destination}
         />
-        <DetailItem label="review_status" value={textAt(order, [["review_status"], ["reviewStatus"]])} />
         <DetailItem
           label="الإجمالي"
           value={
@@ -611,6 +629,9 @@ export function AdminOrderReviewBlocker() {
   const currentOrder = orders[0] ?? null;
   const currentOrderId = orderId(currentOrder);
   const currentOrderIsGeneral = currentOrder ? isGeneralOrder(orderLike(currentOrder)) : false;
+  const currentOrderNeedsRepresentative = currentOrder
+    ? !orderSkipsRepresentativeAssignment(currentOrder)
+    : false;
   const shouldRun = status === "authenticated" && user?.role === "admin";
   const actionBusy =
     phase === "approving" ||
@@ -816,6 +837,18 @@ export function AdminOrderReviewBlocker() {
         throw new Error(localizedApiError(data, "تعذر قبول الطلب."));
       }
 
+      if (currentOrder && orderSkipsRepresentativeAssignment(currentOrder)) {
+        showSnackbar({
+          message: "تم حفظ طلب الدليفري بدون إسناد مندوب.",
+          tone: "success",
+        });
+        await Promise.all([
+          loadBlocker({ silent: true, ignoreBusy: true }),
+          refreshUnreadCount(),
+        ]);
+        return;
+      }
+
       const approvedRepresentatives = representativeListFromApprove(data);
       let nextRepresentatives = approvedRepresentatives.representatives;
       let representativesError: string | null = null;
@@ -839,7 +872,15 @@ export function AdminOrderReviewBlocker() {
       setError(reason instanceof Error ? reason.message : "تعذر قبول الطلب.");
       setPhase("blocked");
     }
-  }, [apiFetch, currentOrderId, fetchRepresentatives, refreshUnreadCount]);
+  }, [
+    apiFetch,
+    currentOrder,
+    currentOrderId,
+    fetchRepresentatives,
+    loadBlocker,
+    refreshUnreadCount,
+    showSnackbar,
+  ]);
 
   const refreshRepresentatives = useCallback(async () => {
     if (!currentOrderId) {
@@ -914,6 +955,23 @@ export function AdminOrderReviewBlocker() {
     selectedRepresentativeId,
     showSnackbar,
   ]);
+
+  const saveApprovedOrder = useCallback(async () => {
+    if (!currentOrderId) {
+      setError("تعذر تحديد الطلب الحالي.");
+      return;
+    }
+
+    setError(null);
+    showSnackbar({
+      message: "تم حفظ الطلب بدون إسناد مندوب.",
+      tone: "success",
+    });
+    await Promise.all([
+      loadBlocker({ silent: true, ignoreBusy: true }),
+      refreshUnreadCount(),
+    ]);
+  }, [currentOrderId, loadBlocker, refreshUnreadCount, showSnackbar]);
 
   const rejectCurrentOrder = useCallback(async () => {
     if (!currentOrderId) {
@@ -1002,7 +1060,7 @@ export function AdminOrderReviewBlocker() {
                   مراجعة طلب قبل متابعة استخدام لوحة التحكم
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                  يجب قبول الطلب وإرساله لمندوب أو رفضه قبل الرجوع للوحة التحكم.
+                  يجب قبول الطلب أو رفضه قبل الرجوع للوحة التحكم، ويتم إسناد المندوب فقط للطلبات التي تحتاج ذلك.
                 </p>
               </div>
               <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-red-500/10 text-red-600 dark:text-red-300">
@@ -1034,7 +1092,8 @@ export function AdminOrderReviewBlocker() {
                   </Button>
                 </div>
               </div>
-            ) : phase === "selecting_representative" || phase === "assigning" ? (
+            ) : currentOrderNeedsRepresentative &&
+              (phase === "selecting_representative" || phase === "assigning") ? (
               <div className="grid gap-5">
                 {orderSummary ? (
                   <div className="rounded-md border bg-muted/20 p-4">
@@ -1135,8 +1194,18 @@ export function AdminOrderReviewBlocker() {
           </div>
 
           <div className="border-t border-border bg-card px-5 py-4 sm:px-6">
-            {phase === "selecting_representative" || phase === "assigning" ? (
+            {currentOrderNeedsRepresentative &&
+            (phase === "selecting_representative" || phase === "assigning") ? (
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={phase === "assigning"}
+                  onClick={() => void saveApprovedOrder()}
+                >
+                  <CheckCircle2 className="size-4" />
+                  حفظ الطلب
+                </Button>
                 <Button
                   type="button"
                   className="bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"

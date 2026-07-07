@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Check,
   ChevronDown,
@@ -46,7 +46,6 @@ import {
   isMultiMarket,
   numberValue,
   objectName,
-  orderReviewStatusLabels,
   orderStatusLabels,
   type OrderMarketSectionLike,
 } from "../order-display";
@@ -110,10 +109,20 @@ type BackendOrder = {
   delivery_address?: BackendAddress | null;
   assigned_representative?: {
     id: number;
+    name?: string | null;
     first_name?: string | null;
     last_name?: string | null;
     phone?: string | null;
+    avatar?: string | null;
+    avatar_url?: string | null;
+    service_city_id?: number | string | null;
+    service_city?: { id: number; name?: string | null; name_ar?: string | null } | null;
+    is_available?: boolean | null;
+    vehicle_type?: string | null;
+    plate_number?: string | null;
   } | null;
+  history?: BackendOrderEvent[];
+  allowed_statuses?: BackendOrderStatus[];
   payment_method?: string | null;
   delivery_type?: BackendDeliveryType | null;
   delivery_price_status?: "fixed" | "pending_quote" | string | null;
@@ -154,6 +163,23 @@ type BackendOrder = {
   updated_at?: string | null;
   items?: BackendOrderItem[];
   offers?: BackendOrderOffer[];
+};
+
+type BackendOrderEvent = {
+  id?: number | string | null;
+  event_type?: string | null;
+  from_status?: BackendOrderStatus | null;
+  to_status?: BackendOrderStatus | null;
+  actor?: {
+    id?: number | string | null;
+    name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    phone?: string | null;
+  } | null;
+  note?: string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string | null;
 };
 
 type BackendOrderItem = {
@@ -271,6 +297,24 @@ type BackendOffer = {
   }>;
 };
 
+type BackendOrderPreview = {
+  summary?: {
+    subtotal?: string | number | null;
+    discount_total?: string | number | null;
+    delivery_total?: string | number | null;
+    grand_total?: string | number | null;
+  } | null;
+  delivery_type?: BackendDeliveryType | null;
+  delivery_price?: string | number | null;
+  delivery_message?: string | null;
+};
+
+type RepresentativeOption = {
+  id: string;
+  name: string;
+  phone?: string | null;
+};
+
 type OrderLineDraft = {
   id: string;
   variantId: string;
@@ -329,7 +373,6 @@ const orderRouteStatuses: BackendOrderStatus[] = [
 const ordersPageSize = 10;
 
 const statusLabels: Record<BackendOrderStatus, string> = orderStatusLabels;
-const reviewStatusLabels: Record<BackendReviewStatus, string> = orderReviewStatusLabels;
 
 function statusTone(status: BackendOrderStatus): "blue" | "green" | "red" | "secondary" {
   if (status === "delivered") return "green";
@@ -338,20 +381,17 @@ function statusTone(status: BackendOrderStatus): "blue" | "green" | "red" | "sec
   return "secondary";
 }
 
-function reviewStatusTone(status: string | null | undefined): "blue" | "green" | "red" | "secondary" {
-  if (status === "approved") return "green";
-  if (status === "rejected") return "red";
-  if (status === "pending_review") return "blue";
-  return "secondary";
-}
-
 function deliveryTypeLabel(order: BackendOrder) {
   return getDeliveryTypeLabel(order);
 }
 
+function isDeliveryOrder(order: BackendOrder) {
+  return order.delivery_type === "delivery" || order.delivery_type === "manual_quote";
+}
+
 function deliveryTypeTone(order: BackendOrder): "blue" | "green" | "red" | "secondary" {
   if (order.delivery_type === "fixed_area") return "green";
-  if (order.delivery_type === "delivery" || order.delivery_type === "manual_quote") return "blue";
+  if (isDeliveryOrder(order)) return "blue";
   if (order.delivery_price_status === "fixed") return "green";
   return "secondary";
 }
@@ -397,8 +437,8 @@ function customerName(order: BackendOrder) {
 }
 
 function DeliveryTypeBadge({ order }: { order: BackendOrder }) {
-  const isDeliveryOrder = order.delivery_type === "delivery" || order.delivery_type === "manual_quote";
-  const Icon = isDeliveryOrder ? Truck : MapPin;
+  const deliveryOrder = isDeliveryOrder(order);
+  const Icon = deliveryOrder ? Truck : MapPin;
 
   return (
     <Badge tone={deliveryTypeTone(order)}>
@@ -411,14 +451,14 @@ function DeliveryTypeBadge({ order }: { order: BackendOrder }) {
 }
 
 function OrderDeliveryIcon({ order }: { order: BackendOrder }) {
-  const isDeliveryOrder = order.delivery_type === "delivery" || order.delivery_type === "manual_quote";
-  const Icon = isDeliveryOrder ? Truck : MapPin;
+  const deliveryOrder = isDeliveryOrder(order);
+  const Icon = deliveryOrder ? Truck : MapPin;
 
   return (
     <span
       className={cn(
         "flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary",
-        isDeliveryOrder && "bg-red-500/10 text-red-600 dark:text-red-300",
+        deliveryOrder && "bg-red-500/10 text-red-600 dark:text-red-300",
       )}
       title={deliveryTypeLabel(order)}
       aria-label={deliveryTypeLabel(order)}
@@ -429,7 +469,7 @@ function OrderDeliveryIcon({ order }: { order: BackendOrder }) {
 }
 
 function orderNumber(order: BackendOrder) {
-  return order.order_number || `طلب #${order.id}`;
+  return order.order_number || `#${order.id}`;
 }
 
 function apiListData<T>(value: unknown): T[] {
@@ -457,6 +497,9 @@ function apiOrderData(value: unknown): BackendOrder | null {
   if (record.data) {
     return apiOrderData(record.data);
   }
+  if ("order" in record) {
+    return apiOrderData((record as { order?: unknown }).order);
+  }
   return value as BackendOrder;
 }
 
@@ -473,18 +516,20 @@ function deliveryAreaName(order: BackendOrder) {
   return orderDeliveryAreaName(order) || cleanText(order.delivery_address?.manual_area) || "-";
 }
 
-function reviewStatusLabel(status: string | null | undefined) {
-  return status && status in reviewStatusLabels
-    ? reviewStatusLabels[status as BackendReviewStatus]
-    : status || "-";
-}
-
 function assignedRepresentativeId(order: BackendOrder) {
   return order.assigned_representative?.id ?? order.assigned_representative_id ?? null;
 }
 
 function apiError(value: unknown, fallback: string) {
-  return firstApiError(value) ?? fallback;
+  const message = firstApiError(value);
+  if (!message) return fallback;
+
+  const normalized = message.toLowerCase();
+  if (normalized.includes("only client users can access their orders")) {
+    return "تعذر إنشاء الطلب من مسار العميل. العملاء المعروضون هنا عملاء فقط، تأكد أن جلسة لوحة التحكم بصلاحية أدمن ثم أعد المحاولة.";
+  }
+
+  return message;
 }
 
 function orderRouteIndex(status: BackendOrderStatus) {
@@ -499,15 +544,167 @@ function canMoveToStatus(currentStatus: BackendOrderStatus, nextStatus: BackendO
   return nextIndex > currentIndex;
 }
 
+function allowedStatusesForOrder(order: BackendOrder) {
+  if (Array.isArray(order.allowed_statuses)) {
+    return new Set(order.allowed_statuses);
+  }
+  return new Set(statusOptions.filter((status) => canMoveToStatus(order.status, status)));
+}
+
+function canMoveOrderToStatus(order: BackendOrder, nextStatus: BackendOrderStatus) {
+  if (order.status === nextStatus) return false;
+  return allowedStatusesForOrder(order).has(nextStatus);
+}
+
+function orderEventLabel(event: BackendOrderEvent, order: BackendOrder) {
+  const toStatusLabel = event.to_status ? statusLabels[event.to_status] : statusLabels[order.status];
+  switch (event.event_type) {
+    case "order_created":
+      return "تم إنشاء الطلب";
+    case "review_approved":
+      return "تمت الموافقة على الطلب";
+    case "review_rejected":
+      return "تم رفض الطلب";
+    case "assigned":
+      return "تم تعيين مندوب";
+    case "unassigned":
+      return "تم إلغاء إسناد المندوب";
+    case "delivery_price_changed":
+      return "تم تحديث سعر التوصيل";
+    case "cancelled":
+      return "تم إلغاء الطلب";
+    case "status_changed":
+      return `تغيرت الحالة إلى ${toStatusLabel}`;
+    default:
+      return toStatusLabel ? `حدث طلب: ${toStatusLabel}` : "حدث طلب";
+  }
+}
+
+function orderEventDetail(event: BackendOrderEvent) {
+  if (event.note?.trim()) return event.note.trim();
+  if (event.event_type === "delivery_price_changed") {
+    const toPrice = event.metadata?.to_delivery_price;
+    if (typeof toPrice === "string" || typeof toPrice === "number") {
+      return `سعر التوصيل: ${money(toPrice)}`;
+    }
+  }
+  const actorName = event.actor?.name?.trim();
+  return actorName ? `بواسطة ${actorName}` : "";
+}
+
+function orderTimelineEvents(order: BackendOrder) {
+  if (Array.isArray(order.history) && order.history.length > 0) {
+    return order.history
+      .filter((event) => event.created_at)
+      .map((event, index, events) => ({
+        key: `${event.id ?? event.event_type ?? "event"}-${index}`,
+        label: orderEventLabel(event, order),
+        detail: orderEventDetail(event),
+        time: event.created_at as string,
+        active: index === events.length - 1,
+        cancelled: event.event_type === "cancelled" || event.event_type === "review_rejected",
+      }));
+  }
+
+  return [
+    order.created_at
+      ? { key: "created", label: "تم إنشاء الطلب", detail: "", time: order.created_at, active: order.status === "pending", cancelled: false }
+      : null,
+    order.approved_at
+      ? { key: "approved", label: "تمت الموافقة على الطلب", detail: "", time: order.approved_at, active: order.review_status === "approved", cancelled: false }
+      : null,
+    order.assigned_at
+      ? { key: "assigned", label: "تم تعيين مندوب", detail: "", time: order.assigned_at, active: order.status === "ready", cancelled: false }
+      : null,
+    order.delivered_at
+      ? { key: "delivered", label: "تم تسليم الطلب", detail: "", time: order.delivered_at, active: order.status === "delivered", cancelled: false }
+      : null,
+    order.rejected_at
+      ? { key: "cancelled", label: "تم إلغاء الطلب", detail: order.rejection_reason?.trim() || "", time: order.rejected_at, active: order.status === "cancelled", cancelled: true }
+      : order.status === "cancelled" && order.updated_at
+        ? { key: "cancelled", label: "تم إلغاء الطلب", detail: "", time: order.updated_at, active: true, cancelled: true }
+        : null,
+    order.updated_at && order.status !== "cancelled" && !order.delivered_at
+      ? { key: "current", label: `الحالة الحالية: ${statusLabels[order.status]}`, detail: "", time: order.updated_at, active: true, cancelled: false }
+      : null,
+  ].filter((event): event is { key: string; label: string; detail: string; time: string; active: boolean; cancelled: boolean } => Boolean(event));
+}
+
 function representativeName(order: BackendOrder) {
   const representative = order.assigned_representative;
   if (!representative) {
-    return "لم يتم تعيين مندوب";
+    const representativeId = assignedRepresentativeId(order);
+    return representativeId ? `مندوب #${representativeId}` : "لم يتم تعيين مندوب";
   }
+  if (representative.name?.trim()) return representative.name.trim();
   return [representative.first_name, representative.last_name]
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)
     .join(" ") || "مندوب غير معروف";
+}
+
+function representativeLookupName(user: BackendDashboardUser) {
+  return fullNameFromBackendUser(user).replace(/^مستخدم #/, "مندوب #");
+}
+
+function representativeNameWithLookup(
+  order: BackendOrder,
+  representatives: Map<string, BackendDashboardUser>,
+) {
+  const representativeId = assignedRepresentativeId(order);
+  if (representativeId) {
+    const representative = representatives.get(String(representativeId));
+    if (representative) return representativeLookupName(representative);
+  }
+  return representativeName(order);
+}
+
+function recordValue(record: Record<string, unknown>, path: string[]) {
+  let current: unknown = record;
+  for (const key of path) {
+    if (!current || typeof current !== "object" || Array.isArray(current)) return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+function textFromRecord(record: Record<string, unknown>, paths: string[][]) {
+  for (const path of paths) {
+    const value = recordValue(record, path);
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return "";
+}
+
+function representativeOptionsFromResponse(value: unknown): RepresentativeOption[] {
+  const rawList =
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Array.isArray((value as { representatives?: unknown }).representatives)
+      ? ((value as { representatives: unknown[] }).representatives)
+      : apiListData<unknown>(value);
+
+  return rawList
+    .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)))
+    .map((representative) => {
+      const id = textFromRecord(representative, [["representative_id"], ["id"], ["user_id"], ["user", "id"]]);
+      const directName = textFromRecord(representative, [["name"], ["full_name"], ["fullName"], ["user", "name"]]);
+      const splitName = [
+        textFromRecord(representative, [["first_name"], ["user", "first_name"]]),
+        textFromRecord(representative, [["last_name"], ["user", "last_name"]]),
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const phone = textFromRecord(representative, [["phone"], ["user", "phone"]]);
+      return {
+        id,
+        name: directName || splitName || (id ? `مندوب #${id}` : "مندوب"),
+        phone: phone || null,
+      };
+    })
+    .filter((representative) => representative.id);
 }
 
 function customerDisplayName(user: BackendDashboardUser) {
@@ -709,14 +906,30 @@ function representativeHref(order: BackendOrder) {
   return `/delivery/couriers/${representativeId}`;
 }
 
+function customerHref(order: BackendOrder) {
+  const customerId = order.customer?.id ?? order.user_id;
+  if (!customerId) return "/customers";
+  return `/customers/${customerId}`;
+}
+
 async function copyText(value: string) {
   await navigator.clipboard.writeText(value);
 }
 
+function orderCopyText(order: BackendOrder) {
+  return [
+    orderNumber(order),
+    customerName(order),
+    order.customer?.phone ?? `user_id: ${order.user_id ?? "-"}`,
+  ].join("\n");
+}
+
 export function BackendOrdersPage() {
   const { apiFetch } = useAuth();
+  const router = useRouter();
   const { showSnackbar } = useSnackbar();
   const [orders, setOrders] = useState<BackendOrder[]>([]);
+  const [representatives, setRepresentatives] = useState<BackendDashboardUser[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | BackendOrderStatus>("all");
   const [deliveryType, setDeliveryType] = useState<"all" | "fixed_area" | "delivery">("all");
@@ -736,6 +949,19 @@ export function BackendOrdersPage() {
       const ordersData = await apiResponseData(ordersResponse);
       if (!ordersResponse.ok) throw new Error(apiError(ordersData, "تعذر تحميل الطلبات."));
       setOrders(apiListData<BackendOrder>(ordersData));
+      try {
+        const representativesResponse = await apiFetch("auth/representatives/");
+        const representativesData = await apiResponseData(representativesResponse);
+        if (representativesResponse.ok) {
+          setRepresentatives(
+            Array.isArray(representativesData)
+              ? representativesData.filter(isBackendDashboardUser)
+              : [],
+          );
+        }
+      } catch {
+        setRepresentatives([]);
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر تحميل الطلبات.");
     } finally {
@@ -753,6 +979,7 @@ export function BackendOrdersPage() {
 
   const visibleOrders = useMemo(() => {
     const normalized = query.trim().toLowerCase();
+    const representativeMap = new Map(representatives.map((representative) => [String(representative.id), representative]));
     return orders.filter((order) => {
       const matchesStatus = status === "all" || order.status === status;
       const matchesDeliveryType =
@@ -770,8 +997,7 @@ export function BackendOrdersPage() {
           getOrderScopeLabel(order),
           getDeliveryDestination(order),
           getMarketCount(order),
-          representativeName(order),
-          order.payment_method,
+          representativeNameWithLookup(order, representativeMap),
           order.delivery_price,
           order.total_price,
         ]
@@ -780,7 +1006,12 @@ export function BackendOrdersPage() {
           .includes(normalized);
       return matchesStatus && matchesDeliveryType && matchesQuery;
     });
-  }, [orders, query, status, deliveryType]);
+  }, [orders, query, status, deliveryType, representatives]);
+
+  const representativeMap = useMemo(
+    () => new Map(representatives.map((representative) => [String(representative.id), representative])),
+    [representatives],
+  );
 
   const totalPages = Math.max(1, Math.ceil(visibleOrders.length / ordersPageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -793,10 +1024,10 @@ export function BackendOrdersPage() {
 
   async function copyOrderNumberFromList(order: BackendOrder) {
     try {
-      await copyText(orderNumber(order));
-      showSnackbar({ message: `تم نسخ رقم الطلب ${orderNumber(order)}.` });
+      await copyText(orderCopyText(order));
+      showSnackbar({ message: `تم نسخ بيانات الطلب ${orderNumber(order)}.` });
     } catch {
-      showSnackbar({ message: "تعذر نسخ رقم الطلب.", tone: "danger" });
+      showSnackbar({ message: "تعذر نسخ بيانات الطلب.", tone: "danger" });
     }
   }
 
@@ -831,7 +1062,7 @@ export function BackendOrdersPage() {
       </div>
 
       <Card className="mt-6 overflow-hidden">
-        <div className="grid gap-3 border-b p-4 md:grid-cols-[minmax(0,1fr)_190px_220px]">
+        <div className="grid gap-3 border-b p-4 md:grid-cols-[minmax(0,1fr)_190px_190px]">
           <label className="relative">
             <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -840,7 +1071,7 @@ export function BackendOrdersPage() {
                 setQuery(event.target.value);
                 setCurrentPage(1);
               }}
-              className="ps-9"
+              className="h-12 ps-9"
               placeholder="بحث برقم الطلب أو العميل أو المحل..."
             />
           </label>
@@ -861,7 +1092,7 @@ export function BackendOrdersPage() {
             ]}
             ariaLabel="فلترة حالة الطلب"
             dir="rtl"
-            className="h-9"
+            className="h-12"
           />
           <AppSelect
             value={deliveryType}
@@ -871,12 +1102,12 @@ export function BackendOrdersPage() {
             }}
             options={[
               { value: "all", label: "كل أنواع التوصيل" },
-              { value: "fixed_area", label: "منطقة ثابتة" },
-              { value: "delivery", label: "دليفري / أخرى" },
+              { value: "fixed_area", label: "مدينة ثابتة" },
+              { value: "delivery", label: "دليفري" },
             ]}
             ariaLabel="فلترة نوع التوصيل"
             dir="rtl"
-            className="h-9"
+            className="h-12"
           />
         </div>
 
@@ -893,14 +1124,23 @@ export function BackendOrdersPage() {
         ) : (
           <div className="grid gap-3 p-4">
             {pagedOrders.map((order, index) => {
-              const isDeliveryOrder = order.delivery_type === "delivery" || order.delivery_type === "manual_quote";
+              const deliveryOrder = isDeliveryOrder(order);
 
               return (
                 <div
                   key={order.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => router.push(`/orders/view/${order.id}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      router.push(`/orders/view/${order.id}`);
+                    }
+                  }}
                   className={cn(
-                    "grid gap-4 rounded-md border bg-card p-4 shadow-sm transition hover:border-primary/35 hover:bg-muted/20 xl:grid-cols-[minmax(270px,1.25fr)_minmax(180px,0.85fr)_160px_170px_150px_82px] xl:items-center",
-                    isDeliveryOrder &&
+                    "grid cursor-pointer gap-4 rounded-md border bg-card p-4 shadow-sm transition hover:border-primary/35 hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 xl:grid-cols-[minmax(270px,1.25fr)_minmax(180px,0.85fr)_160px_170px_150px] xl:items-center",
+                    deliveryOrder &&
                       "border-red-400/40 bg-red-500/5 hover:border-red-400/60 hover:bg-red-500/10",
                   )}
                 >
@@ -913,33 +1153,30 @@ export function BackendOrdersPage() {
                     <OrderDeliveryIcon order={order} />
                     <div className="min-w-0">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <Link
-                          href={`/orders/view/${order.id}`}
+                        <span
                           dir="ltr"
                           className={cn(
-                            "truncate font-bold text-primary hover:underline",
-                            isDeliveryOrder && "text-red-600 dark:text-red-300",
+                            "truncate font-bold text-primary",
+                            deliveryOrder && "text-red-600 dark:text-red-300",
                           )}
                         >
                           {orderNumber(order)}
-                        </Link>
+                        </span>
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(event) => {
+                            event.stopPropagation();
                             void copyOrderNumberFromList(order);
                           }}
                           className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border text-muted-foreground transition hover:bg-accent hover:text-foreground"
-                          aria-label={`نسخ رقم الطلب ${orderNumber(order)}`}
-                          title="نسخ رقم الطلب"
+                          aria-label={`نسخ بيانات الطلب ${orderNumber(order)}`}
+                          title="نسخ بيانات الطلب"
                         >
                           <Copy className="size-4" />
                         </button>
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <Badge tone={statusTone(order.status)}>{statusLabels[order.status]}</Badge>
-                        <Badge tone={reviewStatusTone(order.review_status)}>
-                          {reviewStatusLabel(order.review_status)}
-                        </Badge>
                         <Badge tone={isGeneralOrder(order) ? "secondary" : "blue"}>
                           {getOrderScopeLabel(order)}
                         </Badge>
@@ -952,10 +1189,16 @@ export function BackendOrdersPage() {
                   </div>
 
                   <div className="min-w-0">
-                    <div className="truncate font-bold">{customerName(order)}</div>
-                    <div className="mt-1 inline-block max-w-full truncate text-start text-xs text-muted-foreground [unicode-bidi:plaintext]" dir="ltr">
-                      {order.customer?.phone ?? `user_id: ${order.user_id ?? "-"}`}
-                    </div>
+                    <Link
+                      href={customerHref(order)}
+                      onClick={(event) => event.stopPropagation()}
+                      className="inline-grid max-w-full gap-0.5 font-semibold text-primary hover:underline"
+                    >
+                      <span className="truncate">{customerName(order)}</span>
+                      <span className="truncate text-start text-xs font-normal text-muted-foreground [unicode-bidi:plaintext]" dir="ltr">
+                        {order.customer?.phone ?? `user_id: ${order.user_id ?? "-"}`}
+                      </span>
+                    </Link>
                   </div>
 
                   <div className="min-w-0">
@@ -969,20 +1212,18 @@ export function BackendOrdersPage() {
                   <div className="min-w-0">
                     <div className="text-xs font-bold text-muted-foreground">المندوب</div>
                     <div className="mt-1">
-                      {assignedRepresentativeId(order) ? (
+                      {deliveryOrder ? (
+                        <Badge tone="secondary">لا يسند لمندوب</Badge>
+                      ) : assignedRepresentativeId(order) ? (
                         <Link
                           href={representativeHref(order)}
-                          className="inline-grid max-w-full gap-0.5 font-semibold text-primary hover:underline"
+                          onClick={(event) => event.stopPropagation()}
+                          className="inline-flex max-w-full items-center rounded-md border border-emerald-300 bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 transition hover:border-emerald-400 hover:bg-emerald-200 hover:underline dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-200"
                         >
-                          <span className="truncate">{representativeName(order)}</span>
-                          <span className="truncate text-start text-[11px] font-normal text-muted-foreground [unicode-bidi:plaintext]" dir="ltr">
-                            {order.assigned_representative?.phone ?? `#${assignedRepresentativeId(order)}`}
-                          </span>
+                          <span className="truncate">{representativeNameWithLookup(order, representativeMap)}</span>
                         </Link>
                       ) : (
-                        <Badge tone={order.status === "ready" ? "blue" : "secondary"}>
-                          {order.status === "ready" ? "جاهز للإسناد" : "غير مسند"}
-                        </Badge>
+                        <Badge tone="secondary">غير مسند</Badge>
                       )}
                     </div>
                   </div>
@@ -991,28 +1232,7 @@ export function BackendOrdersPage() {
                     <CurrencyText className="block text-base font-extrabold tabular-nums">
                       {money(order.total_price)}
                     </CurrencyText>
-                    <div className="mt-1 text-xs text-muted-foreground">{order.payment_method ?? "-"}</div>
                   </div>
-
-                  <div className="grid gap-2 rounded-md border bg-muted/10 p-3 text-xs xl:col-span-6 md:grid-cols-2 xl:grid-cols-4">
-                    <SummaryPill label="نوع الطلب" value={getOrderScopeLabel(order)} />
-                    <SummaryPill label="وجهة التوصيل" value={getDeliveryDestination(order)} />
-                    <SummaryPill label="نوع التوصيل" value={deliveryTypeLabel(order)} />
-                    <SummaryPill label="سعر التوصيل" value={deliveryFeeLabel(order)} />
-                    <SummaryPill label="تاريخ الإنشاء" value={dateTime(order.created_at)} />
-                    <SummaryPill label="محلات الطلب" value={marketName(order)} />
-                    <SummaryPill label="المنتجات" value={money(order.subtotal_price)} />
-                    <SummaryPill label="الخصم" value={money(order.discount)} />
-                    <SummaryPill label="ملاحظات الطلب" value={order.description?.trim() || "-"} />
-                    <SummaryPill label="ملاحظة التوصيل" value={order.delivery_note?.trim() || "-"} />
-                  </div>
-
-                  <Link
-                    href={`/orders/view/${order.id}`}
-                    className="inline-flex h-9 items-center justify-center rounded-md border px-3 text-xs font-semibold transition hover:bg-accent xl:w-full"
-                  >
-                    فتح
-                  </Link>
                 </div>
               );
             })}
@@ -1073,18 +1293,17 @@ export function BackendCreateOrderPage() {
   const [customerQuery, setCustomerQuery] = useState("");
   const [createAddressOpen, setCreateAddressOpen] = useState(false);
   const [addressName, setAddressName] = useState("");
-  const [addressLatitude, setAddressLatitude] = useState("");
-  const [addressLongitude, setAddressLongitude] = useState("");
   const [savingAddress, setSavingAddress] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState("cash_on_delivery");
   const [description, setDescription] = useState("");
-  const [deliveryNote, setDeliveryNote] = useState("");
   const [pickerTarget, setPickerTarget] = useState<{ sectionId: string; lineId: string } | null>(null);
   const [productQuery, setProductQuery] = useState("");
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
   const [productAvailabilityFilter, setProductAvailabilityFilter] = useState<"all" | "available" | "unavailable">("all");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [preview, setPreview] = useState<BackendOrderPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function loadInitialData() {
@@ -1139,12 +1358,6 @@ export function BackendCreateOrderPage() {
     setSelectedAddress(rows[0]?.id ? String(rows[0].id) : "");
   }
 
-  function resetAddressDraft() {
-    setAddressName("");
-    setAddressLatitude("");
-    setAddressLongitude("");
-  }
-
   function selectCustomer(userId: string) {
     setSelectedUser(userId);
     setCustomerPickerOpen(false);
@@ -1154,6 +1367,10 @@ export function BackendCreateOrderPage() {
     setPickerTarget(null);
     resetAddressDraft();
     void loadAddresses(userId);
+  }
+
+  function resetAddressDraft() {
+    setAddressName("");
   }
 
   async function createAddress() {
@@ -1166,9 +1383,6 @@ export function BackendCreateOrderPage() {
         name: addressName.trim(),
         isDefault: addresses.length === 0,
       };
-      if (addressLatitude.trim()) body.latitude = addressLatitude.trim();
-      if (addressLongitude.trim()) body.longitude = addressLongitude.trim();
-
       const response = await apiFetch("addresses/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1251,7 +1465,6 @@ export function BackendCreateOrderPage() {
     .filter(Boolean);
   const selectedMarketIdSet = new Set(selectedMarketIds);
   const hasDuplicateMarkets = selectedMarketIdSet.size !== selectedMarketIds.length;
-  const primaryMarketId = selectedMarketIds[0] ?? "";
   const selectedMarketRecords = marketSections
     .map((section) => eligibleMarkets.find((market) => String(market.id) === section.marketId))
     .filter((market): market is BackendMarket => Boolean(market));
@@ -1270,6 +1483,71 @@ export function BackendCreateOrderPage() {
     const variant = variants.find((item) => item.id === line.variantId);
     return sum + (variant?.price ?? 0) * Math.max(1, Number(line.quantity) || 1);
   }, 0);
+  function buildOrderPayload(includeCreateFields: boolean) {
+    if (!selectedUser || !selectedAddress || selectedProductLines.length === 0) return null;
+    const payload: {
+      user_id: number;
+      address_id: number;
+      service_city_id?: number;
+      payment_method?: string;
+      description?: string;
+      items: Array<{ variant_id: number; quantity: number }>;
+      offers: Array<{ offer_id: number }>;
+    } = {
+      user_id: Number(selectedUser),
+      address_id: Number(selectedAddress),
+      items: selectedProductLines.map(({ line }) => ({
+        variant_id: Number(line.variantId),
+        quantity: Math.max(1, Number(line.quantity) || 1),
+      })),
+      offers: selectedOfferLines.map(({ offer }) => ({
+        offer_id: Number(offer.offerId),
+      })),
+    };
+    if (selectedAddressRecord?.service_city_id) {
+      payload.service_city_id = Number(selectedAddressRecord.service_city_id);
+    }
+    if (includeCreateFields) {
+      payload.payment_method = "cash_on_delivery";
+      const trimmedDescription = description.trim();
+      if (trimmedDescription) payload.description = trimmedDescription;
+    }
+    return payload;
+  }
+  const previewPayload = buildOrderPayload(false);
+  const previewPayloadKey = previewPayload ? JSON.stringify(previewPayload) : "";
+
+  useEffect(() => {
+    if (!previewPayloadKey) return;
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setPreviewLoading(true);
+      setPreviewError(null);
+      try {
+        const response = await apiFetch("orders/preview/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: previewPayloadKey,
+        });
+        const data = await apiResponseData(response);
+        if (!response.ok) throw new Error(apiError(data, "تعذر حساب ملخص الطلب."));
+        if (!cancelled) setPreview(data as BackendOrderPreview);
+      } catch (reason) {
+        if (cancelled) return;
+        setPreview(null);
+        setPreviewError(reason instanceof Error ? reason.message : "تعذر حساب ملخص الطلب.");
+      } finally {
+        if (!cancelled) setPreviewLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [apiFetch, previewPayloadKey]);
+
   const activePickerSection = pickerTarget
     ? marketSections.find((section) => section.id === pickerTarget.sectionId) ?? null
     : null;
@@ -1316,10 +1594,10 @@ export function BackendCreateOrderPage() {
   const addressScopeLabel = selectedAddressIsGeneral ? "عام" : "مدينة خدمة";
   const addressDeliveryTypeLabel = selectedAddressRecord
     ? selectedAddressIsGeneral
-      ? "دليفري يدوي"
+      ? "دليفري"
       : selectedAddressRecord.delivery_area
-        ? "توصيل ثابت"
-        : "دليفري يدوي"
+        ? "مدينة ثابتة"
+        : "دليفري"
     : "-";
   const addressDeliveryPriceLabel = selectedAddressRecord
     ? selectedAddressRecord.delivery_area
@@ -1491,7 +1769,6 @@ export function BackendCreateOrderPage() {
   function validateOrderDraft() {
     if (!selectedUser) return "اختر العميل";
     if (!selectedAddressRecord) return "اختر عنوان التوصيل";
-    if (!paymentMethod.trim()) return "اختر طريقة الدفع";
     if (marketSections.length === 0) return "اختر محل واحد على الأقل";
     if (marketSections.some((section) => !section.marketId)) return "اختر محل واحد على الأقل";
     if (hasDuplicateMarkets) return "لا يمكن اختيار نفس المحل مرتين.";
@@ -1532,39 +1809,66 @@ export function BackendCreateOrderPage() {
   }
 
   const validationMessage = validateOrderDraft();
+  const activePreview = previewPayloadKey ? preview : null;
+  const activePreviewError = previewPayloadKey ? previewError : null;
+  const activePreviewLoading = Boolean(previewPayloadKey) && previewLoading;
+  const previewSummary = activePreview?.summary;
+  const previewSubtotal = previewSummary?.subtotal;
+  const previewDeliveryTotal = previewSummary?.delivery_total;
+  const previewGrandTotal = previewSummary?.grand_total;
+  const summaryDeliveryLabel = activePreviewLoading
+    ? "جار حساب التوصيل..."
+    : previewDeliveryTotal !== undefined && previewDeliveryTotal !== null
+      ? money(previewDeliveryTotal)
+      : selectedAddressRecord
+        ? addressDeliveryPriceLabel
+        : "-";
+  const summaryTotalLabel = activePreviewLoading
+    ? "جار الحساب..."
+    : previewGrandTotal !== undefined && previewGrandTotal !== null
+      ? money(previewGrandTotal)
+      : money(subtotal);
+  const summaryProductsLabel =
+    previewSubtotal !== undefined && previewSubtotal !== null
+      ? money(previewSubtotal)
+      : selectedProductLines.length
+        ? `${selectedProductLines.length}`
+        : "لا توجد منتجات مختارة";
+  const submitBlockMessage =
+    validationMessage ||
+    activePreviewError ||
+    (previewPayloadKey && activePreviewLoading ? "جاري حساب ملخص الطلب..." : null) ||
+    (previewPayloadKey && !activePreview ? "انتظر اكتمال معاينة الطلب قبل الحفظ." : null);
 
   async function submitOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving) return;
     const draftError = validateOrderDraft();
     if (draftError) {
       showSnackbar({ message: draftError, tone: "danger" });
       return;
     }
+    if (activePreviewError) {
+      showSnackbar({ message: activePreviewError, tone: "danger" });
+      return;
+    }
+    if (activePreviewLoading || !activePreview) {
+      showSnackbar({ message: "انتظر اكتمال معاينة الطلب قبل الحفظ.", tone: "danger" });
+      return;
+    }
 
-    const items = selectedProductLines.map(({ line }) => ({
-      variant_id: Number(line.variantId),
-      quantity: Math.max(1, Number(line.quantity) || 1),
-      unit_price: "0.00",
-    }));
-    const selectedOfferPayload = selectedOfferLines.map(({ offer }) => ({
-      offer_id: Number(offer.offerId),
-    }));
+    const createPayload = buildOrderPayload(true);
+    if (!createPayload) {
+      showSnackbar({ message: "ط§ظƒطھظ…ظ„ ط¨ظٹط§ظ†ط§طھ ط§ظ„ط·ظ„ط¨ ظ‚ط¨ظ„ ط§ظ„ط­ظپط¸.", tone: "danger" });
+      return;
+    }
 
     setSaving(true);
     try {
       const response = await apiFetch("orders/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: Number(selectedUser),
-          delivery_address_id: Number(selectedAddress),
-          market_id: Number(primaryMarketId),
-          payment_method: paymentMethod.trim(),
-          description: description.trim(),
-          delivery_note: deliveryNote.trim(),
-          items,
-          offers: selectedOfferPayload,
-        }),
+        body: JSON.stringify(createPayload),
       });
       const data = await apiResponseData(response);
       if (!response.ok) throw new Error(apiError(data, "تعذر إنشاء الطلب."));
@@ -1619,7 +1923,7 @@ export function BackendCreateOrderPage() {
                   type="button"
                   onClick={() => setCustomerPickerOpen(true)}
                   className={cn(
-                    "flex h-11 w-full items-center justify-between gap-3 rounded-md border bg-input px-3 py-2 text-start text-sm shadow-sm transition hover:border-primary/45 hover:bg-accent/60",
+                    "flex h-14 w-full items-center justify-between gap-3 rounded-md border bg-input px-3 py-2 text-start text-sm shadow-sm transition hover:border-primary/45 hover:bg-accent/60",
                     !selectedCustomer && "text-muted-foreground",
                   )}
                 >
@@ -1648,7 +1952,7 @@ export function BackendCreateOrderPage() {
                       onValueChange={selectAddress}
                       placeholder="اختر العنوان"
                       ariaLabel="اختيار عنوان التوصيل"
-                      className="h-10 bg-input"
+                      className="h-12 bg-input"
                       disabled={!selectedUser}
                       options={addresses.map((address) => ({
                         value: String(address.id),
@@ -1658,7 +1962,7 @@ export function BackendCreateOrderPage() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-10 shrink-0"
+                      className="h-12 shrink-0"
                       disabled={!selectedUser}
                       onClick={() => setCreateAddressOpen((open) => !open)}
                     >
@@ -1671,25 +1975,9 @@ export function BackendCreateOrderPage() {
                       <Input
                         value={addressName}
                         onChange={(event) => setAddressName(event.target.value)}
-                        placeholder="عنوان التوصيل"
-                        className="h-10"
+                        placeholder="اسم / وصف العنوان"
+                        className="h-12"
                       />
-                      <div className="grid gap-2 md:grid-cols-2">
-                        <Input
-                          value={addressLatitude}
-                          onChange={(event) => setAddressLatitude(event.target.value)}
-                          placeholder="Latitude"
-                          dir="ltr"
-                          className="h-10"
-                        />
-                        <Input
-                          value={addressLongitude}
-                          onChange={(event) => setAddressLongitude(event.target.value)}
-                          placeholder="Longitude"
-                          dir="ltr"
-                          className="h-10"
-                        />
-                      </div>
                       <div className="flex justify-end gap-2">
                         <Button
                           type="button"
@@ -1748,19 +2036,6 @@ export function BackendCreateOrderPage() {
                   )}
                 </div>
               ) : null}
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="طريقة الدفع">
-                  <Input
-                    value={paymentMethod}
-                    onChange={(event) => setPaymentMethod(event.target.value)}
-                    className="h-11 bg-input"
-                    placeholder="cash_on_delivery"
-                    dir="ltr"
-                  />
-                </Field>
-              </div>
-
               <div className="grid gap-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1822,7 +2097,7 @@ export function BackendCreateOrderPage() {
                           onValueChange={(marketId) => updateSectionMarket(section.id, marketId)}
                           placeholder="اختر المحل"
                           ariaLabel={`اختيار المحل ${sectionIndex + 1}`}
-                          className="h-11 bg-input"
+                          className="h-12 bg-input"
                           options={marketOptionsForSection(section.id)}
                         />
                       </Field>
@@ -1940,7 +2215,7 @@ export function BackendCreateOrderPage() {
                                   onValueChange={(offerId) => updateOffer(section.id, offerLine.id, offerId)}
                                   placeholder="اختر العرض"
                                   ariaLabel={`اختيار العرض ${index + 1}`}
-                                  className="h-11 bg-input"
+                                  className="h-12 bg-input"
                                   options={sectionOffers.map((offer) => ({
                                     value: String(offer.id),
                                     label: offerLabel(offer),
@@ -1982,15 +2257,7 @@ export function BackendCreateOrderPage() {
                 <textarea
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
-                  className="min-h-24 rounded-md border bg-input px-3 py-2 text-sm"
-                />
-              </Field>
-              <Field label="ملاحظة التوصيل">
-                <textarea
-                  value={deliveryNote}
-                  onChange={(event) => setDeliveryNote(event.target.value)}
-                  className="min-h-24 rounded-md border bg-input px-3 py-2 text-sm"
-                  placeholder="مثلاً: الاتصال عند الوصول"
+                  className="min-h-36 rounded-md border bg-input px-3 py-3 text-sm"
                 />
               </Field>
             </div>
@@ -2004,23 +2271,28 @@ export function BackendCreateOrderPage() {
             <div className="flex flex-1 flex-col">
               <SummaryRow label="عدد المحلات" value={selectedMarketRecords.length ? `${selectedMarketRecords.length}` : "لم يتم اختيار محلات بعد"} />
               <SummaryRow label="أسماء المحلات" value={selectedMarketSummary || "لم يتم اختيار محلات بعد"} />
-              <SummaryRow label="إجمالي المنتجات" value={selectedProductLines.length ? `${selectedProductLines.length}` : "لا توجد منتجات مختارة"} />
+              <SummaryRow label="إجمالي المنتجات" value={summaryProductsLabel} />
               <SummaryRow label="عدد العروض" value={selectedOfferLines.length ? `${selectedOfferLines.length}` : "لا توجد عروض مختارة"} />
               <SummaryRow label="نوع التوصيل" value={selectedAddressRecord ? addressDeliveryTypeLabel : "-"} />
-              <SummaryRow label="سعر التوصيل" value={selectedAddressRecord ? addressDeliveryPriceLabel : "-"} />
-              <SummaryRow label="الإجمالي المتوقع" value={money(subtotal)} strong />
+              <SummaryRow label="سعر التوصيل" value={summaryDeliveryLabel} />
+              <SummaryRow label="الإجمالي المتوقع" value={summaryTotalLabel} strong />
+              {activePreviewError ? (
+                <p className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                  {activePreviewError}
+                </p>
+              ) : null}
               <div className="mt-auto border-t pt-4" />
             </div>
             <Button
               className="mt-5 w-full"
-              disabled={saving || Boolean(validationMessage)}
+              disabled={saving || Boolean(submitBlockMessage)}
             >
               {saving ? <Loader2 className="size-4 animate-spin" /> : <ClipboardList className="size-4" />}
               حفظ الطلب
             </Button>
-            {validationMessage ? (
+            {submitBlockMessage ? (
               <div className="mt-3 rounded-md border bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
-                {validationMessage}
+                {submitBlockMessage}
               </div>
             ) : null}
           </Card>
@@ -2430,11 +2702,18 @@ function ProductVariantPicker({
   );
 }
 
-function SummaryRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+function SummaryRow({ label, value, strong }: { label: string; value: ReactNode; strong?: boolean }) {
+  const content =
+    typeof value === "string" || typeof value === "number" ? (
+      <CurrencyText className="tabular-nums">{value}</CurrencyText>
+    ) : (
+      value
+    );
+
   return (
     <div className={cn("flex items-center justify-between gap-4 py-2 text-sm", strong && "text-base font-bold")}>
       <span className="text-muted-foreground">{label}</span>
-      <CurrencyText className="tabular-nums" >{value}</CurrencyText>
+      {content}
     </div>
   );
 }
@@ -2605,6 +2884,10 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
   const [savingDeliveryPrice, setSavingDeliveryPrice] = useState(false);
   const [orderDetailsOpen, setOrderDetailsOpen] = useState(false);
   const [representativeOpen, setRepresentativeOpen] = useState(false);
+  const [representativeUser, setRepresentativeUser] = useState<BackendDashboardUser | null>(null);
+  const [representativeOptions, setRepresentativeOptions] = useState<RepresentativeOption[]>([]);
+  const [selectedRepresentativeId, setSelectedRepresentativeId] = useState("");
+  const [representativesLoading, setRepresentativesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function loadOrder() {
@@ -2618,6 +2901,26 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
       if (!nextOrder) throw new Error("تعذر قراءة تفاصيل الطلب من استجابة الباك.");
       setOrder(nextOrder);
       setDeliveryPriceDraft(nextOrder.delivery_price ?? "");
+      setRepresentativeOptions([]);
+      setSelectedRepresentativeId("");
+      const representativeId = assignedRepresentativeId(nextOrder);
+      if (representativeId && !nextOrder.assigned_representative?.name) {
+        try {
+          const representativeResponse = await apiFetch(`auth/users/${encodeURIComponent(String(representativeId))}/`);
+          const representativeData = await apiResponseData(representativeResponse);
+          setRepresentativeUser(
+            representativeResponse.ok &&
+              isBackendDashboardUser(representativeData) &&
+              representativeData.role === "representative"
+              ? representativeData
+              : null,
+          );
+        } catch {
+          setRepresentativeUser(null);
+        }
+      } else {
+        setRepresentativeUser(null);
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر تحميل تفاصيل الطلب.");
     } finally {
@@ -2627,8 +2930,8 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
 
   async function updateStatus(nextStatus: BackendOrderStatus) {
     if (!order || order.status === nextStatus) return;
-    if (nextStatus !== "cancelled" && !canMoveToStatus(order.status, nextStatus)) {
-      showSnackbar({ message: "لا يمكن الرجوع لمرحلة سابقة في حالة الطلب.", tone: "danger" });
+    if (!canMoveOrderToStatus(order, nextStatus)) {
+      showSnackbar({ message: "هذه الحركة غير متاحة لهذا الطلب الآن.", tone: "danger" });
       return;
     }
     setSavingStatus(true);
@@ -2663,11 +2966,64 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
       });
       const data = await apiResponseData(response);
       if (!response.ok) throw new Error(apiError(data, "تعذر إلغاء إسناد الطلب."));
-      setOrder(data as BackendOrder);
+      setOrder(apiOrderData(data) ?? (data as BackendOrder));
       showSnackbar({ message: "تم إلغاء إسناد المندوب.", tone: "success" });
     } catch (reason) {
       showSnackbar({
         message: reason instanceof Error ? reason.message : "تعذر إلغاء الإسناد.",
+        tone: "danger",
+      });
+    } finally {
+      setSavingAssignment(false);
+    }
+  }
+
+  async function loadRepresentativeOptions(targetOrder = order) {
+    if (!targetOrder || isDeliveryOrder(targetOrder)) return;
+    setRepresentativesLoading(true);
+    try {
+      const response = await apiFetch(`admin/orders/${targetOrder.id}/service-city-representatives/`);
+      const data = await apiResponseData(response);
+      if (!response.ok) throw new Error(apiError(data, "تعذر تحميل المندوبين المتاحين."));
+      const options = representativeOptionsFromResponse(data);
+      setRepresentativeOptions(options);
+      if (options.length === 0) {
+        showSnackbar({ message: "لا يوجد مندوبين متاحين لهذا الطلب حاليًا.", tone: "danger" });
+      }
+    } catch (reason) {
+      showSnackbar({
+        message: reason instanceof Error ? reason.message : "تعذر تحميل المندوبين المتاحين.",
+        tone: "danger",
+      });
+    } finally {
+      setRepresentativesLoading(false);
+    }
+  }
+
+  async function assignSelectedRepresentative() {
+    if (!order || !selectedRepresentativeId || isDeliveryOrder(order)) return;
+    setSavingAssignment(true);
+    try {
+      const representativeIdValue = Number(selectedRepresentativeId);
+      const response = await apiFetch(`orders/${order.id}/assignment/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          representative_id: Number.isFinite(representativeIdValue)
+            ? representativeIdValue
+            : selectedRepresentativeId,
+        }),
+      });
+      const data = await apiResponseData(response);
+      if (!response.ok) throw new Error(apiError(data, "تعذر إسناد الطلب للمندوب."));
+      const nextOrder = apiOrderData(data) ?? (data as BackendOrder);
+      setOrder(nextOrder);
+      setRepresentativeOptions([]);
+      setSelectedRepresentativeId("");
+      showSnackbar({ message: "تم إسناد الطلب للمندوب.", tone: "success" });
+    } catch (reason) {
+      showSnackbar({
+        message: reason instanceof Error ? reason.message : "تعذر إسناد الطلب للمندوب.",
         tone: "danger",
       });
     } finally {
@@ -2709,10 +3065,10 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
   async function copyOrderNumber() {
     if (!order) return;
     try {
-      await copyText(orderNumber(order));
-      showSnackbar({ message: `تم نسخ رقم الطلب ${orderNumber(order)}.` });
+      await copyText(orderCopyText(order));
+      showSnackbar({ message: `تم نسخ بيانات الطلب ${orderNumber(order)}.` });
     } catch {
-      showSnackbar({ message: "تعذر نسخ رقم الطلب.", tone: "danger" });
+      showSnackbar({ message: "تعذر نسخ بيانات الطلب.", tone: "danger" });
     }
   }
 
@@ -2723,6 +3079,14 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
+
+  const representativeMap = useMemo(
+    () =>
+      representativeUser
+        ? new Map([[String(representativeUser.id), representativeUser]])
+        : new Map<string, BackendDashboardUser>(),
+    [representativeUser],
+  );
 
   if (loading) {
     return (
@@ -2736,6 +3100,9 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
     return <div className="px-6 py-8 text-sm text-destructive">{error ?? "الطلب غير موجود."}</div>;
   }
 
+  const orderCanUseRepresentative = !isDeliveryOrder(order);
+  const deliveryPriceLocked = order.delivery_price !== null && order.delivery_price !== undefined && order.delivery_price !== "";
+
   return (
     <div dir="rtl" className="px-6 py-8">
       <div className="flex min-h-14 flex-col justify-between gap-4 md:flex-row md:items-center">
@@ -2746,14 +3113,25 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
               {orderNumber(order)}
             </span>
           </h1>
-          <p className="mt-1 text-sm leading-5 text-muted-foreground">
-            {customerName(order)} - {marketName(order)} - {dateTime(order.created_at)}
-          </p>
+          <div className="mt-2 grid gap-1 text-sm leading-5">
+            <Link
+              href={customerHref(order)}
+              className="w-fit max-w-full truncate font-semibold text-primary hover:underline"
+            >
+              {customerName(order)}
+            </Link>
+            <span className="w-fit max-w-full truncate text-start text-muted-foreground [unicode-bidi:plaintext]" dir="ltr">
+              {order.customer?.phone ?? `user_id: ${order.user_id ?? "-"}`}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {marketName(order)} - {dateTime(order.created_at)}
+            </span>
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
             <Button type="button" variant="outline" onClick={() => void copyOrderNumber()}>
               <Copy className="size-4" />
-              نسخ رقم الطلب
+              نسخ بيانات الطلب
             </Button>
             <Link
               href="/orders"
@@ -2780,7 +3158,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
             <div className="mt-4 grid grid-cols-2 gap-2">
               {statusOptions.map((option) => {
                 const current = order.status === option;
-                const canMove = canMoveToStatus(order.status, option);
+                const canMove = canMoveOrderToStatus(order, option);
                 const completed = orderRouteIndex(option) < orderRouteIndex(order.status);
 
                 return (
@@ -2802,7 +3180,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                 type="button"
                 variant={order.status === "cancelled" ? "danger" : "outline"}
                 className="w-full"
-                disabled={savingStatus || order.status === "cancelled"}
+                disabled={savingStatus || !canMoveOrderToStatus(order, "cancelled")}
                 onClick={() => void updateStatus("cancelled")}
               >
                 <XCircle className="size-4" />
@@ -2822,11 +3200,18 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
             </button>
             {orderDetailsOpen ? (
               <div className="mt-3">
-                <SummaryRow label="رقم الطلب" value={orderNumber(order)} />
                 <SummaryRow label="حالة الطلب" value={statusLabels[order.status]} />
-                <SummaryRow label="حالة المراجعة" value={reviewStatusLabel(order.review_status)} />
-                <SummaryRow label="طريقة الدفع" value={order.payment_method ?? "-"} />
-                <SummaryRow label="العميل" value={customerName(order)} />
+                <SummaryRow
+                  label="العميل"
+                  value={
+                    <Link
+                      href={customerHref(order)}
+                      className="max-w-[14rem] truncate font-semibold text-primary hover:underline"
+                    >
+                      {customerName(order)}
+                    </Link>
+                  }
+                />
                 <SummaryRow label="الهاتف" value={order.customer?.phone ?? "-"} />
                 <SummaryRow label="نوع الطلب" value={getOrderScopeLabel(order)} />
                 <SummaryRow label="محلات الطلب" value={marketName(order)} />
@@ -2851,44 +3236,96 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                 {order.custom_delivery_area ? (
                   <SummaryRow label="منطقة الدليفري" value={order.custom_delivery_area} />
                 ) : null}
-                <div className="mt-4 border-t pt-3">
-                  <button
-                    type="button"
-                    onClick={() => setRepresentativeOpen((open) => !open)}
-                    className="flex w-full items-center justify-between gap-3 rounded-md px-1 py-2 text-start font-semibold transition hover:bg-muted/40"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <Truck className="size-4 text-primary" />
-                      المندوب
-                    </span>
-                    <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", representativeOpen && "rotate-180")} />
-                  </button>
-                  {representativeOpen ? (
-                    assignedRepresentativeId(order) ? (
-                      <div className="grid gap-3">
-                        <AssignedRepresentativeDetails order={order} />
-                        {order.assigned_representative && order.status === "ready" ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            disabled={savingAssignment}
-                            onClick={() => void unassignRepresentative()}
-                          >
-                            {savingAssignment ? <Loader2 className="size-4 animate-spin" /> : <X className="size-4" />}
-                            إلغاء إسناد المندوب
-                          </Button>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <div className="rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
-                        لم يتم إسناد الطلب لمندوب بعد.
-                      </div>
-                    )
-                  ) : null}
-                </div>
               </div>
             ) : null}
           </Card>
+
+          {orderCanUseRepresentative ? (
+          <Card className="p-5 text-sm">
+            <button
+              type="button"
+              onClick={() => {
+                const nextOpen = !representativeOpen;
+                setRepresentativeOpen(nextOpen);
+                if (nextOpen && !assignedRepresentativeId(order) && representativeOptions.length === 0) {
+                  void loadRepresentativeOptions(order);
+                }
+              }}
+              className="flex w-full items-center justify-between gap-3 rounded-md px-1 py-2 text-start font-semibold transition hover:bg-muted/40"
+            >
+              <span className="inline-flex items-center gap-2">
+                <Truck className="size-4 text-primary" />
+                المندوب
+                <Badge tone={assignedRepresentativeId(order) ? "green" : "secondary"}>
+                  {assignedRepresentativeId(order)
+                    ? representativeNameWithLookup(order, representativeMap)
+                    : "غير مسند"}
+                </Badge>
+              </span>
+              <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", representativeOpen && "rotate-180")} />
+            </button>
+            {representativeOpen ? (
+              <div className="mt-3">
+                {assignedRepresentativeId(order) ? (
+                  <div className="grid gap-3">
+                    <AssignedRepresentativeDetails order={order} representatives={representativeMap} />
+                    {order.assigned_representative && order.status === "ready" ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={savingAssignment}
+                        onClick={() => void unassignRepresentative()}
+                      >
+                        {savingAssignment ? <Loader2 className="size-4 animate-spin" /> : <X className="size-4" />}
+                        إلغاء إسناد المندوب
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="grid gap-3 rounded-md border bg-muted/20 p-3">
+                    <div className="text-xs text-muted-foreground">
+                      لم يتم إسناد الطلب لمندوب بعد.
+                    </div>
+                    {representativeOptions.length > 0 ? (
+                      <AppSelect
+                        value={selectedRepresentativeId}
+                        onValueChange={setSelectedRepresentativeId}
+                        placeholder="اختر المندوب"
+                        ariaLabel="اختيار المندوب"
+                        className="h-10 bg-input"
+                        options={representativeOptions.map((representative) => ({
+                          value: representative.id,
+                          label: representative.phone
+                            ? `${representative.name} - ${representative.phone}`
+                            : representative.name,
+                        }))}
+                      />
+                    ) : null}
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={representativesLoading || savingAssignment}
+                        onClick={() => void loadRepresentativeOptions(order)}
+                      >
+                        {representativesLoading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+                        تحديث المندوبين
+                      </Button>
+                      <Button
+                        type="button"
+                        disabled={!selectedRepresentativeId || savingAssignment}
+                        onClick={() => void assignSelectedRepresentative()}
+                      >
+                        {savingAssignment ? <Loader2 className="size-4 animate-spin" /> : <Truck className="size-4" />}
+                        إسناد الطلب
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </Card>
+          ) : null}
 
           {false ? (
             <Card className="p-5 text-sm">
@@ -2908,7 +3345,11 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                 value={deliveryPriceDraft}
                 onChange={(event) => setDeliveryPriceDraft(event.target.value)}
                 placeholder={deliveryLaterLabel}
-                disabled={savingDeliveryPrice || ["delivered", "cancelled"].includes(order.status)}
+                disabled={
+                  deliveryPriceLocked ||
+                  savingDeliveryPrice ||
+                  ["delivered", "cancelled"].includes(order.status)
+                }
                 className="h-10"
               />
               <span className="inline-flex h-10 shrink-0 items-center rounded-md border bg-muted/20 px-3 text-xs font-semibold text-muted-foreground">
@@ -2920,6 +3361,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
               className="mt-3 w-full"
               disabled={
                 savingDeliveryPrice ||
+                deliveryPriceLocked ||
                 ["delivered", "cancelled"].includes(order.status) ||
                 deliveryPriceDraft.trim() === ""
               }
@@ -2928,6 +3370,11 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
               {savingDeliveryPrice ? <Loader2 className="size-4 animate-spin" /> : <Truck className="size-4" />}
               حفظ سعر التوصيل
             </Button>
+            {deliveryPriceLocked ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                سعر التوصيل محفوظ بالفعل ولا يمكن تعديله من هنا.
+              </p>
+            ) : null}
             {["delivered", "cancelled"].includes(order.status) ? (
               <p className="mt-2 text-xs text-muted-foreground">
                 لا يمكن تعديل سعر التوصيل بعد التسليم أو الإلغاء.
@@ -2956,25 +3403,37 @@ function FinancialSummaryCard({ order }: { order: BackendOrder }) {
   );
 }
 
-function AssignedRepresentativeDetails({ order }: { order: BackendOrder }) {
+function AssignedRepresentativeDetails({
+  order,
+  representatives,
+}: {
+  order: BackendOrder;
+  representatives?: Map<string, BackendDashboardUser>;
+}) {
   const representativeId = assignedRepresentativeId(order);
   if (!representativeId) return null;
+  const name = representatives
+    ? representativeNameWithLookup(order, representatives)
+    : representativeName(order);
 
   return (
     <Link
       href={representativeHref(order)}
-      aria-label={`عرض تفاصيل المندوب ${representativeName(order)}`}
-      className="mt-2 inline-flex max-w-full rounded-md border bg-muted/15 px-3 py-2 text-sm font-semibold text-primary transition hover:border-primary/40 hover:bg-primary/5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+      aria-label={`عرض تفاصيل المندوب ${name}`}
+      className="mt-2 inline-grid max-w-full gap-1 rounded-md border bg-muted/15 px-3 py-2 text-sm font-semibold text-primary transition hover:border-primary/40 hover:bg-primary/5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
     >
-      <span className="truncate">{representativeName(order)}</span>
+      <span className="truncate">{name}</span>
+      <span className="truncate text-start text-xs font-normal text-muted-foreground [unicode-bidi:plaintext]" dir="ltr">
+        {order.assigned_representative?.phone ?? `#${representativeId}`}
+      </span>
     </Link>
   );
 }
 
 function OrderRouteCard({ order }: { order: BackendOrder }) {
   const activeIndex = orderRouteIndex(order.status);
-  const isCancelled = order.status === "cancelled";
-  const timelineEvents = [
+  const timelineEvents = orderTimelineEvents(order);
+  /*
     order.created_at
       ? { key: "created", label: "تم إنشاء الطلب", time: order.created_at, active: order.status === "pending" }
       : null,
@@ -2996,6 +3455,7 @@ function OrderRouteCard({ order }: { order: BackendOrder }) {
       ? { key: "current", label: `الحالة الحالية: ${statusLabels[order.status]}`, time: order.updated_at, active: true }
       : null,
   ].filter((event): event is { key: string; label: string; time: string; active: boolean } => Boolean(event));
+  */
 
   return (
     <Card className="mt-6 overflow-hidden">
@@ -3029,16 +3489,21 @@ function OrderRouteCard({ order }: { order: BackendOrder }) {
                 {event.label}
               </span>
               <time className="mt-1 block text-xs text-muted-foreground">{dateTime(event.time)}</time>
-              {event.key === "cancelled" && order.rejection_reason?.trim() ? (
+              {event.detail ? (
                 <span className="mt-1 block text-xs text-muted-foreground">
+                  {event.cancelled && order.rejection_reason?.trim()
+                    ? `سبب الإلغاء: ${order.rejection_reason.trim()}`
+                    : event.detail}
+                  {/*
                   سبب الإلغاء: {order.rejection_reason.trim()}
+                  */}
                 </span>
               ) : null}
             </span>
           </li>
         ))}
       </ol>
-      {false && isCancelled ? (
+      {false ? (
         <div className="flex min-h-24 items-center gap-3 px-5 py-5 text-sm text-destructive">
           <XCircle className="size-5" />
           تم إلغاء الطلب.

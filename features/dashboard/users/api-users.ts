@@ -65,7 +65,7 @@ export function fullNameFromBackendUser(user: BackendDashboardUser) {
 }
 
 export function roleLabel(role: string | null | undefined) {
-  if (role === "client") return "مستخدم";
+  if (role === "client") return "عميل";
   if (role === "admin") return "مدير";
   if (role === "representative") return "مندوب";
   return unset;

@@ -187,11 +187,9 @@ export function getOrderScopeLabel(order: DashboardOrderLike) {
 
 export function getDeliveryTypeLabel(order: DashboardOrderLike) {
   const deliveryType = cleanText(order.delivery_type).toLowerCase();
-  if (deliveryType === "fixed_area") return "توصيل ثابت";
+  if (deliveryType === "fixed_area") return "مدينة ثابتة";
   if (deliveryType === "delivery" || deliveryType === "manual_quote") {
-    return isServiceCityOrder(order) && !getDeliveryAreaName(order)
-      ? "دليفري يدوي داخل مدينة خدمة"
-      : "دليفري يدوي";
+    return "دليفري";
   }
   return cleanText(order.delivery_type) || unknownLabel;
 }
