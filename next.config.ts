@@ -57,9 +57,7 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns,
     formats: ["image/webp", "image/avif"],
-  },
-  turbopack: {
-    root: process.cwd(),
+    qualities: [75, 95],
   },
 };
 

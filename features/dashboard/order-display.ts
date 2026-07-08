@@ -137,6 +137,18 @@ export const orderReviewStatusLabels = {
   rejected: "مرفوض",
 } as const;
 
+export const dashboardOrdersChangedEvent = "dashboard-orders:changed";
+
+export function notifyDashboardOrdersChanged(orderId?: string | number | null) {
+  if (typeof window === "undefined") return;
+
+  window.dispatchEvent(
+    new CustomEvent(dashboardOrdersChangedEvent, {
+      detail: orderId === null || orderId === undefined ? undefined : { orderId },
+    }),
+  );
+}
+
 export function cleanText(value: unknown) {
   if (typeof value === "string" && value.trim()) return value.trim();
   if (typeof value === "number" && Number.isFinite(value)) return String(value);

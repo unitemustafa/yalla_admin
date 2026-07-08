@@ -1,196 +1,241 @@
-# Yalla Backend API Report
+# API Report
 
-آخر تحقق: 2026-07-05  
-مصدر التحقق: الكود الحالي في هذا المستودع مع `config.test_settings` وبيانات `seed_demo_data --reset --yes-delete-all --no-media`.  
-الهدف من هذا الملف: مرجع ربط واضح للعميل، لوحة الإدارة، والمندوب. الأمثلة مأخوذة من استجابات فعلية، لكن قيم `id` والتواريخ أمثلة seed وقد تختلف بعد إعادة إنشاء البيانات.
+## 1. Metadata
 
-## قواعد عامة
+- generated_at: 2026-07-08T12:39:14+02:00
+- git branch: main
+- git commit: 0f9559f0c1560dbff909d6ad4b874f3d99db2fee
+- Python version: 3.12.3 from `.venv/bin/python`
+- Django version: 6.0.6
+- DRF version: 3.17.1
+- database used for verification: `config.test_settings`, SQLite `:memory:`
+- media storage used for captured examples: temporary local `FileSystemStorage` override, because default/test settings use Cloudinary storage when `DEBUG=False`
+- primary discovery sources: `config/urls.py`, app URL modules, views, serializers, models, services, tests, Django URL resolver, and live DRF `APIClient` calls against an in-memory migrated database
+- existing `API_REPORT.md`: not used as source of truth; replaced
 
-- كل المسارات تحت `/api/v1/`.
-- استخدم `Content-Type: application/json` إلا في رفع الصور والملفات.
-- المصادقة: `Authorization: Bearer <accessToken>`.
-- مبالغ المال ترجع غالباً كنص عشري مثل `"180.00"`، وبعض حقول المدن القديمة ترجع رقم مثل `45.0` في اختيار المنطقة.
-- قيم `null` مهمة في الربط، خصوصاً `service_city`, `delivery_area`, `delivery_price` في الطلب العام.
-- بعض endpoints ترجع Array مباشرة، وبعضها يرجع object، وبعض البحث يرجع pagination `{count,next,previous,results}`.
-- `/api/v1/orders/create/` للعميل يرجع **قائمة تحتوي طلب أب واحد** حتى لو فيه أكثر من محل: `[{ ...order }]`.
-- النظام الحالي مصري في seed demo: أرقام `+20`، مدن مثل القاهرة والجيزة والإسكندرية. لا تعتمد على أي أمثلة قديمة تخص دول أخرى.
+Commands run:
 
-## بيانات دخول Demo
-
-| الدور | Endpoint | Email | Password |
-|---|---|---|---|
-| Admin | `/api/v1/auth/login/admin/` | `seed.admin@yalla.seed` | `SeedPass1!` |
-| Client service-city | `/api/v1/auth/login/client/` | `seed.amina@yalla.seed` | `SeedPass1!` |
-| Client general | `/api/v1/auth/login/client/` | `seed.karim@yalla.seed` | `SeedPass1!` |
-| Courier | `/api/v1/auth/login/representative/` | `seed.courier1@yalla.seed` | `SeedPass1!` |
-
-## أهم القواعد للربط
-
-- يجب اختيار `market_region` قبل عرض home/offers/search/checkout للعميل.
-- `mode=general` يعني السوق العام فقط، حتى لو `manual_city` مكتوبة `القاهرة`.
-- طلب `general` دائماً يطبّع التوصيل هكذا: `service_city=null`, `delivery_area=null`, `delivery_type=delivery`, `delivery_price=null`.
-- عنوان طلب `general` يجب أن يكون عنواناً يدوياً عاماً: `service_city_id=null`, `delivery_area_id=null`, مع `manual_city` و`manual_area` كنص.
-- طلب `service_city` يحتاج `service_city`. يستخدم `fixed_area` فقط إذا كان العنوان مربوطاً بـ `delivery_area` نشطة وتابعة لنفس المدينة، وإلا يكون `delivery_type=delivery` و`delivery_area=null`.
-- سعر توصيل المنطقة الثابتة يضاف مرة واحدة على الطلب الأب، وليس مرة لكل محل داخل multi-market.
-- المندوبون للطلب العام: أي مندوب نشط لديه courier profile. طلب المدينة: المطابقة حسب `Order.service_city` فقط.
-
-## قيم ثابتة مهمة
-
-| الحقل | القيم |
-|---|---|
-| `role` | `client`, `admin`, `representative` |
-| `market_region.mode` | `general`, `service_city`, أو `null` لمسح الاختيار |
-| `market.scope` / `offer.scope` / `order_scope` | `general`, `service_city` |
-| `delivery_type` | `delivery`, `fixed_area` |
-| `order.status` | `pending`, `confirmed`, `under_preparation`, `ready`, `picked_up`, `on_the_way`, `delivered`, `failed_delivery`, `cancelled` |
-| `review_status` | `pending_review`, `approved`, `rejected` |
-| `offer.type` | `package`, `flash`, `discount`, `announcement`, `delivery` |
-| `offer.status` | `active`, `inactive`, `expired` |
-
-## رسائل رفض Scope كما هي
-
-استخدم هذه الرسائل كما هي في عرض الأخطاء:
-
-```text
-لا يمكن دمج محلات عامة مع محلات مدينة في نفس الطلب
-لا يمكن استخدام عرض مدينة داخل طلب عام
-لا يمكن استخدام عرض عام داخل طلب مدينة
-لا يمكن دمج منتجات من مدن مختلفة في نفس الطلب
+```bash
+rtk git status --short --branch
+rtk git rev-parse --abbrev-ref HEAD
+rtk git rev-parse HEAD
+rtk .venv/bin/python --version
+rtk .venv/bin/python -c "import django, rest_framework; print(django.get_version()); print(rest_framework.VERSION)"
+rtk .venv/bin/python manage.py makemigrations --check --dry-run
+rtk .venv/bin/python manage.py test --settings=config.test_settings
+rtk proxy .venv/bin/python - <<'PY'  # URL resolver endpoint inventory
+rtk .venv/bin/python api_report_capture_tmp.py  # temporary APIClient capture script; removed after use
 ```
 
-## فهرس Endpoints
+Test result summary:
 
-### Auth
+- `makemigrations --check --dry-run`: passed, `No changes detected`; emitted warning that `DATABASE_URL` is not set.
+- `manage.py test --settings=config.test_settings`: failed after running 306 tests in 485.897s: 1 failure, 7 errors.
+- The 7 errors are upload tests that attempted Cloudinary writes without Cloudinary API credentials under `config.test_settings`.
+- The 1 failure is `accounts.tests_seed.SeedDataCommandTests.test_seed_data_populates_every_project_model`: `orders.OrderEvent` was empty after `seed_data`.
+- Live API examples below were captured successfully with a temporary storage override; backend behavior was not changed.
 
-| Method | Path | Auth | ملاحظات |
-|---|---|---|---|
-| POST | `/api/v1/auth/signup/` | عام | تسجيل وإرسال OTP |
-| POST | `/api/v1/auth/verify-email/` | عام | تفعيل التسجيل بالـ OTP |
-| POST | `/api/v1/auth/resend-verification/` | عام | إعادة إرسال OTP |
-| POST | `/api/v1/auth/login/` | عام | تسجيل دخول عام |
-| POST | `/api/v1/auth/login/client/` | عام | دخول عميل فقط |
-| POST | `/api/v1/auth/login/representative/` | عام | دخول مندوب فقط |
-| POST | `/api/v1/auth/login/admin/` | عام | دخول إدارة فقط |
-| POST | `/api/v1/auth/refresh/` | عام | تحديث access token |
-| POST | `/api/v1/auth/logout/` | مستخدم | خروج |
-| GET/PATCH | `/api/v1/auth/me/` | مستخدم | بيانات المستخدم الحالي |
-| GET/PATCH | `/api/v1/auth/client/profile/` | Client | ملف العميل |
-| GET/POST | `/api/v1/auth/users/` | Admin | إدارة المستخدمين |
-| GET/PATCH/DELETE | `/api/v1/auth/users/{user_id}/` | Admin | مستخدم محدد |
-| GET | `/api/v1/auth/representatives/` | Admin | المندوبون |
-| GET | `/api/v1/auth/check-username/` | عام | فحص username |
-| GET | `/api/v1/auth/check-email/` | عام | فحص email |
-| GET | `/api/v1/auth/check-phone/` | عام | فحص phone |
-| POST | `/api/v1/auth/forgot-password/` | عام | طلب إعادة كلمة المرور |
-| POST | `/api/v1/auth/reset-password/` | عام | إعادة كلمة المرور |
+Example provenance:
 
-مسارات auth تعمل مع slash وبدون slash.
+- Code blocks labelled "Captured" came from real DRF `APIClient` requests in the temporary verification DB.
+- Field lists, writable/read-only rules, and choices are from serializers/models/views.
+- Anything not proven by code or captured response is marked `Unconfirmed`.
 
-### Market Region
+## 2. Global API Rules
 
-| Method | Path | Auth | ملاحظات |
-|---|---|---|---|
-| GET | `/api/v1/market-region/options/` | مستخدم | الخيارات المتاحة مع الاختيار الحالي |
-| GET/PATCH | `/api/v1/market-region/me/` | مستخدم | قراءة/تعديل اختيار السوق |
-| POST | `/api/v1/market-region/detect/` | مستخدم | اقتراح مدينة حسب latitude/longitude |
+Base URL:
 
-### Locations / Addresses
+- All application endpoints are under `/api/v1/`.
+- Auth endpoints often have both slash and no-slash aliases, for example `/api/v1/auth/login` and `/api/v1/auth/login/`.
+- Non-auth app endpoints are slash-terminated.
 
-| Method | Path | Auth | ملاحظات |
-|---|---|---|---|
-| GET/POST | `/api/v1/locations/service-cities/` | Admin | مدن الخدمة |
-| GET/PATCH/DELETE | `/api/v1/locations/service-cities/{city_id}/` | Admin | مدينة خدمة |
-| GET/POST | `/api/v1/locations/delivery-areas/` | مستخدم حسب الصلاحية | مناطق التوصيل |
-| GET/PATCH/DELETE | `/api/v1/locations/delivery-areas/{area_id}/` | مستخدم حسب الصلاحية | منطقة توصيل |
-| GET/POST | `/api/v1/locations/addresses/` | مستخدم | عناوين المستخدم، Admin يرسل `user_id` |
-| GET | `/api/v1/locations/addresses/default/` | مستخدم | العنوان الافتراضي |
-| GET/PATCH/DELETE | `/api/v1/locations/addresses/{address_id}/` | مستخدم | عنوان محدد |
-| POST | `/api/v1/locations/addresses/{address_id}/default/` | مستخدم | جعل العنوان افتراضياً |
-| GET/POST | `/api/v1/addresses/` | مستخدم | alias لنفس عناوين locations |
+Authentication:
 
-### Home / Markets / Catalog / Offers
+- JWT via `rest_framework_simplejwt.authentication.JWTAuthentication`.
+- Header format: `Authorization: Bearer <accessToken>`.
+- Login response keys: `accessToken`, `refreshToken`, `expiresIn`, `user`.
+- Access token lifetime: 900 seconds.
+- Refresh token lifetime: 30 days, with refresh rotation and blacklist enabled.
 
-| Method | Path | Auth | ملاحظات |
-|---|---|---|---|
-| GET | `/api/v1/home/` | مستخدم | Home حسب `market_region` |
-| GET | `/api/v1/home/search/` | مستخدم | بحث منتجات |
-| GET | `/api/v1/home/products/` | Client | منتجات حسب عنوان/منطقة العميل، paginated |
-| GET | `/api/v1/home/products/{product_id}/` | مستخدم | تفاصيل منتج للعرض |
-| GET | `/api/v1/home/classifications/` | مستخدم | تصنيفات وأسواق حسب المنطقة |
-| GET | `/api/v1/home/classifications/featured/` | مستخدم | featured فقط |
-| GET | `/api/v1/home/classifications/popular/` | مستخدم | popular فقط |
-| GET | `/api/v1/home/classifications/normal/` | مستخدم | normal فقط |
-| GET | `/api/v1/home/classifications/{classification_id}/markets/` | مستخدم | أسواق تصنيف |
-| GET/POST | `/api/v1/home/market-classifications/` | Admin | إدارة تصنيفات المحلات |
-| GET/PATCH/DELETE | `/api/v1/home/market-classifications/{classification_id}/` | Admin | تصنيف محل |
-| GET/POST | `/api/v1/home/markets/` | Admin | إدارة المحلات |
-| GET/PATCH/DELETE | `/api/v1/home/markets/{market_id}/` | Admin | محل محدد |
-| GET/POST | `/api/v1/offers/` | مستخدم | Admin يرى الكل وينشئ، Client يرى المتاح حسب المنطقة |
-| GET/PATCH/DELETE | `/api/v1/offers/{offer_id}/` | مستخدم | Admin يدير، Client يقرأ المتاح فقط |
-| GET/POST | `/api/v1/catalog/products/` | Admin | إدارة المنتجات |
-| GET/PATCH/DELETE | `/api/v1/catalog/products/{product_id}/` | Admin | منتج محدد |
-| GET | `/api/v1/catalog/products/likes/` | Client | المنتجات المعجب بها |
-| POST | `/api/v1/catalog/products/{product_id}/like/` | Client | إعجاب |
-| DELETE | `/api/v1/catalog/products/{product_id}/unlike/` | Client | إلغاء إعجاب |
+Common response/data formats:
 
-باقي مسارات `/api/v1/catalog/` الإدارية: `addition-classifications`, `category-classifications`, `product-categories`, `category-attributes`, `category-options`, `product-additions` بنفس نمط `GET/POST` للقائمة و`GET/PATCH/DELETE` للتفاصيل.
+- IDs are integer values for domain models except auth `UserSerializer.id`, which serializes as a string.
+- Datetimes serialize as ISO 8601 UTC strings, for example `2026-07-08T10:37:43.096314Z`.
+- Dates use `YYYY-MM-DD`.
+- Decimal/money fields serialize as strings with fixed decimal places, for example `"120.00"`.
+- Booleans in JSON are real booleans. Multipart booleans accept strings such as `"true"` / `"false"` where DRF BooleanField is used.
+- File/image fields may be `null`, a `/media/...` path, or a fully qualified URL depending on storage/request context.
+- Do not manually set multipart `Content-Type` from the frontend; let the browser set the boundary.
 
-### Orders
+Pagination:
 
-| Method | Path | Auth | ملاحظات |
-|---|---|---|---|
-| GET | `/api/v1/orders/my/` | Client | طلبات العميل، يدعم `?status=` |
-| POST | `/api/v1/orders/preview/` | Client | معاينة السعر والتجميع قبل الإنشاء |
-| POST | `/api/v1/orders/create/` | Client | إنشاء طلب، يرجع `[order]` |
-| GET/POST | `/api/v1/orders/` | Admin | قائمة/إنشاء إداري |
-| GET/PATCH/DELETE | `/api/v1/orders/{order_id}/` | Admin | تفاصيل/تعديل/إلغاء |
-| PATCH | `/api/v1/orders/{order_id}/status/` | Admin | تحديث الحالة |
-| PATCH | `/api/v1/orders/{order_id}/assignment/` | Admin | إسناد مندوب |
-| GET | `/api/v1/admin/order-review/blocker/` | Admin | هل يوجد طلبات مراجعة عالقة |
-| POST | `/api/v1/admin/orders/{order_id}/approve/` | Admin | اعتماد الطلب وإرجاع المندوبين المتاحين |
-| POST | `/api/v1/admin/orders/{order_id}/reject/` | Admin | رفض الطلب |
-| GET | `/api/v1/admin/orders/{order_id}/service-city-representatives/` | Admin | مندوبون مؤهلون للطلب |
-
-### Courier / Notifications / Dashboard
-
-| Method | Path | Auth | ملاحظات |
-|---|---|---|---|
-| GET | `/api/v1/courier/orders/` | Courier | طلبات المندوب، يدعم `?status=` |
-| GET | `/api/v1/courier/orders/{order_id}/` | Courier | تفاصيل طلب مسند للمندوب |
-| PATCH | `/api/v1/courier/orders/{order_id}/status/` | Courier | انتقال الحالة |
-| GET | `/api/v1/notifications/` | مستخدم | إشعارات المستخدم، فلاتر: `unread`, `type`, `audience`, `is_blocking`, `is_resolved` |
-| PATCH | `/api/v1/notifications/{notification_id}/read/` | مستخدم | تعليم إشعار كمقروء |
-| POST | `/api/v1/notifications/mark-all-read/` | مستخدم | تعليم الكل كمقروء |
-| GET | `/api/v1/notifications/unread-count/` | مستخدم | عدد غير المقروء |
-| GET | `/api/v1/dashboard/overview/?from=YYYY-MM-DD&to=YYYY-MM-DD` | Admin | ملخص لوحة التحكم |
-
-## Auth Examples
-
-### Admin login
-
-Request:
+- Only the home product list/search endpoints use DRF page-number pagination in the inspected code.
+- Shape:
 
 ```json
 {
-  "email": "seed.admin@yalla.seed",
-  "password": "SeedPass1!"
+  "count": 21,
+  "next": "http://testserver/api/v1/home/search/?page=2&q=Product",
+  "previous": null,
+  "results": []
 }
 ```
 
-Response `200`:
+- Page size is 4 for `/api/v1/home/search/` and `/api/v1/home/products/`.
+
+Common error shape:
+
+- DRF validation errors are field-keyed arrays:
 
 ```json
 {
-  "accessToken": "<accessToken>",
-  "refreshToken": "<refreshToken>",
+  "payment_method": ["This field is required."]
+}
+```
+
+- Permission/auth errors use `detail`:
+
+```json
+{"detail": "Authentication credentials were not provided."}
+```
+
+- Some order region errors are returned through `serializers.ValidationError` with scalar values converted to string arrays:
+
+```json
+{
+  "requires_region_selection": ["True"],
+  "message": ["Select a market browsing region before checkout."],
+  "current_selection": ["None"]
+}
+```
+
+Localized/Arabic errors:
+
+- Arabic validation messages are present in order, location, and courier assignment flows. They are API contract values, not frontend-only translations.
+- Examples:
+  - `لا يمكن دمج محلات عامة مع محلات مدينة في نفس الطلب`
+  - `لا يمكن استخدام عرض مدينة داخل طلب عام`
+  - `لا يمكن استخدام عرض عام داخل طلب مدينة`
+  - `لا يمكن دمج منتجات من مدن مختلفة في نفس الطلب`
+  - `هذا المندوب لا يعمل في نفس مدينة الطلب.`
+
+Endpoint index:
+
+| Endpoint | Methods | Permission |
+|---|---:|---|
+| `/api/v1/auth/signup`, `/signup/` | POST | public |
+| `/api/v1/auth/verify-email`, `/verify-email/` | POST | public |
+| `/api/v1/auth/resend-verification`, `/resend-verification/` | POST | public |
+| `/api/v1/auth/login`, `/login/` | POST | public |
+| `/api/v1/auth/login/client`, `/login/client/` | POST | public, client role required after credential validation |
+| `/api/v1/auth/login/representative`, `/login/representative/` | POST | public, representative role required |
+| `/api/v1/auth/login/admin`, `/login/admin/` | POST | public, admin role required |
+| `/api/v1/auth/refresh`, `/refresh/` | POST | public |
+| `/api/v1/auth/logout`, `/logout/` | POST | authenticated |
+| `/api/v1/auth/me`, `/me/` | GET, PATCH, DELETE | authenticated |
+| `/api/v1/auth/client/profile`, `/client/profile/` | PUT, PATCH | authenticated client |
+| `/api/v1/auth/users`, `/users/` | GET, POST | authenticated admin |
+| `/api/v1/auth/users/{user_id}`, `/users/{user_id}/` | GET, PATCH, DELETE | authenticated admin |
+| `/api/v1/auth/representatives/` | GET | authenticated admin |
+| `/api/v1/auth/check-username`, `/check-username/` | GET | public |
+| `/api/v1/auth/check-email`, `/check-email/` | GET | public |
+| `/api/v1/auth/check-phone`, `/check-phone/` | GET | public |
+| `/api/v1/auth/forgot-password`, `/forgot-password/` | POST | public |
+| `/api/v1/auth/reset-password`, `/reset-password/` | POST | public |
+| `/api/v1/locations/service-cities/` | GET, POST | authenticated admin |
+| `/api/v1/locations/service-cities/{city_id}/` | GET, PUT, PATCH, DELETE | authenticated admin |
+| `/api/v1/locations/delivery-areas/` | GET, POST | GET authenticated; writes admin |
+| `/api/v1/locations/delivery-areas/{area_id}/` | GET, PUT, PATCH, DELETE | GET authenticated; writes admin |
+| `/api/v1/addresses/` | GET, POST | authenticated |
+| `/api/v1/addresses/default/` | GET | authenticated |
+| `/api/v1/addresses/{address_id}/` | PATCH, DELETE | authenticated owner or admin |
+| `/api/v1/addresses/{address_id}/default/` | PATCH | authenticated owner or admin |
+| `/api/v1/locations/addresses/...` | same as `/api/v1/addresses/...` | authenticated alias |
+| `/api/v1/home/login-dashboard-snapshot/` | GET | public |
+| `/api/v1/home/market-classifications/` | GET, POST | authenticated admin |
+| `/api/v1/home/market-classifications/{classification_id}/` | GET, PATCH, DELETE | authenticated admin |
+| `/api/v1/home/markets/` | GET, POST | authenticated admin |
+| `/api/v1/home/markets/{market_id}/` | GET, PATCH, DELETE | authenticated admin |
+| `/api/v1/home/` | GET | authenticated, selected market region required |
+| `/api/v1/home/search/` | GET | authenticated, selected market region required |
+| `/api/v1/home/products/` | GET | authenticated client, selected market region required |
+| `/api/v1/home/products/{product_id}/` | GET | authenticated, selected market region required |
+| `/api/v1/home/classifications/` | GET | authenticated, selected market region required |
+| `/api/v1/home/classifications/featured/` | GET | authenticated, selected market region required |
+| `/api/v1/home/classifications/popular/` | GET | authenticated, selected market region required |
+| `/api/v1/home/classifications/normal/` | GET | authenticated, selected market region required |
+| `/api/v1/home/classifications/{classification_id}/markets/` | GET | authenticated, selected market region required |
+| `/api/v1/market-region/options/` | GET | authenticated |
+| `/api/v1/market-region/me/` | GET, PATCH | authenticated |
+| `/api/v1/market-region/detect/` | POST | authenticated |
+| `/api/v1/catalog/addition-classifications/` | GET, POST | authenticated admin |
+| `/api/v1/catalog/addition-classifications/{classification_id}/` | GET, PATCH, DELETE | authenticated admin |
+| `/api/v1/catalog/category-classifications/` | GET, POST | authenticated admin |
+| `/api/v1/catalog/category-classifications/{classification_id}/` | GET, PATCH, DELETE | authenticated admin |
+| `/api/v1/catalog/product-categories/` | GET, POST | authenticated admin |
+| `/api/v1/catalog/product-categories/{category_id}/` | GET, PATCH, DELETE | authenticated admin |
+| `/api/v1/catalog/category-attributes/` | GET, POST | authenticated admin |
+| `/api/v1/catalog/category-attributes/{attribute_id}/` | GET, PATCH, DELETE | authenticated admin |
+| `/api/v1/catalog/category-options/` | GET, POST | authenticated admin |
+| `/api/v1/catalog/category-options/{option_id}/` | GET, PATCH, DELETE | authenticated admin |
+| `/api/v1/catalog/products/` | GET, POST | authenticated admin |
+| `/api/v1/catalog/products/{product_id}/` | GET, PATCH, DELETE | authenticated admin |
+| `/api/v1/catalog/products/likes/` | GET | authenticated client |
+| `/api/v1/catalog/products/{product_id}/like/` | POST | authenticated client |
+| `/api/v1/catalog/products/{product_id}/unlike/` | DELETE | authenticated client |
+| `/api/v1/catalog/product-additions/` | GET, POST | authenticated admin |
+| `/api/v1/catalog/product-additions/{addition_id}/` | GET, PATCH, DELETE | authenticated admin |
+| `/api/v1/offers/` | GET, POST | GET admin/client; POST admin |
+| `/api/v1/offers/{offer_id}/` | GET, PATCH, DELETE | GET admin/client; writes admin |
+| `/api/v1/orders/` | GET, POST | authenticated admin |
+| `/api/v1/orders/{order_id}/` | GET, PUT, PATCH, DELETE | authenticated admin |
+| `/api/v1/orders/{order_id}/status/` | PATCH | authenticated admin |
+| `/api/v1/orders/{order_id}/delivery-price/` | PATCH | authenticated admin |
+| `/api/v1/orders/{order_id}/assignment/` | PATCH | authenticated admin |
+| `/api/v1/orders/my/` | GET | authenticated client |
+| `/api/v1/orders/preview/` | POST | authenticated client or admin-with-user_id by code |
+| `/api/v1/orders/create/` | POST | authenticated client |
+| `/api/v1/admin/order-review/blocker/` | GET | authenticated admin |
+| `/api/v1/admin/orders/{order_id}/approve/` | POST | authenticated admin |
+| `/api/v1/admin/orders/{order_id}/reject/` | POST | authenticated admin |
+| `/api/v1/admin/orders/{order_id}/service-city-representatives/` | GET | authenticated admin |
+| `/api/v1/courier/orders/` | GET | authenticated representative |
+| `/api/v1/courier/orders/{order_id}/` | GET | authenticated assigned representative |
+| `/api/v1/courier/orders/{order_id}/status/` | PATCH | authenticated assigned representative |
+| `/api/v1/notifications/` | GET | authenticated |
+| `/api/v1/notifications/unread-count/` | GET | authenticated |
+| `/api/v1/notifications/{notification_id}/read/` | PATCH | authenticated visible notification |
+| `/api/v1/notifications/mark-all-read/` | POST | authenticated |
+| `/api/v1/notifications/clear-read/` | DELETE | authenticated |
+| `/api/v1/notifications/{notification_id}/` | DELETE | authenticated visible notification |
+| `/api/v1/dashboard/overview/` | GET | authenticated admin |
+| `/api/v1/dashboard/settings/` | GET, PATCH | authenticated admin |
+
+## 3. Auth / Accounts
+
+Login request:
+
+```json
+{
+  "email": "api-admin@example.com",
+  "password": "Password1!"
+}
+```
+
+Captured login response:
+
+```json
+{
+  "accessToken": "<JWT redacted>",
+  "refreshToken": "<JWT redacted>",
   "expiresIn": 900,
   "user": {
     "id": "1",
-    "first_name": "مدير",
-    "last_name": "يلا",
-    "username": "seed_admin",
-    "email": "seed.admin@yalla.seed",
-    "phone": "+201001000001",
+    "first_name": "",
+    "last_name": "",
+    "username": "api_admin",
+    "email": "api-admin@example.com",
+    "phone": "+213555100001",
     "gender": "",
     "birth_date": null,
     "avatar_url": null,
@@ -202,1370 +247,1953 @@ Response `200`:
 }
 ```
 
-### Client login
+Auth/account contracts:
 
-Request:
+| Endpoint | Request fields | Response |
+|---|---|---|
+| `POST /auth/signup` | `first_name`, `last_name`, `username`, `email`, `phone`, `password`, `password_confirm`, `terms_accepted` | `detail`, `email`, OTP cooldown fields, and `dev_otp` only when `AUTH_OTP_INCLUDE_IN_RESPONSE=True` |
+| `POST /auth/verify-email` | `email`, `otp` | login token payload |
+| `POST /auth/resend-verification` | `email` | `detail`, cooldown fields, optional `dev_otp` |
+| `POST /auth/login*` | `email` or `identifier`, `password` | token payload |
+| `POST /auth/refresh` | `refresh` or `refreshToken` | `accessToken`, `refreshToken` |
+| `POST /auth/logout` | `refresh` or `refreshToken` | `{"detail": "Logout successful."}` |
+| `GET /auth/me` | none | `UserSerializer` |
+| `PATCH /auth/me` | profile fields below | `UserSerializer` |
+| `DELETE /auth/me` | `password` | `{"detail": "Account deleted."}` |
+| `PATCH/PUT /auth/client/profile` | same profile fields | `UserSerializer`; client role only |
+| `GET /auth/users` | none | list of `AdminUserSerializer` |
+| `POST /auth/users` | admin user write fields | `AdminUserSerializer` |
+| `GET/PATCH/DELETE /auth/users/{id}` | admin user write fields for PATCH | detail/stats for GET/PATCH, 204 for DELETE |
+| `GET /auth/representatives/` | none | admin user list filtered to representatives |
+| `GET /auth/check-username` | query `username`, optional `exclude_user_id` for admin | `{available, registered}` |
+| `GET /auth/check-email` | query `email`, optional `exclude_user_id` for admin | `{available, registered}` |
+| `GET /auth/check-phone` | query `phone`, optional `exclude_user_id` for admin | `{available, registered}` |
+| `POST /auth/forgot-password` | `email` | generic `detail`, cooldown fields if user exists |
+| `POST /auth/reset-password` | `email`, `otp`, `password`, `password_confirm` | `{"detail": "Password reset successfully."}` |
+
+User profile writable fields:
+
+- `first_name`, `last_name`, `username`, `email`, `phone`, `gender`, `birth_date`, `avatar_url`
+- multipart image field on user self/profile: `avatar`
+- admin-only user write: `password`, `role`, `is_active`, `is_staff`, `is_superuser`, `avatar_image`, `courier_profile`
+
+Courier profile writable fields inside admin user create/update:
 
 ```json
 {
-  "email": "seed.amina@yalla.seed",
-  "password": "SeedPass1!"
+  "courier_profile": {
+    "vehicle_type": "Motorcycle",
+    "plate_number": "ABC123",
+    "service_city": 1,
+    "delivery_area": null,
+    "max_active_orders": 3,
+    "is_available": true
+  }
 }
 ```
 
-Response `200`:
+Read-only/calculated auth fields:
+
+- `id`, `avatar_url` when built from uploaded image, `has_password`, `username_changed_at`, nested `courier_profile.service_city_name`, admin `last_login`, `created_at`, `updated_at`, `customer_stats`, `recent_orders`.
+
+Notable validation:
+
+- Phone accepts Egypt and Algeria mobile formats and normalizes to `+20...` or `+213...`.
+- Password must be at least 8 chars and include uppercase, number, and special char.
+- Username can be changed only once every 7 days.
+- Avatar/profile image extensions allowed by serializer: jpg, jpeg, png, webp; max 5 MB.
+
+## 4. Locations
+
+Endpoints:
+
+| Endpoint | Methods | Permission | Query params |
+|---|---:|---|---|
+| `/api/v1/locations/service-cities/` | GET, POST | admin | none |
+| `/api/v1/locations/service-cities/{city_id}/` | GET, PUT, PATCH, DELETE | admin | none |
+| `/api/v1/locations/delivery-areas/` | GET, POST | GET authenticated, writes admin | `service_city_id` |
+| `/api/v1/locations/delivery-areas/{area_id}/` | GET, PUT, PATCH, DELETE | GET authenticated, writes admin | none |
+| `/api/v1/addresses/` | GET, POST | authenticated | admin can filter `user_id` |
+| `/api/v1/addresses/default/` | GET | authenticated | none |
+| `/api/v1/addresses/{address_id}/` | PATCH, DELETE | owner or admin | none |
+| `/api/v1/addresses/{address_id}/default/` | PATCH | owner or admin | none |
+| `/api/v1/locations/addresses/...` | same | authenticated alias | same |
+
+Service city fields:
+
+- Writable: `name`, `center_latitude`, `center_longitude`, `radius_km`, `delivery_price`, `is_active`
+- Read-only/calculated: `id`, `delivery_area_count`, `market_count`, `offer_count`
+
+Captured service-city list:
+
+```json
+[
+  {
+    "id": 1,
+    "name": "API City",
+    "center_latitude": "36.7525000",
+    "center_longitude": "3.0420000",
+    "radius_km": "20.00",
+    "delivery_price": "120.00",
+    "is_active": true,
+    "delivery_area_count": 1,
+    "market_count": 0,
+    "offer_count": 0
+  }
+]
+```
+
+Delivery area fields:
+
+- Writable: `service_city_id`, `name`, `center_latitude`, `center_longitude`, `radius_km`, `delivery_price`, `is_active`
+- Read-only: `id`
+
+Captured delivery areas by city:
+
+```json
+[
+  {
+    "id": 1,
+    "service_city_id": 1,
+    "name": "API Central",
+    "center_latitude": "36.7525000",
+    "center_longitude": "3.0420000",
+    "radius_km": "5.00",
+    "delivery_price": "120.00",
+    "is_active": true
+  }
+]
+```
+
+Address writable fields:
+
+- `user_id` only for admin create/update
+- `service_city_id`, `delivery_area_id`, `delivery_type`
+- `name`, `details`, `manual_city`, `manual_area`
+- aliases accepted: `fullName`, `full_name`, `line1`, `street`, `address`, `city`, `state`, `country`, `postalCode`, `postal_code`, `isDefault`
+- `latitude`, `longitude`, `is_default`
+
+Address response shape:
+
+- `id`, `name`, `fullName`, `phone`, `phoneNumber`, `line1`, `street`, `city`, `state`, `country`, `postalCode`
+- `latitude`, `longitude`, `details`, `manual_city`, `manual_area`
+- `service_city`, `service_city_id`, `service_city_name`
+- `delivery_area`, `delivery_area_id`, `delivery_area_name`, `delivery_area_price`
+- `delivery_type`, `delivery_price_preview`, `is_default`, `isDefault`, `created_at`
+
+Delivery behavior rules:
+
+- General/manual address:
+  - `service_city = null`
+  - `delivery_area = null`
+  - `manual_city` and `manual_area` are plain text
+  - `delivery_type = "delivery"`
+  - `delivery_price_preview = null`
+- Service-city fixed area:
+  - `service_city` exists
+  - `delivery_area` exists
+  - `delivery_type = "fixed_area"`
+  - `delivery_price_preview` comes from `delivery_area.delivery_price`
+- Service-city manual unsupported area:
+  - `service_city` exists
+  - `delivery_area = null`
+  - `manual_area` text
+  - `delivery_type = "delivery"`
+  - `delivery_price_preview = null`
+
+Captured fixed-area address create:
 
 ```json
 {
-  "accessToken": "<accessToken>",
-  "refreshToken": "<refreshToken>",
+  "request": {
+    "name": "Home",
+    "line1": "1 API Street",
+    "service_city_id": 1,
+    "delivery_area_id": 1,
+    "latitude": "36.7525000",
+    "longitude": "3.0420000",
+    "is_default": true
+  },
+  "response_item": {
+    "id": 1,
+    "name": "Home",
+    "line1": "1 API Street",
+    "manual_city": null,
+    "manual_area": null,
+    "service_city_id": 1,
+    "delivery_area_id": 1,
+    "delivery_type": "fixed_area",
+    "delivery_price_preview": "120.00",
+    "is_default": true
+  }
+}
+```
+
+Captured general/manual address item:
+
+```json
+{
+  "id": 2,
+  "name": "General Home",
+  "line1": "Manual delivery street",
+  "manual_city": "Mansoura",
+  "manual_area": "University district",
+  "service_city": null,
+  "service_city_id": null,
+  "delivery_area": null,
+  "delivery_area_id": null,
+  "delivery_type": "delivery",
+  "delivery_price_preview": null
+}
+```
+
+Delete behavior:
+
+- Address delete is soft delete: `is_active=False`; response returns remaining active addresses.
+- Service city delete is blocked when linked rows exist and returns:
+
+```json
+{
+  "detail": "لا يمكن حذف المدينة لوجود بيانات مرتبطة بها.",
+  "code": "service_city_in_use",
+  "relations": {"delivery_areas": 1}
+}
+```
+
+## 5. Markets / Shops
+
+Endpoints:
+
+| Endpoint | Methods | Permission |
+|---|---:|---|
+| `/api/v1/home/market-classifications/` | GET, POST | admin |
+| `/api/v1/home/market-classifications/{classification_id}/` | GET, PATCH, DELETE | admin |
+| `/api/v1/home/markets/` | GET, POST | admin |
+| `/api/v1/home/markets/{market_id}/` | GET, PATCH, DELETE | admin |
+| `/api/v1/home/` and classification/home product endpoints | GET | authenticated customer/admin with selected market region |
+
+Market classification choices:
+
+- `classification_type`: `popular`, `featured`, `normal`
+
+Market choices:
+
+- `scope`: `general`, `service_city`
+- `status`: `active`, `inactive`
+
+Admin market writable fields:
+
+- `classification_id`, `name`, `branch`, `scope`, `status`
+- `service_city_ids` or `service_cities`
+- `delivery_area_ids` or `delivery_areas`
+
+Read-only / response fields:
+
+- `id`, nested `classification`, `service_cities`, `delivery_areas`, `created_at`, `updated_at`
+- There is no market image field in the current model/serializer/API.
+
+Captured general market create:
+
+```json
+{
+  "request": {
+    "classification_id": 1,
+    "name": "API General Market",
+    "branch": "Main",
+    "scope": "general",
+    "status": "active"
+  },
+  "response": {
+    "id": 1,
+    "classification": {"id": 1, "name": "API Markets", "classification_type": "featured"},
+    "name": "API General Market",
+    "branch": "Main",
+    "scope": "general",
+    "status": "active",
+    "service_cities": [],
+    "delivery_areas": []
+  }
+}
+```
+
+Captured service-city market create:
+
+```json
+{
+  "request": {
+    "classification_id": 1,
+    "name": "API Service Market",
+    "branch": "Central",
+    "scope": "service_city",
+    "status": "active",
+    "service_city_ids": [1],
+    "delivery_area_ids": [1]
+  },
+  "response": {
+    "id": 2,
+    "scope": "service_city",
+    "service_cities": [{"id": 1, "name": "API City", "delivery_price": "120.00", "is_active": true}],
+    "delivery_areas": [{"id": 1, "service_city_id": 1, "name": "API Central", "delivery_price": "120.00", "is_active": true}]
+  }
+}
+```
+
+Important current behavior:
+
+- For `scope="service_city"`, at least one service city is required on create unless service cities are inferred from delivery areas.
+- For `scope="general"`, the serializer does not require service cities or delivery areas.
+- Current code does not forcibly clear `service_city_ids` / `delivery_area_ids` if sent for a general market. Dashboard should omit them for general markets to preserve the intended contract: general markets are not tied to fixed service-city delivery areas.
+
+Home/market region endpoints:
+
+- `/api/v1/market-region/options/`: returns general option plus active service-city options.
+- `/api/v1/market-region/me/`: get or patch selected region.
+- `/api/v1/market-region/detect/`: detects service city from coordinates and returns an action such as `same_region`, `select_detected_region`, `suggest_switch`, or `unsupported_location`.
+
+## 6. Catalog / Products
+
+Endpoints:
+
+| Endpoint | Methods | Permission |
+|---|---:|---|
+| `/api/v1/catalog/category-classifications/` | GET, POST | admin |
+| `/api/v1/catalog/category-classifications/{classification_id}/` | GET, PATCH, DELETE | admin |
+| `/api/v1/catalog/product-categories/` | GET, POST | admin |
+| `/api/v1/catalog/product-categories/{category_id}/` | GET, PATCH, DELETE | admin |
+| `/api/v1/catalog/category-attributes/` | GET, POST | admin |
+| `/api/v1/catalog/category-attributes/{attribute_id}/` | GET, PATCH, DELETE | admin |
+| `/api/v1/catalog/category-options/` | GET, POST | admin |
+| `/api/v1/catalog/category-options/{option_id}/` | GET, PATCH, DELETE | admin |
+| `/api/v1/catalog/addition-classifications/` | GET, POST | admin |
+| `/api/v1/catalog/addition-classifications/{classification_id}/` | GET, PATCH, DELETE | admin |
+| `/api/v1/catalog/product-additions/` | GET, POST | admin |
+| `/api/v1/catalog/product-additions/{addition_id}/` | GET, PATCH, DELETE | admin |
+| `/api/v1/catalog/products/` | GET, POST | admin |
+| `/api/v1/catalog/products/{product_id}/` | GET, PATCH, DELETE | admin |
+| `/api/v1/catalog/products/likes/` | GET | client |
+| `/api/v1/catalog/products/{product_id}/like/` | POST | client |
+| `/api/v1/catalog/products/{product_id}/unlike/` | DELETE | client |
+| `/api/v1/home/products/{product_id}/` | GET | authenticated visible product detail |
+
+Product category fields:
+
+- Writable: `classification_id`, `name`, `type`, `description`, `image`
+- Response: `id`, nested `classification`, `name`, `type`, `description`, `image`
+- Multipart image upload is supported and captured.
+
+Captured category JSON create:
+
+```json
+{
+  "classification_id": 1,
+  "name": "API Meals",
+  "type": "food",
+  "description": "Meals category"
+}
+```
+
+Captured category multipart create:
+
+```json
+{
+  "classification_id": 1,
+  "name": "API Drinks",
+  "type": "drink",
+  "description": "Drinks category",
+  "image": "category.gif"
+}
+```
+
+Response:
+
+```json
+{
+  "id": 2,
+  "classification": {"id": 1, "name": "API Categories"},
+  "name": "API Drinks",
+  "type": "drink",
+  "description": "Drinks category",
+  "image": "/media/categories/category.gif"
+}
+```
+
+Product writable fields:
+
+- `market_id`
+- `category_id`
+- `is_available`
+- `name`
+- `description`
+- `image`
+- `discount`
+- `attribute_values`: array of `{attribute_id, option_id}`
+- `variants`: array of `{price, sku, attribute_values: [{attribute_id, option_id}]}`
+- `additions`: array of product addition IDs
+
+Product response fields:
+
+- Admin: `id`, nested `market`, nested `category`, `is_available`, `name`, `description`, `image`, `discount`, `attribute_values`, `variants`, `additions`, `created_at`, `updated_at`
+- Home detail: `id`, `name`, `description`, `image`, `discount`, nested `category`, nested `market`, `variants`, `attribute_values`, nested `additions`, `created_at`, `updated_at`
+- Product price is not a top-level API field. Current product price comes from `variants[].price`.
+
+Backend-calculated/read-only:
+
+- `id`, nested `market`, nested `category`, `created_at`, `updated_at`
+- Variant `id` is read-only.
+- Product/category nested representations are read-only.
+
+Variant update rule:
+
+- `PATCH /api/v1/catalog/products/{id}/` with a `variants` array deletes all existing variants and recreates them.
+- Variant IDs cannot be preserved through the current serializer; `id` is read-only and not used for update matching.
+
+Additions:
+
+- JSON body: send `additions` as an array of IDs.
+- Captured multipart body with image: `additions` as repeated/list form values works through DRF multipart parsing.
+- Invalid type returns:
+
+```json
+{"additions": ["Expected a list of items but got type \"str\"."]}
+```
+
+Captured product JSON create without image:
+
+```json
+{
+  "market_id": 2,
+  "category_id": 1,
+  "is_available": true,
+  "name": "API Burger",
+  "description": "Burger description",
+  "discount": "5.00",
+  "additions": [1],
+  "attribute_values": [{"attribute_id": 1, "option_id": 1}],
+  "variants": [
+    {
+      "price": "600.00",
+      "sku": "BURGER-S",
+      "attribute_values": [{"attribute_id": 1, "option_id": 1}]
+    }
+  ]
+}
+```
+
+Captured product response excerpt:
+
+```json
+{
+  "id": 1,
+  "market": {"id": 2, "name": "API Service Market", "branch": "Central", "status": "active", "classification_id": 1},
+  "category": {"id": 1, "name": "API Meals", "type": "food", "description": "Meals category", "image": null},
+  "is_available": true,
+  "name": "API Burger",
+  "description": "Burger description",
+  "image": null,
+  "discount": "5.00",
+  "attribute_values": [{"id": 1, "option": {"id": 1, "value": "Small"}}],
+  "variants": [{"id": 1, "price": "600.00", "sku": "BURGER-S"}],
+  "additions": [1],
+  "created_at": "2026-07-08T10:37:43.096314Z",
+  "updated_at": "2026-07-08T10:37:43.096344Z"
+}
+```
+
+Captured product multipart with image:
+
+```json
+{
+  "market_id": 2,
+  "category_id": 1,
+  "is_available": "true",
+  "name": "API Product Image",
+  "description": "Image product",
+  "discount": "0.00",
+  "additions": [1],
+  "image": "product.gif"
+}
+```
+
+Response excerpt:
+
+```json
+{
+  "id": 2,
+  "image": "/media/products/product.gif",
+  "attribute_values": [],
+  "variants": [],
+  "additions": [1]
+}
+```
+
+Home product detail with variants/additions:
+
+```json
+{
+  "id": 1,
+  "name": "API Burger",
+  "discount": "5.00",
+  "variants": [
+    {
+      "id": 1,
+      "price": "600.00",
+      "sku": "BURGER-S",
+      "attribute_values": [
+        {"id": 1, "attribute_id": 1, "attribute_name": "Size", "option_id": 1, "option_value": "Small"}
+      ]
+    }
+  ],
+  "additions": [
+    {
+      "id": 1,
+      "classification_id": 1,
+      "classification_name": "Extras",
+      "image": null,
+      "name_ar": "جبن",
+      "name_en": "Cheese",
+      "price": "120.00",
+      "is_active": true
+    }
+  ]
+}
+```
+
+Product addition fields:
+
+- Writable: `classification_id`, `image`, `name_ar`, `name_en`, `price`, `is_active`
+- Response: `id`, nested `classification`, `products` as product ID list, `image`, names, `price`, `is_active`
+
+## 7. Offers
+
+Endpoints:
+
+| Endpoint | Methods | Permission |
+|---|---:|---|
+| `/api/v1/offers/` | GET | admin gets admin shape; client gets visible home shape |
+| `/api/v1/offers/` | POST | admin |
+| `/api/v1/offers/{offer_id}/` | GET | admin/client |
+| `/api/v1/offers/{offer_id}/` | PATCH, DELETE | admin |
+
+Current offer model choices:
+
+- `type`: `package`, `flash`, `discount`, `announcement`, `delivery`
+- `status`: `active`, `inactive`, `expired`
+
+Current admin offer fields:
+
+- `id`
+- `market_id`, nested `market`
+- `show_in_general`
+- `service_city_ids`, nested `service_cities`
+- `product_ids`, nested `products`
+- `title`, `description`, `image`
+- `type`, `discount`, `start_time`, `end_time`
+- `active_days`, `use_limits`, `user_limit`
+- `status`, `created_at`, `updated_at`
+
+Important contract difference:
+
+- There is no `scope` field and no singular `service_city_id` field in the current offer serializer.
+- Offer targeting is represented by `show_in_general` and `service_city_ids`.
+
+Validation rules:
+
+- `end_time` must be after `start_time`.
+- `discount` cannot be negative.
+- `product_ids` must be a non-empty list for create.
+- If `show_in_general=false`, at least one `service_city_ids` entry is required.
+- If `show_in_general=true`, `market.scope` must be `general`.
+- All selected service cities must be active and served by the selected market.
+- All selected products must belong to the selected market.
+
+Captured service-city offer JSON:
+
+```json
+{
+  "market_id": 2,
+  "show_in_general": false,
+  "service_city_ids": [1],
+  "product_ids": [1],
+  "title": "API Lunch Offer",
+  "description": "Discount",
+  "type": "discount",
+  "discount": "10.00",
+  "start_time": "2026-07-08T09:37:43.158755+00:00",
+  "end_time": "2026-07-09T10:37:43.158755+00:00",
+  "active_days": ["saturday", "sunday"],
+  "use_limits": 100,
+  "user_limit": 2,
+  "status": "active"
+}
+```
+
+Captured offer response excerpt:
+
+```json
+{
+  "id": 1,
+  "market_id": 2,
+  "show_in_general": false,
+  "service_city_ids": [1],
+  "product_ids": [1],
+  "title": "API Lunch Offer",
+  "image": null,
+  "type": "discount",
+  "discount": "10.00",
+  "active_days": ["saturday", "sunday"],
+  "status": "active",
+  "products": [{"id": 1, "market_id": 2, "category_id": 1, "name": "API Burger"}],
+  "service_cities": [{"id": 1, "name": "API City", "delivery_price": "120.00", "is_active": true}]
+}
+```
+
+Captured multipart offer image upload:
+
+```json
+{
+  "market_id": 2,
+  "show_in_general": "false",
+  "service_city_ids": "[1]",
+  "product_ids": "[1]",
+  "title": "API Image Offer",
+  "description": "Image offer",
+  "type": "flash",
+  "discount": "5.00",
+  "start_time": "<ISO datetime>",
+  "end_time": "<ISO datetime>",
+  "active_days": "[\"monday\",\"tuesday\"]",
+  "status": "active",
+  "image": "offer.gif"
+}
+```
+
+Multipart list rules:
+
+- `service_city_ids`: JSON list string such as `"[1,2]"` or repeated form fields.
+- `product_ids`: JSON list string such as `"[1]"` or repeated form fields.
+- `active_days`: JSON list string such as `"[\"monday\",\"tuesday\"]"`.
+- `image`: file part.
+
+Bug/contract gap found:
+
+- Order preview/create serializers do not check offer `status`, `start_time`, or `end_time`; they validate scope/city/product compatibility only. Expired/inactive offer rejection is not enforced in the inspected order serializers.
+
+## 8. Orders
+
+### Current Architecture
+
+Verified current behavior:
+
+- One parent `Order` can contain multiple `OrderMarketSection` rows.
+- `market_sections` are the real multi-market source.
+- `order.market` is compatibility/first-market only.
+- One admin review notification is created per parent order by `create_new_order_review_notification(order)` using `get_or_create`.
+- One courier assignment is stored on the parent order.
+- `/api/v1/orders/create/` returns a one-item list for client compatibility.
+- Admin create uses `POST /api/v1/orders/`.
+- Dashboard admin create must not use `/api/v1/orders/create/`.
+- Dashboard admin create must not use `/api/v1/orders/preview/`.
+
+Important implementation mismatch:
+
+- `OrderListCreateView.get_serializer_class()` says POST uses `AdminOrderCreateSerializer`, but `OrderListCreateView.create()` actually normalizes request data and uses `ClientOrderCreateSerializer`.
+- Therefore the live admin create contract is the normalized client-create contract plus required admin `user_id`, not the full unused `AdminOrderCreateSerializer` contract.
+
+### Admin Order Endpoints
+
+| Endpoint | Methods | Permission | Notes |
+|---|---:|---|---|
+| `/api/v1/orders/` | GET | admin | query `status` optional |
+| `/api/v1/orders/` | POST | admin | create parent order |
+| `/api/v1/orders/{order_id}/` | GET, PUT, PATCH | admin | detail/update |
+| `/api/v1/orders/{order_id}/` | DELETE | admin | cancels order, does not hard delete |
+| `/api/v1/orders/{order_id}/status/` | PATCH | admin | status transition |
+| `/api/v1/orders/{order_id}/delivery-price/` | PATCH | admin | manual delivery price |
+| `/api/v1/orders/{order_id}/assignment/` | PATCH | admin | assign/unassign representative |
+| `/api/v1/admin/order-review/blocker/` | GET | admin | pending-review blocker |
+| `/api/v1/admin/orders/{order_id}/approve/` | POST | admin | approve review |
+| `/api/v1/admin/orders/{order_id}/reject/` | POST | admin | reject review |
+| `/api/v1/admin/orders/{order_id}/service-city-representatives/` | GET | admin | eligible couriers |
+
+Admin create live request fields:
+
+- Required by current view/serializer:
+  - `user_id` for admin users
+  - `payment_method`
+  - at least one valid `items[]` or `offers[]`
+  - an address must be resolvable: explicit `delivery_address_id`/`address_id` or default matching address for target user
+- Accepted and used:
+  - `delivery_address_id` or `address_id`
+  - `service_city_id`, but must match selected region/address when provided
+  - `description`
+  - `delivery_note`
+  - `items[].variant_id`
+  - `items[].quantity`
+  - `offers[].offer_id`
+- Accepted but ignored by live admin create normalization:
+  - `market_id`
+  - `items[].unit_price`
+  - `offers[].discount_amount`
+- Rejected system-controlled create fields:
+  - `assigned_representative_id`, `assigned_at`, `delivered_at`, `delivery_area_id`, `delivery_type`, `delivery_price`, `order_scope`, `discount`, `subtotal_price`, `total_price`, `image`, `delivery_proof`, `status`, `review_status`, `approved_by`, `approved_at`, `rejected_by`, `rejected_at`, `rejection_reason`
+
+Captured admin single-market create:
+
+```json
+{
+  "request": {
+    "user_id": 2,
+    "delivery_address_id": 1,
+    "market_id": 2,
+    "service_city_id": 1,
+    "payment_method": "cash",
+    "description": "Admin description",
+    "delivery_note": "Admin delivery note",
+    "items": [{"variant_id": 1, "quantity": 2, "unit_price": "999.00"}],
+    "offers": [{"offer_id": 1, "discount_amount": "10.00"}]
+  },
+  "response": {
+    "id": 1,
+    "market_id": 2,
+    "order_scope": "service_city",
+    "delivery_type": "fixed_area",
+    "payment_method": "cash",
+    "status": "pending",
+    "review_status": "pending_review",
+    "subtotal_price": "1200.00",
+    "discount": "120.00",
+    "delivery_price": "120.00",
+    "total_price": "1200.00",
+    "market_count": 1,
+    "is_multi_market": false,
+    "items": [{"variant_id": 1, "quantity": 2, "unit_price": "600.00"}],
+    "offers": [{"offer_id": 1, "discount_amount": "120.00"}]
+  }
+}
+```
+
+Note: request `unit_price` was `"999.00"` but response `unit_price` was `"600.00"` from the current variant price. Request `discount_amount` was `"10.00"` but response discount was computed by backend from offer percent.
+
+Captured admin multi-market create:
+
+```json
+{
+  "request": {
+    "user_id": 2,
+    "delivery_address_id": 1,
+    "market_id": 2,
+    "service_city_id": 1,
+    "payment_method": "cash",
+    "items": [
+      {"variant_id": 1, "quantity": 1, "unit_price": "1.00"},
+      {"variant_id": 2, "quantity": 1, "unit_price": "1.00"}
+    ],
+    "offers": []
+  },
+  "response": {
+    "id": 2,
+    "market_id": 2,
+    "subtotal_price": "1300.00",
+    "delivery_price": "120.00",
+    "total_price": "1420.00",
+    "is_multi_market": true,
+    "market_count": 2,
+    "market_names_summary": "API Service Market, API Second Market",
+    "market_sections": [
+      {"market_id": 2, "subtotal_price": "600.00", "items": [{"variant_id": 1, "unit_price": "600.00"}]},
+      {"market_id": 3, "subtotal_price": "700.00", "items": [{"variant_id": 2, "unit_price": "700.00"}]}
+    ],
+    "pickup_stops": [
+      {"market_id": 2, "pickup_status": "pending", "sort_order": 0},
+      {"market_id": 3, "pickup_status": "pending", "sort_order": 1}
+    ]
+  }
+}
+```
+
+Admin create verification results:
+
+- `payment_method`: required. Missing error: `{"payment_method": ["This field is required."]}`.
+- `delivery_address_id`: not strictly required if the target user has a matching default address. Without any matching address, error:
+
+```json
+{
+  "requires_address_selection": ["True"],
+  "address_id": ["Choose an address for the currently selected market region."]
+}
+```
+
+- `market_id`: not required by live create; omitted request succeeded.
+- `unit_price`: not required by live create; omitted request succeeded. If present, backend ignores it and uses current `variant.price`.
+- Offer-only admin orders are currently allowed if the offer has products with variants; backend adds the first variant for offer products.
+- Multiple markets are inferred from variant/offer product markets.
+
+### Client Checkout Endpoints
+
+| Endpoint | Methods | Permission |
+|---|---:|---|
+| `/api/v1/orders/my/` | GET | client |
+| `/api/v1/orders/preview/` | POST | authenticated; admin can preview with `user_id` by code |
+| `/api/v1/orders/create/` | POST | client |
+
+Client create request:
+
+```json
+{
+  "address_id": 1,
+  "payment_method": "cash",
+  "description": "Client desc",
+  "delivery_note": "Client note",
+  "items": [{"variant_id": 1, "quantity": 1}],
+  "offers": [{"offer_id": 1}]
+}
+```
+
+Captured client create response shape:
+
+```json
+[
+  {
+    "id": 6,
+    "user_id": 2,
+    "delivery_address_id": 1,
+    "market_id": 2,
+    "order_scope": "service_city",
+    "payment_method": "cash",
+    "status": "pending",
+    "review_status": "pending_review",
+    "subtotal_price": "600.00",
+    "discount": "60.00",
+    "delivery_price": "120.00",
+    "total_price": "660.00",
+    "market_sections": [],
+    "pickup_stops": [],
+    "items": [],
+    "offers": []
+  }
+]
+```
+
+The captured response is a one-item list. Arrays in the excerpt are abbreviated here; the live response included full `market_sections`, `pickup_stops`, `items`, and `offers` with the same shape as admin detail.
+
+Preview endpoint:
+
+- Intended use: checkout preview for a selected customer/region.
+- Code permission is not client-only: admin can call it if `user_id` is supplied.
+- It requires the target user to have selected a market region.
+- Dashboard admin create should not call preview; use `POST /api/v1/orders/`.
+
+Captured preview region-selection error:
+
+```json
+{
+  "requires_region_selection": ["True"],
+  "message": ["Select a market browsing region before checkout."],
+  "current_selection": ["None"]
+}
+```
+
+### Order Response Shape
+
+Admin order detail fields:
+
+- `id`
+- `user_id`
+- `customer`
+- `delivery_address_id`
+- `delivery_address`
+- `assigned_representative_id`
+- `assigned_representative`
+- `market_id`
+- `market`
+- `order_scope`
+- `service_city_id`
+- `service_city`
+- `delivery_area_id`
+- `delivery_area`
+- `delivery_type`
+- `payment_method`
+- `discount`
+- `description`
+- `status`
+- `review_status`
+- `delivery_price`
+- `subtotal_price`
+- `total_price`
+- `image`
+- `assigned_at`
+- `delivered_at`
+- `delivery_note`
+- `delivery_proof`
+- `approved_by`
+- `approved_at`
+- `rejected_by`
+- `rejected_at`
+- `rejection_reason`
+- `is_multi_market`
+- `market_count`
+- `market_names_summary`
+- `market_sections`
+- `grouped_items`
+- `grouped_offers`
+- `pickup_stops`
+- `history`
+- `allowed_statuses`
+- `items`
+- `offers`
+- `created_at`
+- `updated_at`
+
+Compatibility notes:
+
+- `order.market` / `market_id` can be only the first market.
+- Use `market_sections` for multi-market display and pickup grouping.
+- Flat `items` / `offers` are compatibility fields.
+- `grouped_items` / `grouped_offers` are preferred for grouped UI if present.
+
+Captured order detail multi-market excerpt:
+
+```json
+{
+  "id": 2,
+  "market_id": 2,
+  "order_scope": "service_city",
+  "delivery_type": "fixed_area",
+  "status": "pending",
+  "review_status": "pending_review",
+  "delivery_price": "120.00",
+  "subtotal_price": "1300.00",
+  "total_price": "1420.00",
+  "is_multi_market": true,
+  "market_count": 2,
+  "market_names_summary": "API Service Market, API Second Market",
+  "market_sections": [
+    {
+      "market_id": 2,
+      "market": {"id": 2, "name": "API Service Market", "branch": "Central", "status": "active"},
+      "subtotal_price": "600.00",
+      "pickup_status": "pending",
+      "items": [{"variant_id": 1, "product_name": "API Burger", "unit_price": "600.00"}]
+    },
+    {
+      "market_id": 3,
+      "market": {"id": 3, "name": "API Second Market", "branch": "Central", "status": "active"},
+      "subtotal_price": "700.00",
+      "pickup_status": "pending",
+      "items": [{"variant_id": 2, "product_name": "API Pizza", "unit_price": "700.00"}]
+    }
+  ],
+  "pickup_stops": [
+    {"market_id": 2, "pickup_status": "pending", "sort_order": 0},
+    {"market_id": 3, "pickup_status": "pending", "sort_order": 1}
+  ]
+}
+```
+
+### Order Choices
+
+From models/serializers:
+
+- `Order.status`: `pending`, `confirmed`, `under_preparation`, `ready`, `picked_up`, `on_the_way`, `delivered`, `failed_delivery`, `cancelled`
+- `Order.review_status`: `pending_review`, `approved`, `rejected`
+- `Order.delivery_type`: `fixed_area`, `delivery`
+- `Order.order_scope`: `general`, `service_city`
+- `OrderMarketSection.pickup_status`: `pending`, `picked_up`
+- `OrderEvent.event_type`: `order_created`, `review_approved`, `review_rejected`, `status_changed`, `assigned`, `unassigned`, `delivery_price_changed`, `cancelled`
+- `payment_method`: plain nonblank string accepted; dashboard currently sends `cash` or `cash_on_delivery` in tests/examples.
+
+Admin status transitions:
+
+- Before approval: only `cancelled` is allowed.
+- After approval:
+  - `pending` -> `confirmed`, `cancelled`
+  - `confirmed` -> `under_preparation`, `cancelled`
+  - `under_preparation` -> `ready` only if assigned, plus `cancelled`
+  - `ready` -> `picked_up`, `cancelled`
+  - `picked_up` -> `on_the_way`, `cancelled`
+  - `on_the_way` -> `delivered`, `failed_delivery`, `cancelled`
+
+Courier status transitions:
+
+- `ready` -> `picked_up`
+- `picked_up` -> `on_the_way`
+- `on_the_way` -> `delivered` or `failed_delivery`
+
+### Multi-Market Rules
+
+Verified in code/tests:
+
+- General cart cannot contain service-city markets.
+- Service-city cart cannot contain general-only/non-serving markets.
+- Service-city cart cannot mix markets from different selected city visibility.
+- General order delivery destination text does not convert it to service-city.
+- General orders use manual delivery:
+  - `service_city = null`
+  - `delivery_area = null`
+  - `delivery_type = "delivery"`
+  - `delivery_price = null`
+- Service-city fixed area uses delivery area price once per parent order.
+- Service-city unsupported/manual area uses `delivery_type="delivery"` and `delivery_price=null`.
+- Delivery price is applied once per parent order, not once per market.
+- Courier `picked_up` currently marks all parent order market sections as `picked_up` together. No separate pickup-section endpoint exists.
+
+Captured Arabic scope mismatch error:
+
+```json
+{
+  "items": ["لا يمكن دمج محلات عامة مع محلات مدينة في نفس الطلب"]
+}
+```
+
+## 9. Notifications
+
+Endpoints:
+
+| Endpoint | Methods | Permission | Query params |
+|---|---:|---|---|
+| `/api/v1/notifications/` | GET | authenticated | `unread`, `type`, `audience`, `is_blocking`, `is_resolved` |
+| `/api/v1/notifications/unread-count/` | GET | authenticated | none |
+| `/api/v1/notifications/{notification_id}/read/` | PATCH | authenticated visible notification | none |
+| `/api/v1/notifications/mark-all-read/` | POST | authenticated | none |
+| `/api/v1/notifications/clear-read/` | DELETE | authenticated | none |
+| `/api/v1/notifications/{notification_id}/` | DELETE | authenticated visible notification | none |
+| `/api/v1/admin/order-review/blocker/` | GET | admin | none |
+
+Notification choices:
+
+- `audience`: `admin`, `courier`, `client`
+- `type`: `new_order_review`, `order_assigned`, `order_rejected`
+
+Notification payload:
+
+```json
+{
+  "id": 6,
+  "audience": "admin",
+  "type": "new_order_review",
+  "title": "New order requires review",
+  "message": "Order #6 requires admin review.",
+  "order_id": 6,
+  "is_read": false,
+  "is_blocking": true,
+  "is_resolved": false,
+  "read_at": null,
+  "resolved_at": null,
+  "created_at": "2026-07-08T10:37:43.489136Z"
+}
+```
+
+Visibility:
+
+- Admin users see notifications with `audience=admin`.
+- Representatives see `audience=courier` notifications where `recipient` is the user.
+- Clients see `audience=client` notifications where `recipient` is the user.
+
+Captured unread count:
+
+```json
+{"unread_count": 6}
+```
+
+Captured review blocker shape:
+
+```json
+{
+  "blocked": true,
+  "pending_count": 6,
+  "orders": [
+    {
+      "id": 6,
+      "review_status": "pending_review",
+      "status": "pending",
+      "market_sections": [],
+      "pickup_stops": []
+    }
+  ]
+}
+```
+
+The live response includes full `OrderSerializer` objects in `orders`; the order object above is abbreviated to show the shape.
+
+One-notification-per-parent-order behavior:
+
+- `create_new_order_review_notification(order)` uses `Notification.objects.get_or_create(...)` for unresolved admin blocking review notification per parent order.
+
+Delete rule:
+
+- Unresolved blocking notifications cannot be deleted:
+
+```json
+{"detail": "Unresolved blocking notifications cannot be deleted."}
+```
+
+## 10. Couriers / Representatives
+
+Endpoints:
+
+| Endpoint | Methods | Permission |
+|---|---:|---|
+| `/api/v1/auth/representatives/` | GET | admin |
+| `/api/v1/admin/orders/{order_id}/service-city-representatives/` | GET | admin |
+| `/api/v1/orders/{order_id}/assignment/` | PATCH | admin |
+| `/api/v1/courier/orders/` | GET | representative |
+| `/api/v1/courier/orders/{order_id}/` | GET | assigned representative |
+| `/api/v1/courier/orders/{order_id}/status/` | PATCH | assigned representative |
+
+Assignment request:
+
+```json
+{"representative_id": 3}
+```
+
+Use `{"representative_id": null}` to unassign.
+
+Assignment rules:
+
+- Order must be approved before assignment.
+- Representative must have a courier profile.
+- For service-city orders, courier profile `service_city` must match the order service city.
+- For general orders, any active available representative profile is eligible.
+- Assignment sets `assigned_representative`, `assigned_at`, and status `ready`.
+- Assignment creates a courier notification of type `order_assigned`.
+
+Captured assignment response excerpt:
+
+```json
+{
+  "message": "Order assigned successfully.",
+  "order": {
+    "id": 2,
+    "status": "ready",
+    "review_status": "approved",
+    "assigned_representative_id": 3,
+    "is_multi_market": true,
+    "market_count": 2,
+    "pickup_stops": [
+      {"market_id": 2, "pickup_status": "pending", "sort_order": 0},
+      {"market_id": 3, "pickup_status": "pending", "sort_order": 1}
+    ]
+  },
+  "representative": {
+    "representative_id": 3,
+    "user_id": 3,
+    "name": "api_courier",
+    "phone": "+213555100003",
+    "service_city_id": 1,
+    "service_city": "API City"
+  }
+}
+```
+
+Courier order detail fields:
+
+- `id`, `status`, `order_scope`, `service_city`, `delivery_area`, `delivery_type`, `market`, `market_count`
+- `customer`, `delivery_address`, `total_price`, `delivery_price`, `created_at`, `assigned_at`
+- Detail adds `market_sections`, `items`, `offers`, `subtotal_price`, `discount`, `delivery_note`, `delivery_proof`, `delivered_at`
+
+Captured courier detail excerpt:
+
+```json
+{
+  "id": 2,
+  "status": "ready",
+  "market_count": 2,
+  "delivery_type": "fixed_area",
+  "total_price": "1420.00",
+  "market_sections": [
+    {"market_id": 2, "pickup_status": "pending", "items": [{"product_name": "API Burger"}]},
+    {"market_id": 3, "pickup_status": "pending", "items": [{"product_name": "API Pizza"}]}
+  ],
+  "items": [
+    {"quantity": 1, "unit_price": "600.00", "product": {"id": 1, "name": "API Burger"}, "variant": {"id": 1, "sku": "BURGER-S", "price": 600.0}},
+    {"quantity": 1, "unit_price": "700.00", "product": {"id": 3, "name": "API Pizza"}, "variant": {"id": 2, "sku": "PIZZA-L", "price": 700.0}}
+  ],
+  "offers": []
+}
+```
+
+No dedicated delivery proof upload endpoint was found. `delivery_proof` exists on `Order` and admin `OrderSerializer`, but courier status update only accepts `status`.
+
+## 11. Dashboard / Analytics
+
+Endpoints:
+
+| Endpoint | Methods | Permission | Query/body |
+|---|---:|---|---|
+| `/api/v1/dashboard/overview/` | GET | admin | query `from=YYYY-MM-DD`, `to=YYYY-MM-DD` |
+| `/api/v1/dashboard/settings/` | GET | admin | none |
+| `/api/v1/dashboard/settings/` | PATCH | admin | JSON or multipart |
+| `/api/v1/home/login-dashboard-snapshot/` | GET | public | none |
+
+Overview response shape:
+
+```json
+{
+  "range": {"from": "2026-07-08", "to": "2026-07-08", "timezone": "UTC"},
+  "currency": "EGP",
+  "revenue": {"total": "0.00", "percentage": 0.0},
+  "orders": {"total": 6, "completed": 0, "incomplete": 6, "completion_rate": 0.0},
+  "customers": {"new": 1, "returning": 0, "return_rate": 0.0},
+  "top_products": [],
+  "active_orders": [
+    {
+      "id": 2,
+      "number": "YM-20260708-000002",
+      "customer": {"id": 2, "name": "api_client"},
+      "total": "1420.00",
+      "status": "picked_up",
+      "created_at": "2026-07-08T10:37:43.293976Z",
+      "market_count": 2,
+      "market_names_summary": "API Service Market - Central, API Second Market - Central",
+      "is_multi_market": true
+    }
+  ],
+  "top_shops": []
+}
+```
+
+Overview rules from service code:
+
+- Revenue/top products/top shops use delivered orders only.
+- Active orders include `pending`, `confirmed`, `under_preparation`, `ready`, `picked_up`, `on_the_way`.
+- `orders.total/completed/incomplete` are calculated for the `to` day only.
+- `top_shops` attributes multi-market section revenue to each section market.
+
+Dashboard settings fields:
+
+- Writable: `primary_color`, `subtle_color`, `accent_color`, `font_family`, `brand_name`, `brand_tagline`, multipart `logo`
+- Read-only: `logo_url`, `updated_at`
+- `font_family` choices: `Cairo`, `Tajawal`, `Alexandria`, `System`
+- Color fields must be `#RRGGBB`.
+- Logo extensions allowed by serializer: jpg, jpeg, png, webp; max 5 MB.
+
+Login dashboard snapshot:
+
+```json
+{
+  "todayOrders": 2,
+  "availableCities": 1,
+  "deliveryZones": 1
+}
+```
+
+## 12. Error Handling Reference
+
+Authentication required:
+
+```json
+{"detail": "Authentication credentials were not provided."}
+```
+
+Permission denied:
+
+```json
+{"detail": "Only admin users can manage orders."}
+```
+
+Validation error:
+
+```json
+{"payment_method": ["This field is required."]}
+```
+
+Not found examples:
+
+```json
+{"detail": "Not found."}
+```
+
+Address not found in custom address views:
+
+```json
+{"detail": "Address not found."}
+```
+
+Invalid additions type:
+
+```json
+{"additions": ["Expected a list of items but got type \"str\"."]}
+```
+
+Missing admin order payment method:
+
+```json
+{"payment_method": ["This field is required."]}
+```
+
+Missing address/default address for order:
+
+```json
+{
+  "requires_address_selection": ["True"],
+  "address_id": ["Choose an address for the currently selected market region."]
+}
+```
+
+Wrong endpoint / preview without region:
+
+```json
+{
+  "requires_region_selection": ["True"],
+  "message": ["Select a market browsing region before checkout."],
+  "current_selection": ["None"]
+}
+```
+
+Market scope mismatch:
+
+```json
+{"items": ["لا يمكن دمج محلات عامة مع محلات مدينة في نفس الطلب"]}
+```
+
+Offer scope mismatch messages:
+
+```json
+{"offers": ["لا يمكن استخدام عرض مدينة داخل طلب عام"]}
+```
+
+```json
+{"offers": ["لا يمكن استخدام عرض عام داخل طلب مدينة"]}
+```
+
+Invalid variant:
+
+```json
+{
+  "items": [
+    {
+      "variant_id": ["Invalid pk \"999999\" - object does not exist."]
+    }
+  ]
+}
+```
+
+Courier city mismatch:
+
+```json
+{"representative_id": "هذا المندوب لا يعمل في نفس مدينة الطلب."}
+```
+
+Image upload error captured through dashboard invalid logo:
+
+```json
+{
+  "logo": [
+    "Upload a valid image. The file you uploaded was either not an image or a corrupted image."
+  ]
+}
+```
+
+Delete blockers:
+
+```json
+{"detail": "Cannot delete product while orders are using it."}
+```
+
+```json
+{"detail": "Cannot delete offer while orders are using it."}
+```
+
+```json
+{"detail": "Unresolved blocking notifications cannot be deleted."}
+```
+
+Expired/inactive offer error:
+
+- Unconfirmed as an API error. Code inspection found no order preview/create validation for offer `status`, `start_time`, or `end_time`.
+
+## 13. Frontend Integration Notes
+
+Admin orders:
+
+- Use `POST /api/v1/orders/`.
+- Do not use `/api/v1/orders/preview/` for dashboard create.
+- Do not use `/api/v1/orders/create/` for dashboard create.
+- Include `user_id`.
+- Include `payment_method`.
+- Include `delivery_address_id` explicitly even though current backend can fall back to a default address.
+- Do not rely on `market_id` for pricing/grouping; backend infers markets from variants/offers.
+- Do not rely on request `unit_price`; backend ignores it and uses `variant.price`.
+- Do not rely on request offer `discount_amount`; backend computes it from offer percentage.
+- Display `market_sections`, not only `order.market`.
+- Treat `order.market` / `market_id` as compatibility/first-market only.
+
+Products:
+
+- Price comes from `variants[].price`; there is no `product.price`.
+- Product additions in admin product create/update are IDs.
+- In home product detail, additions are nested objects.
+- Category image uses `category.image`.
+- Product image uses `product.image`.
+- `PATCH` with `variants` replaces variants; preserve-by-ID is not supported.
+- For product multipart with image, scalar fields and repeated/list `additions` worked. Nested `variants` with multipart were not captured as working; prefer JSON create/update when writing nested variants.
+
+Offers:
+
+- Images are supported by the current serializer and captured with multipart.
+- Use `show_in_general` and `service_city_ids`; do not send `scope` or `service_city_id`.
+- `product_ids` is an array in JSON; in multipart send JSON text like `"[1,2]"` or repeated keys.
+- `active_days` is a JSON array in JSON body; in multipart send JSON text.
+- `announcement` and `delivery` are supported `type` values from the model.
+- Validate offer status/time on the frontend if needed; backend order checkout does not currently reject expired/inactive offers.
+
+Markets:
+
+- General market create/update should omit `service_city_ids` and `delivery_area_ids`.
+- Service-city market create/update should send `service_city_ids` and optionally `delivery_area_ids`.
+- No market image field exists.
+
+Images:
+
+- Image fields can be `null`, `/media/...`, or full remote URL depending on storage/request context.
+- Normalize image URLs in the frontend.
+- Do not set multipart `Content-Type` manually.
+
+Locations:
+
+- `/api/v1/locations/service-cities/` is admin-only in current code.
+- Authenticated non-admin users can read `/api/v1/locations/delivery-areas/?service_city_id=...`.
+- Admin can read all addresses or filter `/api/v1/addresses/?user_id=...`.
+
+## 14. Generated Request/Response Examples
+
+All examples in this section were captured from real API calls in the temporary verification DB unless noted as abbreviated. Token strings are redacted.
+
+### Login Response
+
+```json
+{
+  "accessToken": "<JWT redacted>",
+  "refreshToken": "<JWT redacted>",
   "expiresIn": 900,
   "user": {
-    "id": "2",
-    "first_name": "أمينة",
-    "last_name": "حسن",
-    "username": "seed_amina",
-    "email": "seed.amina@yalla.seed",
-    "phone": "+201001000002",
-    "gender": "",
-    "birth_date": null,
-    "avatar_url": null,
-    "username_changed_at": null,
-    "role": "client",
+    "id": "1",
+    "username": "api_admin",
+    "email": "api-admin@example.com",
+    "phone": "+213555100001",
+    "role": "admin",
     "has_password": true,
     "courier_profile": null
   }
 }
 ```
 
-### Courier login
-
-Response يحتوي `courier_profile` لأن الدور `representative`:
+### Service City List
 
 ```json
-{
-  "accessToken": "<accessToken>",
-  "refreshToken": "<refreshToken>",
-  "expiresIn": 900,
-  "user": {
-    "id": "5",
-    "first_name": "أحمد",
-    "last_name": "مندوب",
-    "username": "seed_courier1",
-    "email": "seed.courier1@yalla.seed",
-    "phone": "+201001000004",
-    "gender": "",
-    "birth_date": null,
-    "avatar_url": null,
-    "username_changed_at": null,
-    "role": "representative",
-    "has_password": true,
-    "courier_profile": {
-      "vehicle_type": "دراجة نارية",
-      "plate_number": "س ي د 1234",
-      "delivery_area": 1,
-      "delivery_area_name": "مدينة نصر",
-      "service_city": 1,
-      "service_city_name": "القاهرة",
-      "max_active_orders": 4,
-      "is_available": true
-    }
-  }
-}
-```
-
-### Signup
-
-Request:
-
-```json
-{
-  "first_name": "Report",
-  "last_name": "User",
-  "username": "report_user",
-  "email": "report.user@yalla.test",
-  "phone": "+201009999999",
-  "password": "StrongPass1!",
-  "password_confirm": "StrongPass1!"
-}
-```
-
-Response `201`:
-
-```json
-{
-  "detail": "Registration OTP sent.",
-  "email": "report.user@yalla.test",
-  "dev_otp": "<dev_otp>"
-}
-```
-
-في بيئة التطوير قد يظهر `dev_otp`. في الإنتاج لا تعتمد عليه كقيمة ثابتة.
-
-## Market Region
-
-اختيار المنطقة هو فلتر السوق والطلبات. بدون اختيار قد ترجع endpoints العميل خطأ مثل:
-
-```json
-{
-  "detail": "Select a market browsing region before loading market content.",
-  "requires_market_region_selection": true
-}
-```
-
-تغيير الاختيار:
-
-```http
-PATCH /api/v1/market-region/me/
-```
-
-General:
-
-```json
-{
-  "mode": "general",
-  "service_city_id": null
-}
-```
-
-Service city:
-
-```json
-{
-  "mode": "service_city",
-  "service_city_id": 1
-}
-```
-
-مسح الاختيار:
-
-```json
-{
-  "mode": null,
-  "service_city_id": null
-}
-```
-
-Response example:
-
-```json
-{
-  "current_selection": {
-    "mode": "service_city",
-    "label": "القاهرة",
-    "service_city": {
-      "id": 1,
-      "name": "القاهرة",
-      "delivery_price": 45.0,
-      "is_active": true
-    },
-    "updated_at": "2026-07-05T15:42:34.729502Z"
-  }
-}
-```
-
-## Locations And Addresses
-
-### Service city example
-
-```json
-{
-  "id": 3,
-  "name": "الإسكندرية",
-  "center_latitude": "31.2001000",
-  "center_longitude": "29.9187000",
-  "radius_km": "24.00",
-  "delivery_price": "55.00",
-  "is_active": true
-}
-```
-
-### Delivery area example
-
-```json
-{
-  "id": 5,
-  "service_city_id": 2,
-  "name": "الدقي",
-  "center_latitude": "30.0384000",
-  "center_longitude": "31.2123000",
-  "radius_km": "6.50",
-  "delivery_price": "50.00",
-  "is_active": true
-}
-```
-
-### General manual address
-
-يستخدم فقط عندما اختيار المستخدم `market_region.mode=general`:
-
-```http
-POST /api/v1/locations/addresses/
-```
-
-Request:
-
-```json
-{
-  "name": "عنوان عام",
-  "line1": "شارع الثورة بجوار بنزينة التعاون",
-  "manual_city": "القاهرة",
-  "manual_area": "مصر الجديدة",
-  "service_city_id": null,
-  "delivery_area_id": null,
-  "latitude": "30.0860000",
-  "longitude": "31.3300000",
-  "isDefault": true
-}
-```
-
-Response shape:
-
-```json
-{
-  "id": 4,
-  "name": "عنوان عام",
-  "fullName": "عنوان عام",
-  "phone": "+201001000003",
-  "phoneNumber": "+201001000003",
-  "line1": "شارع الثورة بجوار بنزينة التعاون",
-  "street": "شارع الثورة بجوار بنزينة التعاون",
-  "city": "",
-  "state": "",
-  "country": "Egypt",
-  "postalCode": "",
-  "latitude": "30.0860000",
-  "longitude": "31.3300000",
-  "details": "شارع الثورة بجوار بنزينة التعاون",
-  "manual_city": "القاهرة",
-  "manual_area": "مصر الجديدة",
-  "service_city": null,
-  "service_city_id": null,
-  "service_city_name": null,
-  "delivery_area": null,
-  "delivery_area_id": null,
-  "delivery_area_name": null,
-  "delivery_area_price": null,
-  "delivery_type": "delivery",
-  "delivery_price_preview": null,
-  "is_default": true,
-  "isDefault": true,
-  "created_at": "2026-07-05T15:42:38.609944Z"
-}
-```
-
-### Service-city fixed-area address
-
-Request:
-
-```json
-{
-  "name": "عنوان السلام",
-  "line1": "السلام، شارع رئيسي",
-  "service_city_id": 1,
-  "delivery_area_id": 4,
-  "manual_city": null,
-  "manual_area": null,
-  "isDefault": false
-}
-```
-
-النظام يجعل `delivery_type=fixed_area` ويعرض `delivery_price_preview` من سعر `delivery_area`.
-
-### Service-city unsupported/manual area address
-
-Request:
-
-```json
-{
-  "name": "عنوان آخر",
-  "line1": "القاهرة، منطقة غير مضافة، قرب الطريق الرئيسي",
-  "service_city_id": 1,
-  "delivery_area_id": null,
-  "manual_city": null,
-  "manual_area": "منطقة غير مضافة",
-  "latitude": "30.0130000",
-  "longitude": "31.4280000"
-}
-```
-
-النظام يجعل `delivery_type=delivery`, `delivery_area=null`, `delivery_price_preview=null`.
-
-## Catalog / Home / Offers
-
-- Admin endpoints تحت `/api/v1/catalog/` و`/api/v1/home/markets/` ترجع بيانات إدارية كاملة.
-- Client home/offers/search ترجع فقط المحلات والمنتجات والعروض المطابقة لاختيار `market_region`.
-- Product variants هي التي تُرسل في الطلبات عبر `variant_id`، وليس `product_id`.
-
-Product example:
-
-```json
-{
-  "id": 6,
-  "market": {
+[
+  {
     "id": 1,
-    "name": "سوق يلا العام",
-    "branch": "",
+    "name": "API City",
+    "center_latitude": "36.7525000",
+    "center_longitude": "3.0420000",
+    "radius_km": "20.00",
+    "delivery_price": "120.00",
+    "is_active": true,
+    "delivery_area_count": 1,
+    "market_count": 0,
+    "offer_count": 0
+  }
+]
+```
+
+### Delivery Area List
+
+```json
+[
+  {
+    "id": 1,
+    "service_city_id": 1,
+    "name": "API Central",
+    "delivery_price": "120.00",
+    "is_active": true
+  }
+]
+```
+
+### Address Responses
+
+Fixed area:
+
+```json
+{
+  "id": 1,
+  "name": "Home",
+  "line1": "1 API Street",
+  "service_city_id": 1,
+  "delivery_area_id": 1,
+  "delivery_type": "fixed_area",
+  "delivery_price_preview": "120.00"
+}
+```
+
+Manual/general:
+
+```json
+{
+  "id": 2,
+  "name": "General Home",
+  "line1": "Manual delivery street",
+  "manual_city": "Mansoura",
+  "manual_area": "University district",
+  "service_city_id": null,
+  "delivery_area_id": null,
+  "delivery_type": "delivery",
+  "delivery_price_preview": null
+}
+```
+
+### Market Create
+
+General market request/response:
+
+```json
+{
+  "request": {
+    "classification_id": 1,
+    "name": "API General Market",
+    "branch": "Main",
+    "scope": "general",
+    "status": "active"
+  },
+  "response": {
+    "id": 1,
+    "classification": {"id": 1, "name": "API Markets", "classification_type": "featured"},
+    "name": "API General Market",
+    "branch": "Main",
+    "scope": "general",
     "status": "active",
-    "classification_id": 1
+    "service_cities": [],
+    "delivery_areas": [],
+    "created_at": "2026-07-08T10:37:42.963173Z",
+    "updated_at": "2026-07-08T10:37:42.963205Z"
+  }
+}
+```
+
+Service-city market request/response:
+
+```json
+{
+  "request": {
+    "classification_id": 1,
+    "name": "API Service Market",
+    "branch": "Central",
+    "scope": "service_city",
+    "status": "active",
+    "service_city_ids": [1],
+    "delivery_area_ids": [1]
   },
-  "category": {
-    "id": 3,
-    "name": "منتجات بقالة",
-    "classification": {
-      "id": 2,
-      "name": "منتجات غذائية"
-    }
+  "response": {
+    "id": 2,
+    "classification": {"id": 1, "name": "API Markets", "classification_type": "featured"},
+    "name": "API Service Market",
+    "branch": "Central",
+    "scope": "service_city",
+    "status": "active",
+    "service_cities": [{"id": 1, "name": "API City", "delivery_price": "120.00", "is_active": true}],
+    "delivery_areas": [{"id": 1, "service_city_id": 1, "name": "API Central", "delivery_price": "120.00", "is_active": true}],
+    "created_at": "2026-07-08T10:37:42.973831Z",
+    "updated_at": "2026-07-08T10:37:42.973861Z"
+  }
+}
+```
+
+### Product Category Create
+
+JSON request/response:
+
+```json
+{
+  "request": {
+    "classification_id": 1,
+    "name": "API Meals",
+    "type": "food",
+    "description": "Meals category"
   },
-  "is_available": true,
-  "name": "أرز مصري",
-  "description": "أرز أبيض درجة أولى.",
-  "image": null,
-  "discount": "0.00",
+  "response": {
+    "id": 1,
+    "classification": {"id": 1, "name": "API Categories"},
+    "name": "API Meals",
+    "type": "food",
+    "description": "Meals category",
+    "image": null
+  }
+}
+```
+
+Multipart request/response:
+
+```json
+{
+  "request": {
+    "classification_id": 1,
+    "name": "API Drinks",
+    "type": "drink",
+    "description": "Drinks category",
+    "image": "category.gif"
+  },
+  "response": {
+    "id": 2,
+    "classification": {"id": 1, "name": "API Categories"},
+    "name": "API Drinks",
+    "type": "drink",
+    "description": "Drinks category",
+    "image": "/media/categories/category.gif"
+  }
+}
+```
+
+### Product Create JSON Without Image
+
+```json
+{
+  "request": {
+    "market_id": 2,
+    "category_id": 1,
+    "is_available": true,
+    "name": "API Burger",
+    "description": "Burger description",
+    "discount": "5.00",
+    "additions": [1],
+    "attribute_values": [{"attribute_id": 1, "option_id": 1}],
+    "variants": [
+      {
+        "price": "600.00",
+        "sku": "BURGER-S",
+        "attribute_values": [{"attribute_id": 1, "option_id": 1}]
+      }
+    ]
+  },
+  "response": {
+    "id": 1,
+    "market": {"id": 2, "name": "API Service Market", "branch": "Central", "status": "active", "classification_id": 1},
+    "category": {"id": 1, "name": "API Meals", "type": "food", "description": "Meals category", "image": null},
+    "is_available": true,
+    "name": "API Burger",
+    "description": "Burger description",
+    "image": null,
+    "discount": "5.00",
+    "attribute_values": [{"id": 1, "option": {"id": 1, "value": "Small"}}],
+    "variants": [{"id": 1, "price": "600.00", "sku": "BURGER-S"}],
+    "additions": [1],
+    "created_at": "2026-07-08T10:37:43.096314Z",
+    "updated_at": "2026-07-08T10:37:43.096344Z"
+  }
+}
+```
+
+### Product Create Multipart With Image
+
+```json
+{
+  "request": {
+    "market_id": 2,
+    "category_id": 1,
+    "is_available": "true",
+    "name": "API Product Image",
+    "description": "Image product",
+    "discount": "0.00",
+    "additions": [1],
+    "image": "product.gif"
+  },
+  "response": {
+    "id": 2,
+    "image": "/media/products/product.gif",
+    "attribute_values": [],
+    "variants": [],
+    "additions": [1],
+    "created_at": "2026-07-08T10:37:43.122595Z",
+    "updated_at": "2026-07-08T10:37:43.122625Z"
+  }
+}
+```
+
+### Product Detail With Variants/Additions
+
+```json
+{
+  "id": 1,
+  "name": "API Burger",
   "variants": [
     {
-      "id": 11,
-      "price": "55.00",
-      "sku": "SEED-0006-1",
-      "attribute_values": [
-        {
-          "id": 7,
-          "attribute": {
-            "id": 8,
-            "name": "العبوة",
-            "options": [
-              {
-                "id": 20,
-                "value": "عبوة"
-              },
-              {
-                "id": 21,
-                "value": "كرتونة"
-              }
-            ]
-          },
-          "option": {
-            "id": 20,
-            "value": "عبوة"
-          }
-        }
-      ]
-    },
-    {
-      "id": 12,
-      "price": "105.00",
-      "sku": "SEED-0006-2",
-      "attribute_values": [
-        {
-          "id": 8,
-          "attribute": {
-            "id": 8,
-            "name": "العبوة",
-            "options": [
-              {
-                "id": 20,
-                "value": "عبوة"
-              },
-              {
-                "id": 21,
-                "value": "كرتونة"
-              }
-            ]
-          },
-          "option": {
-            "id": 21,
-            "value": "كرتونة"
-          }
-        }
-      ]
+      "id": 1,
+      "price": "600.00",
+      "sku": "BURGER-S",
+      "attribute_values": [{"attribute_id": 1, "attribute_name": "Size", "option_id": 1, "option_value": "Small"}]
     }
   ],
   "additions": [
-    5
-  ],
-  "created_at": "2026-07-05T15:42:38.649818Z",
-  "updated_at": "2026-07-05T15:42:38.649835Z"
-}
-```
-
-Offer example:
-
-```json
-{
-  "id": 18,
-  "market_id": 5,
-  "scope": "service_city",
-  "service_city_id": 3,
-  "service_city": {
-    "id": 3,
-    "name": "الإسكندرية",
-    "delivery_price": "55.00",
-    "is_active": true
-  },
-  "product_ids": [
-    31
-  ],
-  "title": "عرض مخبز منتهي",
-  "description": "عرض مخبز منتهي متاح ضمن بيانات العرض التجريبية.",
-  "image": null,
-  "type": "discount",
-  "discount": "15.00",
-  "start_time": "2026-06-15T15:42:34.729502Z",
-  "end_time": "2026-07-04T15:42:34.729502Z",
-  "active_days": [
-    "sunday",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday"
-  ],
-  "use_limits": null,
-  "user_limit": null,
-  "status": "expired"
-}
-```
-
-## Orders Client Flow
-
-الخطوات الموصى بها للعميل:
-
-1. Login.
-2. اختيار `/api/v1/market-region/me/`.
-3. إنشاء/اختيار address متوافق مع نفس المنطقة.
-4. استدعاء `/api/v1/orders/preview/`.
-5. إن كان preview مناسباً، استدعاء `/api/v1/orders/create/` بنفس `items/offers/address_id` مع `payment_method`.
-
-### Preview request shape
-
-```json
-{
-  "address_id": 4,
-  "items": [
-    {"variant_id": 5, "quantity": 2}
-  ],
-  "offers": [
-    {"offer_id": 1}
-  ]
-}
-```
-
-`items` أو `offers` واحد منهم على الأقل مطلوب.
-
-### Create request shape
-
-```json
-{
-  "address_id": 4,
-  "items": [
-    {"variant_id": 5, "quantity": 2}
-  ],
-  "offers": [
-    {"offer_id": 1}
-  ],
-  "payment_method": "cash",
-  "description": "",
-  "delivery_note": ""
-}
-```
-
-## General Multi-Market Order
-
-هذا المثال يثبت السلوك الصحيح لطلب عام بعنوان يدوي في القاهرة/مصر الجديدة: النص محفوظ، لكن الطلب يبقى `general` ولا يأخذ `service_city`.
-
-Preview request:
-
-```json
-{
-  "address_id": 4,
-  "items": [
-    {"variant_id": 5, "quantity": 2},
-    {"variant_id": 13, "quantity": 1}
-  ],
-  "offers": [
-    {"offer_id": 1}
-  ]
-}
-```
-
-Preview response `200`:
-
-```json
-{
-  "order_scope": "general",
-  "service_city": null,
-  "selected_address": {
-    "id": 4,
-    "name": "عنوان عام",
-    "manual_city": "القاهرة",
-    "manual_area": "مصر الجديدة",
-    "service_city": null,
-    "service_city_id": null,
-    "delivery_area": null,
-    "delivery_area_id": null,
-    "delivery_type": "delivery",
-    "delivery_price_preview": null,
-    "is_default": true
-  },
-  "market_count": 2,
-  "is_multi_market": true,
-  "market_names_summary": "سوق يلا العام, متجر العروض العامة",
-  "market_groups": [
     {
-      "market": {
-        "id": 1,
-        "name": "سوق يلا العام",
-        "branch": ""
-      },
-      "service_city": null,
-      "delivery_area": null,
-      "delivery_type": "delivery",
-      "delivery_price": null,
-      "delivery_message": "Delivery price will be determined later.",
-      "delivery_available": true,
-      "selected_products": [
-        {
-          "variant_id": 5,
-          "product_id": 3,
-          "product_name": "مياه معدنية",
-          "image": null,
-          "quantity": 2,
-          "unit_price": "35.00",
-          "subtotal": "70.00"
-        }
-      ],
-      "selected_offers": [
-        {
-          "id": 1,
-          "title": "عرض الجمعة العام",
-          "type": "flash",
-          "discount_percentage": "15.00",
-          "discount_amount": "51.00",
-          "products_count": 3
-        }
-      ],
-      "pricing": {
-        "products_subtotal": "340.00",
-        "total_offer_discounts": "51.00",
-        "delivery_price": null,
-        "market_total": "289.00"
-      }
-    },
-    {
-      "market": {
-        "id": 2,
-        "name": "متجر العروض العامة",
-        "branch": ""
-      },
-      "service_city": null,
-      "delivery_area": null,
-      "delivery_type": "delivery",
-      "delivery_price": null,
-      "delivery_message": "Delivery price will be determined later.",
-      "delivery_available": true,
-      "selected_products": [
-        {
-          "variant_id": 13,
-          "product_id": 7,
-          "product_name": "كرتونة رمضان",
-          "image": null,
-          "quantity": 1,
-          "unit_price": "700.00",
-          "subtotal": "700.00"
-        }
-      ],
-      "selected_offers": [],
-      "pricing": {
-        "products_subtotal": "700.00",
-        "total_offer_discounts": "0.00",
-        "delivery_price": null,
-        "market_total": "700.00"
-      }
+      "id": 1,
+      "classification_name": "Extras",
+      "name_ar": "جبن",
+      "name_en": "Cheese",
+      "price": "120.00",
+      "is_active": true
     }
-  ],
-  "summary": {
-    "subtotal": "1040.00",
-    "discount_total": "51.00",
-    "delivery_total": "0.00",
-    "grand_total": "989.00"
-  }
-}
-```
-
-Create response `201`: لاحظ أنها قائمة بعنصر واحد.
-
-```json
-[
-  {
-    "id": 26,
-    "customer": {
-      "id": 3,
-      "name": "كريم محمود",
-      "phone": "+201001000003"
-    },
-    "order_scope": "general",
-    "service_city_id": null,
-    "service_city": null,
-    "delivery_area_id": null,
-    "delivery_area": null,
-    "delivery_type": "delivery",
-    "delivery_price": null,
-    "payment_method": "cash",
-    "status": "pending",
-    "review_status": "pending_review",
-    "subtotal_price": "1040.00",
-    "discount": "51.00",
-    "total_price": "989.00",
-    "delivery_address": {
-      "id": 4,
-      "name": "عنوان عام",
-      "details": "شارع الثورة بجوار بنزينة التعاون",
-      "manual_city": "القاهرة",
-      "manual_area": "مصر الجديدة",
-      "service_city": null,
-      "delivery_area": null,
-      "delivery_type": "delivery",
-      "delivery_price_preview": null
-    },
-    "is_multi_market": true,
-    "market_count": 2,
-    "market_names_summary": "سوق يلا العام, متجر العروض العامة",
-    "market_sections": [
-      {
-        "id": 29,
-        "market_id": 1,
-        "market": {
-          "id": 1,
-          "name": "سوق يلا العام",
-          "branch": "",
-          "status": "active"
-        },
-        "subtotal_price": "340.00",
-        "discount": "51.00",
-        "total_price": "289.00",
-        "pickup_status": "pending",
-        "sort_order": 0,
-        "items": [
-          {
-            "id": 45,
-            "section_id": 29,
-            "variant_id": 5,
-            "quantity": 2,
-            "unit_price": "35.00"
-          },
-          {
-            "id": 46,
-            "section_id": 29,
-            "variant_id": 7,
-            "quantity": 1,
-            "unit_price": "120.00"
-          },
-          {
-            "id": 47,
-            "section_id": 29,
-            "variant_id": 9,
-            "quantity": 1,
-            "unit_price": "150.00"
-          }
-        ],
-        "offers": [
-          {
-            "id": 15,
-            "section_id": 29,
-            "offer_id": 1,
-            "discount_amount": "51.00",
-            "created_at": "2026-07-05T15:42:43.514327Z"
-          }
-        ]
-      },
-      {
-        "id": 30,
-        "market_id": 2,
-        "market": {
-          "id": 2,
-          "name": "متجر العروض العامة",
-          "branch": "",
-          "status": "active"
-        },
-        "subtotal_price": "700.00",
-        "discount": "0.00",
-        "total_price": "700.00",
-        "pickup_status": "pending",
-        "sort_order": 1,
-        "items": [
-          {
-            "id": 48,
-            "section_id": 30,
-            "variant_id": 13,
-            "quantity": 1,
-            "unit_price": "700.00"
-          }
-        ],
-        "offers": []
-      }
-    ],
-    "pickup_stops": [
-      {
-        "market_id": 1,
-        "market": {
-          "id": 1,
-          "name": "سوق يلا العام",
-          "branch": "",
-          "status": "active"
-        },
-        "pickup_status": "pending",
-        "picked_up_at": null,
-        "sort_order": 0
-      },
-      {
-        "market_id": 2,
-        "market": {
-          "id": 2,
-          "name": "متجر العروض العامة",
-          "branch": "",
-          "status": "active"
-        },
-        "pickup_status": "pending",
-        "picked_up_at": null,
-        "sort_order": 1
-      }
-    ]
-  }
-]
-```
-
-الحقول المهمة في الربط:
-
-- `order_scope="general"`
-- `service_city_id=null`
-- `delivery_area_id=null`
-- `delivery_type="delivery"`
-- `delivery_price=null`
-- `market_sections` يحتوي كل محل داخل الطلب الأب.
-- `pickup_stops` يستخدم لتتبع استلام المندوب من كل محل.
-- `items` و`offers` ما زالت موجودة كتوافق قديم، لكن الربط الجديد الأفضل يعتمد على `market_sections` أو `grouped_items/grouped_offers`.
-
-## Service-City Fixed-Area Order
-
-Preview request:
-
-```json
-{
-  "address_id": 3,
-  "items": [
-    {"variant_id": 25, "quantity": 1}
-  ],
-  "offers": [
-    {"offer_id": 4}
   ]
 }
 ```
 
-Preview response:
+### Offer Create JSON
 
 ```json
 {
-  "order_scope": "service_city",
-  "service_city": {
+  "request": {
+    "market_id": 2,
+    "show_in_general": false,
+    "service_city_ids": [1],
+    "product_ids": [1],
+    "title": "API Lunch Offer",
+    "description": "Discount",
+    "type": "discount",
+    "discount": "10.00",
+    "start_time": "2026-07-08T09:37:43.158755+00:00",
+    "end_time": "2026-07-09T10:37:43.158755+00:00",
+    "active_days": ["saturday", "sunday"],
+    "use_limits": 100,
+    "user_limit": 2,
+    "status": "active"
+  },
+  "response": {
     "id": 1,
-    "name": "القاهرة",
-    "delivery_price": "45.00",
-    "is_active": true
-  },
-  "selected_address": {
-    "id": 3,
-    "name": "عنوان السلام",
-    "manual_city": null,
-    "manual_area": null,
-    "service_city": {
-      "id": 1,
-      "name": "القاهرة",
-      "delivery_price": "45.00",
-      "is_active": true
-    },
-    "service_city_id": 1,
-    "delivery_area": {
-      "id": 4,
-      "service_city_id": 1,
-      "name": "السلام",
-      "delivery_price": "46.00",
-      "is_active": true
-    },
-    "delivery_area_id": 4,
-    "delivery_type": "fixed_area",
-    "delivery_price_preview": "46.00",
-    "is_default": false
-  },
-  "market_count": 1,
-  "is_multi_market": false,
-  "market_names_summary": "مطبخ النيل العائلي",
-  "market_groups": [
-    {
-      "market": {
-        "id": 3,
-        "name": "مطبخ النيل العائلي",
-        "branch": "مدينة نصر"
-      },
-      "service_city": {
-        "id": 1,
-        "name": "القاهرة",
-        "delivery_price": "45.00",
-        "is_active": true
-      },
-      "delivery_area": {
-        "id": 4,
-        "service_city_id": 1,
-        "name": "السلام",
-        "delivery_price": "46.00",
-        "is_active": true
-      },
-      "delivery_type": "fixed_area",
-      "delivery_price": "46.00",
-      "delivery_message": "",
-      "delivery_available": true,
-      "selected_products": [
-        {
-          "variant_id": 25,
-          "product_id": 13,
-          "product_name": "دجاج مشوي",
-          "image": null,
-          "quantity": 1,
-          "unit_price": "180.00",
-          "subtotal": "180.00"
-        }
-      ],
-      "selected_offers": [
-        {
-          "id": 4,
-          "title": "باقة العائلة",
-          "type": "package",
-          "discount_percentage": "18.00",
-          "discount_amount": "69.30",
-          "products_count": 3
-        }
-      ],
-      "pricing": {
-        "products_subtotal": "385.00",
-        "total_offer_discounts": "69.30",
-        "delivery_price": "46.00",
-        "market_total": "361.70"
-      }
-    }
-  ],
-  "summary": {
-    "subtotal": "385.00",
-    "discount_total": "69.30",
-    "delivery_total": "46.00",
-    "grand_total": "361.70"
+    "market_id": 2,
+    "market": {"id": 2, "name": "API Service Market", "scope": "service_city", "status": "active"},
+    "show_in_general": false,
+    "service_city_ids": [1],
+    "service_cities": [{"id": 1, "name": "API City", "delivery_price": "120.00", "is_active": true}],
+    "product_ids": [1],
+    "products": [{"id": 1, "market_id": 2, "category_id": 1, "name": "API Burger"}],
+    "title": "API Lunch Offer",
+    "description": "Discount",
+    "image": null,
+    "type": "discount",
+    "discount": "10.00",
+    "start_time": "2026-07-08T09:37:43.158755Z",
+    "end_time": "2026-07-09T10:37:43.158755Z",
+    "active_days": ["saturday", "sunday"],
+    "use_limits": 100,
+    "user_limit": 2,
+    "status": "active",
+    "created_at": "2026-07-08T10:37:43.169230Z",
+    "updated_at": "2026-07-08T10:37:43.169265Z"
   }
 }
 ```
 
-في هذا المثال العنوان مربوط بمنطقة `السلام` داخل القاهرة، لذلك:
-
-- `order_scope="service_city"`
-- `delivery_type="fixed_area"`
-- `delivery_area.id=4`
-- `delivery_price="46.00"`
-- `summary.delivery_total="46.00"` مرة واحدة على الطلب الأب.
-
-## Service-City Unsupported/Manual Area Order
-
-Create request:
+### Offer Multipart With Image
 
 ```json
 {
-  "address_id": 2,
-  "items": [
-    {"variant_id": 25, "quantity": 1}
-  ],
-  "payment_method": "cash"
+  "request": {
+    "market_id": 2,
+    "show_in_general": "false",
+    "service_city_ids": "[1]",
+    "product_ids": "[1]",
+    "title": "API Image Offer",
+    "description": "Image offer",
+    "type": "flash",
+    "discount": "5.00",
+    "start_time": "<captured ISO datetime>",
+    "end_time": "<captured ISO datetime>",
+    "active_days": "[\"monday\",\"tuesday\"]",
+    "status": "active",
+    "image": "offer.gif"
+  },
+  "response": {
+    "id": 2,
+    "market_id": 2,
+    "show_in_general": false,
+    "service_city_ids": [1],
+    "product_ids": [1],
+    "title": "API Image Offer",
+    "description": "Image offer",
+    "image": "/media/offers/offer.gif",
+    "type": "flash",
+    "discount": "5.00",
+    "active_days": ["monday", "tuesday"],
+    "status": "active",
+    "products": [{"id": 1, "market_id": 2, "category_id": 1, "name": "API Burger"}],
+    "service_cities": [{"id": 1, "name": "API City", "delivery_price": "120.00", "is_active": true}]
+  }
 }
 ```
 
-Create response `201`:
+### Admin Order Create Single-Market
 
 ```json
-[
-  {
-    "id": 27,
-    "customer": {
-      "id": 2,
-      "name": "أمينة حسن",
-      "phone": "+201001000002"
-    },
-    "order_scope": "service_city",
+{
+  "request": {
+    "user_id": 2,
+    "delivery_address_id": 1,
+    "market_id": 2,
     "service_city_id": 1,
-    "service_city": {
-      "id": 1,
-      "name": "القاهرة",
-      "delivery_price": "45.00",
-      "is_active": true
-    },
-    "delivery_area_id": null,
-    "delivery_area": null,
-    "delivery_type": "delivery",
-    "delivery_price": null,
     "payment_method": "cash",
-    "status": "pending",
-    "review_status": "pending_review",
-    "subtotal_price": "180.00",
-    "discount": "0.00",
-    "total_price": "180.00",
-    "delivery_address": {
-      "id": 2,
-      "name": "عنوان آخر",
-      "details": "القاهرة، منطقة غير مضافة، قرب الطريق الرئيسي",
-      "manual_city": null,
-      "manual_area": "منطقة غير مضافة",
-      "service_city": {
-        "id": 1,
-        "name": "القاهرة",
-        "delivery_price": "45.00",
-        "is_active": true
-      },
-      "delivery_area": null,
-      "delivery_type": "delivery",
-      "delivery_price_preview": null
-    },
+    "description": "Admin description",
+    "delivery_note": "Admin delivery note",
+    "items": [{"variant_id": 1, "quantity": 2, "unit_price": "999.00"}],
+    "offers": [{"offer_id": 1, "discount_amount": "10.00"}]
+  },
+  "response": {
+    "id": 1,
+    "market_id": 2,
+    "order_scope": "service_city",
+    "delivery_type": "fixed_area",
+    "payment_method": "cash",
+    "discount": "120.00",
+    "subtotal_price": "1200.00",
+    "delivery_price": "120.00",
+    "total_price": "1200.00",
     "is_multi_market": false,
     "market_count": 1,
-    "market_names_summary": "مطبخ النيل العائلي",
+    "market_sections": [{"market_id": 2, "subtotal_price": "1200.00", "items": [{"variant_id": 1, "quantity": 2, "unit_price": "600.00"}]}],
+    "pickup_stops": [{"market_id": 2, "pickup_status": "pending", "sort_order": 0}]
+  }
+}
+```
+
+The request `unit_price` and `discount_amount` are accepted but ignored by live admin create; backend used variant price `"600.00"` and computed offer discount `"120.00"`.
+
+### Admin Order Create Multi-Market
+
+```json
+{
+  "request": {
+    "user_id": 2,
+    "delivery_address_id": 1,
+    "market_id": 2,
+    "service_city_id": 1,
+    "payment_method": "cash",
+    "description": "Admin multi",
+    "delivery_note": "Two pickups",
+    "items": [
+      {"variant_id": 1, "quantity": 1, "unit_price": "1.00"},
+      {"variant_id": 2, "quantity": 1, "unit_price": "1.00"}
+    ],
+    "offers": []
+  },
+  "response": {
+    "id": 2,
+    "market_id": 2,
+    "order_scope": "service_city",
+    "subtotal_price": "1300.00",
+    "delivery_price": "120.00",
+    "total_price": "1420.00",
+    "is_multi_market": true,
+    "market_count": 2,
+    "market_names_summary": "API Service Market, API Second Market",
     "market_sections": [
-      {
-        "id": 31,
-        "market_id": 3,
-        "market": {
-          "id": 3,
-          "name": "مطبخ النيل العائلي",
-          "branch": "مدينة نصر",
-          "status": "active"
-        },
-        "subtotal_price": "180.00",
-        "discount": "0.00",
-        "total_price": "180.00",
-        "pickup_status": "pending",
-        "sort_order": 0,
-        "items": [
-          {
-            "id": 49,
-            "section_id": 31,
-            "variant_id": 25,
-            "quantity": 1,
-            "unit_price": "180.00"
-          }
-        ],
-        "offers": []
-      }
+      {"market_id": 2, "subtotal_price": "600.00", "items": [{"variant_id": 1, "unit_price": "600.00"}]},
+      {"market_id": 3, "subtotal_price": "700.00", "items": [{"variant_id": 2, "unit_price": "700.00"}]}
     ],
     "pickup_stops": [
-      {
-        "market_id": 3,
-        "market": {
-          "id": 3,
-          "name": "مطبخ النيل العائلي",
-          "branch": "مدينة نصر",
-          "status": "active"
-        },
-        "pickup_status": "pending",
-        "picked_up_at": null,
-        "sort_order": 0
-      }
+      {"market_id": 2, "pickup_status": "pending", "sort_order": 0},
+      {"market_id": 3, "pickup_status": "pending", "sort_order": 1}
     ]
   }
-]
+}
 ```
 
-هذا هو السلوك المقصود عندما تكون المنطقة غير مضافة في `DeliveryArea`:
-
-- `service_city` تبقى القاهرة.
-- `delivery_area=null`.
-- `delivery_type="delivery"`.
-- `delivery_price=null`.
-- `delivery_address.manual_area` يظهر للمندوب والإدارة.
-- إسناد المندوب يطابق `Order.service_city` وليس `delivery_area`.
-
-## Order Response Contract
-
-أهم الحقول في `OrderSerializer`:
-
-| الحقل | النوع | ملاحظات |
-|---|---|---|
-| `id` | number | رقم الطلب |
-| `customer` | object | `id`, `name`, `phone` |
-| `delivery_address` | object/null | يحتوي `manual_city`, `manual_area`, `delivery_area`, `delivery_type` |
-| `assigned_representative_id` | number/null | المندوب المسند |
-| `market` | object | أول محل للتوافق القديم |
-| `order_scope` | string | `general` أو `service_city` |
-| `service_city` | object/null | null في الطلب العام |
-| `delivery_area` | object/null | null في العام أو المنطقة اليدوية |
-| `delivery_type` | string | `delivery` أو `fixed_area` |
-| `delivery_price` | string/null | null عندما السعر يحدد لاحقاً |
-| `subtotal_price` | string | مجموع المنتجات قبل الخصم والتوصيل |
-| `discount` | string | خصم العروض |
-| `total_price` | string | النهائي |
-| `review_status` | string | يبدأ `pending_review` |
-| `market_sections` | array | المصدر الأساسي لتجميع المحلات |
-| `grouped_items` | array | توافق للعرض حسب المحل |
-| `grouped_offers` | array | توافق للعروض حسب المحل |
-| `pickup_stops` | array | نقاط الاستلام للمندوب |
-| `items` | array | توافق قديم، لا يكفي وحده للـ multi-market |
-| `offers` | array | توافق قديم |
-
-## Admin Order Flow
-
-### Review blocker
-
-```http
-GET /api/v1/admin/order-review/blocker/
-```
-
-Response fields:
-
-- `blocked`: boolean، تكون `true` إذا يوجد طلبات `pending_review`.
-- `pending_count`: عدد الطلبات التي تنتظر مراجعة الإدارة.
-- `orders`: قائمة `OrderSerializer[]` لنفس الطلبات العالقة.
-
-### Approve
-
-```http
-POST /api/v1/admin/orders/{order_id}/approve/
-```
-
-Response example:
+### Client Order Create
 
 ```json
 {
-  "message": "Order approved successfully.",
-  "order": {
-    "id": 27,
-    "order_scope": "service_city",
-    "service_city_id": 1,
-    "delivery_area_id": null,
-    "delivery_type": "delivery",
-    "status": "under_preparation",
-    "review_status": "approved",
-    "assigned_representative_id": null
+  "request": {
+    "address_id": 1,
+    "payment_method": "cash",
+    "description": "Client desc",
+    "delivery_note": "Client note",
+    "items": [{"variant_id": 1, "quantity": 1}],
+    "offers": [{"offer_id": 1}]
   },
-  "service_city": {
-    "id": 1,
-    "name": "القاهرة"
-  },
-  "available_representatives": [
+  "response": [
     {
-      "representative_id": 5,
-      "user_id": 5,
-      "name": "أحمد مندوب",
-      "phone": "+201001000004",
-      "service_city_id": 1,
-      "service_city": "القاهرة"
-    },
-    {
-      "representative_id": 6,
-      "user_id": 6,
-      "name": "محمود مندوب",
-      "phone": "+201001000005",
-      "service_city_id": 1,
-      "service_city": "القاهرة"
-    }
-  ]
-}
-```
-
-للطلب العام `service_city` في هذه الاستجابة يكون `null`، و`available_representatives` يرجع أي مندوب نشط لديه `courier_profile`.
-
-### Representatives for order
-
-```http
-GET /api/v1/admin/orders/{order_id}/service-city-representatives/
-```
-
-- طلب `service_city`: يرجع مندوبين نفس `Order.service_city`.
-- طلب `general`: يرجع كل المندوبين النشطين المتاحين أصحاب profile، و`service_city=null`.
-
-### Assign courier
-
-```http
-PATCH /api/v1/orders/{order_id}/assignment/
-```
-
-Request:
-
-```json
-{
-  "representative_id": 5
-}
-```
-
-Response example:
-
-```json
-{
-  "message": "Order assigned successfully.",
-  "order": {
-    "id": 27,
-    "status": "ready",
-    "review_status": "approved",
-    "assigned_representative_id": 5
-  },
-  "representative": {
-    "representative_id": 5,
-    "user_id": 5,
-    "name": "أحمد مندوب",
-    "phone": "+201001000004",
-    "service_city_id": 1,
-    "service_city": "القاهرة"
-  }
-}
-```
-
-بعد الإسناد يصبح `status="ready"` ويُملأ `assigned_at`.
-
-### Admin create order
-
-```http
-POST /api/v1/orders/
-```
-
-Request minimum:
-
-```json
-{
-  "user_id": 2,
-  "delivery_address_id": 2,
-  "market_id": 3,
-  "payment_method": "cash",
-  "description": "",
-  "delivery_note": "",
-  "items": [
-    {"variant_id": 25, "quantity": 1, "unit_price": "0.00"}
-  ],
-  "offers": []
-}
-```
-
-ملاحظة مهمة: عند الإنشاء الإداري لا ترسل الحقول التالية لأنها system-controlled وسيتم رفضها لو كانت موجودة: `order_scope`, `delivery_area_id`, `delivery_type`, `delivery_price`, `discount`, `subtotal_price`, `total_price`, `status`, `review_status`, `assigned_representative_id`, `assigned_at`, `delivered_at`, `approved_by`, `approved_at`, `rejected_by`, `rejected_at`, `rejection_reason`, `image`, `delivery_proof`.
-
-## Courier Flow
-
-### List assigned orders
-
-```http
-GET /api/v1/courier/orders/
-```
-
-Response example:
-
-```json
-[
-  {
-    "id": 27,
-    "status": "ready",
-    "order_scope": "service_city",
-    "service_city": {
-      "id": 1,
-      "name": "القاهرة",
-      "delivery_price": "45.00",
-      "is_active": true
-    },
-    "delivery_area": null,
-    "delivery_type": "delivery",
-    "market": {
-      "id": 3,
-      "name": "مطبخ النيل العائلي",
-      "branch": "مدينة نصر",
-      "status": "active"
-    },
-    "market_count": 1,
-    "customer": {
-      "id": 2,
-      "name": "أمينة حسن",
-      "phone": "+201001000002"
-    },
-    "delivery_address": {
-      "id": 2,
-      "name": "عنوان آخر",
-      "details": "القاهرة، منطقة غير مضافة، قرب الطريق الرئيسي",
-      "manual_city": null,
-      "manual_area": "منطقة غير مضافة",
-      "delivery_area": null,
-      "delivery_type": "delivery"
-    },
-    "total_price": "180.00",
-    "delivery_price": null,
-    "created_at": "2026-07-05T15:42:43.566728Z",
-    "assigned_at": "2026-07-05T15:42:43.626821Z"
-  }
-]
-```
-
-`delivery_address` في courier response يحتوي `manual_city` و`manual_area` حتى تظهر المناطق اليدوية للمندوب.
-
-### Status transitions
-
-```http
-PATCH /api/v1/courier/orders/{order_id}/status/
-```
-
-Allowed transitions:
-
-| الحالي | التالي المسموح |
-|---|---|
-| `ready` | `picked_up` |
-| `picked_up` | `on_the_way` |
-| `on_the_way` | `delivered`, `failed_delivery` |
-
-Request:
-
-```json
-{
-  "status": "picked_up"
-}
-```
-
-إذا أرسل المندوب انتقالاً غير مسموح يرجع:
-
-```json
-{
-  "status": "Invalid status transition."
-}
-```
-
-## Notifications
-
-List:
-
-```http
-GET /api/v1/notifications/?unread=true&type=new_order_review&is_blocking=true
-```
-
-Notification shape:
-
-```json
-{
-  "id": 20,
-  "audience": "admin",
-  "type": "new_order_review",
-  "title": "New order requires review",
-  "message": "Order #27 requires admin review.",
-  "order_id": 27,
-  "is_read": true,
-  "is_blocking": true,
-  "is_resolved": true,
-  "created_at": "2026-07-05T15:42:43.568514Z"
-}
-```
-
-Unread count:
-
-```json
-{
-  "unread_count": 9
-}
-```
-
-## Dashboard
-
-```http
-GET /api/v1/dashboard/overview/?from=2026-01-01&to=2026-12-31
-```
-
-Response shape:
-
-```json
-{
-  "range": {
-    "from": "2026-01-01",
-    "to": "2026-12-31",
-    "timezone": "UTC"
-  },
-  "currency": "EGP",
-  "revenue": {
-    "total": "793.35",
-    "percentage": 11.4
-  },
-  "orders": {
-    "total": 27,
-    "completed": 5,
-    "incomplete": 22,
-    "completion_rate": 18.5
-  },
-  "customers": {
-    "new": 3,
-    "returning": 0,
-    "return_rate": 0.0
-  },
-  "top_products": [
-    {
-      "product_id": 8,
-      "name": "عرض مدارس",
-      "revenue": "150.00",
-      "quantity_sold": 1,
-      "orders_count": 1
-    },
-    {
-      "product_id": 41,
-      "name": "فيتامين C",
-      "revenue": "120.00",
-      "quantity_sold": 1,
-      "orders_count": 1
-    }
-  ],
-  "active_orders": [
-    {
-      "id": 27,
-      "number": "YM-20260705-000027",
-      "customer": {
-        "id": 2,
-        "name": "أمينة حسن"
-      },
-      "total": "180.00",
-      "status": "ready",
-      "created_at": "2026-07-05T15:42:43.566728Z"
-    },
-    {
-      "id": 26,
-      "number": "YM-20260705-000026",
-      "customer": {
-        "id": 3,
-        "name": "كريم محمود"
-      },
-      "total": "989.00",
-      "status": "pending",
-      "created_at": "2026-07-05T15:42:43.512571Z"
-    }
-  ],
-  "top_shops": [
-    {
+      "id": 6,
       "market_id": 2,
-      "name": "متجر العروض العامة",
-      "zone": "",
-      "orders_count": 1,
-      "average_items_per_order": 3.0,
-      "revenue": "226.00"
-    },
-    {
-      "market_id": 7,
-      "name": "صيدلية الحياة - الدقي",
-      "zone": "الجيزة",
-      "orders_count": 1,
-      "average_items_per_order": 2.0,
-      "revenue": "205.10"
+      "order_scope": "service_city",
+      "delivery_type": "fixed_area",
+      "payment_method": "cash",
+      "discount": "60.00",
+      "subtotal_price": "600.00",
+      "delivery_price": "120.00",
+      "total_price": "660.00",
+      "is_multi_market": false,
+      "market_count": 1,
+      "market_sections": [{"market_id": 2, "subtotal_price": "600.00", "items": [{"variant_id": 1, "quantity": 1, "unit_price": "600.00"}]}],
+      "pickup_stops": [{"market_id": 2, "pickup_status": "pending", "sort_order": 0}]
     }
   ]
 }
 ```
 
-## Integration Checklist
+Response is a one-item list.
 
-- خزّن `accessToken` وابعثه في `Authorization` لكل endpoint محمي.
-- لا تعرض Home أو Offers للعميل قبل اختيار `market_region`.
-- عند `general` أنشئ/استخدم عنواناً عاماً يدوياً فقط، ولا ترسل `service_city_id` في preview/create.
-- لا تعتبر `manual_city="القاهرة"` مدينة خدمة؛ هي نص فقط في الطلب العام.
-- عند `service_city` استخدم عنواناً بنفس المدينة المختارة.
-- اعتمد على `preview` لحساب السعر، ثم نفذ `create` بنفس السلة.
-- بعد `create` اقرأ الطلب من العنصر الأول في القائمة: `response[0]`.
-- في عرض multi-market اعتمد على `market_sections` و`pickup_stops`، لا على `market` فقط.
-- في courier UI اعرض `manual_city` و`manual_area` من `delivery_address`.
-- تعامل مع `delivery_price=null` كـ “السعر يحدد لاحقاً”، وليس كخطأ.
+### Client Preview Region Error
+
+```json
+{
+  "requires_region_selection": ["True"],
+  "message": ["Select a market browsing region before checkout."],
+  "current_selection": ["None"]
+}
+```
+
+### Notification Blocker Response
+
+```json
+{
+  "blocked": true,
+  "pending_count": 6,
+  "orders": [
+    {
+      "id": 6,
+      "review_status": "pending_review",
+      "status": "pending",
+      "market_id": 2,
+      "market_count": 1,
+      "is_multi_market": false,
+      "market_sections": [{"market_id": 2, "pickup_status": "pending"}],
+      "pickup_stops": [{"market_id": 2, "pickup_status": "pending", "sort_order": 0}]
+    }
+  ]
+}
+```
+
+### Courier Order Detail With Pickup Sections
+
+```json
+{
+  "id": 2,
+  "status": "ready",
+  "market_count": 2,
+  "market_sections": [
+    {"market_id": 2, "pickup_status": "pending", "items": [{"product_name": "API Burger"}]},
+    {"market_id": 3, "pickup_status": "pending", "items": [{"product_name": "API Pizza"}]}
+  ],
+  "items": [
+    {"quantity": 1, "unit_price": "600.00", "product": {"id": 1, "name": "API Burger"}},
+    {"quantity": 1, "unit_price": "700.00", "product": {"id": 3, "name": "API Pizza"}}
+  ]
+}
+```
+
+## Unconfirmed Items
+
+- Product multipart create/update with nested `variants` was not captured as working. JSON create/update with nested variants was captured and should be used for variant writes.
+- Expired/inactive offer rejection is unconfirmed as an API error. Code inspection found order preview/create validates offer scope/product compatibility but not `status`, `start_time`, or `end_time`.
+- No dedicated courier delivery-proof upload endpoint was found. `delivery_proof` exists on `Order` and admin `OrderSerializer`, but courier status update only accepts `status`.
+- No dedicated pickup-section status endpoint was found. Courier `picked_up` marks all parent order market sections as picked up together.
+
+## Contract Mismatches / Bugs Found
+
+1. `POST /api/v1/orders/` advertises `AdminOrderCreateSerializer` via `get_serializer_class()`, but the create method uses `ClientOrderCreateSerializer` after normalization. This makes `market_id`, `unit_price`, and `discount_amount` accepted-but-ignored compatibility fields in live admin create.
+2. `delivery_address_id` is not strictly required on admin create if the target user has a matching default address, despite the apparent admin serializer requiring it.
+3. Offer-only admin orders are currently allowed by the live create path, despite the unused admin serializer requiring `items`.
+4. Order create/preview does not validate offer `status`, `start_time`, or `end_time`; expired/inactive offers may be accepted if scope/product checks pass.
+5. There is no dedicated courier delivery-proof upload endpoint, although `delivery_proof` exists on the `Order` model/serializer.
+6. General market serializer does not enforce clearing `service_city_ids` / `delivery_area_ids`; frontend should omit them.
+7. `config.test_settings` inherits Cloudinary storage for uploads when `DEBUG=False`, causing upload tests to fail without Cloudinary credentials.
+8. `seed_data` test expects every project model populated, but `orders.OrderEvent` remains empty.
+
+No backend behavior was changed while generating this report.

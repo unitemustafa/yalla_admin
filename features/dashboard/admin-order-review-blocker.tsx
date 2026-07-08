@@ -26,12 +26,15 @@ import {
   getManualArea,
   getManualCity,
   getMarketCount,
+  getMarketSections,
   getOrderMarketsSummary,
   getOrderScopeLabel,
+  getPickupStatusLabel,
   getServiceCityName as orderServiceCityName,
   isGeneralOrder,
   isMultiMarket,
   isServiceCityOrder,
+  notifyDashboardOrdersChanged,
   type DashboardOrderLike,
 } from "./order-display";
 import { useDashboardNotifications } from "./notifications-context";
@@ -159,19 +162,6 @@ function orderId(order: ApiRecord | null) {
 
 function orderLike(order: ApiRecord): DashboardOrderLike {
   return order as DashboardOrderLike;
-}
-
-function deliveryTypeValue(order: ApiRecord) {
-  return textAt(
-    order,
-    [["delivery_type"], ["deliveryType"], ["delivery_address", "delivery_type"], ["deliveryAddress", "deliveryType"]],
-    "",
-  ).toLowerCase();
-}
-
-function orderSkipsRepresentativeAssignment(order: ApiRecord) {
-  const deliveryType = deliveryTypeValue(order);
-  return deliveryType === "delivery" || deliveryType === "manual_quote";
 }
 
 function customerName(order: ApiRecord) {
@@ -351,6 +341,11 @@ function representativeAvailability(representative: ApiRecord) {
 }
 
 function localizedApiError(value: unknown, fallback: string) {
+  if (isRecord(value) && "representative_id" in value) {
+    const representativeMessage = firstApiError(value.representative_id);
+    if (representativeMessage) return representativeMessage;
+  }
+
   const message = firstApiError(value);
   if (!message) return fallback;
 
@@ -499,6 +494,7 @@ function OrderDetails({ order }: { order: ApiRecord }) {
   const typedOrder = orderLike(order);
   const delivery = deliveryDetails(order);
   const total = moneyLabel(valueAt(order, ["total_price"]));
+  const sections = getMarketSections(typedOrder);
 
   return (
     <div className="grid gap-4">
@@ -552,6 +548,45 @@ function OrderDetails({ order }: { order: ApiRecord }) {
           <DetailItem label="سعر التوصيل" value={delivery.price} />
         </div>
       </div>
+
+      {sections.length > 0 ? (
+        <div className="rounded-md border border-border/70 bg-card p-4">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <PackageCheck className="size-4 text-primary" />
+            <span className="font-bold">محلات الطلب</span>
+            <Badge tone={sections.length > 1 ? "green" : "secondary"}>
+              {sections.length.toLocaleString("en-US")} {sections.length > 1 ? "محلات" : "محل"}
+            </Badge>
+          </div>
+          <div className="grid gap-2">
+            {sections.map((section, index) => {
+              const marketNameText =
+                textValue(section.market?.name_ar) ||
+                textValue(section.market?.name) ||
+                (section.market_id ? `محل #${section.market_id}` : `محل ${index + 1}`);
+              const itemsCount = section.items?.length ?? 0;
+              const offersCount = section.offers?.length ?? 0;
+
+              return (
+                <div
+                  key={`${section.id ?? section.market_id ?? index}`}
+                  className="rounded-md border bg-muted/20 px-3 py-2 text-sm"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-bold">{marketNameText}</span>
+                    <Badge tone={textValue(section.pickup_status) === "picked_up" ? "green" : "secondary"}>
+                      {getPickupStatusLabel(section.pickup_status)}
+                    </Badge>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    المنتجات: {itemsCount.toLocaleString("en-US")} - العروض: {offersCount.toLocaleString("en-US")}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -629,9 +664,7 @@ export function AdminOrderReviewBlocker() {
   const currentOrder = orders[0] ?? null;
   const currentOrderId = orderId(currentOrder);
   const currentOrderIsGeneral = currentOrder ? isGeneralOrder(orderLike(currentOrder)) : false;
-  const currentOrderNeedsRepresentative = currentOrder
-    ? !orderSkipsRepresentativeAssignment(currentOrder)
-    : false;
+  const currentOrderNeedsRepresentative = Boolean(currentOrder);
   const shouldRun = status === "authenticated" && user?.role === "admin";
   const actionBusy =
     phase === "approving" ||
@@ -836,18 +869,7 @@ export function AdminOrderReviewBlocker() {
       if (!response.ok) {
         throw new Error(localizedApiError(data, "تعذر قبول الطلب."));
       }
-
-      if (currentOrder && orderSkipsRepresentativeAssignment(currentOrder)) {
-        showSnackbar({
-          message: "تم حفظ طلب الدليفري بدون إسناد مندوب.",
-          tone: "success",
-        });
-        await Promise.all([
-          loadBlocker({ silent: true, ignoreBusy: true }),
-          refreshUnreadCount(),
-        ]);
-        return;
-      }
+      notifyDashboardOrdersChanged(currentOrderId);
 
       const approvedRepresentatives = representativeListFromApprove(data);
       let nextRepresentatives = approvedRepresentatives.representatives;
@@ -874,12 +896,9 @@ export function AdminOrderReviewBlocker() {
     }
   }, [
     apiFetch,
-    currentOrder,
     currentOrderId,
     fetchRepresentatives,
-    loadBlocker,
     refreshUnreadCount,
-    showSnackbar,
   ]);
 
   const refreshRepresentatives = useCallback(async () => {
@@ -937,6 +956,7 @@ export function AdminOrderReviewBlocker() {
         message: "تم قبول الطلب وإرساله للمندوب.",
         tone: "success",
       });
+      notifyDashboardOrdersChanged(currentOrderId);
       await Promise.all([
         loadBlocker({ silent: true, ignoreBusy: true }),
         refreshUnreadCount(),
@@ -967,6 +987,7 @@ export function AdminOrderReviewBlocker() {
       message: "تم حفظ الطلب بدون إسناد مندوب.",
       tone: "success",
     });
+    notifyDashboardOrdersChanged(currentOrderId);
     await Promise.all([
       loadBlocker({ silent: true, ignoreBusy: true }),
       refreshUnreadCount(),
@@ -996,6 +1017,7 @@ export function AdminOrderReviewBlocker() {
         message: "تم رفض الطلب.",
         tone: "success",
       });
+      notifyDashboardOrdersChanged(currentOrderId);
       await Promise.all([
         loadBlocker({ silent: true, ignoreBusy: true }),
         refreshUnreadCount(),
