@@ -192,20 +192,13 @@ export function translateOrderStatus(status: unknown) {
 
   const labels: Record<string, string> = {
     pending: "قيد الانتظار",
-    under_preparation: "قيد التحضير",
-    preparing: "قيد التحضير",
-    ready: "جاهز",
-    on_the_way: "في الطريق",
-    delivered: "مكتمل",
-    completed: "مكتمل",
+    confirmed: "مؤكد",
+    assigned: "تم الإسناد",
+    picked_up: "تم الاستلام",
+    delivered: "تم التسليم",
+    failed_delivery: "تعذر التوصيل",
     cancelled: "ملغي",
-    canceled: "ملغي",
-    rejected: "مرفوض",
   };
-
-  labels.confirmed = "مؤكد";
-  labels.picked_up = "تم الاستلام";
-  labels.failed_delivery = "تعذر التوصيل";
 
   return labels[status.trim().toLowerCase()] ?? status;
 }

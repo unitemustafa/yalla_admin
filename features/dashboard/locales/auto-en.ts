@@ -3,7 +3,7 @@ export const autoTextEn: Record<string, string> = {
   "نظرة سريعة": "Quick overview",
   "إدارة الطلبات والمنتجات والفروع من مكان واحد":
     "Manage orders, products, and branches from one place",
-  "طلبات مكتملة": "Completed orders",
+  "طلبات تم تسليمها": "Delivered orders",
   "متوسط التجهيز": "Average preparation",
   "18 د": "18 min",
   "تجربة مرتبة للعمليات اليومية، متابعة الشغل أول بأول، وقرارات أسرع من نفس المكان.":
@@ -135,7 +135,7 @@ export const autoTextEn: Record<string, string> = {
   "إنشاء طلب جديد": "Create new order",
   "إجمالي الطلبات": "Total orders",
   "قيد الانتظار": "Pending",
-  "مكتمل": "Completed",
+  "تم التسليم": "Delivered",
   "ملغي": "Cancelled",
   "نوع الطلب": "Order type",
   "طريقة الدفع": "Payment method",

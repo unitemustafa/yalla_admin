@@ -708,7 +708,7 @@ function orderMatchesFilters(order: DashboardOrder, filters: OrderFilters) {
 }
 
 function orderStatusTone(status: string): "green" | "yellow" | "blue" | "red" | "gray" {
-  if (status === "مكتمل") return "gray";
+  if (status === "تم التسليم") return "gray";
   if (status === "مؤكد") return "blue";
   if (status === "ملغي") return "red";
   return "yellow";
@@ -935,7 +935,7 @@ export function OrdersPage() {
     (order) => order.status === "قيد الانتظار",
   ).length;
   const completedCount = dateFilteredOrders.filter(
-    (order) => order.status === "مكتمل",
+    (order) => order.status === "تم التسليم",
   ).length;
   const cancelledCount = dateFilteredOrders.filter(
     (order) => order.status === "ملغي",
@@ -980,7 +980,7 @@ export function OrdersPage() {
         cards={[
           ["إجمالي الطلبات", String(dateFilteredOrders.length), ShoppingCart, "text-primary"],
           ["قيد الانتظار", String(waitingCount), Calendar, "text-amber-500"],
-          ["مكتمل", String(completedCount), CheckCircle2, "text-green-500"],
+          ["تم التسليم", String(completedCount), CheckCircle2, "text-green-500"],
           ["ملغي", String(cancelledCount), XCircle, "text-destructive"],
         ]}
       />

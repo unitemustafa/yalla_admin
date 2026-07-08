@@ -124,10 +124,8 @@ export const deliveryLaterLabel = "يحدد لاحقاً";
 export const orderStatusLabels = {
   pending: "قيد الانتظار",
   confirmed: "مؤكد",
-  under_preparation: "قيد التجهيز",
-  ready: "جاهز للإسناد",
+  assigned: "تم الإسناد",
   picked_up: "تم الاستلام",
-  on_the_way: "في الطريق",
   delivered: "تم التسليم",
   failed_delivery: "تعذر التوصيل",
   cancelled: "ملغي",

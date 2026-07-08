@@ -30,7 +30,8 @@ const currency = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
-const orderSteps = ["قيد الانتظار", "مؤكد", "مكتمل"] as const;
+const orderSteps = ["قيد الانتظار", "مؤكد", "تم الإسناد", "تم الاستلام", "تم التسليم"] as const;
+const orderAdminActionSteps = ["قيد الانتظار", "مؤكد"] as const;
 
 type OrderStatus = (typeof orderSteps)[number];
 
@@ -89,7 +90,7 @@ const defaultOrderCourier: OrderCourier = {
   vehicle: "موتوسيكل",
   plateNumber: "ق ر ب 2481",
   zone: "التل الكبير",
-  status: "في الطريق",
+  status: "تم الاستلام",
   currentLocation: "شارع البحر، بجوار موقف التل الكبير",
   mapUrl: "https://www.google.com/maps/search/?api=1&query=El+Tall+El+Kebir",
 };
@@ -102,7 +103,7 @@ const demoOrderCouriers: Record<string, OrderCourier> = {
     vehicle: "موتوسيكل",
     plateNumber: "س د ن 3194",
     zone: "التل الكبير",
-    status: "استلم الطلب",
+    status: "تم الاستلام",
     currentLocation: "مدخل التل الكبير، طريق الإسماعيلية الزراعي",
     mapUrl: "https://www.google.com/maps/search/?api=1&query=El+Tall+El+Kebir+Ismailia",
   },
@@ -112,7 +113,7 @@ const demoOrderCouriers: Record<string, OrderCourier> = {
     vehicle: "موتوسيكل",
     plateNumber: "ط ل ب 5702",
     zone: "التل الكبير",
-    status: "جاهز للتسليم",
+    status: "تم الإسناد",
     currentLocation: "قرب سنتر السلام، التل الكبير",
     mapUrl: "https://www.google.com/maps/search/?api=1&query=El+Salam+El+Tall+El+Kebir",
   },
@@ -187,10 +188,6 @@ function productsForOrder(order: DashboardOrder & { products?: OrderProduct[] })
 }
 
 function normalizeOrderStatus(status: string): OrderStatus {
-  if (status === "قيد التجهيز" || status === "جاهز") {
-    return "مؤكد";
-  }
-
   return orderSteps.includes(status as OrderStatus)
     ? (status as OrderStatus)
     : orderSteps[0];
@@ -400,7 +397,7 @@ function StatusTimeline({
         </div>
       </div>
 
-      <ol className="grid gap-y-5 px-5 py-6 md:grid-cols-3 md:gap-y-0">
+      <ol className="grid gap-y-5 px-5 py-6 md:grid-cols-5 md:gap-y-0">
         {orderSteps.map((step, index) => {
           const isReached = index <= activeStep;
           const isActive = index === activeStep;
@@ -716,7 +713,7 @@ export function OrderDetailPage({ order }: { order: DashboardOrder }) {
                 تغيير الحالة
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {orderSteps.map((status) => {
+                {orderAdminActionSteps.map((status) => {
                   const selected = status === currentStatus;
 
                   return (

@@ -12,11 +12,8 @@ export type CourierOrderRuleLike = {
 };
 
 const activeAssignedStatuses = new Set([
-  "confirmed",
-  "under_preparation",
-  "ready",
+  "assigned",
   "picked_up",
-  "on_the_way",
 ]);
 
 const terminalStatuses = new Set([

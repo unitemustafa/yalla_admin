@@ -60,10 +60,8 @@ import {
 type BackendOrderStatus =
   | "pending"
   | "confirmed"
-  | "under_preparation"
-  | "ready"
+  | "assigned"
   | "picked_up"
-  | "on_the_way"
   | "delivered"
   | "failed_delivery"
   | "cancelled";
@@ -351,22 +349,24 @@ type ProductVariantOption = {
 const statusOptions: BackendOrderStatus[] = [
   "pending",
   "confirmed",
-  "under_preparation",
-  "ready",
+  "assigned",
   "picked_up",
-  "on_the_way",
   "delivered",
+  "failed_delivery",
+  "cancelled",
 ];
 
-const filterStatusOptions: BackendOrderStatus[] = [...statusOptions, "failed_delivery", "cancelled"];
+const adminStatusActionOptions: BackendOrderStatus[] = [
+  "pending",
+  "confirmed",
+  "failed_delivery",
+];
 
 const orderRouteStatuses: BackendOrderStatus[] = [
   "pending",
   "confirmed",
-  "under_preparation",
-  "ready",
+  "assigned",
   "picked_up",
-  "on_the_way",
   "delivered",
 ];
 
@@ -377,7 +377,7 @@ const statusLabels: Record<BackendOrderStatus, string> = orderStatusLabels;
 function statusTone(status: BackendOrderStatus): "blue" | "green" | "red" | "secondary" {
   if (status === "delivered") return "green";
   if (status === "cancelled" || status === "failed_delivery") return "red";
-  if (status === "ready" || status === "confirmed" || status === "on_the_way" || status === "picked_up") return "blue";
+  if (status === "confirmed" || status === "assigned" || status === "picked_up") return "blue";
   return "secondary";
 }
 
@@ -520,6 +520,20 @@ function assignedRepresentativeId(order: BackendOrder) {
   return order.assigned_representative?.id ?? order.assigned_representative_id ?? null;
 }
 
+function hasAssignedRepresentative(order: BackendOrder) {
+  return Boolean(assignedRepresentativeId(order));
+}
+
+function isAssignmentEligible(order: BackendOrder) {
+  return order.status === "confirmed" &&
+    order.review_status === "approved" &&
+    !hasAssignedRepresentative(order);
+}
+
+function isReassignmentEligible(order: BackendOrder) {
+  return order.status === "assigned" && hasAssignedRepresentative(order);
+}
+
 function apiError(value: unknown, fallback: string) {
   const message = firstApiError(value);
   if (!message) return fallback;
@@ -537,18 +551,11 @@ function orderRouteIndex(status: BackendOrderStatus) {
   return index >= 0 ? index : 0;
 }
 
-function canMoveToStatus(currentStatus: BackendOrderStatus, nextStatus: BackendOrderStatus) {
-  if (currentStatus === "cancelled") return false;
-  const currentIndex = orderRouteIndex(currentStatus);
-  const nextIndex = orderRouteIndex(nextStatus);
-  return nextIndex > currentIndex;
-}
-
 function allowedStatusesForOrder(order: BackendOrder) {
   if (Array.isArray(order.allowed_statuses)) {
     return new Set(order.allowed_statuses);
   }
-  return new Set(statusOptions.filter((status) => canMoveToStatus(order.status, status)));
+  return new Set<BackendOrderStatus>();
 }
 
 function canMoveOrderToStatus(order: BackendOrder, nextStatus: BackendOrderStatus) {
@@ -614,7 +621,7 @@ function orderTimelineEvents(order: BackendOrder) {
       ? { key: "approved", label: "تمت الموافقة على الطلب", detail: "", time: order.approved_at, active: order.review_status === "approved", cancelled: false }
       : null,
     order.assigned_at
-      ? { key: "assigned", label: "تم تعيين مندوب", detail: "", time: order.assigned_at, active: order.status === "ready", cancelled: false }
+      ? { key: "assigned", label: "تم إسناد مندوب", detail: "", time: order.assigned_at, active: order.status === "assigned", cancelled: false }
       : null,
     order.delivered_at
       ? { key: "delivered", label: "تم تسليم الطلب", detail: "", time: order.delivered_at, active: order.status === "delivered", cancelled: false }
@@ -623,11 +630,43 @@ function orderTimelineEvents(order: BackendOrder) {
       ? { key: "cancelled", label: "تم إلغاء الطلب", detail: order.rejection_reason?.trim() || "", time: order.rejected_at, active: order.status === "cancelled", cancelled: true }
       : order.status === "cancelled" && order.updated_at
         ? { key: "cancelled", label: "تم إلغاء الطلب", detail: "", time: order.updated_at, active: true, cancelled: true }
+        : order.status === "failed_delivery" && order.updated_at
+          ? { key: "failed_delivery", label: "تعذر التوصيل", detail: "", time: order.updated_at, active: true, cancelled: true }
         : null,
-    order.updated_at && order.status !== "cancelled" && !order.delivered_at
+    order.updated_at && !["cancelled", "failed_delivery"].includes(order.status) && !order.delivered_at
       ? { key: "current", label: `الحالة الحالية: ${statusLabels[order.status]}`, detail: "", time: order.updated_at, active: true, cancelled: false }
       : null,
   ].filter((event): event is { key: string; label: string; detail: string; time: string; active: boolean; cancelled: boolean } => Boolean(event));
+}
+
+function orderHistoryStatuses(order: BackendOrder) {
+  const statuses = new Set<BackendOrderStatus>();
+  if (Array.isArray(order.history)) {
+    for (const event of order.history) {
+      if (event.from_status) statuses.add(event.from_status);
+      if (event.to_status) statuses.add(event.to_status);
+    }
+  }
+  statuses.add(order.status);
+  return statuses;
+}
+
+function routeActiveStatus(order: BackendOrder) {
+  if (orderRouteStatuses.includes(order.status)) return order.status;
+  const reachedStatuses = orderHistoryStatuses(order);
+  for (let index = orderRouteStatuses.length - 1; index >= 0; index -= 1) {
+    const status = orderRouteStatuses[index];
+    if (reachedStatuses.has(status)) return status;
+  }
+  return "pending";
+}
+
+function isExceptionalTerminalStatus(status: BackendOrderStatus) {
+  return status === "cancelled" || status === "failed_delivery";
+}
+
+function isClosedOrderStatus(status: BackendOrderStatus) {
+  return status === "delivered" || isExceptionalTerminalStatus(status);
 }
 
 function representativeName(order: BackendOrder) {
@@ -1018,8 +1057,8 @@ export function BackendOrdersPage() {
   const pageStartIndex = (safeCurrentPage - 1) * ordersPageSize;
   const pagedOrders = visibleOrders.slice(pageStartIndex, pageStartIndex + ordersPageSize);
 
-  const readyCount = orders.filter((order) => order.status === "ready" && !assignedRepresentativeId(order)).length;
-  const assignedCount = orders.filter((order) => Boolean(assignedRepresentativeId(order))).length;
+  const assignmentReadyCount = orders.filter((order) => order.status === "confirmed" && !assignedRepresentativeId(order)).length;
+  const assignedCount = orders.filter((order) => order.status === "assigned" && Boolean(assignedRepresentativeId(order))).length;
   const deliveredCount = orders.filter((order) => order.status === "delivered").length;
 
   async function copyOrderNumberFromList(order: BackendOrder) {
@@ -1056,7 +1095,7 @@ export function BackendOrdersPage() {
 
       <div className="mt-6 grid gap-3 md:grid-cols-4">
         <Metric title="إجمالي الطلبات" value={orders.length} />
-        <Metric title="جاهزة للإسناد" value={readyCount} />
+        <Metric title="جاهزة للإسناد" value={assignmentReadyCount} />
         <Metric title="مسندة لمندوب" value={assignedCount} />
         <Metric title="تم التسليم" value={deliveredCount} />
       </div>
@@ -1085,7 +1124,7 @@ export function BackendOrdersPage() {
             }}
             options={[
               { value: "all", label: "كل الحالات" },
-              ...filterStatusOptions.map((value) => ({
+              ...statusOptions.map((value) => ({
                 value,
                 label: statusLabels[value],
               })),
@@ -2956,7 +2995,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
   }
 
   async function unassignRepresentative() {
-    if (!order || !assignedRepresentativeId(order) || order.status !== "ready") return;
+    if (!order || !isReassignmentEligible(order)) return;
     setSavingAssignment(true);
     try {
       const response = await apiFetch(`orders/${order.id}/assignment/`, {
@@ -2967,6 +3006,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
       const data = await apiResponseData(response);
       if (!response.ok) throw new Error(apiError(data, "تعذر إلغاء إسناد الطلب."));
       setOrder(apiOrderData(data) ?? (data as BackendOrder));
+      await loadOrder();
       showSnackbar({ message: "تم إلغاء إسناد المندوب.", tone: "success" });
     } catch (reason) {
       showSnackbar({
@@ -2979,7 +3019,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
   }
 
   async function loadRepresentativeOptions(targetOrder = order) {
-    if (!targetOrder || isDeliveryOrder(targetOrder)) return;
+    if (!targetOrder || (!isAssignmentEligible(targetOrder) && !isReassignmentEligible(targetOrder))) return;
     setRepresentativesLoading(true);
     try {
       const response = await apiFetch(`admin/orders/${targetOrder.id}/service-city-representatives/`);
@@ -3001,7 +3041,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
   }
 
   async function assignSelectedRepresentative() {
-    if (!order || !selectedRepresentativeId || isDeliveryOrder(order)) return;
+    if (!order || !selectedRepresentativeId || (!isAssignmentEligible(order) && !isReassignmentEligible(order))) return;
     setSavingAssignment(true);
     try {
       const representativeIdValue = Number(selectedRepresentativeId);
@@ -3020,6 +3060,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
       setOrder(nextOrder);
       setRepresentativeOptions([]);
       setSelectedRepresentativeId("");
+      await loadOrder();
       showSnackbar({ message: "تم إسناد الطلب للمندوب.", tone: "success" });
     } catch (reason) {
       showSnackbar({
@@ -3100,7 +3141,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
     return <div className="px-6 py-8 text-sm text-destructive">{error ?? "الطلب غير موجود."}</div>;
   }
 
-  const orderCanUseRepresentative = !isDeliveryOrder(order);
+  const orderCanUseRepresentative = isAssignmentEligible(order) || isReassignmentEligible(order) || hasAssignedRepresentative(order);
   const deliveryPriceLocked = order.delivery_price !== null && order.delivery_price !== undefined && order.delivery_price !== "";
 
   return (
@@ -3155,38 +3196,43 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
           <Card className="p-5">
             <div className="mb-3 font-semibold">حالة الطلب</div>
             <Badge tone={statusTone(order.status)}>{statusLabels[order.status]}</Badge>
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              {statusOptions.map((option) => {
-                const current = order.status === option;
-                const canMove = canMoveOrderToStatus(order, option);
-                const completed = orderRouteIndex(option) < orderRouteIndex(order.status);
+            {adminStatusActionOptions.some((option) => canMoveOrderToStatus(order, option)) ? (
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                {adminStatusActionOptions
+                  .filter((option) => canMoveOrderToStatus(order, option))
+                  .map((option) => {
+                    const current = order.status === option;
+                    const completed = orderRouteIndex(option) < orderRouteIndex(order.status);
 
-                return (
-                  <Button
-                    key={option}
-                    type="button"
-                    variant={current ? "default" : "outline"}
-                    disabled={savingStatus || current || !canMove}
-                    title={completed ? "مرحلة تمت ولا يمكن الرجوع إليها" : undefined}
-                    onClick={() => void updateStatus(option)}
-                  >
-                    {statusLabels[option]}
-                  </Button>
-                );
-              })}
-            </div>
-            <div className="mt-3 border-t pt-3">
-              <Button
-                type="button"
-                variant={order.status === "cancelled" ? "danger" : "outline"}
-                className="w-full"
-                disabled={savingStatus || !canMoveOrderToStatus(order, "cancelled")}
-                onClick={() => void updateStatus("cancelled")}
-              >
-                <XCircle className="size-4" />
-                إلغاء الطلب
-              </Button>
-            </div>
+                    return (
+                      <Button
+                        key={option}
+                        type="button"
+                        variant={current ? "default" : "outline"}
+                        disabled={savingStatus || current}
+                        title={completed ? "مرحلة تمت ولا يمكن الرجوع إليها" : undefined}
+                        onClick={() => void updateStatus(option)}
+                      >
+                        {statusLabels[option]}
+                      </Button>
+                    );
+                  })}
+              </div>
+            ) : null}
+            {canMoveOrderToStatus(order, "cancelled") ? (
+              <div className="mt-3 border-t pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={savingStatus}
+                  onClick={() => void updateStatus("cancelled")}
+                >
+                  <XCircle className="size-4" />
+                  إلغاء الطلب
+                </Button>
+              </div>
+            ) : null}
           </Card>
 
           <Card className="p-5 text-sm">
@@ -3247,7 +3293,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
               onClick={() => {
                 const nextOpen = !representativeOpen;
                 setRepresentativeOpen(nextOpen);
-                if (nextOpen && !assignedRepresentativeId(order) && representativeOptions.length === 0) {
+                if (nextOpen && isAssignmentEligible(order) && representativeOptions.length === 0) {
                   void loadRepresentativeOptions(order);
                 }
               }}
@@ -3269,7 +3315,45 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                 {assignedRepresentativeId(order) ? (
                   <div className="grid gap-3">
                     <AssignedRepresentativeDetails order={order} representatives={representativeMap} />
-                    {order.assigned_representative && order.status === "ready" ? (
+                    {isReassignmentEligible(order) ? (
+                      <div className="grid gap-3 rounded-md border bg-muted/20 p-3">
+                        {representativeOptions.length > 0 ? (
+                          <AppSelect
+                            value={selectedRepresentativeId}
+                            onValueChange={setSelectedRepresentativeId}
+                            placeholder="اختر المندوب الجديد"
+                            ariaLabel="اختيار المندوب الجديد"
+                            className="h-10 bg-input"
+                            options={representativeOptions.map((representative) => ({
+                              value: representative.id,
+                              label: representative.phone
+                                ? `${representative.name} - ${representative.phone}`
+                                : representative.name,
+                            }))}
+                          />
+                        ) : null}
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={representativesLoading || savingAssignment}
+                            onClick={() => void loadRepresentativeOptions(order)}
+                          >
+                            {representativesLoading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+                            تحديث المندوبين
+                          </Button>
+                          <Button
+                            type="button"
+                            disabled={!selectedRepresentativeId || savingAssignment}
+                            onClick={() => void assignSelectedRepresentative()}
+                          >
+                            {savingAssignment ? <Loader2 className="size-4 animate-spin" /> : <Truck className="size-4" />}
+                            تغيير المندوب
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+                    {isReassignmentEligible(order) ? (
                       <Button
                         type="button"
                         variant="outline"
@@ -3348,7 +3432,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                 disabled={
                   deliveryPriceLocked ||
                   savingDeliveryPrice ||
-                  ["delivered", "cancelled"].includes(order.status)
+                  isClosedOrderStatus(order.status)
                 }
                 className="h-10"
               />
@@ -3362,7 +3446,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
               disabled={
                 savingDeliveryPrice ||
                 deliveryPriceLocked ||
-                ["delivered", "cancelled"].includes(order.status) ||
+                isClosedOrderStatus(order.status) ||
                 deliveryPriceDraft.trim() === ""
               }
               onClick={() => void updateDeliveryPrice()}
@@ -3375,9 +3459,9 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                 سعر التوصيل محفوظ بالفعل ولا يمكن تعديله من هنا.
               </p>
             ) : null}
-            {["delivered", "cancelled"].includes(order.status) ? (
+            {isClosedOrderStatus(order.status) ? (
               <p className="mt-2 text-xs text-muted-foreground">
-                لا يمكن تعديل سعر التوصيل بعد التسليم أو الإلغاء.
+                لا يمكن تعديل سعر التوصيل بعد التسليم أو الإلغاء أو تعذر التوصيل.
               </p>
             ) : null}
           </Card>
@@ -3431,31 +3515,14 @@ function AssignedRepresentativeDetails({
 }
 
 function OrderRouteCard({ order }: { order: BackendOrder }) {
-  const activeIndex = orderRouteIndex(order.status);
+  const activeStatus = routeActiveStatus(order);
+  const activeIndex = orderRouteIndex(activeStatus);
+  const reachedStatuses = orderHistoryStatuses(order);
+  const hasExceptionalFinal = isExceptionalTerminalStatus(order.status);
+  const routeStatuses = hasExceptionalFinal
+    ? [...orderRouteStatuses, order.status]
+    : orderRouteStatuses;
   const timelineEvents = orderTimelineEvents(order);
-  /*
-    order.created_at
-      ? { key: "created", label: "تم إنشاء الطلب", time: order.created_at, active: order.status === "pending" }
-      : null,
-    order.approved_at
-      ? { key: "approved", label: "تمت الموافقة على الطلب", time: order.approved_at, active: order.review_status === "approved" }
-      : null,
-    order.assigned_at
-      ? { key: "assigned", label: "تم تعيين مندوب", time: order.assigned_at, active: order.status === "ready" }
-      : null,
-    order.delivered_at
-      ? { key: "delivered", label: "تم تسليم الطلب", time: order.delivered_at, active: order.status === "delivered" }
-      : null,
-    order.rejected_at
-      ? { key: "cancelled", label: "تم إلغاء الطلب", time: order.rejected_at, active: order.status === "cancelled" }
-      : order.status === "cancelled" && order.updated_at
-        ? { key: "cancelled", label: "تم إلغاء الطلب", time: order.updated_at, active: true }
-        : null,
-    order.updated_at && order.status !== "cancelled" && !order.delivered_at
-      ? { key: "current", label: `الحالة الحالية: ${statusLabels[order.status]}`, time: order.updated_at, active: true }
-      : null,
-  ].filter((event): event is { key: string; label: string; time: string; active: boolean } => Boolean(event));
-  */
 
   return (
     <Card className="mt-6 overflow-hidden">
@@ -3509,42 +3576,47 @@ function OrderRouteCard({ order }: { order: BackendOrder }) {
           تم إلغاء الطلب.
         </div>
       ) : (
-        <ol className="grid gap-y-5 px-5 py-6 md:grid-cols-7 md:gap-y-0">
-          {orderRouteStatuses.map((status, index) => {
-            const isReached = index <= activeIndex;
-            const isActive = index === activeIndex;
-            const isConnectorReached = index < activeIndex;
+        <ol className={cn("grid gap-y-5 px-5 py-6 md:gap-y-0", hasExceptionalFinal ? "md:grid-cols-6" : "md:grid-cols-5")}>
+          {routeStatuses.map((status, index) => {
+            const isExceptionStep = hasExceptionalFinal && status === order.status && index === routeStatuses.length - 1;
+            const isReached = isExceptionStep || reachedStatuses.has(status) || (!isExceptionStep && index <= activeIndex);
+            const isActive = isExceptionStep || (!hasExceptionalFinal && status === activeStatus);
+            const isConnectorReached = !isExceptionStep && index < activeIndex;
 
             return (
               <li
                 key={status}
                 className="relative flex min-w-0 items-start gap-3 text-sm md:flex-col md:items-center md:gap-3 md:text-center"
               >
-                {index < orderRouteStatuses.length - 1 ? (
+                {index < routeStatuses.length - 1 ? (
                   <span
                     aria-hidden="true"
                     className={cn(
                       "absolute start-[15px] top-8 z-0 h-[calc(100%+1.25rem)] w-0.5 transition-colors md:start-auto md:right-1/2 md:top-4 md:h-0.5 md:w-full",
-                      isConnectorReached ? "bg-emerald-500" : "bg-border",
+                      isConnectorReached ? "bg-emerald-500" : isExceptionStep ? "bg-red-500" : "bg-border",
                     )}
                   />
                 ) : null}
                 <span
                   className={cn(
                     "relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full border-2 transition-all",
-                    isReached
+                    isExceptionStep
+                      ? "border-red-500 bg-red-500 text-white shadow-sm shadow-red-500/25"
+                      : isReached
                       ? "border-emerald-500 bg-emerald-500 text-white shadow-sm shadow-emerald-500/25"
                       : "border-border bg-card text-muted-foreground",
-                    isActive && "ring-4 ring-emerald-500/10",
+                    isActive && (isExceptionStep ? "ring-4 ring-red-500/10" : "ring-4 ring-emerald-500/10"),
                   )}
                 >
-                  {isReached ? <Check className="size-4 stroke-[3]" /> : null}
+                  {isExceptionStep ? <XCircle className="size-4" /> : isReached ? <Check className="size-4 stroke-[3]" /> : null}
                 </span>
                 <div className="min-w-0 text-right md:text-center">
                   <div
                     className={cn(
                       "font-semibold transition-colors",
-                      isReached
+                      isExceptionStep
+                        ? "text-red-600 dark:text-red-300"
+                        : isReached
                         ? "text-emerald-600 dark:text-emerald-300"
                         : "text-muted-foreground",
                     )}
@@ -3554,7 +3626,9 @@ function OrderRouteCard({ order }: { order: BackendOrder }) {
                   <time
                     className={cn(
                       "mt-0.5 block text-xs",
-                      isReached
+                      isExceptionStep
+                        ? "text-red-600/75 dark:text-red-300/75"
+                        : isReached
                         ? "text-emerald-600/75 dark:text-emerald-300/75"
                         : "text-muted-foreground/60",
                     )}

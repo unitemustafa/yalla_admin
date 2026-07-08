@@ -47,10 +47,8 @@ import {
 type CourierOrderStatus =
   | "pending"
   | "confirmed"
-  | "under_preparation"
-  | "ready"
+  | "assigned"
   | "picked_up"
-  | "on_the_way"
   | "delivered"
   | "failed_delivery"
   | "cancelled";
@@ -79,19 +77,17 @@ type CourierOrder = DashboardOrderLike & {
 const statusLabels: Record<CourierOrderStatus, string> = {
   pending: "قيد الانتظار",
   confirmed: "مؤكد",
-  under_preparation: "قيد التجهيز",
-  ready: "جاهز للاستلام",
+  assigned: "تم الإسناد",
   picked_up: "تم الاستلام",
-  on_the_way: "في الطريق",
   delivered: "تم التسليم",
-  failed_delivery: "فشل التوصيل",
+  failed_delivery: "تعذر التوصيل",
   cancelled: "ملغي",
 };
 
 function statusTone(status: CourierOrderStatus) {
   if (status === "delivered") return "green" as const;
   if (status === "cancelled" || status === "failed_delivery") return "red" as const;
-  if (status === "ready" || status === "confirmed" || status === "under_preparation" || status === "picked_up" || status === "on_the_way") return "blue" as const;
+  if (status === "confirmed" || status === "assigned" || status === "picked_up") return "blue" as const;
   return "secondary" as const;
 }
 
@@ -439,7 +435,7 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
         <SummaryMetric
           title="تم التسليم"
           value={deliveredOrders.length}
-          detail="طلبات مكتملة"
+          detail="طلبات تم تسليمها"
           icon={<CheckCircle2 className="size-5" />}
         />
         <SummaryMetric
@@ -513,7 +509,7 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
           />
           <FeaturedOrder
             title="آخر طلب تم تسليمه"
-            description="أحدث عملية تسليم مكتملة"
+            description="أحدث عملية تم تسليمها"
             order={deliveredOrders[0]}
             emptyText="لم يسلم المندوب أي طلب حتى الآن."
           />

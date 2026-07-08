@@ -74,6 +74,7 @@ type ServiceCity = { id: number; name: string; name_ar?: string | null; is_activ
 type AdminOrder = DashboardOrderLike & {
   id: number;
   status: string;
+  review_status?: string | null;
   total_price: string;
   customer?: { first_name?: string; last_name?: string; phone?: string };
   assigned_representative?: number | string | { id?: number | string | null } | null;
@@ -145,6 +146,16 @@ function orderServiceCityId(order: AdminOrder) {
       order.delivery_address?.service_city?.id ??
       "",
   );
+}
+
+function isAssignmentEligible(order: AdminOrder) {
+  return order.status === "confirmed" &&
+    order.review_status === "approved" &&
+    !assignedRepresentativeId(order);
+}
+
+function isReassignmentEligible(order: AdminOrder) {
+  return order.status === "assigned" && Boolean(assignedRepresentativeId(order));
 }
 
 function assignmentOrderLabel(order: AdminOrder, courier: BackendDashboardUser) {
@@ -803,8 +814,12 @@ export function CouriersPage() {
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  const readyOrders = useMemo(
-    () => orders.filter((order) => order.status === "ready" && !assignedRepresentativeId(order)),
+  const assignableOrders = useMemo(
+    () => orders.filter(isAssignmentEligible),
+    [orders],
+  );
+  const reassignableOrders = useMemo(
+    () => orders.filter(isReassignmentEligible),
     [orders],
   );
   const assignedActiveOrders = useMemo(() => {
@@ -819,9 +834,10 @@ export function CouriersPage() {
   const assignmentOrders = useMemo(() => {
     const rows = new Map<string, AdminOrder>();
     for (const order of assignedActiveOrders) rows.set(String(order.id), order);
-    for (const order of readyOrders) rows.set(String(order.id), order);
+    for (const order of assignableOrders) rows.set(String(order.id), order);
+    for (const order of reassignableOrders) rows.set(String(order.id), order);
     return Array.from(rows.values());
-  }, [assignedActiveOrders, readyOrders]);
+  }, [assignedActiveOrders, assignableOrders, reassignableOrders]);
   const filteredReadyOrders = useMemo(() => {
     const courierCityId = String(assigning?.courier_profile?.service_city ?? "");
     const cityRows = courierCityId
@@ -1031,10 +1047,11 @@ export function CouriersPage() {
             const maxActiveOrders = profile?.max_active_orders ?? 0;
             const isAvailable = courier.is_active !== false && profile?.is_available !== false;
             const isAtCapacity = maxActiveOrders > 0 && active >= maxActiveOrders;
-            const canAssign = isAvailable && !isAtCapacity && readyOrders.length > 0 && busy === null;
+            const assignableCount = assignableOrders.length + reassignableOrders.length;
+            const canAssign = isAvailable && !isAtCapacity && assignableCount > 0 && busy === null;
             const assignmentDisabledReason =
-              readyOrders.length === 0
-                ? "لا توجد طلبات جاهزة للإسناد"
+              assignableCount === 0
+                ? "لا توجد طلبات مؤهلة للإسناد"
                 : !isAvailable
                   ? "المندوب غير متاح"
                   : isAtCapacity
@@ -1126,7 +1143,7 @@ export function CouriersPage() {
               <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input value={orderSearch} onChange={(event) => setOrderSearch(event.target.value)} placeholder="ابحث برقم الطلب أو اسم العميل أو العنوان..." className="h-10 ps-9" />
             </div>
-            <Field label="الطلب الجاهز">
+            <Field label="الطلب المؤهل للإسناد">
               <AppSelect
                 value={selectedOrder}
                 onValueChange={setSelectedOrder}
@@ -1137,7 +1154,7 @@ export function CouriersPage() {
                 placeholder={filteredReadyOrders.length ? "اختر طلبًا" : "لا توجد طلبات مطابقة"}
                 className="h-10 bg-input"
                 contentClassName="rounded-xl border-border/80 bg-popover p-1.5 shadow-2xl"
-                ariaLabel="الطلب الجاهز"
+                ariaLabel="الطلب المؤهل للإسناد"
               />
             </Field>
             <Button className="w-full" disabled={!selectedOrder || busy !== null} onClick={() => void assign()}>
