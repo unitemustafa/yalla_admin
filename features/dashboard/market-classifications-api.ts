@@ -5,10 +5,14 @@ type ApiFetch = (path: string, init?: RequestInit) => Promise<Response>;
 export type MarketClassification = {
   id: number;
   name: string;
+  classification_type: MarketClassificationType;
 };
+
+export type MarketClassificationType = "normal" | "featured" | "popular";
 
 export type MarketClassificationPayload = {
   name: string;
+  classification_type: MarketClassificationType;
 };
 
 const endpoint = "home/market-classifications/";
@@ -25,10 +29,15 @@ function normalizeMarketClassification(
   const record = value as Record<string, unknown>;
   const id = Number(record.id);
   const name = typeof record.name === "string" ? record.name.trim() : "";
+  const rawType = record.classification_type;
+  const classification_type =
+    rawType === "popular" || rawType === "featured" || rawType === "normal"
+      ? rawType
+      : "normal";
 
   if (!Number.isFinite(id) || !name) return null;
 
-  return { id, name };
+  return { id, name, classification_type };
 }
 
 function listFromResponse(value: unknown) {
@@ -52,7 +61,10 @@ async function checkedData(response: Response, fallback: string) {
 }
 
 function requestBody(payload: MarketClassificationPayload) {
-  return JSON.stringify({ name: payload.name.trim() });
+  return JSON.stringify({
+    name: payload.name.trim(),
+    classification_type: payload.classification_type,
+  });
 }
 
 export async function loadMarketClassifications(apiFetch: ApiFetch) {

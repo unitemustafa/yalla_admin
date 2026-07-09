@@ -7,15 +7,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   ImagePlus,
-  Layers3,
+  Package,
   Plus,
+  Power,
   Save,
+  Search,
+  Shirt,
+  ShoppingBasket,
+  Sparkles,
   Store,
   Trash2,
   X,
 } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
+import { cn } from "@/lib/utils";
 import {
   AdminApiError,
   adminApiPaths,
@@ -27,14 +33,16 @@ import {
   updateProduct,
   type BackendRecord,
   type NormalizedProduct,
-  type ProductAttributeValuePayload,
+  type NormalizedProductAttribute,
   type ProductVariantPayload,
   type ProductWritePayload,
 } from "../admin-api";
+import { ProductLivePreview } from "../components/product-live-preview";
 import { DashboardImage } from "../dashboard-image";
-import { useSnackbar } from "../snackbar";
 import { AppSelect, Button, CurrencyText, Input, Switch } from "../primitives";
-import { cn } from "@/lib/utils";
+import { useSnackbar } from "../snackbar";
+
+type ProductTheme = "clothing" | "consumer" | "other";
 
 type CatalogMarket = {
   id: string;
@@ -42,31 +50,29 @@ type CatalogMarket = {
   branch: string;
   status: string;
   scope: string;
-};
-
-type CatalogCategory = {
-  id: string;
-  name: string;
-  description: string;
-};
-
-type CatalogAttribute = {
-  id: number;
-  categoryId: number | null;
-  name: string;
-  options: CatalogOption[];
-};
-
-type CatalogOption = {
-  id: number;
-  attributeId: number;
-  value: string;
+  serviceCities: string[];
 };
 
 type ProductAdditionChoice = {
+  classification: string;
   id: string;
   name: string;
   price: string;
+};
+
+type OptionDraft = {
+  clientId: string;
+  id?: number;
+  colorHex?: string;
+  isActive?: boolean;
+  value: string;
+};
+
+type AttributeDraft = {
+  clientId: string;
+  id?: number;
+  name: string;
+  options: OptionDraft[];
 };
 
 type VariantDraft = {
@@ -74,15 +80,136 @@ type VariantDraft = {
   id?: number;
   price: string;
   sku: string;
-  attributeValues: ProductAttributeValuePayload[];
+  selections: Record<string, string>;
 };
 
-const emptyVariant = (): VariantDraft => ({
-  tempId: `variant-${Date.now()}-${Math.round(Math.random() * 10000)}`,
-  price: "",
-  sku: "",
-  attributeValues: [],
-});
+const themeCards: Array<{
+  id: ProductTheme;
+  label: string;
+  description: string;
+  icon: typeof Shirt;
+  tone: string;
+  selectedTone: string;
+}> = [
+  {
+    id: "clothing",
+    label: "ملابس",
+    description: "ألوان، مقاسات، ونوع",
+    icon: Shirt,
+    tone: "border-emerald-200 bg-emerald-50/60 text-emerald-950 hover:border-emerald-300 dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-100",
+    selectedTone: "border-emerald-500 ring-2 ring-emerald-500/20 shadow-[0_14px_28px_rgba(16,185,129,0.16)]",
+  },
+  {
+    id: "consumer",
+    label: "استهلاكي",
+    description: "الوزن والكمية",
+    icon: ShoppingBasket,
+    tone: "border-amber-200 bg-amber-50/70 text-amber-950 hover:border-amber-300 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-100",
+    selectedTone: "border-amber-500 ring-2 ring-amber-500/20 shadow-[0_14px_28px_rgba(245,158,11,0.16)]",
+  },
+  {
+    id: "other",
+    label: "أخرى",
+    description: "بدون قالب جاهز",
+    icon: Package,
+    tone: "border-sky-200 bg-sky-50/70 text-sky-950 hover:border-sky-300 dark:border-sky-400/20 dark:bg-sky-500/10 dark:text-sky-100",
+    selectedTone: "border-sky-500 ring-2 ring-sky-500/20 shadow-[0_14px_28px_rgba(14,165,233,0.16)]",
+  },
+];
+
+const themeTemplates: Record<ProductTheme, AttributeDraft[]> = {
+  clothing: [
+    {
+      clientId: createId("attr-color"),
+      name: "اللون",
+      options: [
+        { clientId: createId("opt-color"), value: "أخضر" },
+        { clientId: createId("opt-color"), value: "أسود" },
+        { clientId: createId("opt-color"), value: "أحمر" },
+        { clientId: createId("opt-color"), value: "كريمي" },
+      ],
+    },
+    {
+      clientId: createId("attr-size"),
+      name: "المقاس",
+      options: [
+        { clientId: createId("opt-size"), value: "صغير" },
+        { clientId: createId("opt-size"), value: "متوسط" },
+        { clientId: createId("opt-size"), value: "كبير" },
+        { clientId: createId("opt-size"), value: "كبير جدًا" },
+      ],
+    },
+    {
+      clientId: createId("attr-type"),
+      name: "النوع",
+      options: [
+        { clientId: createId("opt-type"), value: "رجالي" },
+        { clientId: createId("opt-type"), value: "حريمي" },
+        { clientId: createId("opt-type"), value: "أطفال" },
+      ],
+    },
+  ],
+  consumer: [
+    { clientId: createId("attr-weight"), name: "الوزن", options: [] },
+    { clientId: createId("attr-quantity"), name: "الكمية", options: [] },
+  ],
+  other: [],
+};
+
+function createId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.round(Math.random() * 100000)}`;
+}
+
+function cloneTemplate(theme: ProductTheme) {
+  return themeTemplates[theme].map((attribute) => ({
+    clientId: createId(attribute.clientId),
+    name: attribute.name,
+    options: attribute.options.map((option) => ({
+      clientId: createId(option.clientId),
+      colorHex: colorHexForOption(attribute.name, option.value),
+      isActive: true,
+      value: option.value,
+    })),
+  }));
+}
+
+function isColorAttributeName(name: string) {
+  const normalized = name.trim().toLowerCase();
+  return normalized.includes("لون") || normalized.includes("ط§ظ„ظ„ظˆظ†") || normalized.includes("color");
+}
+
+function colorHexForOption(attributeName: string, value: string) {
+  if (!isColorAttributeName(attributeName)) return undefined;
+  const normalized = value.trim().toLowerCase();
+  const palette: Record<string, string> = {
+    "أسود": "#111827",
+    "ط£ط³ظˆط¯": "#111827",
+    "أحمر": "#dc2626",
+    "ط£ط­ظ…ط±": "#dc2626",
+    "أخضر": "#16a34a",
+    "ط£ط®ط¶ط±": "#16a34a",
+    "أبيض": "#f8fafc",
+    "ط£ط¨ظٹط¶": "#f8fafc",
+    "كريمي": "#f5e6c8",
+    "ظƒط±ظٹظ…ظٹ": "#f5e6c8",
+    "أزرق": "#2563eb",
+    "ط£ط²ط±ظ‚": "#2563eb",
+  };
+  return palette[normalized] ?? "#94a3b8";
+}
+
+function colorInputValue(value: string | undefined) {
+  return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#94a3b8";
+}
+
+function emptyVariant(): VariantDraft {
+  return {
+    tempId: createId("variant"),
+    price: "",
+    sku: "",
+    selections: {},
+  };
+}
 
 function asRecord(value: unknown): BackendRecord | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -101,6 +228,15 @@ function numericId(value: unknown) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function validPrice(value: string) {
+  const trimmed = value.trim();
+  return /^\d+(\.\d{1,2})?$/.test(trimmed) && Number(trimmed) >= 0;
+}
+
+function optionIsActive(option: OptionDraft) {
+  return option.isActive !== false;
+}
+
 function formatApiErrors(value: unknown): string[] {
   if (typeof value === "string" && value.trim()) return [value.trim()];
   if (Array.isArray(value)) return value.flatMap(formatApiErrors);
@@ -115,176 +251,97 @@ function formatApiErrors(value: unknown): string[] {
 }
 
 function normalizeMarket(record: BackendRecord): CatalogMarket {
+  const serviceCities = Array.isArray(record.service_cities)
+    ? record.service_cities
+        .map((city) => textValue(asRecord(city)?.name))
+        .filter(Boolean)
+    : [];
+
   return {
     id: textValue(record.id),
-    name: textValue(record.name, `سوق #${textValue(record.id)}`),
+    name: textValue(record.name, `محل #${textValue(record.id)}`),
     branch: textValue(record.branch),
     status: textValue(record.status, "active"),
-    scope: textValue(record.scope),
-  };
-}
-
-function normalizeCategory(record: BackendRecord): CatalogCategory {
-  const classification = asRecord(record.classification);
-
-  return {
-    id: textValue(record.id),
-    name: textValue(record.name, `فئة #${textValue(record.id)}`),
-    description: textValue(classification?.name),
-  };
-}
-
-function optionFromRecord(record: BackendRecord): CatalogOption | null {
-  const attribute = asRecord(record.attribute);
-  const id = numericId(record.id);
-  const attributeId = numericId(record.attribute_id ?? attribute?.id);
-
-  if (id === null || attributeId === null) return null;
-
-  return {
-    id,
-    attributeId,
-    value: textValue(record.value, `اختيار #${id}`),
-  };
-}
-
-function attributeFromRecord(record: BackendRecord): CatalogAttribute | null {
-  const id = numericId(record.id);
-  const category = asRecord(record.category);
-
-  if (id === null) return null;
-
-  return {
-    id,
-    categoryId: numericId(record.category_id ?? category?.id),
-    name: textValue(record.name, `خاصية #${id}`),
-    options: Array.isArray(record.options)
-      ? record.options
-          .map((option) => optionFromRecord({ ...(asRecord(option) ?? {}), attribute_id: id }))
-          .filter((option): option is CatalogOption => Boolean(option))
-      : [],
+    scope: textValue(record.scope, "service_city"),
+    serviceCities,
   };
 }
 
 function additionFromRecord(record: BackendRecord): ProductAdditionChoice {
   const nameAr = textValue(record.name_ar);
   const name = nameAr || textValue(record.name, textValue(record.name_en, `إضافة #${textValue(record.id)}`));
+  const classification = asRecord(record.classification);
 
   return {
+    classification: textValue(
+      record.classification_name,
+      textValue(classification?.name, "غير مصنف"),
+    ),
     id: textValue(record.id),
     name,
     price: textValue(record.price),
   };
 }
 
-function variantAttributeIds(value: unknown): ProductAttributeValuePayload | null {
-  const record = asRecord(value);
-  if (!record) return null;
-  const attribute = asRecord(record.attribute);
-  const option = asRecord(record.option);
-  const attributeId = numericId(record.attribute_id ?? attribute?.id);
-  const optionId = numericId(record.option_id ?? option?.id);
-  const id = numericId(record.id);
-
-  if (attributeId === null || optionId === null) return null;
-
+function attributeFromProduct(attribute: NormalizedProductAttribute): AttributeDraft {
+  const attrClientId = attribute.client_id || `attr-${attribute.id ?? createId("loaded")}`;
   return {
-    ...(id === null ? {} : { id }),
-    attribute_id: attributeId,
-    option_id: optionId,
+    ...(attribute.id === undefined || attribute.id === null ? {} : { id: attribute.id }),
+    clientId: attrClientId,
+    name: attribute.name,
+    options: attribute.options.map((option) => ({
+      ...(option.id === undefined || option.id === null ? {} : { id: option.id }),
+      clientId: option.client_id || `opt-${option.id ?? createId("loaded")}`,
+      colorHex: colorHexForOption(attribute.name, option.value),
+      isActive: true,
+      value: option.value,
+    })),
   };
 }
 
-function variantDraftFromProductVariant(value: unknown): VariantDraft {
+function variantFromProductVariant(value: unknown, attributes: AttributeDraft[]): VariantDraft {
   const record = asRecord(value) ?? {};
   const id = numericId(record.id);
+  const selections: Record<string, string> = {};
+  const attributeValues = Array.isArray(record.attribute_values) ? record.attribute_values : [];
+
+  attributeValues.forEach((entry) => {
+    const item = asRecord(entry);
+    if (!item) return;
+    const attrId = numericId(item.product_attribute_id ?? item.attribute_id);
+    const optionId = numericId(item.product_attribute_option_id ?? item.option_id);
+    const attribute = attributes.find((candidate) => candidate.id === attrId);
+    const option = attribute?.options.find((candidate) => candidate.id === optionId);
+    if (attribute && option) {
+      selections[attribute.clientId] = option.clientId;
+    }
+  });
 
   return {
-    tempId: `variant-${textValue(record.id, String(Date.now()))}-${Math.round(Math.random() * 10000)}`,
+    tempId: createId("variant"),
     ...(id === null ? {} : { id }),
     price: textValue(record.price),
     sku: textValue(record.sku),
-    attributeValues: Array.isArray(record.attribute_values)
-      ? record.attribute_values
-          .map(variantAttributeIds)
-          .filter((item): item is ProductAttributeValuePayload => Boolean(item))
-      : [],
-  };
-}
-
-function selectedOptionId(
-  variant: VariantDraft,
-  attributeId: number,
-) {
-  return variant.attributeValues.find(
-    (value) => value.attribute_id === attributeId,
-  )?.option_id;
-}
-
-function mergeAttributeValue(
-  variant: VariantDraft,
-  attributeId: number,
-  optionValue: string,
-): VariantDraft {
-  const optionId = numericId(optionValue);
-  const nextValues = variant.attributeValues.filter(
-    (value) => value.attribute_id !== attributeId,
-  );
-
-  if (optionId !== null) {
-    nextValues.push({ attribute_id: attributeId, option_id: optionId });
-  }
-
-  return { ...variant, attributeValues: nextValues };
-}
-
-function uniqueAttributeValues(variants: VariantDraft[]) {
-  const byKey = new Map<string, ProductAttributeValuePayload>();
-  variants.forEach((variant) => {
-    variant.attributeValues.forEach((value) => {
-      byKey.set(`${value.attribute_id}:${value.option_id}`, value);
-    });
-  });
-  return Array.from(byKey.values());
-}
-
-function validPrice(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return false;
-  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return false;
-  return Number.isFinite(Number(trimmed));
-}
-
-function variantPayload(variant: VariantDraft, includeId: boolean): ProductVariantPayload {
-  return {
-    ...(includeId && variant.id !== undefined ? { id: variant.id } : {}),
-    price: Number(variant.price).toFixed(2),
-    ...(variant.sku.trim() ? { sku: variant.sku.trim() } : {}),
-    attribute_values: variant.attributeValues,
+    selections,
   };
 }
 
 function productMarketChoice(product: NormalizedProduct): CatalogMarket | null {
   if (product.marketId === null) return null;
-
   return {
     id: String(product.marketId),
-    name: textValue(product.market?.name, `سوق #${product.marketId}`),
+    name: textValue(product.market?.name, `محل #${product.marketId}`),
     branch: textValue(product.market?.branch),
     status: textValue(product.market?.status, "inactive"),
-    scope: textValue(product.market?.scope),
+    scope: textValue(product.market?.scope, "service_city"),
+    serviceCities: [],
   };
 }
 
-function productCategoryChoice(product: NormalizedProduct): CatalogCategory | null {
-  if (product.categoryId === null) return null;
-  const classification = asRecord(product.category?.classification);
-
-  return {
-    id: String(product.categoryId),
-    name: textValue(product.category?.name, `فئة #${product.categoryId}`),
-    description: textValue(classification?.name),
-  };
+function selectionKey(variant: VariantDraft, attributes: AttributeDraft[]) {
+  return attributes
+    .map((attribute) => `${attribute.clientId}:${variant.selections[attribute.clientId] ?? ""}`)
+    .join("|");
 }
 
 function Section({
@@ -337,61 +394,58 @@ export function ProductFormPage() {
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
   const [markets, setMarkets] = useState<CatalogMarket[]>([]);
-  const [categories, setCategories] = useState<CatalogCategory[]>([]);
-  const [attributes, setAttributes] = useState<CatalogAttribute[]>([]);
-  const [options, setOptions] = useState<CatalogOption[]>([]);
+  const [marketModalOpen, setMarketModalOpen] = useState(false);
+  const [marketQuery, setMarketQuery] = useState("");
+  const [marketTab, setMarketTab] = useState<"general" | "service_city">("general");
   const [additions, setAdditions] = useState<ProductAdditionChoice[]>([]);
+  const [additionPickerOpen, setAdditionPickerOpen] = useState(false);
+  const [additionClassification, setAdditionClassification] = useState("all");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [selectedMarketId, setSelectedMarketId] = useState("");
-  const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [selectedAdditionIds, setSelectedAdditionIds] = useState<number[]>([]);
+  const [theme, setTheme] = useState<ProductTheme>("other");
+  const [attributes, setAttributes] = useState<AttributeDraft[]>(() => cloneTemplate("other"));
   const [isAvailable, setIsAvailable] = useState(true);
+  const [isPopular, setIsPopular] = useState(false);
   const [discount, setDiscount] = useState("0.00");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [variantRows, setVariantRows] = useState<VariantDraft[]>(() => [emptyVariant()]);
   const [variantsDirty, setVariantsDirty] = useState(false);
 
-  const activeAttributes = useMemo(() => {
-    const categoryId = numericId(selectedCategoryId);
-    if (categoryId === null) return [];
+  const selectedMarket = markets.find((market) => market.id === selectedMarketId) ?? null;
 
-    return attributes
-      .filter((attribute) => attribute.categoryId === categoryId)
-      .map((attribute) => {
-        const mergedOptions = [
-          ...attribute.options,
-          ...options.filter((option) => option.attributeId === attribute.id),
-        ];
-        const uniqueOptions = Array.from(
-          new Map(mergedOptions.map((option) => [option.id, option])).values(),
-        );
-
-        return { ...attribute, options: uniqueOptions };
-      });
-  }, [attributes, options, selectedCategoryId]);
-
-  const marketOptions = useMemo(() => {
-    return markets
-      .filter((market) => market.status === "active" || market.id === selectedMarketId)
-      .map((market) => ({
-        value: market.id,
-        label: market.branch ? `${market.name} - ${market.branch}` : market.name,
-        disabled: market.status !== "active" && market.id === selectedMarketId,
-      }));
-  }, [markets, selectedMarketId]);
-
-  const categoryOptions = useMemo(
-    () =>
-      categories.map((category) => ({
-        value: category.id,
-        label: category.description
-          ? `${category.name} - ${category.description}`
-          : category.name,
-      })),
-    [categories],
+  const additionClassifications = useMemo(
+    () => Array.from(new Set(additions.map((addition) => addition.classification || "غير مصنف"))),
+    [additions],
   );
+
+  const filteredAdditions = useMemo(
+    () =>
+      additionClassification === "all"
+        ? additions
+        : additions.filter((addition) => addition.classification === additionClassification),
+    [additionClassification, additions],
+  );
+
+  const selectedAdditions = useMemo(() => {
+    const selectedIds = new Set(selectedAdditionIds.map(String));
+    return additions.filter((addition) => selectedIds.has(addition.id));
+  }, [additions, selectedAdditionIds]);
+
+  const filteredMarkets = useMemo(() => {
+    const query = marketQuery.trim().toLowerCase();
+    return markets.filter((market) => {
+      if (market.status !== "active" && market.id !== selectedMarketId) return false;
+      if (marketTab === "general" && market.scope !== "general") return false;
+      if (marketTab === "service_city" && market.serviceCities.length === 0) return false;
+      if (!query) return true;
+      return `${market.name} ${market.branch} ${market.serviceCities.join(" ")}`
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [marketQuery, marketTab, markets, selectedMarketId]);
 
   useEffect(
     () => () => {
@@ -408,67 +462,28 @@ export function ProductFormPage() {
       setCatalogError("");
 
       try {
-        const [
-          marketsResponse,
-          categoriesResponse,
-          attributesResponse,
-          optionsResponse,
-          additionsResponse,
-        ] = await Promise.all([
+        const [marketsResponse, additionsResponse] = await Promise.all([
           apiFetch(adminApiPaths.markets),
-          apiFetch(adminApiPaths.productCategories),
-          apiFetch(adminApiPaths.categoryAttributes),
-          apiFetch(adminApiPaths.categoryOptions),
           apiFetch(adminApiPaths.productAdditions),
         ]);
-        const [
-          marketsData,
-          categoriesData,
-          attributesData,
-          optionsData,
-          additionsData,
-        ] = await Promise.all([
+        const [marketsData, additionsData] = await Promise.all([
           readApiData(marketsResponse),
-          readApiData(categoriesResponse),
-          readApiData(attributesResponse),
-          readApiData(optionsResponse),
           readApiData(additionsResponse),
         ]);
 
-        if (
-          !marketsResponse.ok ||
-          !categoriesResponse.ok ||
-          !attributesResponse.ok ||
-          !optionsResponse.ok ||
-          !additionsResponse.ok
-        ) {
+        if (!marketsResponse.ok || !additionsResponse.ok) {
           throw new Error("تعذر تحميل بيانات المنتج");
         }
 
         if (!active) return;
 
         const nextMarkets = apiList(marketsData).map(normalizeMarket);
-        const nextCategories = apiList(categoriesData).map(normalizeCategory);
         setMarkets(nextMarkets);
-        setCategories(nextCategories);
-        setAttributes(
-          apiList(attributesData)
-            .map(attributeFromRecord)
-            .filter((attribute): attribute is CatalogAttribute => Boolean(attribute)),
-        );
-        setOptions(
-          apiList(optionsData)
-            .map(optionFromRecord)
-            .filter((option): option is CatalogOption => Boolean(option)),
-        );
         setAdditions(apiList(additionsData).map(additionFromRecord));
         setSelectedMarketId((current) => current || nextMarkets[0]?.id || "");
-        setSelectedCategoryId((current) => current || nextCategories[0]?.id || "");
       } catch (error) {
         if (active) {
-          setCatalogError(
-            error instanceof Error ? error.message : "تعذر تحميل بيانات المنتج",
-          );
+          setCatalogError(error instanceof Error ? error.message : "تعذر تحميل بيانات المنتج");
         }
       } finally {
         if (active) setCatalogLoading(false);
@@ -484,7 +499,15 @@ export function ProductFormPage() {
 
   const hydrateProduct = useCallback((product: NormalizedProduct, options: { clone: boolean }) => {
     const marketChoice = productMarketChoice(product);
-    const categoryChoice = productCategoryChoice(product);
+    const nextAttributes = product.attributes.length
+      ? product.attributes.map(attributeFromProduct)
+      : cloneTemplate(product.theme);
+    const variants = product.variants.length
+      ? product.variants.map((variant) => {
+          const draft = variantFromProductVariant(variant, nextAttributes);
+          return options.clone ? { ...draft, id: undefined } : draft;
+        })
+      : [emptyVariant()];
 
     if (marketChoice) {
       setMarkets((current) =>
@@ -494,40 +517,26 @@ export function ProductFormPage() {
       );
       setSelectedMarketId(marketChoice.id);
     }
-    if (categoryChoice) {
-      setCategories((current) =>
-        current.some((category) => category.id === categoryChoice.id)
-          ? current
-          : [...current, categoryChoice],
-      );
-      setSelectedCategoryId(categoryChoice.id);
-    }
 
+    setTheme(product.theme);
+    setAttributes(nextAttributes);
     setName(options.clone ? `${product.name} (نسخة)` : product.name);
     setDescription(product.description);
     setDiscount(String(product.discount ?? "0.00"));
     setIsAvailable(product.isAvailable);
+    setIsPopular(product.isPopular);
     setSelectedAdditionIds(normalizeIds(product.additions));
     setImagePreview(product.image);
     setImageFile(null);
-    setVariantRows(
-      product.variants.length
-        ? product.variants.map((variant) => {
-            const draft = variantDraftFromProductVariant(variant);
-            return options.clone ? { ...draft, id: undefined } : draft;
-          })
-        : [emptyVariant()],
-    );
+    setVariantRows(variants);
     setVariantsDirty(false);
     setSaveError("");
   }, []);
 
   useEffect(() => {
     const sourceId = editItemId || duplicateId;
-
     if (!sourceId) return;
     const productId = sourceId;
-
     let active = true;
 
     async function loadProduct() {
@@ -537,17 +546,12 @@ export function ProductFormPage() {
       try {
         const product = await getProduct(apiFetch, productId);
         if (!active) return;
-
         hydrateProduct(product, { clone: !isEditing });
       } catch (error) {
         if (!active) return;
-        if (error instanceof AdminApiError && error.status === 404) {
-          setProductError("تعذر العثور على المنتج");
-        } else {
-          setProductError(
-            error instanceof Error ? error.message : "تعذر تحميل بيانات المنتج",
-          );
-        }
+        setProductError(
+          error instanceof Error ? error.message : "تعذر تحميل بيانات المنتج",
+        );
       } finally {
         if (active) setProductLoading(false);
       }
@@ -581,6 +585,150 @@ export function ProductFormPage() {
     setImageFile(null);
   }
 
+  function applyTheme(nextTheme: ProductTheme) {
+    if (nextTheme === theme) return;
+    setTheme(nextTheme);
+    setAttributes(cloneTemplate(nextTheme));
+    setVariantRows([emptyVariant()]);
+    setVariantsDirty(true);
+  }
+
+  function addAttribute() {
+    setAttributes((current) => [
+      ...current,
+      { clientId: createId("attr"), name: "خاصية جديدة", options: [] },
+    ]);
+    setVariantsDirty(true);
+  }
+
+  function updateAttribute(clientId: string, name: string) {
+    setAttributes((current) =>
+      current.map((attribute) =>
+        attribute.clientId === clientId ? { ...attribute, name } : attribute,
+      ),
+    );
+    setVariantsDirty(true);
+  }
+
+  function removeAttribute(clientId: string) {
+    setAttributes((current) => current.filter((attribute) => attribute.clientId !== clientId));
+    setVariantRows((current) =>
+      current.map((variant) => {
+        const selections = { ...variant.selections };
+        delete selections[clientId];
+        return { ...variant, selections };
+      }),
+    );
+    setVariantsDirty(true);
+  }
+
+  function addOption(attributeClientId: string) {
+    setAttributes((current) =>
+      current.map((attribute) =>
+        attribute.clientId === attributeClientId
+          ? {
+              ...attribute,
+              options: [
+                ...attribute.options,
+                {
+                  clientId: createId("opt"),
+                  colorHex: isColorAttributeName(attribute.name) ? "#94a3b8" : undefined,
+                  isActive: true,
+                  value: isColorAttributeName(attribute.name) ? "لون جديد" : "اختيار جديد",
+                },
+              ],
+            }
+          : attribute,
+      ),
+    );
+    setVariantsDirty(true);
+  }
+
+  function updateOption(attributeClientId: string, optionClientId: string, value: string) {
+    setAttributes((current) =>
+      current.map((attribute) =>
+        attribute.clientId === attributeClientId
+          ? {
+              ...attribute,
+              options: attribute.options.map((option) =>
+                option.clientId === optionClientId ? { ...option, value } : option,
+              ),
+            }
+          : attribute,
+      ),
+    );
+    setVariantsDirty(true);
+  }
+
+  function updateOptionColor(attributeClientId: string, optionClientId: string, colorHex: string) {
+    setAttributes((current) =>
+      current.map((attribute) =>
+        attribute.clientId === attributeClientId
+          ? {
+              ...attribute,
+              options: attribute.options.map((option) =>
+                option.clientId === optionClientId ? { ...option, colorHex } : option,
+              ),
+            }
+          : attribute,
+      ),
+    );
+    setVariantsDirty(true);
+  }
+
+  function removeOption(attributeClientId: string, optionClientId: string) {
+    setAttributes((current) =>
+      current.map((attribute) =>
+        attribute.clientId === attributeClientId
+          ? {
+              ...attribute,
+              options: attribute.options.filter((option) => option.clientId !== optionClientId),
+            }
+          : attribute,
+      ),
+    );
+    setVariantRows((current) =>
+      current.map((variant) => ({
+        ...variant,
+        selections:
+          variant.selections[attributeClientId] === optionClientId
+            ? { ...variant.selections, [attributeClientId]: "" }
+            : variant.selections,
+      })),
+    );
+    setVariantsDirty(true);
+  }
+
+  function toggleOptionActive(attributeClientId: string, optionClientId: string) {
+    let nextActive = true;
+    setAttributes((current) =>
+      current.map((attribute) =>
+        attribute.clientId === attributeClientId
+          ? {
+              ...attribute,
+              options: attribute.options.map((option) => {
+                if (option.clientId !== optionClientId) return option;
+                nextActive = option.isActive === false;
+                return { ...option, isActive: nextActive };
+              }),
+            }
+          : attribute,
+      ),
+    );
+    if (!nextActive) {
+      setVariantRows((current) =>
+        current.map((variant) => ({
+          ...variant,
+          selections:
+            variant.selections[attributeClientId] === optionClientId
+              ? { ...variant.selections, [attributeClientId]: "" }
+              : variant.selections,
+        })),
+      );
+    }
+    setVariantsDirty(true);
+  }
+
   function updateVariant(tempId: string, updater: (variant: VariantDraft) => VariantDraft) {
     setVariantsDirty(true);
     setVariantRows((currentRows) =>
@@ -604,12 +752,6 @@ export function ProductFormPage() {
     );
   }
 
-  function changeCategory(categoryId: string) {
-    setSelectedCategoryId(categoryId);
-    setVariantRows([emptyVariant()]);
-    setVariantsDirty(true);
-  }
-
   function toggleAddition(additionId: string | number) {
     const id = Number(additionId);
     if (!Number.isFinite(id)) return;
@@ -623,21 +765,79 @@ export function ProductFormPage() {
 
   function validateForm() {
     if (!name.trim()) return "اسم المنتج مطلوب";
-    if (!selectedMarketId) return "اختر السوق";
-    if (!selectedCategoryId) return "اختر الفئة";
-    if (!variantRows.length || variantRows.every((variant) => !variant.price.trim())) {
-      return "يجب إضافة سعر/متغير واحد على الأقل";
+    if (!selectedMarketId) return "اختر المحل";
+    if (!theme) return "اختر الثيم";
+    const discountValue = Number(discount);
+    if (!Number.isFinite(discountValue) || discountValue < 0 || discountValue >= 100) {
+      return "الخصم غير صالح";
     }
-    if (variantRows.some((variant) => !validPrice(variant.price))) {
-      return "السعر يجب أن يكون رقماً صحيحاً";
+    const cleanAttributes = attributes.filter((attribute) => attribute.name.trim());
+    if (!cleanAttributes.length) {
+      const priced = variantRows.filter((variant) => variant.price.trim());
+      if (priced.length !== 1) return "أدخل السعر الأساسي فقط";
+      if (!validPrice(priced[0].price)) return "سعر المنتج غير صالح";
+      return null;
     }
-    return "";
+    const seen = new Map<string, number>();
+    for (const [index, variant] of variantRows.entries()) {
+      if (!variant.price.trim()) return `سعر المتغير رقم ${index + 1} غير صالح`;
+      if (!validPrice(variant.price)) return `سعر المتغير رقم ${index + 1} غير صالح`;
+      for (const attribute of cleanAttributes) {
+        const selectedOptionId = variant.selections[attribute.clientId];
+        if (!selectedOptionId) {
+          return `المتغير رقم ${index + 1} ينقصه اختيار ${attribute.name}`;
+        }
+        const selectedOption = attribute.options.find((option) => option.clientId === selectedOptionId);
+        if (!selectedOption || !optionIsActive(selectedOption)) {
+          return `اختيار ${attribute.name} في المتغير رقم ${index + 1} غير متاح`;
+        }
+      }
+      const key = selectionKey(variant, cleanAttributes);
+      if (seen.has(key)) {
+        return `المتغير رقم ${index + 1} يكرر تركيبة المتغير رقم ${seen.get(key)}`;
+      }
+      seen.set(key, index + 1);
+    }
+    return null;
+  }
+
+  function attributePayload() {
+    return attributes
+      .filter((attribute) => attribute.name.trim())
+      .map((attribute, index) => ({
+        ...(attribute.id === undefined ? {} : { id: attribute.id }),
+        client_id: attribute.clientId,
+        name: attribute.name.trim(),
+        sort_order: index,
+        options: attribute.options
+          .filter((option) => option.value.trim())
+          .map((option, optionIndex) => ({
+            ...(option.id === undefined ? {} : { id: option.id }),
+            client_id: option.clientId,
+            value: option.value.trim(),
+            sort_order: optionIndex,
+          })),
+      }));
+  }
+
+  function variantPayloads(): ProductVariantPayload[] {
+    const activeAttributes = attributes.filter((attribute) => attribute.name.trim());
+    const sourceRows = activeAttributes.length
+      ? variantRows
+      : variantRows.filter((variant) => variant.price.trim()).slice(0, 1);
+
+    return sourceRows.map((variant) => ({
+      ...(variant.id !== undefined ? { id: variant.id } : {}),
+      price: Number(variant.price).toFixed(2),
+      selections: activeAttributes.map((attribute) => ({
+        attribute_client_id: attribute.clientId,
+        option_client_id: variant.selections[attribute.clientId],
+      })),
+    }));
   }
 
   async function saveProduct(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (saving) return;
-
     const validationError = validateForm();
     if (validationError) {
       setSaveError(validationError);
@@ -645,28 +845,18 @@ export function ProductFormPage() {
     }
 
     const marketId = Number(selectedMarketId);
-    const categoryId = Number(selectedCategoryId);
-    const variants = variantRows.map((variant) =>
-      variantPayload(variant, Boolean(isEditing)),
-    );
-    const additionIds = normalizeIds(selectedAdditionIds);
-    if (process.env.NODE_ENV === "development") {
-      console.log("additionIds", additionIds);
-    }
+    const additionIds = selectedAdditionIds.filter((id) => Number.isFinite(id));
     const payload: ProductWritePayload = {
       market_id: marketId,
-      category_id: categoryId,
+      theme,
+      is_popular: isPopular,
       is_available: isAvailable,
       name: name.trim(),
       description: description.trim(),
-      discount: discount.trim() || "0.00",
+      discount: Number(discount || 0).toFixed(2),
       additions: additionIds,
-      ...(!isEditing || variantsDirty
-        ? {
-            attribute_values: uniqueAttributeValues(variantRows),
-            variants,
-          }
-        : {}),
+      attributes: attributePayload(),
+      ...(!isEditing || variantsDirty ? { variants: variantPayloads() } : {}),
     };
 
     setSaving(true);
@@ -693,12 +883,39 @@ export function ProductFormPage() {
     }
   }
 
+  const previewAttributes = attributes.map((attribute) => ({
+    id: attribute.id,
+    clientId: attribute.clientId,
+    name: attribute.name,
+    options: attribute.options.map((option) => ({
+      id: option.id,
+      clientId: option.clientId,
+      attributeId: attribute.id,
+      attributeClientId: attribute.clientId,
+      colorHex: option.colorHex ?? colorHexForOption(attribute.name, option.value),
+      isActive: optionIsActive(option),
+      value: option.value,
+    })),
+  }));
+
+  const previewVariants = variantRows.map((variant) => ({
+    tempId: variant.tempId,
+    price: variant.price,
+    attributeValues: [],
+    selections: Object.entries(variant.selections)
+      .filter(([, optionClientId]) => Boolean(optionClientId))
+      .map(([attributeClientId, optionClientId]) => ({
+        attributeClientId,
+        optionClientId,
+      })),
+  }));
+
   const pageTitle = isEditing ? "تعديل منتج" : "إضافة منتج";
   const pageDescription = isEditing
-    ? "عدّل بيانات المنتج من استجابة الباك مباشرة."
+    ? "عدّل بيانات المنتج ومتغيراته من العقد الجديد."
     : duplicateId
       ? "أنشئ نسخة جديدة من منتج موجود."
-      : "أنشئ منتجاً جديداً متوافقاً مع API_REPORT.md.";
+      : "أنشئ منتجًا تابعًا لمحل مع ثيم وخصائص خاصة به.";
 
   if (productLoading && isEditing) {
     return (
@@ -770,13 +987,14 @@ export function ProductFormPage() {
         ) : null}
       </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="grid gap-5">
           <Section title="البيانات الأساسية">
             <div className="grid gap-4 md:grid-cols-2">
               <LabelText label="اسم المنتج">
                 <Input
                   className="h-10"
+                  data-testid="product-name-input"
                   onChange={(event) => setName(event.target.value)}
                   placeholder="اسم المنتج مطلوب"
                   value={name}
@@ -794,51 +1012,240 @@ export function ProductFormPage() {
             <LabelText label="وصف المنتج">
               <textarea
                 className="min-h-24 w-full resize-none rounded-md border border-border bg-input px-3 py-2 text-sm shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/15"
+                data-testid="product-description-input"
                 onChange={(event) => setDescription(event.target.value)}
                 placeholder="الوصف اختياري"
                 value={description}
               />
             </LabelText>
             <div className="grid gap-4 md:grid-cols-2">
-              <LabelText label="السوق">
-                <AppSelect
-                  ariaLabel="السوق"
-                  className="h-10"
-                  disabled={catalogLoading || !marketOptions.length}
-                  icon={<Store className="size-4" />}
-                  onValueChange={setSelectedMarketId}
-                  options={marketOptions}
-                  placeholder={catalogLoading ? "جار التحميل..." : "اختر السوق"}
-                  value={selectedMarketId}
-                />
+              <LabelText label="المحل">
+                <button
+                  className="flex h-10 w-full items-center justify-between gap-3 rounded-md border bg-input px-3 text-sm shadow-sm transition hover:border-primary/50"
+                  onClick={() => setMarketModalOpen(true)}
+                  type="button"
+                >
+                  <span className="min-w-0 truncate font-semibold">
+                    {selectedMarket
+                      ? selectedMarket.branch
+                        ? `${selectedMarket.name} - ${selectedMarket.branch}`
+                        : selectedMarket.name
+                      : "اختيار المحل"}
+                  </span>
+                  <Store className="size-4 text-muted-foreground" />
+                </button>
               </LabelText>
-              <LabelText label="الفئة">
-                <AppSelect
-                  ariaLabel="الفئة"
-                  className="h-10"
-                  disabled={catalogLoading || !categoryOptions.length}
-                  icon={<Layers3 className="size-4" />}
-                  onValueChange={changeCategory}
-                  options={categoryOptions}
-                  placeholder={catalogLoading ? "جار التحميل..." : "اختر الفئة"}
-                  value={selectedCategoryId}
-                />
+              <LabelText label="الخصم">
+                <div className="relative" dir="ltr">
+                  <Input
+                    className="h-10 pe-10 text-left"
+                    data-testid="product-discount-input"
+                    inputMode="decimal"
+                    onChange={(event) => setDiscount(event.target.value.replace(/[^\d.]/g, ""))}
+                    placeholder="0.00"
+                    value={discount}
+                  />
+                  <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-sm font-black text-muted-foreground">
+                    %
+                  </span>
+                </div>
               </LabelText>
             </div>
-            <LabelText label="الخصم">
-              <div className="relative max-w-xs" dir="ltr">
-                <Input
-                  className="h-10 pe-10 text-left"
-                  inputMode="decimal"
-                  onChange={(event) => setDiscount(event.target.value.replace(/[^\d.]/g, ""))}
-                  placeholder="0.00"
-                  value={discount}
-                />
-                <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-sm font-black text-muted-foreground">
-                  %
-                </span>
+            <div className="flex min-h-12 items-center justify-between rounded-md border bg-background px-3 py-2">
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                <Sparkles className="size-4 text-[#FFA000]" />
+                منتج شائع
+              </span>
+              <Switch checked={isPopular} onCheckedChange={setIsPopular} />
+            </div>
+          </Section>
+
+          <Section title="الإضافات">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold">
+                  {selectedAdditions.length
+                    ? `${selectedAdditions.length} إضافات محددة`
+                    : "لا توجد إضافات محددة"}
+                </div>
+                {selectedAdditions.length ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {selectedAdditions.map((addition) => (
+                      <span
+                        key={addition.id}
+                        className="inline-flex h-8 items-center gap-2 rounded-md border bg-background px-2 text-xs font-semibold"
+                      >
+                        {addition.name}
+                        {addition.price ? (
+                          <CurrencyText className="text-primary">{`EGP ${addition.price}`}</CurrencyText>
+                        ) : null}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </div>
-            </LabelText>
+              <Button onClick={() => setAdditionPickerOpen(true)} type="button" variant="outline">
+                <Plus className="size-4" />
+                اختيار الإضافات
+              </Button>
+            </div>
+          </Section>
+
+          <Section title="الثيم">
+            <div className="grid gap-3 md:grid-cols-3">
+              {themeCards.map((card) => {
+                const Icon = card.icon;
+                const selected = theme === card.id;
+                return (
+                  <button
+                    key={card.id}
+                    aria-pressed={selected}
+                    className={cn(
+                      "group grid min-h-[116px] gap-3 rounded-lg border p-4 text-start transition",
+                      card.tone,
+                      selected && card.selectedTone,
+                    )}
+                    onClick={() => applyTheme(card.id)}
+                    type="button"
+                  >
+                    <span className="flex items-start justify-between gap-3">
+                      <span className="flex size-10 items-center justify-center rounded-md bg-background/75 shadow-sm">
+                        <Icon className="size-5" />
+                      </span>
+                      <span
+                        className={cn(
+                          "flex size-6 items-center justify-center rounded-full border bg-background/80",
+                          selected ? "border-primary text-primary" : "border-transparent text-transparent",
+                        )}
+                      >
+                        <Check className="size-4" />
+                      </span>
+                    </span>
+                    <span>
+                      <span className="block font-black">{card.label}</span>
+                      <span className="mt-1 block text-xs font-semibold opacity-75">
+                        {card.description}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </Section>
+
+          <Section title="خصائص المنتج">
+            <div className="grid gap-3">
+              {attributes.map((attribute, attributeIndex) => (
+                <div key={attribute.clientId} className="grid gap-3 rounded-md border bg-background p-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                    <Input
+                      className="h-10 flex-1"
+                      onChange={(event) => updateAttribute(attribute.clientId, event.target.value)}
+                      value={attribute.name}
+                    />
+                    <div className="flex gap-2">
+                      <Button onClick={() => addOption(attribute.clientId)} type="button" variant="outline">
+                        <Plus className="size-4" />
+                        {isColorAttributeName(attribute.name) ? "إضافة لون" : "اختيار"}
+                      </Button>
+                      <Button
+                        aria-label="حذف الخاصية"
+                        onClick={() => removeAttribute(attribute.clientId)}
+                        type="button"
+                        variant="outline"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {attribute.options.map((option) => {
+                      const isColor = isColorAttributeName(attribute.name);
+                      const active = optionIsActive(option);
+                      const colorHex = option.colorHex ?? colorHexForOption(attribute.name, option.value);
+                      const safeColorHex = colorInputValue(colorHex);
+
+                      return (
+                        <div
+                          key={option.clientId}
+                          className={cn(
+                            "inline-flex min-h-9 min-w-0 items-center gap-1.5 rounded-md border bg-card px-1.5 py-1 shadow-sm",
+                            !active && "bg-muted/50 opacity-55",
+                          )}
+                        >
+                          {isColor ? (
+                            <>
+                              <input
+                                aria-label={`لون ${option.value}`}
+                                className="h-8 w-9 shrink-0 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
+                                onChange={(event) =>
+                                  updateOptionColor(attribute.clientId, option.clientId, event.target.value)
+                                }
+                                type="color"
+                                value={safeColorHex}
+                              />
+                              <Input
+                                aria-label={`درجة لون ${option.value}`}
+                                className="h-8 w-20 px-2 text-xs"
+                                dir="ltr"
+                                onChange={(event) =>
+                                  updateOptionColor(attribute.clientId, option.clientId, event.target.value)
+                                }
+                                value={colorHex ?? "#94a3b8"}
+                              />
+                            </>
+                          ) : null}
+                          <input
+                            className="w-16 bg-transparent text-sm font-semibold outline-none"
+                            onChange={(event) =>
+                              updateOption(attribute.clientId, option.clientId, event.target.value)
+                            }
+                            value={option.value}
+                          />
+                          <button
+                            aria-label={active ? `تعطيل الاختيار ${option.value}` : `تفعيل الاختيار ${option.value}`}
+                            className={cn(
+                              "inline-flex size-8 items-center justify-center rounded-md border transition",
+                              active
+                                ? "text-muted-foreground hover:border-primary hover:text-primary"
+                                : "border-primary/40 bg-primary/10 text-primary",
+                            )}
+                            onClick={() => toggleOptionActive(attribute.clientId, option.clientId)}
+                            type="button"
+                          >
+                            <Power className="size-3.5" />
+                          </button>
+                          <button
+                            aria-label={`حذف الاختيار ${option.value}`}
+                            className="inline-flex size-8 items-center justify-center rounded-md border text-muted-foreground transition hover:border-destructive hover:text-destructive"
+                            onClick={() => removeOption(attribute.clientId, option.clientId)}
+                            type="button"
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {!attribute.options.length ? (
+                    <div className="rounded-md border border-dashed bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+                      لا توجد اختيارات لـ {attribute.name || `الخاصية ${attributeIndex + 1}`}.
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+              {!attributes.length ? (
+                <div className="rounded-md border border-dashed bg-muted/20 px-3 py-3 text-sm text-muted-foreground">
+                  يبدأ هذا الثيم بلا خصائص.
+                </div>
+              ) : null}
+            </div>
+            <div>
+              <Button onClick={addAttribute} type="button" variant="outline">
+                <Plus className="size-4" />
+                إضافة خاصية
+              </Button>
+            </div>
           </Section>
 
           <Section title="المتغيرات والأسعار">
@@ -846,17 +1253,18 @@ export function ProductFormPage() {
               {variantRows.map((variant, index) => (
                 <div
                   key={variant.tempId}
-                  className="grid gap-3 rounded-md border bg-background p-3 lg:grid-cols-[120px_1fr_auto] lg:items-start"
+                  className="grid gap-3 rounded-md border bg-background p-3 lg:grid-cols-[48px_1fr_auto] lg:items-start"
                 >
                   <div className="flex size-10 items-center justify-center rounded-md bg-primary/10 text-sm font-black text-primary">
                     {index + 1}
                   </div>
                   <div className="grid gap-3">
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <LabelText label="السعر">
+                    <div className="grid gap-3">
+                      <LabelText label={attributes.length ? "سعر التركيبة" : "السعر الأساسي"}>
                         <div className="relative" dir="ltr">
                           <Input
                             className="h-10 pe-14 text-left"
+                            data-testid={`variant-price-${index}`}
                             inputMode="decimal"
                             onChange={(event) =>
                               updateVariant(variant.tempId, (current) => ({
@@ -872,51 +1280,32 @@ export function ProductFormPage() {
                           </CurrencyText>
                         </div>
                       </LabelText>
-                      <LabelText label="SKU">
-                        <Input
-                          className="h-10"
-                          dir="ltr"
-                          onChange={(event) =>
-                            updateVariant(variant.tempId, (current) => ({
-                              ...current,
-                              sku: event.target.value,
-                            }))
-                          }
-                          placeholder="اختياري"
-                          value={variant.sku}
-                        />
-                      </LabelText>
                     </div>
-                    {activeAttributes.length ? (
-                      <div className="grid gap-3 md:grid-cols-2">
-                        {activeAttributes.map((attribute) => (
-                          <LabelText key={attribute.id} label={attribute.name}>
+                    {attributes.length ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        {attributes.map((attribute) => (
+                          <LabelText key={attribute.clientId} label={attribute.name}>
                             <AppSelect
                               ariaLabel={attribute.name}
                               className="h-10"
                               disabled={!attribute.options.length}
                               onValueChange={(optionId) =>
-                                updateVariant(variant.tempId, (current) =>
-                                  mergeAttributeValue(current, attribute.id, optionId),
-                                )
+                                updateVariant(variant.tempId, (current) => ({
+                                  ...current,
+                                  selections: { ...current.selections, [attribute.clientId]: optionId },
+                                }))
                               }
-                              options={attribute.options.map((option) => ({
-                                value: String(option.id),
+                              options={attribute.options.filter(optionIsActive).map((option) => ({
+                                value: option.clientId,
                                 label: option.value,
                               }))}
-                              placeholder={
-                                attribute.options.length ? "اختر" : "لا توجد اختيارات"
-                              }
-                              value={String(selectedOptionId(variant, attribute.id) ?? "")}
+                              placeholder={attribute.options.length ? "اختر" : "لا توجد اختيارات"}
+                              value={variant.selections[attribute.clientId] ?? ""}
                             />
                           </LabelText>
                         ))}
                       </div>
-                    ) : (
-                      <p className="rounded-md border border-dashed bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
-                        لا توجد خصائص لهذه الفئة. سيتم حفظ متغير سعر فقط.
-                      </p>
-                    )}
+                    ) : null}
                   </div>
                   <Button
                     aria-label="حذف المتغير"
@@ -931,61 +1320,35 @@ export function ProductFormPage() {
                 </div>
               ))}
             </div>
-            <div>
-              <Button onClick={addVariant} type="button" variant="outline">
-                <Plus className="size-4" />
-                إضافة متغير
-              </Button>
-            </div>
-          </Section>
-
-          <Section title="الإضافات">
-            {additions.length ? (
-              <div className="grid gap-2 md:grid-cols-2">
-                {additions.map((addition) => {
-                  const additionId = Number(addition.id);
-                  const selected = selectedAdditionIds.includes(additionId);
-
-                  return (
-                    <button
-                      key={addition.id}
-                      aria-pressed={selected}
-                      className={cn(
-                        "flex min-h-12 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-start text-sm transition hover:border-primary/50 hover:bg-accent/45",
-                        selected && "border-primary bg-primary/10 ring-1 ring-primary/20",
-                      )}
-                      onClick={() => toggleAddition(addition.id)}
-                      type="button"
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate font-semibold">{addition.name}</span>
-                        {addition.price ? (
-                          <span className="mt-0.5 block text-xs text-muted-foreground" dir="ltr">
-                            EGP {addition.price}
-                          </span>
-                        ) : null}
-                      </span>
-                      <span
-                        className={cn(
-                          "flex size-5 shrink-0 items-center justify-center rounded border",
-                          selected
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border",
-                        )}
-                      >
-                        {selected ? <Check className="size-3.5" /> : null}
-                      </span>
-                    </button>
-                  );
-                })}
+            {attributes.length ? (
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={addVariant} type="button" variant="outline">
+                  <Plus className="size-4" />
+                  إضافة متغير
+                </Button>
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">لا توجد إضافات.</p>
-            )}
+            ) : null}
           </Section>
+
         </div>
 
-        <aside className="grid gap-5 self-start">
+        <aside className="grid gap-5 self-start xl:sticky xl:top-5">
+          <ProductLivePreview
+            additions={additions}
+            attributes={previewAttributes}
+            description={description}
+            discount={discount}
+            imageSrc={imagePreview}
+            isAvailable={isAvailable}
+            isPopular={isPopular}
+            markets={markets}
+            name={name}
+            selectedAdditionIds={selectedAdditionIds}
+            selectedMarketId={selectedMarketId}
+            theme={theme}
+            variantRows={previewVariants}
+          />
+
           <Section title="صورة المنتج">
             <label className="group relative flex min-h-[220px] cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-muted/30 text-center transition hover:border-primary/50 hover:bg-accent/50">
               <input
@@ -1003,6 +1366,7 @@ export function ProductFormPage() {
                   sizes="320px"
                   className="h-[220px] w-full rounded-lg"
                   imageClassName="object-contain p-2"
+                  unoptimized={imagePreview.startsWith("blob:")}
                 />
               ) : (
                 <span className="flex flex-col items-center gap-3 px-6 text-sm text-muted-foreground">
@@ -1020,33 +1384,200 @@ export function ProductFormPage() {
               </Button>
             ) : null}
           </Section>
-
-          <Section title="ملخص الحفظ">
-            <div className="grid gap-2 text-sm">
-              <div className="flex justify-between gap-3 rounded-md bg-muted/35 px-3 py-2">
-                <span className="text-muted-foreground">السوق</span>
-                <span className="truncate font-semibold">
-                  {markets.find((market) => market.id === selectedMarketId)?.name || "-"}
-                </span>
-              </div>
-              <div className="flex justify-between gap-3 rounded-md bg-muted/35 px-3 py-2">
-                <span className="text-muted-foreground">الفئة</span>
-                <span className="truncate font-semibold">
-                  {categories.find((category) => category.id === selectedCategoryId)?.name || "-"}
-                </span>
-              </div>
-              <div className="flex justify-between gap-3 rounded-md bg-muted/35 px-3 py-2">
-                <span className="text-muted-foreground">المتغيرات</span>
-                <span className="font-semibold">{variantRows.length}</span>
-              </div>
-              <div className="flex justify-between gap-3 rounded-md bg-muted/35 px-3 py-2">
-                <span className="text-muted-foreground">الإضافات</span>
-                <span className="font-semibold">{selectedAdditionIds.length}</span>
-              </div>
-            </div>
-          </Section>
         </aside>
       </div>
+
+      {additionPickerOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/45 px-4 py-6 backdrop-blur-sm">
+          <div
+            aria-modal="true"
+            className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-lg border bg-background text-foreground shadow-2xl"
+            role="dialog"
+          >
+            <div className="flex items-center justify-between gap-4 border-b px-5 py-4">
+              <div className="font-semibold">اختيار الإضافات</div>
+              <button
+                aria-label="إغلاق"
+                className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
+                onClick={() => setAdditionPickerOpen(false)}
+                type="button"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="grid gap-4 p-5">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className={cn(
+                    "h-9 rounded-md border px-3 text-sm font-semibold transition",
+                    additionClassification === "all"
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "bg-background hover:border-primary/50",
+                  )}
+                  onClick={() => setAdditionClassification("all")}
+                  type="button"
+                >
+                  الكل
+                </button>
+                {additionClassifications.map((classification) => (
+                  <button
+                    key={classification}
+                    className={cn(
+                      "h-9 rounded-md border px-3 text-sm font-semibold transition",
+                      additionClassification === classification
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "bg-background hover:border-primary/50",
+                    )}
+                    onClick={() => setAdditionClassification(classification)}
+                    type="button"
+                  >
+                    {classification}
+                  </button>
+                ))}
+              </div>
+
+              <div className="max-h-[54vh] overflow-y-auto">
+                {filteredAdditions.length ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {filteredAdditions.map((addition) => {
+                      const additionId = Number(addition.id);
+                      const selected = selectedAdditionIds.includes(additionId);
+
+                      return (
+                        <button
+                          key={addition.id}
+                          aria-pressed={selected}
+                          className={cn(
+                            "flex min-h-12 items-center justify-between gap-3 rounded-md border bg-card px-3 py-2 text-start text-sm transition hover:border-primary/50",
+                            selected && "border-primary bg-primary/10 ring-1 ring-primary/20",
+                          )}
+                          onClick={() => toggleAddition(addition.id)}
+                          type="button"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate font-semibold">{addition.name}</span>
+                            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                              {addition.classification}
+                              {addition.price ? ` - EGP ${addition.price}` : ""}
+                            </span>
+                          </span>
+                          <span
+                            className={cn(
+                              "flex size-5 shrink-0 items-center justify-center rounded border",
+                              selected
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border",
+                            )}
+                          >
+                            {selected ? <Check className="size-3.5" /> : null}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-dashed bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
+                    لا توجد إضافات في هذا التصنيف.
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end">
+                <Button onClick={() => setAdditionPickerOpen(false)} type="button">
+                  موافق
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {marketModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/45 px-4 py-6 backdrop-blur-sm">
+          <div
+            aria-modal="true"
+            className="max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-lg border bg-background text-foreground shadow-2xl"
+            role="dialog"
+          >
+            <div className="flex items-center justify-between gap-4 border-b px-5 py-4">
+              <div className="font-semibold">اختيار المحل</div>
+              <button
+                aria-label="إغلاق"
+                className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
+                onClick={() => setMarketModalOpen(false)}
+                type="button"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="grid gap-4 p-5">
+              <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute inset-y-0 start-3 my-auto size-4 text-muted-foreground" />
+                  <Input
+                    className="h-10 ps-9"
+                    onChange={(event) => setMarketQuery(event.target.value)}
+                    value={marketQuery}
+                  />
+                </div>
+                <div className="flex rounded-md border bg-muted/20 p-1">
+                  {[
+                    ["general", "عام"],
+                    ["service_city", "مدن الخدمة"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      className={cn(
+                        "h-8 rounded px-3 text-sm font-semibold transition",
+                        marketTab === value ? "bg-background shadow-sm" : "text-muted-foreground",
+                      )}
+                      onClick={() => setMarketTab(value as "general" | "service_city")}
+                      type="button"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="max-h-[54vh] overflow-y-auto">
+                <div className="grid gap-2">
+                  {filteredMarkets.map((market) => (
+                    <button
+                      key={market.id}
+                      className={cn(
+                        "flex min-h-14 items-center justify-between gap-3 rounded-md border bg-card px-3 py-2 text-start transition hover:border-primary/50",
+                        selectedMarketId === market.id && "border-primary bg-primary/10",
+                      )}
+                      onClick={() => {
+                        setSelectedMarketId(market.id);
+                        setMarketModalOpen(false);
+                      }}
+                      type="button"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold">
+                          {market.branch ? `${market.name} - ${market.branch}` : market.name}
+                        </span>
+                        <span className="mt-1 block truncate text-xs text-muted-foreground">
+                          {market.scope === "general"
+                            ? "عام"
+                            : market.serviceCities.join("، ") || "مدينة خدمة"}
+                        </span>
+                      </span>
+                      {selectedMarketId === market.id ? <Check className="size-4 text-primary" /> : null}
+                    </button>
+                  ))}
+                  {!filteredMarkets.length ? (
+                    <div className="rounded-md border border-dashed bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
+                      لا توجد محلات مطابقة.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </form>
   );
 }

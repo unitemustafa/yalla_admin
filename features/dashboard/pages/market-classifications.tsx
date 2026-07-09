@@ -1,12 +1,13 @@
 "use client";
 
+import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   Edit3,
+  ImagePlus,
   Plus,
   RefreshCw,
-  Save,
   Search,
   Store,
   Tags,
@@ -21,14 +22,15 @@ import {
   loadMarketClassifications,
   updateMarketClassification,
   type MarketClassification,
+  type MarketClassificationType,
 } from "../market-classifications-api";
+import { DashboardImage } from "../dashboard-image";
 import {
   ActionMenu,
   Badge,
   Button,
   Card,
   DataTable,
-  Field,
   Input,
   PageTitle,
   Pagination,
@@ -38,7 +40,68 @@ import { cn } from "@/lib/utils";
 
 const pageSize = 10;
 
+const classificationTypeOptions: Array<{
+  value: MarketClassificationType;
+  label: string;
+}> = [
+  { value: "normal", label: "عادية" },
+  { value: "featured", label: "مميزة" },
+  { value: "popular", label: "شائعة" },
+];
+
 type ClassificationDialogMode = "create" | "edit";
+type ClassificationFormPayload = {
+  name: string;
+  classification_type: MarketClassificationType;
+};
+
+type ClassificationFormState = {
+  name: string;
+  classificationType: MarketClassificationType;
+  description: string;
+  imagePreview: string | null;
+  imageFile: File | null;
+};
+
+function classificationTypeLabel(value: MarketClassificationType) {
+  return (
+    classificationTypeOptions.find((option) => option.value === value)?.label ??
+    "عادية"
+  );
+}
+
+function TypeSelector({
+  value,
+  onChange,
+}: {
+  value: MarketClassificationType;
+  onChange: (value: MarketClassificationType) => void;
+}) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-3">
+      {classificationTypeOptions.map((option) => {
+        const selected = option.value === value;
+
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={selected}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              "min-h-11 rounded-md border px-3 py-2 text-sm font-bold transition",
+              selected
+                ? "border-primary bg-primary/10 text-primary shadow-sm"
+                : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-accent hover:text-foreground",
+            )}
+          >
+            فئة {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function useLockedPageScroll(active: boolean) {
   useEffect(() => {
@@ -64,21 +127,60 @@ function ClassificationDialog({
 }: {
   classification?: MarketClassification;
   onClose: () => void;
-  onSubmit: (name: string) => Promise<void>;
+  onSubmit: (payload: ClassificationFormPayload) => Promise<void>;
 }) {
   const mode: ClassificationDialogMode = classification ? "edit" : "create";
-  const [name, setName] = useState(classification?.name ?? "");
+  const [form, setForm] = useState<ClassificationFormState>({
+    name: classification?.name ?? "",
+    classificationType: classification?.classification_type ?? "normal",
+    description: "",
+    imagePreview: null,
+    imageFile: null,
+  });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
   useLockedPageScroll(true);
 
+  function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setForm((current) => {
+      if (current.imagePreview) URL.revokeObjectURL(current.imagePreview);
+      return {
+        ...current,
+        imagePreview: URL.createObjectURL(file),
+        imageFile: file,
+      };
+    });
+    event.target.value = "";
+  }
+
+  function clearLocalPreview() {
+    setForm((current) => {
+      if (current.imagePreview) URL.revokeObjectURL(current.imagePreview);
+      return {
+        ...current,
+        imagePreview: null,
+        imageFile: null,
+      };
+    });
+  }
+
+  useEffect(
+    () => () => {
+      if (form.imagePreview) URL.revokeObjectURL(form.imagePreview);
+    },
+    [form.imagePreview],
+  );
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const trimmedName = name.trim();
+    const trimmedName = form.name.trim();
 
     if (!trimmedName) {
-      setError("اسم التصنيف مطلوب.");
+      setError("اسم الفئة مطلوب.");
       return;
     }
 
@@ -86,76 +188,170 @@ function ClassificationDialog({
     setError("");
 
     try {
-      await onSubmit(trimmedName);
+      await onSubmit({
+        name: trimmedName,
+        classification_type: form.classificationType,
+      });
     } catch {
       setSaving(false);
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-foreground/60 px-4 py-6 backdrop-blur-sm">
-      <section
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-foreground/35 p-4 backdrop-blur-[1px]">
+      <form
         dir="rtl"
-        role="dialog"
-        aria-modal="true"
         aria-labelledby="market-classification-dialog-title"
-        className="mx-auto w-full max-w-xl overflow-hidden rounded-xl border bg-background shadow-2xl"
+        aria-modal="true"
+        className="flex max-h-[92vh] w-full max-w-[980px] flex-col overflow-hidden rounded-lg border bg-background p-6 shadow-2xl"
+        onSubmit={submit}
+        role="dialog"
       >
-        <div className="flex items-start justify-between gap-4 border-b bg-muted/20 px-6 py-5">
+        <div className="flex items-start justify-between gap-4">
           <div>
             <h2
               id="market-classification-dialog-title"
-              className="text-xl font-bold leading-7"
+              className="text-lg font-semibold"
             >
-              {mode === "edit" ? "تعديل تصنيف محل" : "إضافة تصنيف محل"}
+              {mode === "edit" ? "تعديل الفئة" : "إضافة فئة جديدة"}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              اكتب اسم التصنيف كما سيظهر داخل لوحة الإدارة.
+              {mode === "edit"
+                ? "عدّل بيانات الفئة."
+                : "أنشئ فئة جديدة من بيانات الباك."}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border bg-background shadow-sm transition hover:bg-accent"
+            className="rounded-md border p-2 hover:bg-accent"
             aria-label="إغلاق"
           >
             <X className="size-4" />
           </button>
         </div>
 
-        <form onSubmit={submit}>
-          <div className="grid gap-4 p-6">
-            <Field label="اسم التصنيف *">
-              <Input
-                autoFocus
-                value={name}
-                onChange={(event) => {
-                  setName(event.target.value);
-                  if (error) setError("");
-                }}
-                placeholder="مثلًا: مطاعم"
-                dir="rtl"
-              />
-            </Field>
-            {error ? (
-              <p className="flex items-center gap-2 text-sm font-medium text-destructive">
-                <AlertCircle className="size-4" />
-                {error}
-              </p>
-            ) : null}
+        {error ? (
+          <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-200">
+            {error}
+          </div>
+        ) : null}
+
+        <div className="mt-5 grid min-h-0 flex-1 gap-5 overflow-y-auto pr-1 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start">
+          <div className="grid gap-3 text-sm font-medium lg:sticky lg:top-0">
+            <div className="text-sm font-medium leading-5">صورة الفئة</div>
+            <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/15 p-3">
+              <label className="group relative flex aspect-[16/10] min-h-[190px] cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-background text-center transition hover:border-primary/50 hover:bg-accent/40">
+                <input
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={handleImageChange}
+                  type="file"
+                />
+                {form.imagePreview ? (
+                  <>
+                    <DashboardImage
+                      src={form.imagePreview}
+                      alt="معاينة صورة الفئة"
+                      width={360}
+                      height={225}
+                      sizes="360px"
+                      className="absolute inset-0 size-full"
+                      imageClassName="object-cover"
+                      unoptimized
+                    />
+                    <span className="absolute inset-0 z-20 bg-black/0 transition group-hover:bg-black/35" />
+                    <span className="relative z-30 rounded-md bg-background/95 px-3 py-2 text-sm font-semibold opacity-0 shadow-sm transition group-hover:opacity-100">
+                      تغيير الصورة
+                    </span>
+                  </>
+                ) : (
+                  <span className="flex flex-col items-center gap-2 px-4 text-sm text-muted-foreground">
+                    <span className="flex size-10 items-center justify-center rounded-md bg-muted/50">
+                      <ImagePlus className="size-5 text-primary" />
+                    </span>
+                    <span className="font-semibold text-foreground">اختيار صورة</span>
+                  </span>
+                )}
+              </label>
+              <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground">
+                <span className="min-w-0 truncate">
+                  {form.imageFile ? form.imageFile.name : "لم يتم اختيار صورة"}
+                </span>
+                {form.imagePreview ? (
+                  <button
+                    type="button"
+                    onClick={clearLocalPreview}
+                    className="inline-flex shrink-0 items-center gap-1 font-semibold text-destructive transition hover:text-destructive/80"
+                  >
+                    <X className="size-3.5" />
+                    إزالة المعاينة
+                  </button>
+                ) : null}
+              </div>
+            </div>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-border/70 px-6 py-4">
-            <Button type="button" variant="outline" onClick={onClose}>
-              إلغاء
-            </Button>
-            <Button type="submit" disabled={saving}>
-              <Save className="size-4" />
-              {saving ? "جاري الحفظ..." : "حفظ التصنيف"}
-            </Button>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+              اسم الفئة
+              <Input
+                autoFocus
+                className="h-11"
+                value={form.name}
+                onChange={(event) => {
+                  setForm((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }));
+                  if (error) setError("");
+                }}
+                placeholder="اسم الفئة مطلوب"
+                dir="rtl"
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+              نوع الفئة
+              <TypeSelector
+                value={form.classificationType}
+                onChange={(classificationType) =>
+                  setForm((current) => ({
+                    ...current,
+                    classificationType,
+                  }))
+                }
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+              وصف الفئة
+              <textarea
+                value={form.description}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    description: event.target.value,
+                  }))
+                }
+                className="min-h-24 resize-none rounded-md border border-border bg-input px-3 py-2 text-sm leading-6 text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/40 focus:ring-2 focus:ring-primary/15"
+                placeholder="الوصف اختياري"
+              />
+            </label>
           </div>
-        </form>
-      </section>
+        </div>
+
+        <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-border/70 pt-4">
+          <Button variant="outline" onClick={onClose} type="button">
+            إلغاء
+          </Button>
+          <Button disabled={saving} type="submit">
+            {saving
+              ? "جاري الحفظ..."
+              : mode === "edit"
+                ? "حفظ التعديلات"
+                : "إنشاء"}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -187,11 +383,11 @@ function DeleteClassificationDialog({
             id="delete-market-classification-title"
             className="text-xl font-bold leading-7"
           >
-            حذف تصنيف المحل
+            حذف فئة المحل
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            هل تريد حذف تصنيف &quot;{classification.name}&quot;؟ لا يمكن التراجع
-            عن هذا الإجراء.
+            هل تريد حذف فئة &quot;{classification.name}&quot;؟ إذا كانت مستخدمة
+            في محلات سيعرض الخادم خطأ الحماية ولن يتم حذف المحلات.
           </p>
         </div>
         <div className="flex justify-end gap-2 px-6 py-4">
@@ -219,8 +415,9 @@ function LoadingRows() {
       {Array.from({ length: 5 }, (_, index) => (
         <div
           key={index}
-          className="grid h-[53px] animate-pulse grid-cols-[64px_minmax(0,1fr)_120px] items-center gap-4 rounded-md border bg-muted/20 px-4"
+          className="grid h-[53px] animate-pulse grid-cols-[64px_minmax(0,1fr)_140px_120px] items-center gap-4 rounded-md border bg-muted/20 px-4"
         >
+          <div className="h-4 rounded bg-muted" />
           <div className="h-4 rounded bg-muted" />
           <div className="h-4 rounded bg-muted" />
           <div className="h-8 rounded bg-muted" />
@@ -253,9 +450,13 @@ export function MarketClassificationsPage() {
 
     try {
       setClassifications(await loadMarketClassifications(apiFetch));
-    } catch {
+    } catch (reason) {
       setClassifications([]);
-      setLoadError("تعذر تحميل تصنيفات المحلات.");
+      setLoadError(
+        reason instanceof Error
+          ? reason.message
+          : "تعذر تحميل فئات المحلات.",
+      );
     } finally {
       setLoading(false);
     }
@@ -271,7 +472,13 @@ export function MarketClassificationsPage() {
     if (!normalizedQuery) return classifications;
 
     return classifications.filter((classification) =>
-      classification.name.toLocaleLowerCase("ar-EG").includes(normalizedQuery),
+      [
+        classification.name,
+        classificationTypeLabel(classification.classification_type),
+      ]
+        .join(" ")
+        .toLocaleLowerCase("ar-EG")
+        .includes(normalizedQuery),
     );
   }, [classifications, query]);
 
@@ -286,38 +493,39 @@ export function MarketClassificationsPage() {
     pageStartIndex + pageSize,
   );
 
-  async function saveClassification(name: string) {
+  async function saveClassification(payload: ClassificationFormPayload) {
     try {
       if (dialogClassification) {
         const updated = await updateMarketClassification(
           apiFetch,
           dialogClassification.id,
-          { name },
+          payload,
         );
         setClassifications((current) =>
           current.map((item) => (item.id === updated.id ? updated : item)),
         );
         showSnackbar({
-          message: "تم تحديث التصنيف بنجاح.",
+          message: "تم تحديث الفئة بنجاح.",
           tone: "success",
         });
       } else {
-        const created = await createMarketClassification(apiFetch, { name });
+        const created = await createMarketClassification(apiFetch, payload);
         setClassifications((current) => [created, ...current]);
         setCurrentPage(1);
         showSnackbar({
-          message: "تمت إضافة التصنيف بنجاح.",
+          message: "تمت إضافة الفئة بنجاح.",
           tone: "success",
         });
       }
 
       setDialogClassification(undefined);
-    } catch {
+    } catch (reason) {
       showSnackbar({
-        message: "تعذر حفظ التصنيف.",
+        message:
+          reason instanceof Error ? reason.message : "تعذر حفظ فئة المحل.",
         tone: "danger",
       });
-      throw new Error("تعذر حفظ التصنيف.");
+      throw new Error("تعذر حفظ فئة المحل.");
     }
   }
 
@@ -333,12 +541,13 @@ export function MarketClassificationsPage() {
       );
       setDeleteClassification(null);
       showSnackbar({
-        message: "تم حذف التصنيف بنجاح.",
+        message: "تم حذف الفئة بنجاح.",
         tone: "success",
       });
-    } catch {
+    } catch (reason) {
       showSnackbar({
-        message: "تعذر حذف التصنيف.",
+        message:
+          reason instanceof Error ? reason.message : "تعذر حذف فئة المحل.",
         tone: "danger",
       });
     } finally {
@@ -349,8 +558,8 @@ export function MarketClassificationsPage() {
   return (
     <div dir="rtl" className="px-6 py-6">
       <PageTitle
-        title="تصنيفات المحلات"
-        description="إدارة تصنيفات المحلات مثل مطاعم، سوبرماركت، صيدليات وغيرها."
+        title="الفئات"
+        description="إدارة تصنيفات المحلات وربطها بالمحلات."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -369,7 +578,7 @@ export function MarketClassificationsPage() {
               onClick={() => setDialogClassification(null)}
             >
               <Plus className="size-4" />
-              إضافة تصنيف
+              إضافة فئة
             </Button>
           </div>
         }
@@ -382,7 +591,7 @@ export function MarketClassificationsPage() {
               <Tags className="size-5" />
             </span>
             <div>
-              <p className="text-xs text-muted-foreground">إجمالي التصنيفات</p>
+              <p className="text-xs text-muted-foreground">إجمالي الفئات</p>
               <p className="text-xl font-bold">{classifications.length}</p>
             </div>
           </div>
@@ -405,9 +614,9 @@ export function MarketClassificationsPage() {
       <Card className="mt-6 overflow-hidden">
         <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-semibold">كل تصنيفات المحلات</h2>
+            <h2 className="font-semibold">كل فئات المحلات</h2>
             <p className="text-xs text-muted-foreground">
-              استخدم التصنيفات لتنظيم المحلات في لوحة الإدارة.
+              الفئة نفسها هي التصنيف الذي يختاره المحل.
             </p>
           </div>
           <div className="relative sm:w-72">
@@ -419,7 +628,7 @@ export function MarketClassificationsPage() {
                 setCurrentPage(1);
               }}
               className="pr-9"
-              placeholder="ابحث عن تصنيف..."
+              placeholder="ابحث عن فئة..."
             />
           </div>
         </div>
@@ -429,7 +638,7 @@ export function MarketClassificationsPage() {
         ) : loadError ? (
           <div className="flex min-h-56 flex-col items-center justify-center gap-3 px-6 text-center">
             <AlertCircle className="size-8 text-destructive" />
-            <p className="text-sm font-medium">تعذر تحميل تصنيفات المحلات.</p>
+            <p className="text-sm font-medium">{loadError}</p>
             <Button variant="outline" onClick={() => void load()}>
               إعادة المحاولة
             </Button>
@@ -437,19 +646,24 @@ export function MarketClassificationsPage() {
         ) : filteredClassifications.length === 0 ? (
           <div className="flex min-h-56 flex-col items-center justify-center gap-2 px-6 text-center">
             <Tags className="size-9 text-muted-foreground" />
-            <p className="font-semibold">لا توجد تصنيفات محلات</p>
+            <p className="font-semibold">لا توجد فئات محلات</p>
             <p className="text-sm text-muted-foreground">
-              أضف أول تصنيف مثل مطاعم أو سوبرماركت.
+              أضف أول فئة محل مثل مطاعم أو ملابس.
             </p>
+            <Button type="button" onClick={() => setDialogClassification(null)}>
+              <Plus className="size-4" />
+              إضافة فئة
+            </Button>
           </div>
         ) : (
           <>
             <DataTable
-              minWidth={620}
-              columnWidths={[80, 360, 160]}
+              minWidth={720}
+              columnWidths={[80, 320, 160, 160]}
               headers={[
                 "#",
-                "اسم التصنيف",
+                "اسم الفئة",
+                "نوع الفئة",
                 <span key="actions" className="block text-center">
                   الإجراءات
                 </span>,
@@ -462,6 +676,9 @@ export function MarketClassificationsPage() {
                   <Badge tone="secondary">{classification.id}</Badge>
                   <span className="font-semibold">{classification.name}</span>
                 </div>,
+                <Badge key="type" tone="blue">
+                  {classificationTypeLabel(classification.classification_type)}
+                </Badge>,
                 <div key="actions" className="flex justify-center">
                   <ActionMenu
                     open={openActionMenu === classification.id}

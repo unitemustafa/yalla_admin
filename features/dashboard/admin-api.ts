@@ -30,6 +30,22 @@ export type NormalizedProductVariant = BackendRecord & {
   price?: string | number | null;
   sku?: string | null;
   attribute_values?: unknown[];
+  selections?: unknown[];
+};
+
+export type NormalizedProductAttributeOption = {
+  id?: number | null;
+  client_id?: string;
+  value: string;
+  sort_order?: number;
+};
+
+export type NormalizedProductAttribute = {
+  id?: number | null;
+  client_id?: string;
+  name: string;
+  sort_order?: number;
+  options: NormalizedProductAttributeOption[];
 };
 
 export type NormalizedProduct = {
@@ -40,10 +56,13 @@ export type NormalizedProduct = {
   market: BackendRecord | null;
   categoryId: number | null;
   category: BackendRecord | null;
+  theme: "clothing" | "consumer" | "other";
+  isPopular: boolean;
   image: string | null;
   discount: string | number;
   isAvailable: boolean;
   additions: number[];
+  attributes: NormalizedProductAttribute[];
   variants: NormalizedProductVariant[];
   createdAt: string;
   updatedAt: string;
@@ -55,21 +74,33 @@ export type ProductAttributeValuePayload = {
   option_id: number;
 };
 
+export type ProductVariantSelectionPayload =
+  | {
+      attribute_id: number;
+      option_id: number;
+    }
+  | {
+      attribute_client_id: string;
+      option_client_id: string;
+    };
+
 export type ProductVariantPayload = {
   id?: number;
   price: string;
   sku?: string;
-  attribute_values: ProductAttributeValuePayload[];
+  selections: ProductVariantSelectionPayload[];
 };
 
 export type ProductWritePayload = {
   market_id?: number;
-  category_id?: number;
+  theme?: "clothing" | "consumer" | "other";
+  is_popular?: boolean;
   is_available?: boolean;
   name?: string;
   description?: string;
   discount?: string;
   additions?: number[];
+  attributes?: NormalizedProductAttribute[];
   attribute_values?: ProductAttributeValuePayload[];
   variants?: ProductVariantPayload[];
 };
@@ -268,6 +299,47 @@ function normalizeProductImage(value: unknown) {
   return normalizeImageSrc(trimmed);
 }
 
+function productTheme(value: unknown): "clothing" | "consumer" | "other" {
+  return value === "clothing" || value === "consumer" || value === "other"
+    ? value
+    : "other";
+}
+
+function normalizeProductAttributeOption(raw: unknown): NormalizedProductAttributeOption | null {
+  const record = backendRecord(raw);
+  if (!record) return null;
+  const idValue = nullableNumber(record.id);
+  const value = typeof record.value === "string" ? record.value.trim() : "";
+  if (!value) return null;
+
+  return {
+    ...(idValue === null ? {} : { id: idValue }),
+    client_id: typeof record.client_id === "string" ? record.client_id : undefined,
+    value,
+    sort_order: nullableNumber(record.sort_order) ?? 0,
+  };
+}
+
+function normalizeProductAttribute(raw: unknown): NormalizedProductAttribute | null {
+  const record = backendRecord(raw);
+  if (!record) return null;
+  const idValue = nullableNumber(record.id);
+  const name = typeof record.name === "string" ? record.name.trim() : "";
+  if (!name) return null;
+
+  return {
+    ...(idValue === null ? {} : { id: idValue }),
+    client_id: typeof record.client_id === "string" ? record.client_id : undefined,
+    name,
+    sort_order: nullableNumber(record.sort_order) ?? 0,
+    options: Array.isArray(record.options)
+      ? record.options
+          .map(normalizeProductAttributeOption)
+          .filter((option): option is NormalizedProductAttributeOption => Boolean(option))
+      : [],
+  };
+}
+
 export function normalizeProduct(raw: unknown): NormalizedProduct {
   const record = backendRecord(raw) ?? {};
   const market = backendRecord(record.market);
@@ -298,6 +370,13 @@ export function normalizeProduct(raw: unknown): NormalizedProduct {
     market,
     categoryId: nullableNumber(record.category_id ?? record.categoryId ?? category?.id),
     category,
+    theme: productTheme(record.theme),
+    isPopular:
+      typeof record.is_popular === "boolean"
+        ? record.is_popular
+        : typeof record.isPopular === "boolean"
+          ? record.isPopular
+          : false,
     image: normalizeProductImage(record.image),
     discount:
       typeof record.discount === "number" || typeof record.discount === "string"
@@ -313,6 +392,11 @@ export function normalizeProduct(raw: unknown): NormalizedProduct {
       ? record.additions
           .map(normalizeAdditionId)
           .filter((additionId): additionId is number => additionId !== null)
+      : [],
+    attributes: Array.isArray(record.attributes)
+      ? record.attributes
+          .map(normalizeProductAttribute)
+          .filter((attribute): attribute is NormalizedProductAttribute => Boolean(attribute))
       : [],
     variants,
     createdAt:
@@ -563,8 +647,15 @@ function nestedName(value: unknown) {
 export function productRowFromApi(value: unknown, index: number): ItemRow {
   const record = backendRecord(value) ?? {};
   const product = normalizeProduct(record);
+  const themeLabel =
+    product.theme === "clothing"
+      ? "ملابس"
+      : product.theme === "consumer"
+        ? "استهلاكي"
+        : "أخرى";
   const category =
     nestedName(product.category) ||
+    themeLabel ||
     nestedName(record.product_category) ||
     nestedName(record.classification) ||
     text(record, ["category_name", "product_category_name"], "غير مصنف");
@@ -628,7 +719,7 @@ export function productRowFromApi(value: unknown, index: number): ItemRow {
     displayPrice,
     displayPriceLabel,
     variants,
-    featured: bool(record, ["is_featured", "featured"], false) ? "نعم" : "لا",
+    featured: product.isPopular || bool(record, ["is_featured", "featured"], false) ? "نعم" : "لا",
     active: product.isAvailable,
     visibilityMode: marketScope === "service_city" ? "regions" : "general",
   };
