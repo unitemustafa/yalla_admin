@@ -57,3 +57,8 @@ dev-server.out.log
 
 .serena
 .env.local
+
+# Environment files
+.env
+.env.*
+!.env.example
