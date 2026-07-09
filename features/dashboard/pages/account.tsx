@@ -30,7 +30,7 @@ const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ACCOUNT_PASSWORD_CHANGE_ENABLED = false;
 const DEFAULT_AVATAR_SRC = "/default-user-avatar.svg";
-const AVATAR_UPLOAD_FIELD = "avatar_image";
+const AVATAR_UPLOAD_FIELD = "avatar";
 
 function displayName(firstName?: string, lastName?: string, username?: string) {
   return [firstName, lastName].filter(Boolean).join(" ") || username || currentUser.fullName;
@@ -198,6 +198,15 @@ export function AccountPage() {
     };
   }, []);
 
+  function clearAvatarSelection() {
+    setSelectedAvatar(null);
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    setAvatarPreviewUrl("");
+  }
+
   async function saveProfile(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     if (profileSaving) return;
@@ -274,13 +283,9 @@ export function AccountPage() {
         });
       }
 
-      setSelectedAvatar(null);
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-        objectUrlRef.current = null;
-      }
-      setAvatarPreviewUrl("");
+      clearAvatarSelection();
     } catch (error) {
+      clearAvatarSelection();
       setProfileError(
         error instanceof Error ? error.message : "تعذر تحديث بيانات الحساب.",
       );
@@ -435,7 +440,7 @@ export function AccountPage() {
               />
               <button
                 type="button"
-                className="absolute inset-x-0 bottom-0 flex h-9 items-center justify-center bg-black/55 text-white transition hover:bg-black/70"
+                className="absolute inset-x-0 bottom-0 z-20 flex h-9 items-center justify-center bg-black/55 text-white transition hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 onClick={() => avatarInputRef.current?.click()}
                 aria-label="تغيير الصورة"
                 title="تغيير الصورة"
