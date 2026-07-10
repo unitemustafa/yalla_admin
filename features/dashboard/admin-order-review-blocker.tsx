@@ -18,6 +18,7 @@ import {
 import { useAuth } from "@/features/auth/auth-provider";
 import { cn } from "@/lib/utils";
 import {
+  dashboardOrdersChangedEvent,
   deliveryLaterLabel,
   getDeliveryAreaName as orderDeliveryAreaName,
   getDeliveryDestination,
@@ -59,7 +60,7 @@ type RepresentativeListResult = {
   representatives: ApiRecord[];
 };
 
-const pollIntervalMs = 5_000;
+const pollIntervalMs = 180_000;
 const hiddenRejectionReason = "تم رفض الطلب من الإدارة";
 
 function isRecord(value: unknown): value is ApiRecord {
@@ -806,16 +807,30 @@ export function AdminOrderReviewBlocker() {
   useEffect(() => {
     if (!shouldRun) return;
 
+    function handleOrdersChanged() {
+      void loadBlocker({ silent: true, ignoreBusy: true });
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void loadBlocker({ silent: true });
+      }
+    }
+
     const initialTimer = window.setTimeout(() => {
       void loadBlocker({ silent: true });
     }, 0);
     const timer = window.setInterval(() => {
       void loadBlocker({ silent: true });
     }, pollIntervalMs);
+    window.addEventListener(dashboardOrdersChangedEvent, handleOrdersChanged);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.clearTimeout(initialTimer);
       window.clearInterval(timer);
+      window.removeEventListener(dashboardOrdersChangedEvent, handleOrdersChanged);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [loadBlocker, shouldRun]);
 
