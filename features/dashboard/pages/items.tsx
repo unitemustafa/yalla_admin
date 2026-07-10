@@ -29,6 +29,7 @@ import {
   apiList,
   deleteProduct,
   getProduct,
+  primaryProductImageUrl,
   listProducts,
   productRowFromApi,
   readApiData,
@@ -689,7 +690,7 @@ function ProductDetailDialog({
               <div className="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)]">
                 <DashboardImage
                   alt={product.name}
-                  src={product.image}
+                  src={primaryProductImageUrl(product)}
                   width={180}
                   height={180}
                   sizes="180px"

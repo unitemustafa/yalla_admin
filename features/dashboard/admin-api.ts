@@ -48,6 +48,14 @@ export type NormalizedProductAttribute = {
   options: NormalizedProductAttributeOption[];
 };
 
+export type NormalizedProductImage = {
+  id: number;
+  image: string | null;
+  url: string | null;
+  isPrimary: boolean;
+  sortOrder: number;
+};
+
 export type NormalizedProduct = {
   id: number;
   name: string;
@@ -59,6 +67,7 @@ export type NormalizedProduct = {
   theme: "clothing" | "consumer" | "other";
   isPopular: boolean;
   image: string | null;
+  images: NormalizedProductImage[];
   discount: string | number;
   isAvailable: boolean;
   additions: number[];
@@ -288,7 +297,7 @@ function normalizeAdditionId(value: unknown) {
   return record ? nullableNumber(record.id) : null;
 }
 
-function normalizeProductImage(value: unknown) {
+function normalizeProductImageUrl(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -297,6 +306,20 @@ function normalizeProductImage(value: unknown) {
     return null;
   }
   return normalizeImageSrc(trimmed);
+}
+
+function normalizeProductImageRecord(value: unknown): NormalizedProductImage | null {
+  const record = backendRecord(value);
+  const imageId = nullableNumber(record?.id);
+  if (!record || imageId === null) return null;
+
+  return {
+    id: imageId,
+    image: normalizeProductImageUrl(record.image),
+    url: normalizeProductImageUrl(record.url),
+    isPrimary: record.is_primary === true || record.isPrimary === true,
+    sortOrder: nullableNumber(record.sort_order ?? record.sortOrder) ?? 0,
+  };
 }
 
 function productTheme(value: unknown): "clothing" | "consumer" | "other" {
@@ -377,7 +400,13 @@ export function normalizeProduct(raw: unknown): NormalizedProduct {
         : typeof record.isPopular === "boolean"
           ? record.isPopular
           : false,
-    image: normalizeProductImage(record.image),
+    image: normalizeProductImageUrl(record.image),
+    images: Array.isArray(record.images)
+      ? record.images
+          .map(normalizeProductImageRecord)
+          .filter((image): image is NormalizedProductImage => Boolean(image))
+          .sort((first, second) => first.sortOrder - second.sortOrder || first.id - second.id)
+      : [],
     discount:
       typeof record.discount === "number" || typeof record.discount === "string"
         ? record.discount
@@ -412,6 +441,13 @@ export function normalizeProduct(raw: unknown): NormalizedProduct {
           ? record.updatedAt
           : "",
   };
+}
+
+export function primaryProductImageUrl(product: NormalizedProduct) {
+  if (product.image) return product.image;
+  const primary = product.images.find((image) => image.isPrimary);
+  const first = product.images[0];
+  return primary?.url ?? primary?.image ?? first?.url ?? first?.image ?? null;
 }
 
 export function normalizeProductCategory(raw: unknown): NormalizedProductCategory {
@@ -476,7 +512,11 @@ async function parseAdminResponse(
   return data;
 }
 
-function productPayloadFormData(payload: ProductWritePayload, imageFile: File) {
+function productPayloadFormData(
+  payload: ProductWritePayload,
+  imageFiles: readonly File[],
+  primaryImageIndex?: number,
+) {
   const formData = new FormData();
 
   Object.entries(payload).forEach(([key, value]) => {
@@ -493,7 +533,10 @@ function productPayloadFormData(payload: ProductWritePayload, imageFile: File) {
     }
     formData.set(key, typeof value === "boolean" ? String(value) : String(value ?? ""));
   });
-  formData.set("image", imageFile);
+  imageFiles.forEach((file) => formData.append("images", file));
+  if (primaryImageIndex !== undefined) {
+    formData.set("primary_image_index", String(primaryImageIndex));
+  }
 
   return formData;
 }
@@ -501,12 +544,13 @@ function productPayloadFormData(payload: ProductWritePayload, imageFile: File) {
 function productRequestInit(
   method: "POST" | "PATCH",
   payload: ProductWritePayload,
-  imageFile?: File | null,
+  imageFiles: readonly File[] = [],
+  primaryImageIndex?: number,
 ): RequestInit {
-  if (imageFile) {
+  if (imageFiles.length) {
     return {
       method,
-      body: productPayloadFormData(payload, imageFile),
+      body: productPayloadFormData(payload, imageFiles, primaryImageIndex),
     };
   }
 
@@ -704,7 +748,7 @@ export function productRowFromApi(value: unknown, index: number): ItemRow {
     index: String(index + 1),
     id: Number.isFinite(product.id) ? String(product.id) : id(record, index),
     code: text(record, ["code", "sku"], id(record, index)),
-    image: normalizeImageSrc(product.image, fallbackImage),
+    image: normalizeImageSrc(primaryProductImageUrl(product), fallbackImage),
     name: product.name || text(record, ["name", "name_ar", "name_en", "title"], `منتج #${index + 1}`),
     description: product.description || text(record, ["description", "details"], ""),
     category,
@@ -831,11 +875,12 @@ export async function getProduct(apiFetch: ApiFetch, productId: string | number)
 export async function createProduct(
   apiFetch: ApiFetch,
   payload: ProductWritePayload,
-  imageFile?: File | null,
+  imageFiles: readonly File[] = [],
+  primaryImageIndex?: number,
 ) {
   const response = await apiFetch(
     adminApiPaths.products,
-    productRequestInit("POST", payload, imageFile),
+    productRequestInit("POST", payload, imageFiles, primaryImageIndex),
   );
   const data = await parseAdminResponse(response, "تعذر حفظ المنتج");
 
@@ -846,15 +891,81 @@ export async function updateProduct(
   apiFetch: ApiFetch,
   productId: string | number,
   payload: ProductWritePayload,
-  imageFile?: File | null,
+  imageFiles: readonly File[] = [],
+  primaryImageIndex?: number,
 ) {
   const response = await apiFetch(
     `${adminApiPaths.products}${encodeURIComponent(String(productId))}/`,
-    productRequestInit("PATCH", payload, imageFile),
+    productRequestInit("PATCH", payload, imageFiles, primaryImageIndex),
   );
   const data = await parseAdminResponse(response, "تعذر حفظ المنتج");
 
   return assertReadableProduct(normalizeProduct(data), "تعذر قراءة بيانات المنتج");
+}
+
+export async function uploadProductImages(
+  apiFetch: ApiFetch,
+  productId: string | number,
+  files: readonly File[],
+  primaryImageIndex?: number,
+) {
+  const formData = new FormData();
+  files.forEach((file) => formData.append("images", file));
+  if (primaryImageIndex !== undefined) {
+    formData.set("primary_image_index", String(primaryImageIndex));
+  }
+  const response = await apiFetch(
+    `${adminApiPaths.products}${encodeURIComponent(String(productId))}/images/`,
+    { method: "POST", body: formData },
+  );
+  const data = await parseAdminResponse(response, "تعذر رفع صور المنتج");
+  return assertReadableProduct(normalizeProduct(data), "تعذر قراءة صور المنتج");
+}
+
+export async function deleteProductImage(
+  apiFetch: ApiFetch,
+  productId: string | number,
+  imageId: number,
+) {
+  const response = await apiFetch(
+    `${adminApiPaths.products}${encodeURIComponent(String(productId))}/images/${encodeURIComponent(String(imageId))}/`,
+    { method: "DELETE" },
+  );
+  await parseAdminResponse(response, "تعذر حذف صورة المنتج");
+}
+
+export async function setPrimaryProductImage(
+  apiFetch: ApiFetch,
+  productId: string | number,
+  imageId: number,
+) {
+  const response = await apiFetch(
+    `${adminApiPaths.products}${encodeURIComponent(String(productId))}/images/${encodeURIComponent(String(imageId))}/`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_primary: true }),
+    },
+  );
+  const data = await parseAdminResponse(response, "تعذر تعيين الصورة الرئيسية");
+  return assertReadableProduct(normalizeProduct(data), "تعذر قراءة صور المنتج");
+}
+
+export async function reorderProductImages(
+  apiFetch: ApiFetch,
+  productId: string | number,
+  imageIds: readonly number[],
+) {
+  const response = await apiFetch(
+    `${adminApiPaths.products}${encodeURIComponent(String(productId))}/images/reorder/`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image_ids: imageIds }),
+    },
+  );
+  const data = await parseAdminResponse(response, "تعذر ترتيب صور المنتج");
+  return assertReadableProduct(normalizeProduct(data), "تعذر قراءة صور المنتج");
 }
 
 export async function deleteProduct(

@@ -6,6 +6,8 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
+  ArrowDown,
+  ArrowUp,
   ImagePlus,
   Package,
   Plus,
@@ -27,9 +29,14 @@ import {
   adminApiPaths,
   apiList,
   createProduct,
+  deleteProductImage,
   getProduct,
   normalizeIds,
+  primaryProductImageUrl,
   readApiData,
+  reorderProductImages,
+  setPrimaryProductImage,
+  uploadProductImages,
   updateProduct,
   type BackendRecord,
   type NormalizedProduct,
@@ -38,6 +45,7 @@ import {
   type ProductWritePayload,
 } from "../admin-api";
 import { ProductLivePreview } from "../components/product-live-preview";
+import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
 import { DashboardImage } from "../dashboard-image";
 import { AppSelect, Button, CurrencyText, Input, Switch } from "../primitives";
 import { useSnackbar } from "../snackbar";
@@ -82,6 +90,30 @@ type VariantDraft = {
   sku: string;
   selections: Record<string, string>;
 };
+
+type ProductImageDraft =
+  | {
+      kind: "remote";
+      id: number;
+      src: string;
+      isPrimary: boolean;
+      serverIsPrimary: boolean;
+    }
+  | {
+      kind: "local";
+      clientId: string;
+      file: File;
+      previewUrl: string;
+      isPrimary: boolean;
+    };
+
+const MAX_PRODUCT_IMAGES = 10;
+const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_PRODUCT_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
 
 const themeCards: Array<{
   id: ProductTheme;
@@ -386,7 +418,7 @@ export function ProductFormPage() {
   const editItemId = Array.isArray(rawItemId) ? rawItemId[0] : rawItemId;
   const duplicateId = searchParams.get("duplicate");
   const isEditing = Boolean(editItemId);
-  const imageUrlRef = useRef<string | null>(null);
+  const localImageUrlsRef = useRef<Set<string>>(new Set());
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [productLoading, setProductLoading] = useState(Boolean(editItemId || duplicateId));
   const [catalogError, setCatalogError] = useState("");
@@ -409,12 +441,20 @@ export function ProductFormPage() {
   const [isAvailable, setIsAvailable] = useState(true);
   const [isPopular, setIsPopular] = useState(false);
   const [discount, setDiscount] = useState("0.00");
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [productImages, setProductImages] = useState<ProductImageDraft[]>([]);
+  const [imageActionBusy, setImageActionBusy] = useState(false);
+  const [deleteImageId, setDeleteImageId] = useState<number | null>(null);
   const [variantRows, setVariantRows] = useState<VariantDraft[]>(() => [emptyVariant()]);
   const [variantsDirty, setVariantsDirty] = useState(false);
 
   const selectedMarket = markets.find((market) => market.id === selectedMarketId) ?? null;
+  const primaryImage =
+    productImages.find((image) => image.isPrimary) ?? productImages[0] ?? null;
+  const imagePreview = primaryImage
+    ? primaryImage.kind === "local"
+      ? primaryImage.previewUrl
+      : primaryImage.src
+    : null;
 
   const additionClassifications = useMemo(
     () => Array.from(new Set(additions.map((addition) => addition.classification || "غير مصنف"))),
@@ -449,7 +489,8 @@ export function ProductFormPage() {
 
   useEffect(
     () => () => {
-      if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current);
+      localImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      localImageUrlsRef.current.clear();
     },
     [],
   );
@@ -526,8 +567,17 @@ export function ProductFormPage() {
     setIsAvailable(product.isAvailable);
     setIsPopular(product.isPopular);
     setSelectedAdditionIds(normalizeIds(product.additions));
-    setImagePreview(product.image);
-    setImageFile(null);
+    setProductImages(
+      options.clone
+        ? []
+        : product.images.map((image) => ({
+            kind: "remote" as const,
+            id: image.id,
+            src: image.url ?? image.image ?? primaryProductImageUrl(product) ?? "",
+            isPrimary: image.isPrimary,
+            serverIsPrimary: image.isPrimary,
+          })),
+    );
     setVariantRows(variants);
     setVariantsDirty(false);
     setSaveError("");
@@ -564,25 +614,243 @@ export function ProductFormPage() {
     };
   }, [apiFetch, duplicateId, editItemId, hydrateProduct, isEditing]);
 
-  function selectImage(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current);
-    const nextUrl = URL.createObjectURL(file);
-    imageUrlRef.current = nextUrl;
-    setImagePreview(nextUrl);
-    setImageFile(file);
-    event.target.value = "";
+  function mergeServerImages(
+    product: NormalizedProduct,
+    preserveLocalPrimary = true,
+  ) {
+    setProductImages((current) => {
+      const locals = current.filter(
+        (image): image is Extract<ProductImageDraft, { kind: "local" }> =>
+          image.kind === "local",
+      );
+      const localHasPrimary = preserveLocalPrimary && locals.some((image) => image.isPrimary);
+      const remotes: ProductImageDraft[] = product.images.map((image) => ({
+        kind: "remote",
+        id: image.id,
+        src: image.url ?? image.image ?? primaryProductImageUrl(product) ?? "",
+        isPrimary: localHasPrimary ? false : image.isPrimary,
+        serverIsPrimary: image.isPrimary,
+      }));
+      return [
+        ...remotes,
+        ...locals.map((image) => ({
+          ...image,
+          isPrimary: localHasPrimary ? image.isPrimary : false,
+        })),
+      ];
+    });
   }
 
-  function removeImagePreview() {
-    if (imageUrlRef.current) {
-      URL.revokeObjectURL(imageUrlRef.current);
-      imageUrlRef.current = null;
+  function selectImages(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (!files.length) return;
+
+    const localKeys = new Set(
+      productImages
+        .filter((image) => image.kind === "local")
+        .map((image) => `${image.file.name}:${image.file.size}:${image.file.type}:${image.file.lastModified}`),
+    );
+    const availableSlots = Math.max(0, MAX_PRODUCT_IMAGES - productImages.length);
+    const accepted: File[] = [];
+    let validationMessage = "";
+
+    for (const file of files) {
+      if (!ALLOWED_PRODUCT_IMAGE_TYPES.has(file.type)) {
+        validationMessage ||= "نوع الملف غير مدعوم. استخدم JPG أو PNG أو WEBP.";
+        continue;
+      }
+      if (file.size > MAX_PRODUCT_IMAGE_SIZE) {
+        validationMessage ||= "حجم الصورة أكبر من الحد المسموح (5 ميجابايت).";
+        continue;
+      }
+      const key = `${file.name}:${file.size}:${file.type}:${file.lastModified}`;
+      if (localKeys.has(key)) continue;
+      if (accepted.length >= availableSlots) {
+        validationMessage ||= "وصلت إلى الحد الأقصى للصور (10 صور).";
+        continue;
+      }
+      localKeys.add(key);
+      accepted.push(file);
     }
-    setImagePreview(null);
-    setImageFile(null);
+
+    if (validationMessage) {
+      setSaveError(validationMessage);
+      showSnackbar({ message: validationMessage, tone: "danger" });
+    }
+    if (!accepted.length) return;
+
+    setProductImages((current) => {
+      const hasPrimary = current.some((image) => image.isPrimary);
+      const additions = accepted.map((file, index) => {
+        const previewUrl = URL.createObjectURL(file);
+        localImageUrlsRef.current.add(previewUrl);
+        return {
+          kind: "local" as const,
+          clientId: createId("product-image"),
+          file,
+          previewUrl,
+          isPrimary: !hasPrimary && index === 0,
+        };
+      });
+      return [...current, ...additions];
+    });
+    setSaveError("");
+  }
+
+  function removeLocalImage(clientId: string) {
+    setProductImages((current) => {
+      const removed = current.find(
+        (image) => image.kind === "local" && image.clientId === clientId,
+      );
+      if (!removed || removed.kind !== "local") return current;
+      URL.revokeObjectURL(removed.previewUrl);
+      localImageUrlsRef.current.delete(removed.previewUrl);
+      const next = current.filter(
+        (image) => image.kind !== "local" || image.clientId !== clientId,
+      );
+      if (removed.isPrimary && next.length) {
+        const nextLocal = next.find((image) => image.kind === "local");
+        const serverPrimary = next.find(
+          (image) => image.kind === "remote" && image.serverIsPrimary,
+        );
+        const replacement = nextLocal ?? serverPrimary ?? next[0];
+        return next.map((image) => ({
+          ...image,
+          isPrimary:
+            image.kind === "local" && replacement.kind === "local"
+              ? image.clientId === replacement.clientId
+              : image.kind === "remote" && replacement.kind === "remote"
+                ? image.id === replacement.id
+                : false,
+        }));
+      }
+      return next;
+    });
+  }
+
+  function setLocalPrimary(clientId: string) {
+    setProductImages((current) =>
+      current.map((image) => ({
+        ...image,
+        isPrimary: image.kind === "local" && image.clientId === clientId,
+      })),
+    );
+  }
+
+  function moveLocalImage(clientId: string, direction: -1 | 1) {
+    setProductImages((current) => {
+      const localIndexes = current
+        .map((image, index) => (image.kind === "local" ? index : -1))
+        .filter((index) => index >= 0);
+      const currentIndex = current.findIndex(
+        (image) => image.kind === "local" && image.clientId === clientId,
+      );
+      const localPosition = localIndexes.indexOf(currentIndex);
+      const targetIndex = localIndexes[localPosition + direction];
+      if (currentIndex < 0 || targetIndex === undefined) return current;
+      const next = [...current];
+      [next[currentIndex], next[targetIndex]] = [next[targetIndex], next[currentIndex]];
+      return next;
+    });
+  }
+
+  async function setRemotePrimary(imageId: number) {
+    if (!editItemId || imageActionBusy) return;
+    setImageActionBusy(true);
+    setSaveError("");
+    try {
+      const product = await setPrimaryProductImage(apiFetch, editItemId, imageId);
+      mergeServerImages(product, false);
+      showSnackbar({ message: "تم تعيين الصورة الرئيسية." });
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "تعذر تعيين الصورة الرئيسية");
+    } finally {
+      setImageActionBusy(false);
+    }
+  }
+
+  async function moveRemoteImage(imageId: number, direction: -1 | 1) {
+    if (!editItemId || imageActionBusy) return;
+    const remotes = productImages.filter(
+      (image): image is Extract<ProductImageDraft, { kind: "remote" }> =>
+        image.kind === "remote",
+    );
+    const index = remotes.findIndex((image) => image.id === imageId);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= remotes.length) return;
+    const reordered = [...remotes];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    setImageActionBusy(true);
+    setSaveError("");
+    try {
+      const product = await reorderProductImages(
+        apiFetch,
+        editItemId,
+        reordered.map((image) => image.id),
+      );
+      mergeServerImages(product);
+      showSnackbar({ message: "تم تحديث ترتيب الصور." });
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "تعذر ترتيب الصور");
+    } finally {
+      setImageActionBusy(false);
+    }
+  }
+
+  async function confirmRemoteImageDelete() {
+    if (!editItemId || deleteImageId === null || imageActionBusy) return;
+    setImageActionBusy(true);
+    setSaveError("");
+    try {
+      await deleteProductImage(apiFetch, editItemId, deleteImageId);
+      const product = await getProduct(apiFetch, editItemId);
+      mergeServerImages(product);
+      setDeleteImageId(null);
+      showSnackbar({ message: "تم حذف الصورة." });
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "تعذر حذف الصورة");
+    } finally {
+      setImageActionBusy(false);
+    }
+  }
+
+  async function uploadPendingImages() {
+    if (!editItemId || imageActionBusy) return;
+    const locals = productImages.filter(
+      (image): image is Extract<ProductImageDraft, { kind: "local" }> =>
+        image.kind === "local",
+    );
+    if (!locals.length) return;
+    const primaryIndex = locals.findIndex((image) => image.isPrimary);
+    setImageActionBusy(true);
+    setSaveError("");
+    try {
+      const product = await uploadProductImages(
+        apiFetch,
+        editItemId,
+        locals.map((image) => image.file),
+        primaryIndex >= 0 ? primaryIndex : undefined,
+      );
+      locals.forEach((image) => {
+        URL.revokeObjectURL(image.previewUrl);
+        localImageUrlsRef.current.delete(image.previewUrl);
+      });
+      setProductImages(
+        product.images.map((image) => ({
+          kind: "remote",
+          id: image.id,
+          src: image.url ?? image.image ?? primaryProductImageUrl(product) ?? "",
+          isPrimary: image.isPrimary,
+          serverIsPrimary: image.isPrimary,
+        })),
+      );
+      showSnackbar({ message: "تم رفع صور المنتج بنجاح." });
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "تعذر رفع صور المنتج");
+    } finally {
+      setImageActionBusy(false);
+    }
   }
 
   function applyTheme(nextTheme: ProductTheme) {
@@ -838,6 +1106,7 @@ export function ProductFormPage() {
 
   async function saveProduct(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving || imageActionBusy) return;
     const validationError = validateForm();
     if (validationError) {
       setSaveError(validationError);
@@ -858,16 +1127,33 @@ export function ProductFormPage() {
       attributes: attributePayload(),
       ...(!isEditing || variantsDirty ? { variants: variantPayloads() } : {}),
     };
+    const localImages = productImages.filter(
+      (image): image is Extract<ProductImageDraft, { kind: "local" }> =>
+        image.kind === "local",
+    );
+    const primaryImageIndex = localImages.findIndex((image) => image.isPrimary);
+    const files = localImages.map((image) => image.file);
 
     setSaving(true);
     setSaveError("");
 
     try {
       if (isEditing && editItemId) {
-        await updateProduct(apiFetch, editItemId, payload, imageFile);
+        await updateProduct(
+          apiFetch,
+          editItemId,
+          payload,
+          files,
+          primaryImageIndex >= 0 ? primaryImageIndex : undefined,
+        );
         showSnackbar({ message: "تم تحديث المنتج بنجاح.", tone: "success" });
       } else {
-        await createProduct(apiFetch, payload, imageFile);
+        await createProduct(
+          apiFetch,
+          payload,
+          files,
+          primaryImageIndex >= 0 ? primaryImageIndex : undefined,
+        );
         showSnackbar({ message: "تم إنشاء المنتج بنجاح.", tone: "success" });
       }
       router.push("/items");
@@ -969,7 +1255,7 @@ export function ProductFormPage() {
               <X className="size-4" />
               إلغاء
             </Link>
-            <Button className="h-10" disabled={saving || catalogLoading || productLoading} type="submit">
+            <Button className="h-10" disabled={saving || imageActionBusy || catalogLoading || productLoading} type="submit">
               <Save className="size-4" />
               {saving ? "جاري الحفظ..." : "حفظ المنتج"}
             </Button>
@@ -1349,40 +1635,143 @@ export function ProductFormPage() {
             variantRows={previewVariants}
           />
 
-          <Section title="صورة المنتج">
-            <label className="group relative flex min-h-[220px] cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-muted/30 text-center transition hover:border-primary/50 hover:bg-accent/50">
+          <Section title="صور المنتج">
+            <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+              <span>يمكنك اختيار حتى 10 صور</span>
+              <span>{productImages.length} / {MAX_PRODUCT_IMAGES}</span>
+            </div>
+            <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/20 px-4 py-3 text-center transition hover:border-primary/50 hover:bg-accent/50">
               <input
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 className="sr-only"
-                onChange={selectImage}
+                data-testid="product-images-input"
+                disabled={saving || imageActionBusy || productImages.length >= MAX_PRODUCT_IMAGES}
+                multiple
+                onChange={selectImages}
                 type="file"
               />
-              {imagePreview ? (
-                <DashboardImage
-                  alt={name || "صورة المنتج"}
-                  src={imagePreview}
-                  width={320}
-                  height={220}
-                  sizes="320px"
-                  className="h-[220px] w-full rounded-lg"
-                  imageClassName="object-contain p-2"
-                  unoptimized={imagePreview.startsWith("blob:")}
-                />
-              ) : (
-                <span className="flex flex-col items-center gap-3 px-6 text-sm text-muted-foreground">
-                  <span className="flex size-12 items-center justify-center rounded-lg bg-background shadow-sm">
-                    <ImagePlus className="size-6 text-primary" />
-                  </span>
-                  <span className="font-medium text-foreground">اختيار صورة</span>
-                </span>
-              )}
+              <ImagePlus className="size-6 text-primary" />
+              <span className="text-sm font-semibold">
+                {productImages.length ? "إضافة صور أخرى" : "اختر صور المنتج"}
+              </span>
+              <span className="text-xs text-muted-foreground">JPG أو PNG أو WEBP، بحد أقصى 5 ميجابايت للصورة</span>
             </label>
-            {imagePreview ? (
-              <Button onClick={removeImagePreview} type="button" variant="outline">
-                <X className="size-4" />
-                إزالة المعاينة
+            {isEditing && productImages.some((image) => image.kind === "local") ? (
+              <Button
+                disabled={saving || imageActionBusy}
+                onClick={() => void uploadPendingImages()}
+                type="button"
+              >
+                <ImagePlus className="size-4" />
+                {imageActionBusy ? "جاري رفع الصور..." : "رفع الصور المحددة"}
               </Button>
             ) : null}
+
+            {productImages.length ? (
+              <div className="grid grid-cols-2 gap-3" data-testid="product-image-grid">
+                {productImages.map((image, index) => {
+                  const sameKind = productImages.filter((item) => item.kind === image.kind);
+                  const kindIndex = sameKind.findIndex((item) =>
+                    item.kind === "remote" && image.kind === "remote"
+                      ? item.id === image.id
+                      : item.kind === "local" && image.kind === "local"
+                        ? item.clientId === image.clientId
+                        : false,
+                  );
+                  const src = image.kind === "local" ? image.previewUrl : image.src;
+                  const key = image.kind === "local" ? image.clientId : String(image.id);
+                  return (
+                    <article key={`${image.kind}-${key}`} className="overflow-hidden rounded-lg border bg-background shadow-sm">
+                      <div className="relative h-28 bg-muted/25">
+                        <DashboardImage
+                          alt={`${name || "صورة المنتج"} ${index + 1}`}
+                          src={src}
+                          width={180}
+                          height={112}
+                          sizes="180px"
+                          className="h-28 w-full"
+                          imageClassName="object-contain p-1.5"
+                          unoptimized={image.kind === "local"}
+                        />
+                        <span className="absolute start-2 top-2 rounded-md bg-background/90 px-2 py-1 text-[11px] font-black shadow">
+                          {index + 1}
+                        </span>
+                        {image.isPrimary ? (
+                          <span className="absolute bottom-2 end-2 rounded-md bg-primary px-2 py-1 text-[10px] font-bold text-primary-foreground shadow">
+                            الصورة الرئيسية
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="grid gap-2 p-2">
+                        {!image.isPrimary ? (
+                          <Button
+                            className="h-8 px-2 text-xs"
+                            disabled={imageActionBusy}
+                            onClick={() =>
+                              image.kind === "local"
+                                ? setLocalPrimary(image.clientId)
+                                : void setRemotePrimary(image.id)
+                            }
+                            type="button"
+                            variant="outline"
+                          >
+                            تعيين كرئيسية
+                          </Button>
+                        ) : null}
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <Button
+                            aria-label="تحريك الصورة للأعلى"
+                            className="h-8 px-2"
+                            disabled={kindIndex <= 0 || imageActionBusy}
+                            onClick={() =>
+                              image.kind === "local"
+                                ? moveLocalImage(image.clientId, -1)
+                                : void moveRemoteImage(image.id, -1)
+                            }
+                            type="button"
+                            variant="outline"
+                          >
+                            <ArrowUp className="size-3.5" />
+                          </Button>
+                          <Button
+                            aria-label="تحريك الصورة للأسفل"
+                            className="h-8 px-2"
+                            disabled={kindIndex >= sameKind.length - 1 || imageActionBusy}
+                            onClick={() =>
+                              image.kind === "local"
+                                ? moveLocalImage(image.clientId, 1)
+                                : void moveRemoteImage(image.id, 1)
+                            }
+                            type="button"
+                            variant="outline"
+                          >
+                            <ArrowDown className="size-3.5" />
+                          </Button>
+                          <Button
+                            aria-label="حذف الصورة"
+                            className="h-8 px-2"
+                            disabled={imageActionBusy}
+                            onClick={() =>
+                              image.kind === "local"
+                                ? removeLocalImage(image.clientId)
+                                : setDeleteImageId(image.id)
+                            }
+                            type="button"
+                            variant="danger"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-md border border-dashed bg-muted/15 px-3 py-3 text-center text-sm text-muted-foreground">
+                لا توجد صور للمنتج بعد.
+              </div>
+            )}
           </Section>
         </aside>
       </div>
@@ -1577,6 +1966,15 @@ export function ProductFormPage() {
             </div>
           </div>
         </div>
+      ) : null}
+      {deleteImageId !== null ? (
+        <ConfirmDeleteDialog
+          busy={imageActionBusy}
+          description="سيتم حذف الصورة المرفوعة نهائيًا. إذا كانت رئيسية فسيتم اختيار الصورة التالية تلقائيًا."
+          onCancel={() => setDeleteImageId(null)}
+          onConfirm={() => void confirmRemoteImageDelete()}
+          title="حذف الصورة"
+        />
       ) : null}
     </form>
   );
