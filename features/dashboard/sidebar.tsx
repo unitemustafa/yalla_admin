@@ -105,7 +105,6 @@ export function Sidebar({
     user?.username ||
     currentUser.fullName;
   const userAvatar = user?.avatar_url?.trim();
-  const userInitials =
     userFullName
       .split(/\s+/)
       .filter(Boolean)
