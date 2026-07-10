@@ -7,7 +7,7 @@ import { useSnackbar } from "./snackbar";
 type UndoableDeleteOptions = {
   message: string;
   onDelete: () => void;
-  onUndo: () => void;
+  onUndo: () => Promise<void> | void;
   onCommit?: () => Promise<void> | void;
   onCommitError?: (error: unknown) => void;
   durationMs?: number;
@@ -42,7 +42,9 @@ export function useUndoableDelete() {
         undone = true;
         window.clearTimeout(timer);
         timersRef.current.delete(timer);
-        onUndo();
+        void Promise.resolve(onUndo()).catch((error) => {
+          onCommitError?.(error);
+        });
       };
 
       const commit = async () => {
@@ -54,7 +56,7 @@ export function useUndoableDelete() {
         } catch (error) {
           if (!undone) {
             undone = true;
-            onUndo();
+            void Promise.resolve(onUndo()).catch(() => undefined);
             onCommitError?.(error);
           }
         }

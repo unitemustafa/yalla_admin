@@ -245,6 +245,31 @@ export async function deleteServiceCity(
   });
   if (response.ok) return;
   const data = await responseJson(response);
+  if (
+    data &&
+    typeof data === "object" &&
+    "relations" in data &&
+    data.relations &&
+    typeof data.relations === "object"
+  ) {
+    const labels: Record<string, string> = {
+      delivery_areas: "مناطق التوصيل",
+      markets: "المحلات",
+      offers: "العروض",
+      couriers: "المندوبون",
+      addresses: "عناوين العملاء",
+      orders: "الطلبات",
+      users: "حسابات العملاء",
+    };
+    const linkedData = Object.entries(data.relations)
+      .filter(([, count]) => typeof count === "number" && count > 0)
+      .map(([key, count]) => `${labels[key] ?? key} (${count})`);
+    if (linkedData.length) {
+      throw new Error(
+        `لا يمكن حذف المدينة لأنها مرتبطة بـ: ${linkedData.join("، ")}. انقل أو احذف هذه البيانات أولًا.`,
+      );
+    }
+  }
   throw new Error(firstError(data) ?? "تعذر حذف المدينة.");
 }
 

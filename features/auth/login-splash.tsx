@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 
 import { SafeImage } from "@/components/safe-image";
-import { logoSrc } from "@/features/dashboard/data";
 
 const splashStorageKey = "yalla-login-splash-seen";
 
@@ -23,7 +22,17 @@ export function markLoginSplashSeen() {
   }
 }
 
-export function LoginSplash({ onDone }: { onDone: () => void }) {
+export function LoginSplash({
+  brandName,
+  brandTagline,
+  logoUrl,
+  onDone,
+}: {
+  brandName: string;
+  brandTagline: string;
+  logoUrl: string;
+  onDone: () => void;
+}) {
   useEffect(() => {
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
@@ -39,17 +48,15 @@ export function LoginSplash({ onDone }: { onDone: () => void }) {
       <div className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(to_left,white_1px,transparent_1px),linear-gradient(to_bottom,white_1px,transparent_1px)] [background-size:54px_54px]" />
       <div className="relative z-10 flex w-full max-w-sm flex-col items-center px-8 text-center text-primary-foreground">
         <SafeImage
-          alt="Yalla Market"
-          src={logoSrc}
+          alt={brandName}
+          src={logoUrl}
           width={92}
           height={92}
           priority
           className="size-[92px] rounded-2xl border border-white/25 object-cover shadow-2xl"
         />
-        <h1 className="mt-5 text-3xl font-extrabold leading-tight">
-          يلا ماركت
-        </h1>
-        <p className="mt-2 text-sm font-medium text-white/75">لوحة التحكم</p>
+        <h1 className="mt-5 text-3xl font-extrabold leading-tight">{brandName}</h1>
+        <p className="mt-2 text-sm font-medium text-white/75">{brandTagline}</p>
         <div
           className="mt-8 h-1.5 w-full overflow-hidden rounded-full bg-white/20"
           aria-hidden="true"

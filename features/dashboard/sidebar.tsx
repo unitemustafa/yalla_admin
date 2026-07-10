@@ -25,7 +25,6 @@ import { useSidebarGroups } from "./hooks";
 import { useDashboardI18n } from "./i18n";
 import { useDashboardNotifications } from "./notifications-context";
 import { currentUser } from "./profile-data";
-import { branchOptions } from "./reference-data";
 import type { PageKey } from "./types";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -260,6 +259,7 @@ export function Sidebar({
         )}
       >
         <button
+          data-testid="sidebar-branch-toggle"
           type="button"
           aria-haspopup="menu"
           aria-expanded={branchMenuOpen}
@@ -292,10 +292,16 @@ export function Sidebar({
           {!iconOnly ? (
             <>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5 leading-tight">
-                <span className="block truncate text-start text-[11px] font-semibold">
+                <span
+                  data-testid="sidebar-brand-name"
+                  className="block truncate text-start text-[11px] font-semibold"
+                >
                   {brandName}
                 </span>
-                <span className="line-clamp-2 block text-start text-[10px] leading-[12px] text-sidebar-foreground/80">
+                <span
+                  data-testid="sidebar-branch-name"
+                  className="line-clamp-2 block text-start text-[10px] leading-[12px] text-sidebar-foreground/80"
+                >
                   {branchName}
                 </span>
               </span>
@@ -306,6 +312,7 @@ export function Sidebar({
 
         {branchMenuOpen ? (
           <div
+            data-testid="sidebar-branch-dropdown"
             role="menu"
             className={cn(
               "z-50 rounded-lg border border-sidebar-border bg-sidebar p-1 text-sidebar-foreground shadow-2xl",
@@ -317,7 +324,7 @@ export function Sidebar({
                 : "absolute left-2 right-2 top-16",
             )}
           >
-            {branchOptions.map((branch) => (
+            {[{ id: "current-brand", label: branchName }].map((branch) => (
               <button
                 key={branch.id}
                 type="button"
@@ -327,7 +334,7 @@ export function Sidebar({
                 className="flex min-h-9 w-full items-center gap-2 rounded-md bg-sidebar-accent px-2 py-2 text-sm font-medium text-sidebar-accent-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               >
                 <span className="min-w-0 flex-1 truncate text-start">
-                  {t(branch.labelKey)}
+                  {branch.label}
                 </span>
                 <Check className="size-4 shrink-0" />
               </button>

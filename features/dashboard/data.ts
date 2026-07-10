@@ -80,7 +80,7 @@ export const navGroups: NavGroup[] = [
           { label: "إضافة مندوب", href: "/delivery/couriers/new", page: "create-courier" },
         ],
       },
-      { label: "المستخدمين", icon: Users, href: "/customers", page: "customers" },
+      { label: "العملاء", icon: Users, href: "/customers", page: "customers" },
       {
         label: "العضويات",
         icon: BadgeCheck,
@@ -150,7 +150,7 @@ export const breadcrumbByPage: Record<PageKey, BreadcrumbItem[]> = {
     { label: "المندوبين", href: "/delivery/couriers" },
     { label: "إضافة مندوب" },
   ],
-  customers: [dashboardCrumb, { label: "المستخدمين" }],
+  customers: [dashboardCrumb, { label: "العملاء" }],
   memberships: [dashboardCrumb, { label: "العضويات" }],
   account: [dashboardCrumb, { label: "Account" }],
   settings: [dashboardCrumb, { label: "الإعدادات" }],

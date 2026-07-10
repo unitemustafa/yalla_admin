@@ -104,7 +104,23 @@ export function UserDetailApiPage({ userId }: { userId: string }) {
       void loadUser();
     }, 0);
 
-    return () => window.clearTimeout(timer);
+    const refreshWhenDashboardRegainsFocus = () => {
+      void loadUser();
+    };
+    const refreshWhenDocumentBecomesVisible = () => {
+      if (document.visibilityState === "visible") {
+        void loadUser();
+      }
+    };
+
+    window.addEventListener("focus", refreshWhenDashboardRegainsFocus);
+    document.addEventListener("visibilitychange", refreshWhenDocumentBecomesVisible);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("focus", refreshWhenDashboardRegainsFocus);
+      document.removeEventListener("visibilitychange", refreshWhenDocumentBecomesVisible);
+    };
   }, [loadUser]);
 
   async function handleActivationChange(checked: boolean) {

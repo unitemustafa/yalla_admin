@@ -30,9 +30,11 @@ import {
   Input,
   PageTitle,
   Pagination,
+  Switch,
 } from "../primitives";
 import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
+import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
 import { useAuth } from "@/features/auth/auth-provider";
 import {
   deleteDeliveryZone,
@@ -55,7 +57,6 @@ type ZoneDraft = {
   cityId: string;
   name: string;
   fixedDeliveryPrice: string;
-  status: DeliveryZoneStatus;
 };
 
 type ZoneDraftErrors = Partial<Record<keyof ZoneDraft, string>>;
@@ -64,11 +65,6 @@ const statusLabels: Record<DeliveryZoneStatus, string> = {
   active: "مفعلة",
   inactive: "غير مفعلة",
 };
-
-const statusOptions = [
-  { value: "active", label: "مفعلة" },
-  { value: "inactive", label: "غير مفعلة" },
-] satisfies Array<{ value: DeliveryZoneStatus; label: string }>;
 
 function formatCurrency(value: number) {
   const formattedValue = new Intl.NumberFormat("en-US", {
@@ -140,7 +136,6 @@ function createZoneDraft(zone?: DeliveryZone): ZoneDraft {
     cityId: zone?.cityId ?? "",
     name: zone?.name ?? "",
     fixedDeliveryPrice: numberToDraftValue(zone?.fixedDeliveryPrice ?? 0),
-    status: zone?.status ?? "active",
   };
 }
 
@@ -172,7 +167,7 @@ function zoneFromDraft(draft: ZoneDraft, currentZone?: DeliveryZone): DeliveryZo
     cityName: currentZone?.cityName ?? "",
     name: draft.name.trim(),
     fixedDeliveryPrice: parseNumber(draft.fixedDeliveryPrice),
-    status: draft.status,
+    status: currentZone?.status ?? "active",
     createdAt: currentZone?.createdAt ?? today,
     updatedAt: today,
   };
@@ -371,19 +366,6 @@ function ZoneFormDialog({
                   error={errors.fixedDeliveryPrice}
                   placeholder="45"
                 />
-<div className="md:col-span-2">
-                  <Field label="الحالة">
-                    <AppSelect
-                      value={draft.status}
-                      onValueChange={(value) =>
-                        updateDraft("status", value as DeliveryZoneStatus)
-                      }
-                      options={statusOptions}
-                      ariaLabel="الحالة"
-                      dir="rtl"
-                    />
-                  </Field>
-                </div>
               </div>
             </div>
 
@@ -428,52 +410,6 @@ function PreviewRow({ label, value }: { label: string; value: React.ReactNode })
     <div className="flex items-center justify-between gap-4">
       <span className="text-muted-foreground">{label}</span>
       <span className="text-start font-semibold">{value}</span>
-    </div>
-  );
-}
-
-function ConfirmDeleteDialog({
-  zone,
-  busy,
-  onCancel,
-  onConfirm,
-}: {
-  zone: DeliveryZone;
-  busy: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  useLockedPageScroll();
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 px-4 py-6 backdrop-blur-sm">
-      <section
-        dir="rtl"
-        role="dialog"
-        aria-modal="true"
-        className="w-full max-w-md rounded-xl border bg-background p-5 shadow-2xl"
-      >
-        <div className="flex items-start gap-3">
-          <div className="rounded-full bg-destructive/10 p-2 text-destructive">
-            <AlertCircle className="size-5" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold">حذف منطقة التوصيل</h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              هل تريد حذف منطقة {zone.name}؟ لا يمكن التراجع عن هذا الإجراء.
-            </p>
-          </div>
-        </div>
-        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
-            إلغاء
-          </Button>
-          <Button type="button" variant="danger" onClick={onConfirm} disabled={busy}>
-            {busy ? <RefreshCw className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-            حذف
-          </Button>
-        </div>
-      </section>
     </div>
   );
 }
@@ -602,14 +538,20 @@ function ZonesTable({
 
 function ZonesMobileList({
   zones,
+  cities,
   startIndex,
   onEdit,
   onDelete,
+  onStatusChange,
+  changingStatusId,
 }: {
   zones: DeliveryZone[];
+  cities: ServiceCity[];
   startIndex: number;
   onEdit: (zone: DeliveryZone) => void;
   onDelete: (zone: DeliveryZone) => void;
+  onStatusChange: (zone: DeliveryZone, checked: boolean) => void;
+  changingStatusId: string | null;
 }) {
   if (!zones.length) {
     return null;
@@ -620,7 +562,7 @@ function ZonesMobileList({
       {zones.map((zone, index) => (
         <Card
           key={zone.id}
-          className="grid gap-4 p-4 xl:grid-cols-[minmax(280px,1fr)_260px_120px] xl:items-center"
+          className="grid gap-4 p-4 xl:grid-cols-[minmax(240px,1fr)_minmax(320px,430px)_auto] xl:items-center"
         >
           <div className="flex min-w-0 items-center gap-3">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">
@@ -632,21 +574,36 @@ function ZonesMobileList({
             <div className="min-w-0">
               <div className="grid gap-2">
                 <h3 className="font-bold text-foreground">{zone.name}</h3>
-                <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge status={zone.status} />
-                </div>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 text-center text-sm">
+          <div className="grid grid-cols-2 gap-2 text-center text-sm">
+            <div className="rounded-md bg-muted px-3 py-2">
+              <div className="truncate font-bold">
+                {zone.cityName ||
+                  cities.find((city) => String(city.id) === zone.cityId)?.name ||
+                  "غير محدد"}
+              </div>
+              <div className="text-xs text-muted-foreground">مدينة التوصيل</div>
+            </div>
             <div className="rounded-md bg-muted px-3 py-2">
               <div className="truncate font-bold" dir="ltr">{deliveryPriceLabel(zone)}</div>
               <div className="text-xs text-muted-foreground">سعر التوصيل</div>
             </div>
           </div>
 
-          <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
+          <div className="flex flex-nowrap justify-start gap-2 xl:justify-end">
+            <div className="flex shrink-0 items-center gap-2 rounded-md border px-2 py-1">
+              <Switch
+                checked={zone.status === "active"}
+                disabled={changingStatusId === zone.id}
+                onCheckedChange={(checked) => onStatusChange(zone, checked)}
+              />
+              <span className="text-xs font-semibold">
+                {zone.status === "active" ? "مفعّلة" : "معطّلة"}
+              </span>
+            </div>
             <Button type="button" variant="outline" size="icon" onClick={() => onEdit(zone)} aria-label={`تعديل ${zone.name}`} title="تعديل">
               <Edit3 className="size-4" />
             </Button>
@@ -675,6 +632,7 @@ export function DeliveryZonesPage() {
   const [creating, setCreating] = useState(false);
   const [deleteZone, setDeleteZone] = useState<DeliveryZone | null>(null);
   const [deletingZoneId, setDeletingZoneId] = useState<string | null>(null);
+  const [changingStatusId, setChangingStatusId] = useState<string | null>(null);
   const { cities, loading: citiesLoading, error: citiesError } = useServiceCities();
   const cityFilterOptions = useMemo(
     () => [
@@ -753,7 +711,7 @@ export function DeliveryZonesPage() {
             : currentZones.filter((currentZone) => currentZone.id !== zone.id),
         );
         setEditingZone(null);
-        showSnackbar({ message: "تم تحديث منطقة التوصيل وحفظها في الباك.", tone: "success" });
+        showSnackbar({ message: "تم تحديث منطقة التوصيل.", tone: "success" });
         return;
       }
 
@@ -762,12 +720,40 @@ export function DeliveryZonesPage() {
       }
       setCreating(false);
       setCurrentPage(1);
-      showSnackbar({ message: "تمت إضافة منطقة التوصيل وحفظها في الباك.", tone: "success" });
+      showSnackbar({ message: "تمت إضافة منطقة التوصيل.", tone: "success" });
     } catch (error) {
       showSnackbar({
         message: error instanceof Error ? error.message : "تعذر حفظ منطقة التوصيل.",
         tone: "danger",
       });
+    }
+  }
+
+  async function handleZoneStatusChange(zone: DeliveryZone, checked: boolean) {
+    if (changingStatusId) return;
+
+    setChangingStatusId(zone.id);
+    try {
+      const savedZone = await saveDeliveryZone(apiFetch, {
+        ...zone,
+        status: checked ? "active" : "inactive",
+      });
+      setZones((currentZones) =>
+        currentZones.map((currentZone) =>
+          currentZone.id === savedZone.id ? savedZone : currentZone,
+        ),
+      );
+      showSnackbar({
+        message: checked ? "تم تفعيل منطقة التوصيل." : "تم تعطيل منطقة التوصيل.",
+        tone: checked ? "success" : "danger",
+      });
+    } catch (error) {
+      showSnackbar({
+        message: error instanceof Error ? error.message : "تعذر تحديث منطقة التوصيل.",
+        tone: "danger",
+      });
+    } finally {
+      setChangingStatusId(null);
     }
   }
 
@@ -799,16 +785,29 @@ export function DeliveryZonesPage() {
         setDeleteZone(null);
         setDeletingZoneId(null);
       },
-      onUndo: () =>
-        setZones((currentZones) => {
-          if (currentZones.some((currentZone) => currentZone.id === zone.id)) {
-            return currentZones;
-          }
+      onUndo: async () => {
+        try {
+          const restoredZone = await saveDeliveryZone(apiFetch, {
+            ...zone,
+            id: `restore-${zone.id}`,
+          });
+          setZones((currentZones) => {
+            if (currentZones.some((currentZone) => currentZone.id === restoredZone.id)) {
+              return currentZones;
+            }
 
-          const nextZones = [...currentZones];
-          nextZones.splice(Math.max(0, zoneIndex), 0, zone);
-          return nextZones;
-        }),
+            const nextZones = [...currentZones];
+            nextZones.splice(Math.max(0, zoneIndex), 0, restoredZone);
+            return nextZones;
+          });
+          showSnackbar({ message: `تمت استعادة منطقة ${restoredZone.name}.`, tone: "success" });
+        } catch (error) {
+          showSnackbar({
+            message: error instanceof Error ? error.message : "تعذر التراجع عن حذف منطقة التوصيل.",
+            tone: "danger",
+          });
+        }
+      },
       onCommit: async () => undefined,
       onCommitError: (error) => {
         showSnackbar({
@@ -947,9 +946,12 @@ export function DeliveryZonesPage() {
               <div className="mt-4">
                 <ZonesMobileList
                   zones={pagedZones}
+                  cities={cities}
                   startIndex={pageStartIndex}
                   onEdit={setEditingZone}
                   onDelete={setDeleteZone}
+                  onStatusChange={handleZoneStatusChange}
+                  changingStatusId={changingStatusId}
                 />
                 {!pagedZones.length ? (
                   <ZonesTable
@@ -999,7 +1001,8 @@ export function DeliveryZonesPage() {
       ) : null}
       {deleteZone ? (
         <ConfirmDeleteDialog
-          zone={deleteZone}
+          title="حذف منطقة التوصيل"
+          description={`هل تريد حذف منطقة التوصيل ${deleteZone.name}؟`}
           busy={deletingZoneId === deleteZone.id}
           onCancel={() => setDeleteZone(null)}
           onConfirm={confirmDeleteZone}

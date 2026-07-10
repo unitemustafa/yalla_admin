@@ -24,11 +24,15 @@ import { currentUser } from "@/features/dashboard/profile-data";
 import { Button, Card, Input, PageTitle } from "@/features/dashboard/primitives";
 import { DashboardImage } from "@/features/dashboard/dashboard-image";
 import { useSnackbar } from "@/features/dashboard/snackbar";
-import type { AuthUser } from "@/lib/auth";
+import {
+  isNetworkError,
+  NETWORK_ERROR_MESSAGE,
+  type AuthUser,
+} from "@/lib/auth";
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const ACCOUNT_PASSWORD_CHANGE_ENABLED = false;
+const ACCOUNT_PASSWORD_CHANGE_ENABLED = true;
 const DEFAULT_AVATAR_SRC = "/default-user-avatar.svg";
 const AVATAR_UPLOAD_FIELD = "avatar";
 
@@ -142,7 +146,6 @@ export function AccountPage() {
   const [otp, setOtp] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
-  const [devOtp, setDevOtp] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
   const [profileName, setProfileName] = useState(() =>
@@ -223,17 +226,11 @@ export function AccountPage() {
       setProfileError("اكتب الاسم قبل الحفظ.");
       return;
     }
-    if (!profileEmail.trim()) {
-      setProfileError("اكتب البريد الإلكتروني قبل الحفظ.");
-      return;
-    }
-
     setProfileSaving(true);
     setProfileError("");
     try {
       const textPayload = {
         ...nextNameParts,
-        email: profileEmail.trim(),
       };
       const response = selectedAvatar
         ? await apiFetch("auth/me/", {
@@ -243,7 +240,6 @@ export function AccountPage() {
               formData.append(AVATAR_UPLOAD_FIELD, selectedAvatar);
               formData.set("first_name", textPayload.first_name);
               formData.set("last_name", textPayload.last_name);
-              formData.set("email", textPayload.email);
               return formData;
             })(),
           })
@@ -287,7 +283,11 @@ export function AccountPage() {
     } catch (error) {
       clearAvatarSelection();
       setProfileError(
-        error instanceof Error ? error.message : "تعذر تحديث بيانات الحساب.",
+        isNetworkError(error)
+          ? NETWORK_ERROR_MESSAGE
+          : error instanceof Error
+            ? error.message
+            : "تعذر تحديث بيانات الحساب.",
       );
     } finally {
       setProfileSaving(false);
@@ -316,7 +316,7 @@ export function AccountPage() {
     showSnackbar({ message: "تم اختيار الصورة. اضغط حفظ لتطبيق التغيير." });
   }
 
-  async function requestResetCode(isResend = false) {
+  async function requestResetCode() {
     if (!ACCOUNT_PASSWORD_CHANGE_ENABLED) return;
     if (!email || busyAction || resendCooldown > 0) return;
 
@@ -329,7 +329,6 @@ export function AccountPage() {
         body: JSON.stringify({ email }),
       });
       const data = (await responseData(response)) as {
-        dev_otp?: unknown;
         resend_after_seconds?: unknown;
         retry_after_seconds?: unknown;
       } | null;
@@ -342,7 +341,6 @@ export function AccountPage() {
 
       setPasswordStep("verify");
       setOtp("");
-      setDevOtp(typeof data?.dev_otp === "string" ? data.dev_otp : null);
       const cooldown =
         typeof data?.resend_after_seconds === "number"
           ? data.resend_after_seconds
@@ -351,13 +349,15 @@ export function AccountPage() {
             : 30;
       setResendCooldown(cooldown);
       showSnackbar({
-        message: isResend
-          ? "تم إرسال كود تحقق جديد."
-          : "تم إرسال كود التحقق إلى بريد الحساب.",
+        message: "تم إرسال كود التحقق إلى بريد الحساب.",
       });
     } catch (error) {
       setPasswordError(
-        error instanceof Error ? error.message : "تعذر إرسال كود التحقق.",
+        isNetworkError(error)
+          ? NETWORK_ERROR_MESSAGE
+          : error instanceof Error
+            ? error.message
+            : "تعذر إرسال كود التحقق.",
       );
     } finally {
       setBusyAction(null);
@@ -405,13 +405,16 @@ export function AccountPage() {
       setOtp("");
       setPassword("");
       setPasswordConfirm("");
-      setDevOtp(null);
       showSnackbar({ message: "تم تغيير كلمة المرور. سجل الدخول من جديد." });
       await logout();
       router.replace("/login");
     } catch (error) {
       setPasswordError(
-        error instanceof Error ? error.message : "تعذر تغيير كلمة المرور.",
+        isNetworkError(error)
+          ? NETWORK_ERROR_MESSAGE
+          : error instanceof Error
+            ? error.message
+            : "تعذر تغيير كلمة المرور.",
       );
     } finally {
       setBusyAction(null);
@@ -473,12 +476,13 @@ export function AccountPage() {
           <Card className="p-5">
             <h3 className="text-lg font-bold">بيانات البروفايل</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              بيانات حساب المدير الحالي متزامنة مع الخادم.
+              إدارة بيانات حساب المدير الحالي
             </p>
             <form className="mt-5 grid gap-4 md:grid-cols-2" onSubmit={saveProfile}>
               <label className="grid gap-2 text-sm font-medium">
                 الاسم
                 <Input
+                  data-testid="account-name-input"
                   value={profileName}
                   onChange={(event) => setProfileName(event.target.value)}
                   required
@@ -487,11 +491,11 @@ export function AccountPage() {
               <label className="grid gap-2 text-sm font-medium">
                 البريد الإلكتروني
                 <Input
+                  data-testid="account-email-input"
                   dir="ltr"
                   className="text-right"
                   value={profileEmail}
-                  onChange={(event) => setProfileEmail(event.target.value)}
-                  required
+                  readOnly
                 />
               </label>
               <div className="flex items-end gap-2 md:col-span-2">
@@ -522,6 +526,7 @@ export function AccountPage() {
             </p>
             {passwordStep === "idle" ? (
               <Button
+                data-testid="change-password-button"
                 type="button"
                 variant="outline"
                 className="mt-5"
@@ -538,15 +543,10 @@ export function AccountPage() {
               </Button>
             ) : (
               <form className="mt-5 grid max-w-xl gap-4" onSubmit={resetPassword}>
-                {devOtp ? (
-                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
-                    كود التطوير المحلي: <code dir="ltr" className="font-bold">{devOtp}</code>
-                  </div>
-                ) : null}
-
                 <label className="grid gap-2 text-sm font-medium">
                   كود التحقق
                   <Input
+                    data-testid="password-otp-input"
                     dir="ltr"
                     inputMode="numeric"
                     autoComplete="one-time-code"
@@ -560,6 +560,7 @@ export function AccountPage() {
                 <label className="grid gap-2 text-sm font-medium">
                   كلمة المرور الجديدة
                   <Input
+                    data-testid="new-password-input"
                     dir="ltr"
                     type="password"
                     autoComplete="new-password"
@@ -572,6 +573,7 @@ export function AccountPage() {
                 <label className="grid gap-2 text-sm font-medium">
                   تأكيد كلمة المرور
                   <Input
+                    data-testid="confirm-password-input"
                     dir="ltr"
                     type="password"
                     autoComplete="new-password"
@@ -590,7 +592,11 @@ export function AccountPage() {
                   </p>
                 ) : null}
                 <div className="flex flex-wrap gap-2">
-                  <Button type="submit" disabled={busyAction !== null}>
+                  <Button
+                    data-testid="save-password-button"
+                    type="submit"
+                    disabled={busyAction !== null}
+                  >
                     {busyAction === "reset" ? <Loader2 className="size-4 animate-spin" /> : null}
                     {busyAction === "reset" ? "جاري الحفظ..." : "حفظ كلمة المرور"}
                   </Button>
@@ -598,7 +604,7 @@ export function AccountPage() {
                     type="button"
                     variant="outline"
                     disabled={busyAction !== null || resendCooldown > 0}
-                    onClick={() => void requestResetCode(true)}
+                    onClick={() => void requestResetCode()}
                   >
                     {busyAction === "request" ? (
                       <Loader2 className="size-4 animate-spin" />
@@ -618,7 +624,6 @@ export function AccountPage() {
                       setOtp("");
                       setPassword("");
                       setPasswordConfirm("");
-                      setDevOtp(null);
                       setPasswordError("");
                     }}
                   >

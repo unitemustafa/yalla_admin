@@ -7,9 +7,20 @@ export const AUTH_COOKIE_NAMES = {
 
 export const AUTH_STORAGE_KEYS = {
   temporarySessionActive: "yalla_temporary_session_active",
-  temporarySessionExpiresAt: "yalla_temporary_session_expires_at",
+  sessionExpiresAt: "yalla_admin_session_expires_at",
   sessionExpiredNotice: "yalla_session_expired_notice",
 } as const;
+
+export const NETWORK_ERROR_MESSAGE =
+  "تعذر الاتصال بالخادم. تحقق من اتصال الإنترنت ثم حاول مرة أخرى.";
+
+export function isNetworkError(error: unknown) {
+  return (
+    error instanceof TypeError ||
+    (error instanceof Error &&
+      /failed to fetch|networkerror|load failed/i.test(error.message))
+  );
+}
 
 export type AuthUser = {
   id: string;

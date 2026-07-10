@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 
 import { logoSrc } from "@/features/dashboard/data";
+import { applyDashboardCustomization } from "@/features/dashboard/customization";
 import { DashboardAutoTranslate } from "@/features/dashboard/auto-translate";
 import { DashboardI18nProvider } from "@/features/dashboard/i18n";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -33,7 +34,12 @@ import {
 } from "@/features/auth/login-splash";
 import { useAuth } from "@/features/auth/auth-provider";
 import type { LoginDashboardSnapshot } from "@/features/dashboard/static-data";
-import { AUTH_STORAGE_KEYS, isSafeNextPath } from "@/lib/auth";
+import {
+  AUTH_STORAGE_KEYS,
+  isNetworkError,
+  isSafeNextPath,
+  NETWORK_ERROR_MESSAGE,
+} from "@/lib/auth";
 
 const productImages = [
   "https://bucket.ammenu.com/yalla-market/items/1778576027822-i19a0pn483.webp",
@@ -74,11 +80,35 @@ function LoginPageContent({
   const [pending, setPending] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const loginBrandName = snapshot.branding.brandName || "يلا ماركت";
+  const loginBrandTagline = snapshot.branding.brandTagline || "لوحة التحكم";
+  const loginLogo = snapshot.branding.logoUrl || logoSrc;
   const stats = [
     { label: "طلبات اليوم", value: String(snapshot.todayOrders), icon: PackageCheck },
     { label: "مدن متاحة", value: String(snapshot.availableCities), icon: MapPin },
     { label: "مناطق توصيل", value: String(snapshot.deliveryZones), icon: Truck },
   ];
+
+  useEffect(() => {
+    const font = {
+      Cairo: "cairo",
+      Tajawal: "tajawal",
+      Alexandria: "alexandria",
+      System: "system",
+    } as const;
+    applyDashboardCustomization({
+      palette: "custom",
+      font: font[snapshot.branding.fontFamily],
+      brandName: loginBrandName,
+      branchName: loginBrandTagline,
+      logoDataUrl: loginLogo,
+      customColors: {
+        primary: snapshot.branding.primaryColor,
+        surface: snapshot.branding.subtleColor,
+        accent: snapshot.branding.accentColor,
+      },
+    });
+  }, [loginBrandName, loginBrandTagline, loginLogo, snapshot.branding]);
 
   const finishSplash = useCallback(() => {
     markLoginSplashSeen();
@@ -102,7 +132,7 @@ function LoginPageContent({
     try {
       const expiresAt = Number(
         localStorage.getItem(
-          AUTH_STORAGE_KEYS.temporarySessionExpiresAt,
+          AUTH_STORAGE_KEYS.sessionExpiresAt,
         ),
       );
       shouldShow =
@@ -113,7 +143,7 @@ function LoginPageContent({
       localStorage.removeItem(AUTH_STORAGE_KEYS.sessionExpiredNotice);
       if (expiresAt <= Date.now()) {
         localStorage.removeItem(
-          AUTH_STORAGE_KEYS.temporarySessionExpiresAt,
+          AUTH_STORAGE_KEYS.sessionExpiresAt,
         );
       }
     } catch {
@@ -138,7 +168,9 @@ function LoginPageContent({
       });
     } catch (caughtError) {
       setError(
-        caughtError instanceof Error
+        isNetworkError(caughtError)
+          ? NETWORK_ERROR_MESSAGE
+          : caughtError instanceof Error
           ? caughtError.message
           : "تعذر تسجيل الدخول. حاول مرة أخرى.",
       );
@@ -155,7 +187,14 @@ function LoginPageContent({
 
   return (
     <main className="relative h-dvh overflow-hidden bg-background text-foreground">
-      {showSplash ? <LoginSplash onDone={finishSplash} /> : null}
+      {showSplash ? (
+        <LoginSplash
+          brandName={loginBrandName}
+          brandTagline={loginBrandTagline}
+          logoUrl={loginLogo}
+          onDone={finishSplash}
+        />
+      ) : null}
       {sessionExpired ? (
         <div className="fixed inset-0 z-[90] grid place-items-center bg-black/55 px-5 backdrop-blur-sm">
           <div
@@ -210,16 +249,16 @@ function LoginPageContent({
           <div className="relative z-10 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <SafeImage
-                alt="Yalla Market"
-                src={logoSrc}
+                alt={loginBrandName}
+                src={loginLogo}
                 width={56}
                 height={56}
                 priority
                 className="size-14 rounded-xl border border-white/20 object-cover shadow-lg"
               />
               <div>
-                <p className="text-xl font-bold leading-6">يلا ماركت</p>
-                <p className="text-sm text-white/75">لوحة التحكم</p>
+                <p className="text-xl font-bold leading-6">{loginBrandName}</p>
+                <p className="text-sm text-white/75">{loginBrandTagline}</p>
               </div>
             </div>
             <div className="inline-flex items-center gap-2 rounded-md border border-white/20 bg-white/10 px-3 py-2 text-sm text-white/80">
@@ -286,16 +325,16 @@ function LoginPageContent({
           <div className="w-full max-w-md">
             <div className="mb-9 flex items-center gap-3 lg:hidden">
               <SafeImage
-                alt="Yalla Market"
-                src={logoSrc}
+                alt={loginBrandName}
+                src={loginLogo}
                 width={52}
                 height={52}
                 priority
                 className="size-12 rounded-xl object-cover shadow"
               />
               <div>
-                <p className="text-xl font-bold">يلا ماركت</p>
-                <p className="text-sm text-muted-foreground">لوحة التحكم</p>
+                <p className="text-xl font-bold">{loginBrandName}</p>
+                <p className="text-sm text-muted-foreground">{loginBrandTagline}</p>
               </div>
             </div>
 

@@ -8,12 +8,16 @@ import {
   DashboardI18nProvider,
   useDashboardI18n,
 } from "./i18n";
+import { useEffect } from "react";
+
 import { useDashboardCustomization } from "./customization";
+import { loadDashboardSettings } from "./dashboard-settings-api";
 import { DashboardOfflineBanner } from "./offline-banner";
 import { SnackbarProvider } from "./snackbar";
 import { AdminOrderReviewBlocker } from "./admin-order-review-blocker";
 import { DashboardNotificationsProvider } from "./notifications-context";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/features/auth/auth-provider";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -37,12 +41,13 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     toggleCollapsed,
   } = useDashboardFrame();
   const { breadcrumbsForPage, direction, t } = useDashboardI18n();
-  useDashboardCustomization();
+  const { setCustomization } = useDashboardCustomization();
   const breadcrumbs = breadcrumbsForPage(activePage);
 
   return (
     <DashboardAutoTranslate>
       <div className="min-h-screen w-full bg-background text-foreground">
+        <DashboardSettingsBootstrapper setCustomization={setCustomization} />
         <DashboardOfflineBanner />
         <AdminOrderReviewBlocker />
         {mobileNavOpen ? (
@@ -84,4 +89,31 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
       </div>
     </DashboardAutoTranslate>
   );
+}
+
+function DashboardSettingsBootstrapper({
+  setCustomization,
+}: {
+  setCustomization: ReturnType<typeof useDashboardCustomization>["setCustomization"];
+}) {
+  const { apiFetch, status } = useAuth();
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    let active = true;
+
+    void loadDashboardSettings(apiFetch)
+      .then((serverCustomization) => {
+        if (active) setCustomization(serverCustomization);
+      })
+      .catch(() => {
+        // Keep the most recently saved local customization if the server is unavailable.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [apiFetch, setCustomization, status]);
+
+  return null;
 }

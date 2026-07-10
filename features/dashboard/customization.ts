@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export type DashboardPaletteId =
   | "teal"
@@ -437,14 +437,14 @@ export function resetDashboardCustomization() {
 }
 
 export function useDashboardCustomization() {
-  const [customization, setCustomization] = useState<DashboardCustomization>(
+  const [customization, setCurrentCustomization] = useState<DashboardCustomization>(
     defaultDashboardCustomization,
   );
 
   useEffect(() => {
     function syncCustomization() {
       const nextCustomization = readDashboardCustomization();
-      setCustomization(nextCustomization);
+      setCurrentCustomization(nextCustomization);
       applyDashboardCustomization(nextCustomization);
     }
 
@@ -466,9 +466,16 @@ export function useDashboardCustomization() {
     };
   }, []);
 
+  const setCustomization = useCallback((nextCustomization: DashboardCustomization) => {
+    saveDashboardCustomization(nextCustomization);
+  }, []);
+  const resetCustomization = useCallback(() => {
+    resetDashboardCustomization();
+  }, []);
+
   return {
     customization,
-    setCustomization: saveDashboardCustomization,
-    resetCustomization: resetDashboardCustomization,
+    setCustomization,
+    resetCustomization,
   };
 }

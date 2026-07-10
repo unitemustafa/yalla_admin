@@ -39,6 +39,7 @@ import {
 } from "../cities-api";
 import { useSnackbar } from "../snackbar";
 import { useAuth } from "@/features/auth/auth-provider";
+import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
 
 const CityCoverageMap = dynamic(() => import("../city-coverage-map"), {
   ssr: false,
@@ -129,52 +130,6 @@ function useLockedPageScroll() {
       document.documentElement.style.overflow = previousHtmlOverflow;
     };
   }, []);
-}
-
-function CityDeleteDialog({
-  city,
-  busy,
-  onCancel,
-  onConfirm,
-}: {
-  city: ServiceCity;
-  busy: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  useLockedPageScroll();
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 px-4 py-6 backdrop-blur-sm">
-      <section
-        dir="rtl"
-        role="dialog"
-        aria-modal="true"
-        className="w-full max-w-md rounded-xl border bg-background p-5 shadow-2xl"
-      >
-        <div className="flex items-start gap-3">
-          <div className="rounded-lg bg-destructive/10 p-2 text-destructive">
-            <Trash2 className="size-5" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold">حذف المدينة</h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              هل تريد حذف مدينة {city.name}؟ يمكنك التراجع مباشرة من رسالة الحذف.
-            </p>
-          </div>
-        </div>
-        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
-            إلغاء
-          </Button>
-          <Button type="button" variant="danger" onClick={onConfirm} disabled={busy}>
-            {busy ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-            حذف
-          </Button>
-        </div>
-      </section>
-    </div>
-  );
 }
 
 function CityDialog({
@@ -481,11 +436,10 @@ function DeliveryAreasDialog({
             </div>
           ) : (
             <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[860px] text-sm">
+              <table className="w-full min-w-[680px] text-sm">
                 <colgroup>
                   <col className="w-[220px]" />
                   <col className="w-[180px]" />
-                  <col className="w-[130px]" />
                   <col className="w-[120px]" />
                   <col className="w-[210px]" />
                 </colgroup>
@@ -493,15 +447,14 @@ function DeliveryAreasDialog({
                   <tr className="border-b bg-muted/35 text-xs text-muted-foreground">
                     <th className="px-4 py-3 text-start">اسم المنطقة</th>
                     <th className="px-4 py-3 text-start">سعر التوصيل</th>
-                    <th className="px-4 py-3 text-start">نصف القطر</th>
                     <th className="px-4 py-3 text-start">الحالة</th>
-                    <th className="px-4 py-3 text-start">الإجراءات</th>
+                    <th className="px-4 py-3 text-start" aria-label="تعطيل أو تفعيل" />
                   </tr>
                 </thead>
                 <tbody>
                   {areas.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-0">
+                      <td colSpan={4} className="p-0">
                         <div className="flex min-h-48 flex-col items-center justify-center gap-2 bg-muted/10 px-4 text-center">
                           <MapPin className="size-8 text-muted-foreground" />
                           <p className="font-semibold">لا توجد مناطق توصيل لهذه المدينة</p>
@@ -514,7 +467,6 @@ function DeliveryAreasDialog({
                       <tr key={area.id} className="border-b last:border-0">
                         <td className="px-4 py-4 font-semibold">{area.name}</td>
                         <td className="px-4 py-4">{formatMoney(area.delivery_price)}</td>
-                        <td className="px-4 py-4">{formatRadius(area.radius_km)}</td>
                         <td className="px-4 py-4">
                           <Badge tone={area.is_active ? "green" : "red"}>
                             {area.is_active ? "مفعلة" : "معطلة"}
@@ -884,8 +836,9 @@ export function CitiesPage() {
         />
       ) : null}
       {deleteCity ? (
-        <CityDeleteDialog
-          city={deleteCity}
+        <ConfirmDeleteDialog
+          title="حذف المدينة"
+          description={`هل تريد حذف المدينة ${deleteCity.name}؟`}
           busy={busyCityId === deleteCity.id}
           onCancel={() => setDeleteCity(null)}
           onConfirm={() => void removeCity(deleteCity)}

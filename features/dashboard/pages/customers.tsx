@@ -25,6 +25,7 @@ import {
   translateApiMessage,
 } from "../users/api-users";
 import type { DashboardUser } from "../users/default-dashboard-users";
+import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
 import { DashboardImage } from "../dashboard-image";
 import { Badge, Button, Card, Input, PageTitle, Pagination, Switch } from "../primitives";
 import { useSnackbar } from "../snackbar";
@@ -32,6 +33,7 @@ import {
   availabilityMessage,
   canonicalPhoneValue,
   isValidEmail,
+  isValidLocalPhone,
   isValidUsername,
   normalizeEmail,
   normalizeUsername,
@@ -229,7 +231,7 @@ export function CustomersPage() {
     setCustomers((currentCustomers) => [createdCustomer, ...currentCustomers]);
     setAddCustomerOpen(false);
     showSnackbar({
-      message: `تم إضافة ${createdCustomer.name} وربطه بالباك.`,
+      message: `تم إضافة العميل ${createdCustomer.name}.`,
       tone: "success",
     });
   }
@@ -373,7 +375,7 @@ export function CustomersPage() {
     <div className="space-y-6 px-6 py-10">
       <PageTitle
         title="العملاء"
-        description="إدارة عملاء تطبيق يلا ماركت المسجلين في الباك"
+        description="إدارة عملاء تطبيق يلا ماركت"
         size="compact"
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -451,8 +453,9 @@ export function CustomersPage() {
       ) : null}
 
       {deleteCustomer ? (
-        <ConfirmDeleteCustomerDialog
-          user={deleteCustomer}
+        <ConfirmDeleteDialog
+          title="حذف العميل"
+          description={`هل تريد حذف العميل ${deleteCustomer.name}؟`}
           busy={deletingUserId === deleteCustomer.id}
           onCancel={() => setDeleteCustomer(null)}
           onConfirm={() => void handleDeleteCustomer()}
@@ -498,63 +501,6 @@ function CustomerErrorAlert({
         </Button>
       </div>
     </Card>
-  );
-}
-
-function ConfirmDeleteCustomerDialog({
-  user,
-  busy,
-  onCancel,
-  onConfirm,
-}: {
-  user: DashboardUser;
-  busy: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  useEffect(() => {
-    const previousBodyOverflow = document.body.style.overflow;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
-
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overflow = previousHtmlOverflow;
-    };
-  }, []);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 px-4 py-6 backdrop-blur-sm">
-      <section
-        dir="rtl"
-        role="dialog"
-        aria-modal="true"
-        className="w-full max-w-md rounded-xl border bg-background p-5 shadow-2xl"
-      >
-        <div className="flex items-start gap-3">
-          <div className="rounded-full bg-destructive/10 p-2 text-destructive">
-            <AlertCircle className="size-5" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold">حذف العميل</h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              هل تريد حذف العميل {user.name}؟ لا يمكن التراجع عن هذا الإجراء.
-            </p>
-          </div>
-        </div>
-        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
-            إلغاء
-          </Button>
-          <Button type="button" variant="danger" onClick={onConfirm} disabled={busy}>
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-            حذف
-          </Button>
-        </div>
-      </section>
-    </div>
   );
 }
 
@@ -672,6 +618,7 @@ function AddCustomerDialog({
   function updateDraft(field: keyof CustomerDraft, value: string) {
     setDraft((currentDraft) => ({ ...currentDraft, [field]: sanitizeCustomerInput(field, value) }));
     setApiError(null);
+    setSubmitted(false);
     setApiFieldErrors((currentErrors) => {
       const nextErrors = { ...currentErrors };
       delete nextErrors[field];
@@ -707,6 +654,12 @@ function AddCustomerDialog({
   }
 
   function errorFor(field: keyof CustomerDraft) {
+    if (field === "username" || field === "email" || field === "phone") {
+      const state = availabilityStates[field];
+      if (state === "invalid" || state === "taken" || state === "request_error") {
+        return availabilityMessage(field, state);
+      }
+    }
     if (field === "password" && draft.password) {
       return apiFieldErrors.password;
     }
@@ -760,6 +713,9 @@ function AddCustomerDialog({
                   autoComplete="off"
                   dir="rtl"
                   value={draft.username}
+                  onKeyDown={(event) => {
+                    if (event.key === " ") event.preventDefault();
+                  }}
                   onChange={(event) => updateDraft("username", event.target.value)}
                   onFocus={() => setFocusedAvailabilityField("username")}
                   onBlur={() => setFocusedAvailabilityField(null)}
@@ -777,6 +733,7 @@ function AddCustomerDialog({
               <CustomerField label="رقم الهاتف *" error={errorFor("phone")}>
                 <Input
                   dir="ltr"
+                  type="tel"
                   autoComplete="off"
                   inputMode="tel"
                   maxLength={11}
@@ -803,6 +760,9 @@ function AddCustomerDialog({
                   type="email"
                   autoComplete="new-password"
                   value={draft.email}
+                  onKeyDown={(event) => {
+                    if (event.key === " ") event.preventDefault();
+                  }}
                   onChange={(event) => updateDraft("email", event.target.value)}
                   onFocus={() => setFocusedAvailabilityField("email")}
                   onBlur={() => setFocusedAvailabilityField(null)}
@@ -908,7 +868,13 @@ function AvailabilityHint({
   state: AvailabilityState;
   visible: boolean;
 }) {
-  if (!visible || state === "idle" || state === "invalid") {
+  if (
+    !visible ||
+    state === "idle" ||
+    state === "invalid" ||
+    state === "taken" ||
+    state === "request_error"
+  ) {
     return null;
   }
   if (state === "checking") {
@@ -976,7 +942,7 @@ function validateCustomerDraftWithBackendAvailability(draft: CustomerDraft) {
   }
   if (!draft.phone.trim()) {
     errors.phone = "اكتب رقم الهاتف.";
-  } else if (!/^01[0125]\d{8}$/.test(draft.phone)) {
+  } else if (!isValidLocalPhone(draft.phone)) {
     errors.phone = "اكتب رقم هاتف صحيحًا.";
   }
   if (!normalizeEmail(draft.email)) {

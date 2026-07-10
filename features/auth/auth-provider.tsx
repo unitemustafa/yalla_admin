@@ -14,10 +14,12 @@ import { Cookies } from "react-cookie";
 import {
   AUTH_COOKIE_NAMES,
   AUTH_STORAGE_KEYS,
+  NETWORK_ERROR_MESSAGE,
   type AuthSession,
   type AuthTokens,
   type AuthUser,
   isAccessTokenUsable,
+  isNetworkError,
   jwtExpiresAt,
 } from "@/lib/auth";
 
@@ -25,7 +27,7 @@ const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1"
 ).replace(/\/+$/, "");
 const REFRESH_BUFFER_MS = 60_000;
-const REMEMBER_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+const REMEMBER_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 const TEMPORARY_MAX_AGE_SECONDS = 60 * 60 * 8;
 const cookies = new Cookies();
 
@@ -48,27 +50,12 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 let refreshPromise: Promise<AuthTokens> | null = null;
 
-function cookieOptions(remember: boolean) {
-  let maxAge = REMEMBER_MAX_AGE_SECONDS;
-  if (!remember) {
-    try {
-      const expiresAt = Number(
-        localStorage.getItem(AUTH_STORAGE_KEYS.temporarySessionExpiresAt),
-      );
-      maxAge =
-        Number.isFinite(expiresAt) && expiresAt > Date.now()
-          ? Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000))
-          : TEMPORARY_MAX_AGE_SECONDS;
-    } catch {
-      maxAge = TEMPORARY_MAX_AGE_SECONDS;
-    }
-  }
-
+function cookieOptions() {
   return {
     path: "/",
     sameSite: "lax" as const,
     secure: typeof window !== "undefined" && window.location.protocol === "https:",
-    maxAge,
+    maxAge: remainingSessionMaxAge(),
   };
 }
 
@@ -95,10 +82,10 @@ function hasTemporaryTabSession() {
   }
 }
 
-function temporarySessionExpiresAt() {
+function sessionExpiresAt() {
   try {
     const value = Number(
-      localStorage.getItem(AUTH_STORAGE_KEYS.temporarySessionExpiresAt),
+      localStorage.getItem(AUTH_STORAGE_KEYS.sessionExpiresAt),
     );
     return Number.isFinite(value) && value > 0 ? value : null;
   } catch {
@@ -106,22 +93,34 @@ function temporarySessionExpiresAt() {
   }
 }
 
+function remainingSessionMaxAge() {
+  const expiresAt = sessionExpiresAt();
+  return expiresAt && expiresAt > Date.now()
+    ? Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000))
+    : 0;
+}
+
 function persistSessionLifetime(remember: boolean) {
   try {
     localStorage.removeItem(AUTH_STORAGE_KEYS.sessionExpiredNotice);
+    localStorage.setItem(
+      AUTH_STORAGE_KEYS.sessionExpiresAt,
+      String(
+        Date.now() +
+          (remember
+            ? REMEMBER_MAX_AGE_SECONDS
+            : TEMPORARY_MAX_AGE_SECONDS) *
+            1000,
+      ),
+    );
     if (remember) {
       sessionStorage.removeItem(AUTH_STORAGE_KEYS.temporarySessionActive);
-      localStorage.removeItem(AUTH_STORAGE_KEYS.temporarySessionExpiresAt);
       return;
     }
 
     sessionStorage.setItem(
       AUTH_STORAGE_KEYS.temporarySessionActive,
       "true",
-    );
-    localStorage.setItem(
-      AUTH_STORAGE_KEYS.temporarySessionExpiresAt,
-      String(Date.now() + TEMPORARY_MAX_AGE_SECONDS * 1000),
     );
   } catch {
     // Cookies still enforce the maximum lifetime if storage is unavailable.
@@ -131,7 +130,7 @@ function persistSessionLifetime(remember: boolean) {
 function clearSessionLifetime(announceExpired: boolean) {
   try {
     sessionStorage.removeItem(AUTH_STORAGE_KEYS.temporarySessionActive);
-    localStorage.removeItem(AUTH_STORAGE_KEYS.temporarySessionExpiresAt);
+    localStorage.removeItem(AUTH_STORAGE_KEYS.sessionExpiresAt);
     if (announceExpired) {
       localStorage.setItem(AUTH_STORAGE_KEYS.sessionExpiredNotice, "true");
     } else {
@@ -142,22 +141,22 @@ function clearSessionLifetime(announceExpired: boolean) {
   }
 }
 
-function persistTokens(tokens: AuthTokens, remember = readRemember()) {
-  const options = cookieOptions(remember);
+function persistTokens(tokens: AuthTokens) {
+  const options = cookieOptions();
   cookies.set(AUTH_COOKIE_NAMES.accessToken, tokens.accessToken, options);
   cookies.set(AUTH_COOKIE_NAMES.refreshToken, tokens.refreshToken, options);
 }
 
 function persistSession(session: AuthSession, remember: boolean) {
   persistSessionLifetime(remember);
-  const options = cookieOptions(remember);
-  persistTokens(session, remember);
+  const options = cookieOptions();
+  persistTokens(session);
   cookies.set(AUTH_COOKIE_NAMES.user, session.user, options);
   cookies.set(AUTH_COOKIE_NAMES.remember, String(remember), options);
 }
 
 function persistUser(user: AuthUser) {
-  cookies.set(AUTH_COOKIE_NAMES.user, user, cookieOptions(readRemember()));
+  cookies.set(AUTH_COOKIE_NAMES.user, user, cookieOptions());
 }
 
 function clearSessionCookies() {
@@ -212,13 +211,23 @@ async function refreshTokens() {
     doNotParse: true,
   }) as string | undefined;
   if (!refreshToken) throw new Error("لا توجد جلسة قابلة للتجديد.");
+  const expiresAt = sessionExpiresAt();
+  if (!expiresAt || expiresAt <= Date.now()) {
+    throw new Error("انتهت الجلسة. سجّل الدخول من جديد.");
+  }
 
   refreshPromise = (async () => {
-    const response = await fetch(`${API_BASE_URL}/auth/refresh/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}/auth/refresh/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
+    } catch (error) {
+      if (isNetworkError(error)) throw new Error(NETWORK_ERROR_MESSAGE);
+      throw error;
+    }
     const data = (await responseData(response)) as Partial<AuthTokens> | null;
 
     if (
@@ -245,9 +254,15 @@ async function refreshTokens() {
 }
 
 async function fetchCurrentAdminUser(accessToken: string) {
-  const response = await fetch(`${API_BASE_URL}/auth/me/`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/me/`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch (error) {
+    if (isNetworkError(error)) throw new Error(NETWORK_ERROR_MESSAGE);
+    throw error;
+  }
   const data = await responseData(response);
 
   if (!response.ok || !data || typeof data !== "object") {
@@ -274,6 +289,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const sessionExpiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearSession = useCallback((announceExpired = false) => {
+    if (refreshTimer.current) {
+      clearTimeout(refreshTimer.current);
+      refreshTimer.current = null;
+    }
     if (sessionExpiryTimer.current) {
       clearTimeout(sessionExpiryTimer.current);
       sessionExpiryTimer.current = null;
@@ -285,15 +304,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const scheduleSessionExpiry = useCallback(
-    (remember: boolean) => {
+    () => {
       if (sessionExpiryTimer.current) {
         clearTimeout(sessionExpiryTimer.current);
         sessionExpiryTimer.current = null;
       }
-      if (remember) return;
-
-      const expiresAt = temporarySessionExpiresAt();
-      if (expiresAt === null) return;
+      const expiresAt = sessionExpiresAt();
+      if (expiresAt === null) {
+        clearSession(true);
+        return;
+      }
       if (expiresAt <= Date.now()) {
         clearSession(true);
         return;
@@ -347,17 +367,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearSession(true);
         return;
       }
-      const temporaryExpiresAt = temporarySessionExpiresAt();
-      if (
-        !remember &&
-        temporaryExpiresAt !== null &&
-        temporaryExpiresAt <= Date.now()
-      ) {
+      const expiresAt = sessionExpiresAt();
+      if (!expiresAt || expiresAt <= Date.now()) {
         clearSession(true);
         return;
       }
 
-      scheduleSessionExpiry(remember);
+      scheduleSessionExpiry();
 
       try {
         const usableAccessToken = isAccessTokenUsable(accessToken)
@@ -385,14 +401,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(
     async (input: { email: string; password: string; remember: boolean }) => {
-      const response = await fetch(`${API_BASE_URL}/auth/login/admin/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: input.email,
-          password: input.password,
-        }),
-      });
+      let response: Response;
+      try {
+        response = await fetch(`${API_BASE_URL}/auth/login/admin/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: input.email,
+            password: input.password,
+            remember: input.remember,
+          }),
+        });
+      } catch (error) {
+        if (isNetworkError(error)) throw new Error(NETWORK_ERROR_MESSAGE);
+        throw error;
+      }
       const data = (await responseData(response)) as Partial<AuthSession> | null;
 
       if (!response.ok) {
@@ -416,7 +439,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       persistSession(session, input.remember);
       setUser(session.user);
       setStatus("authenticated");
-      scheduleSessionExpiry(input.remember);
+      scheduleSessionExpiry();
       scheduleRefresh(session.accessToken);
     },
     [scheduleRefresh, scheduleSessionExpiry],

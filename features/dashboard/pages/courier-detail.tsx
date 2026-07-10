@@ -43,6 +43,7 @@ import {
   isBackendDashboardUser,
   type BackendDashboardUser,
 } from "../users/api-users";
+import { displayLocalPhone } from "../users/account-fields";
 
 type CourierOrderStatus =
   | "pending"
@@ -461,7 +462,7 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
                   courier.phone ? (
                     <a href={`tel:${courier.phone}`} className="text-primary hover:underline">
                       <Phone className="me-1 inline size-3.5" />
-                      {courier.phone}
+                      {displayLocalPhone(courier.phone)}
                     </a>
                   ) : null
                 }

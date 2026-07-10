@@ -22,6 +22,8 @@ export type BackendDashboardUser = {
   date_joined?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  market_region_mode?: "general" | "service_city" | string | null;
+  market_region_service_city_name?: string | null;
   customer_stats?: {
     orders_count?: number | string | null;
     completed_orders_count?: number | string | null;
@@ -86,6 +88,13 @@ export function formatBackendDate(value: string | null | undefined) {
 
 export function dashboardUserFromBackend(user: BackendDashboardUser): DashboardUser {
   const active = user.is_active !== false;
+  const serviceCityName = user.market_region_service_city_name?.trim();
+  const location =
+    user.market_region_mode === "service_city" && serviceCityName
+      ? serviceCityName
+      : user.market_region_mode === "general"
+        ? "عام"
+        : unset;
 
   return {
     id: String(user.id),
@@ -96,7 +105,7 @@ export function dashboardUserFromBackend(user: BackendDashboardUser): DashboardU
     avatar: normalizeImageSrc(user.avatar_url, defaultAvatar),
     role: roleLabel(user.role),
     branch: unset,
-    location: unset,
+    location,
     joinedAt: formatBackendDate(user.date_joined ?? user.created_at),
     lastLogin: formatBackendDate(user.last_login),
     updatedAt: formatBackendDate(user.updated_at),

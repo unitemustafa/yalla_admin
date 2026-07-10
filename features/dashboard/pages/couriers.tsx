@@ -45,9 +45,10 @@ import {
   isMultiMarket,
   type DashboardOrderLike,
 } from "../order-display";
-import { AppSelect, Badge, Button, Card, Field, Input, PageTitle, Pagination } from "../primitives";
+import { AppSelect, Badge, Button, Card, Field, Input, PageTitle, Pagination, Switch } from "../primitives";
 import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
+import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
 import {
   apiResponseData,
   firstApiError,
@@ -583,7 +584,6 @@ function CourierForm({
                   <Field label="نوع المركبة"><Input required autoComplete="off" placeholder="مثال: دراجة نارية" value={draft.vehicleType} onChange={(e) => update("vehicleType", e.target.value)} className="h-10 rounded-md" /></Field>
                   <Field label="رقم اللوحة"><Input required autoComplete="off" placeholder="مثال: أ ب ج 1234" value={draft.plateNumber} onChange={(e) => update("plateNumber", e.target.value)} className="h-10 rounded-md" /></Field>
                   <Field label="مدينة التشغيل"><AppSelect value={draft.serviceCity} onValueChange={(value) => update("serviceCity", value)} options={cities.filter((city) => city.is_active !== false).map((city) => ({ value: String(city.id), label: city.name }))} placeholder="اختر مدينة التشغيل" icon={<MapPin className="size-4" />} className="h-10 rounded-md bg-input" contentClassName="rounded-md border-border/80 bg-popover p-1.5 shadow-2xl" ariaLabel="مدينة التشغيل" /></Field>
-                  <Field label="التوفر"><AppSelect value={draft.isAvailable} onValueChange={(value) => update("isAvailable", value)} options={[{ value: "true", label: "متاح" }, { value: "false", label: "غير متاح" }]} className="h-10 rounded-md bg-input" contentClassName="rounded-md border-border/80 bg-popover p-1.5 shadow-2xl" ariaLabel="التوفر" /></Field>
                   <Field label="الحد الأقصى للطلبات"><Input required min={1} type="number" autoComplete="off" value={draft.maxActiveOrders} onChange={(e) => update("maxActiveOrders", e.target.value)} className="h-10 rounded-md" /></Field>
                 </div>
               ) : null}
@@ -726,35 +726,6 @@ function PasswordDialog({
           <Button type="button" disabled={busy || !canSavePassword} onClick={() => onConfirm(password)}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
             حفظ كلمة المرور
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function DeleteDialog({
-  courier,
-  busy,
-  onClose,
-  onConfirm,
-}: {
-  courier: BackendDashboardUser;
-  busy: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <Modal title="حذف مندوب" onClose={onClose} maxWidth="max-w-md">
-      <div className="space-y-4 p-5">
-        <div className="rounded-lg border border-red-400/30 bg-red-500/10 px-4 py-3 text-red-700 dark:text-red-200">
-          هل تريد حذف حساب {fullNameFromBackendUser(courier)}؟ لا يمكن التراجع عن هذه العملية.
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onClose}>إلغاء</Button>
-          <Button type="button" variant="danger" disabled={busy} onClick={onConfirm}>
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-            حذف الحساب
           </Button>
         </div>
       </div>
@@ -921,13 +892,77 @@ export function CouriersPage() {
     if (response.ok) setPasswordCourier(null);
   }
 
-  function restoreCourier(courier: BackendDashboardUser, index: number) {
-    setCouriers((rows) => {
-      if (rows.some((row) => row.id === courier.id)) return rows;
-      const nextRows = [...rows];
-      nextRows.splice(Math.max(0, index), 0, courier);
-      return nextRows;
-    });
+  async function handleAvailabilityChange(
+    courier: BackendDashboardUser,
+    checked: boolean,
+  ) {
+    const profile = courier.courier_profile;
+    if (!profile?.service_city || busy !== null) return;
+
+    setBusy(`availability-${courier.id}`);
+    try {
+      const response = await apiFetch(`auth/users/${courier.id}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courier_profile: {
+            is_available: checked,
+          },
+        }),
+      });
+      const data = await apiResponseData(response);
+      if (!response.ok || !isBackendDashboardUser(data)) {
+        throw new Error(errorMessage(data, "تعذر تحديث توفر المندوب."));
+      }
+      setCouriers((rows) =>
+        rows.map((row) => (row.id === courier.id ? data : row)),
+      );
+      showSnackbar({
+        message: checked ? "تم جعل المندوب متاحًا." : "تم جعل المندوب غير متاح.",
+        tone: checked ? "success" : "danger",
+      });
+    } catch (reason) {
+      showSnackbar({
+        message: reason instanceof Error ? reason.message : "تعذر تحديث توفر المندوب.",
+        tone: "danger",
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function restoreCourier(courier: BackendDashboardUser, index: number) {
+    setBusy(`restore-${courier.id}`);
+    try {
+      const response = await apiFetch(`auth/users/${courier.id}/restore/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: courier.email,
+          username: courier.username,
+          phone: courier.phone,
+          is_active: courier.is_active !== false,
+        }),
+      });
+      const data = await apiResponseData(response);
+      if (!response.ok || !isBackendDashboardUser(data)) {
+        throw new Error(errorMessage(data, "تعذر التراجع عن حذف المندوب."));
+      }
+      setCouriers((rows) => {
+        if (rows.some((row) => row.id === data.id)) return rows;
+        const nextRows = [...rows];
+        nextRows.splice(Math.max(0, index), 0, data);
+        return nextRows;
+      });
+      showSnackbar({ message: `تمت استعادة المندوب ${fullNameFromBackendUser(data)}.`, tone: "success" });
+    } catch (reason) {
+      showSnackbar({
+        message: reason instanceof Error ? reason.message : "تعذر التراجع عن حذف المندوب.",
+        tone: "danger",
+      });
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function confirmDelete() {
@@ -952,8 +987,7 @@ export function CouriersPage() {
         setDeleteCourier(null);
       },
       onUndo: () => {
-        restoreCourier(courier, courierIndex);
-        setBusy(null);
+        return restoreCourier(courier, courierIndex);
       },
       onCommit: async () => {
         const response: { ok: boolean } = { ok: true };
@@ -976,7 +1010,7 @@ export function CouriersPage() {
     <div className="px-6 py-8">
       <PageTitle
         title="المندوبين"
-        description="حسابات المندوبين وإسناد طلبات Yalla Home"
+        description="حسابات المندوبين وإسناد طلبات يلا هوم"
         size="compact"
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -1059,7 +1093,7 @@ export function CouriersPage() {
                     : undefined;
 
             return (
-              <Card key={courier.id} className="grid gap-4 p-4 xl:grid-cols-[minmax(280px,1fr)_320px_260px] xl:items-center">
+              <Card key={courier.id} className="grid gap-4 p-4 xl:grid-cols-[minmax(220px,1fr)_320px_400px] xl:items-center">
                 <Link
                   href={`/delivery/couriers/${courier.id}`}
                   className="flex min-w-0 items-center gap-3 rounded-lg transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
@@ -1077,7 +1111,7 @@ export function CouriersPage() {
                       </Badge>
                       {isAtCapacity ? <Badge tone="red">ممتلئ</Badge> : null}
                     </div>
-                    <p className="mt-1 truncate text-sm text-muted-foreground" dir="ltr">{courier.phone} - {courier.email}</p>
+                    <p className="mt-1 truncate text-sm text-muted-foreground" dir="ltr">{displayLocalPhone(courier.phone)} - {courier.email}</p>
                     <p className="mt-1 truncate text-sm"><Truck className="me-1 inline size-4 text-primary" />{profile?.vehicle_type ?? "غير محدد"} - {profile?.plate_number ?? "بلا لوحة"} - {profile?.service_city_name ?? "بلا مدينة"}</p>
                   </div>
                 </Link>
@@ -1086,7 +1120,19 @@ export function CouriersPage() {
                   <div className="rounded-md bg-muted px-3 py-2"><div className="font-bold">{delivered}</div><div className="text-xs text-muted-foreground">تم التسليم</div></div>
                   <div className="rounded-md bg-muted px-3 py-2"><div className="font-bold">{maxActiveOrders}</div><div className="text-xs text-muted-foreground">السعة</div></div>
                 </div>
-                <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
+                <div className="flex flex-nowrap justify-start gap-2 xl:justify-end">
+                  <div className="flex shrink-0 items-center gap-2 rounded-md border px-2 py-1">
+                    <Switch
+                      checked={profile?.is_available !== false}
+                      disabled={busy !== null || !profile?.service_city}
+                      onCheckedChange={(checked) =>
+                        void handleAvailabilityChange(courier, checked)
+                      }
+                    />
+                    <span className="text-xs font-semibold">
+                      {profile?.is_available === false ? "غير متاح" : "متاح"}
+                    </span>
+                  </div>
                   <Link
                     href={`/delivery/couriers/${courier.id}`}
                     className="inline-flex size-9 items-center justify-center rounded-md border border-border bg-background text-muted-foreground shadow-sm transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
@@ -1134,7 +1180,13 @@ export function CouriersPage() {
         <PasswordDialog courier={passwordCourier} busy={busy === `password-${passwordCourier.id}`} onClose={() => setPasswordCourier(null)} onConfirm={(password) => void confirmPassword(password)} />
       ) : null}
       {deleteCourier ? (
-        <DeleteDialog courier={deleteCourier} busy={busy === `delete-${deleteCourier.id}`} onClose={() => setDeleteCourier(null)} onConfirm={() => void confirmDelete()} />
+        <ConfirmDeleteDialog
+          title="حذف المندوب"
+          description={`هل تريد حذف المندوب ${fullNameFromBackendUser(deleteCourier)}؟`}
+          busy={busy === `delete-${deleteCourier.id}`}
+          onCancel={() => setDeleteCourier(null)}
+          onConfirm={() => void confirmDelete()}
+        />
       ) : null}
       {assigning ? (
         <Modal title={`إسناد طلب إلى ${fullNameFromBackendUser(assigning)}`} onClose={() => { setAssigning(null); setSelectedOrder(""); setOrderSearch(""); }}>

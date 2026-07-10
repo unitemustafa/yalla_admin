@@ -11,13 +11,11 @@ import {
   RotateCcw,
   Save,
   Store,
-  Type,
 } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
 import {
   dashboardCustomPaletteVariables,
-  dashboardFonts,
   dashboardPalettes,
   defaultDashboardCustomization,
   type DashboardCustomization,
@@ -297,7 +295,7 @@ export function SettingsPage() {
         description="تخصيص ألوان اللوحة، الخط، وبيانات البراند الظاهرة في القائمة."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button
+              <Button
               disabled={isLoadingSettings || isSavingSettings}
               onClick={handleReset}
               type="button"
@@ -307,6 +305,7 @@ export function SettingsPage() {
               رجوع للافتراضي
             </Button>
             <Button
+              data-testid="save-dashboard-settings"
               disabled={isLoadingSettings || isSavingSettings}
               onClick={() => void handleSave()}
               type="button"
@@ -487,36 +486,12 @@ export function SettingsPage() {
             </div>
           </SettingBlock>
 
-          <SettingBlock icon={<Type className="size-4" />} title="الخط">
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              {dashboardFonts.map((font) => {
-                const selected = font.id === draft.font;
-
-                return (
-                  <button
-                    key={font.id}
-                    aria-pressed={selected}
-                    className={cn(
-                      "flex h-12 items-center justify-center gap-2 rounded-lg border px-3 font-semibold transition-colors hover:bg-accent",
-                      selected && "border-primary bg-primary/10 text-primary",
-                    )}
-                    onClick={() => updateDraft({ font: font.id })}
-                    style={{ fontFamily: font.cssValue }}
-                    type="button"
-                  >
-                    {font.name}
-                    {selected ? <Check className="size-4" /> : null}
-                  </button>
-                );
-              })}
-            </div>
-          </SettingBlock>
-
           <SettingBlock icon={<Store className="size-4" />} title="اللوجو واسم البراند">
             <div className="grid gap-4">
               <label className="grid gap-2 text-sm font-medium">
                 اسم البراند
                 <Input
+                  data-testid="dashboard-brand-name-input"
                   onChange={(event) => updateDraft({ brandName: event.target.value })}
                   placeholder={t("brand.name")}
                   value={draft.brandName}
@@ -526,6 +501,7 @@ export function SettingsPage() {
               <label className="grid gap-2 text-sm font-medium">
                 الوصف الظاهر تحت اللوجو
                 <Input
+                  data-testid="dashboard-brand-tagline-input"
                   onChange={(event) => updateDraft({ branchName: event.target.value })}
                   placeholder={t("branch.default")}
                   value={draft.branchName}

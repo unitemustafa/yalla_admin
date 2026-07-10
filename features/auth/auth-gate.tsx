@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import { useAuth } from "./auth-provider";
+import { AUTH_STORAGE_KEYS } from "@/lib/auth";
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { status } = useAuth();
@@ -12,7 +13,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (status === "unauthenticated") {
       const next = `${window.location.pathname}${window.location.search}`;
-      router.replace(`/login?next=${encodeURIComponent(next)}`);
+      const expired =
+        localStorage.getItem(AUTH_STORAGE_KEYS.sessionExpiredNotice) === "true";
+      router.replace(
+        expired
+          ? `/login?session=expired&next=${encodeURIComponent(next)}`
+          : `/login?next=${encodeURIComponent(next)}`,
+      );
     }
   }, [router, status]);
 
