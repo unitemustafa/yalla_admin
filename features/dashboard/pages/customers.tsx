@@ -1004,6 +1004,7 @@ function CustomersTable({
             </span>
             <DashboardImage
               src={customer.avatar}
+              placeholderType="customer"
               alt={customer.name}
               width={56}
               height={56}

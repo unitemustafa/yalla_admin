@@ -77,6 +77,32 @@ const themeScript = `
           "--sidebar-ring": "hsl(154 64% 45%)"
         }
       },
+      "market-blue": {
+        light: {
+          "--primary": "hsl(233 90% 64%)",
+          "--primary-foreground": "hsl(0 0% 100%)",
+          "--ring": "hsl(233 90% 70%)",
+          "--sidebar-foreground": "hsl(232 38% 26%)",
+          "--sidebar-primary": "hsl(233 90% 64%)",
+          "--sidebar-primary-foreground": "hsl(0 0% 100%)",
+          "--sidebar-accent": "hsl(233 100% 97%)",
+          "--sidebar-accent-foreground": "hsl(233 70% 38%)",
+          "--sidebar-border": "hsl(233 35% 88%)",
+          "--sidebar-ring": "hsl(233 90% 70%)"
+        },
+        dark: {
+          "--primary": "hsl(233 92% 68%)",
+          "--primary-foreground": "hsl(233 70% 10%)",
+          "--ring": "hsl(233 92% 68%)",
+          "--sidebar-foreground": "hsl(232 30% 92%)",
+          "--sidebar-primary": "hsl(233 92% 68%)",
+          "--sidebar-primary-foreground": "hsl(233 70% 10%)",
+          "--sidebar-accent": "hsl(232 30% 19%)",
+          "--sidebar-accent-foreground": "hsl(233 90% 94%)",
+          "--sidebar-border": "hsl(232 18% 27%)",
+          "--sidebar-ring": "hsl(233 92% 68%)"
+        }
+      },
       indigo: {
         light: {
           "--primary": "hsl(239 72% 56%)",

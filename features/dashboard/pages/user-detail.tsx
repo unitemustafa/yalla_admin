@@ -307,6 +307,7 @@ export function UserDetailPage({
           <div className="flex items-center gap-4">
             <DashboardImage
               src={user.avatar}
+              placeholderType="user"
               alt={user.name}
               width={80}
               height={80}

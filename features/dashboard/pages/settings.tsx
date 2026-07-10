@@ -27,9 +27,14 @@ import {
   saveDashboardSettings,
 } from "@/features/dashboard/dashboard-settings-api";
 import { DashboardImage } from "@/features/dashboard/dashboard-image";
-import { logoSrc } from "@/features/dashboard/data";
+import { dashboardBrandLogos } from "@/features/dashboard/data";
 import { useDashboardI18n } from "@/features/dashboard/i18n";
-import { Button, Card, Input, PageTitle } from "@/features/dashboard/primitives";
+import {
+  Button,
+  Card,
+  Input,
+  PageTitle,
+} from "@/features/dashboard/primitives";
 import { useSnackbar } from "@/features/dashboard/snackbar";
 import { cn } from "@/lib/utils";
 
@@ -37,6 +42,7 @@ const MAX_LOGO_SIZE = 5 * 1024 * 1024;
 const ALLOWED_LOGO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const DEFAULT_SERVER_BRAND_NAME = "يلا ماركت";
 const DEFAULT_SERVER_TAGLINE = "أول أونلاين ماركت في النيل الكبير";
+const THEME_CHANGE_EVENT = "yalla-theme-change";
 
 function SettingBlock({
   icon,
@@ -90,9 +96,6 @@ function settingsErrorMessage(message: string) {
   if (normalized.includes("color must be a hex")) {
     return "استخدم لونًا بصيغة #RRGGBB.";
   }
-  if (normalized.includes("unsupported font")) {
-    return "الخط المختار غير مدعوم.";
-  }
   if (normalized.includes("brand name is required")) {
     return "اسم البراند مطلوب.";
   }
@@ -133,15 +136,35 @@ export function SettingsPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => {
+    if (typeof window === "undefined") return "dark";
+    return document.documentElement.classList.contains("dark")
+      ? "dark"
+      : "light";
+  });
 
   const brandName = draft.brandName || t("brand.name");
   const branchName = draft.branchName || t("branch.default");
-  const logo = logoPreviewUrl || draft.logoDataUrl || logoSrc;
+  const logo =
+    logoPreviewUrl || draft.logoDataUrl || dashboardBrandLogos[resolvedTheme];
   const selectedSwatches =
     draft.palette === "custom"
       ? dashboardCustomPaletteVariables(draft.customColors).swatches
       : (dashboardPalettes.find((palette) => palette.id === draft.palette)
           ?.swatches ?? dashboardPalettes[0].swatches);
+
+  useEffect(() => {
+    function syncResolvedTheme() {
+      setResolvedTheme(
+        document.documentElement.classList.contains("dark") ? "dark" : "light",
+      );
+    }
+
+    syncResolvedTheme();
+    window.addEventListener(THEME_CHANGE_EVENT, syncResolvedTheme);
+    return () =>
+      window.removeEventListener(THEME_CHANGE_EVENT, syncResolvedTheme);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -152,7 +175,7 @@ export function SettingsPage() {
         const nextCustomization = withServerDefaults(serverCustomization);
         setDraft(nextCustomization);
         setCustomization(nextCustomization);
-        setStatus("تم تحميل إعدادات اللوحة من الخادم.");
+        setStatus(null);
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -288,14 +311,43 @@ export function SettingsPage() {
     setStatus("تم تجهيز القيم الافتراضية. احفظ لتطبيقها.");
   }
 
+  async function removeLogo() {
+    if (isSavingSettings) return;
+    setIsSavingSettings(true);
+    try {
+      const savedCustomization = await saveDashboardSettings(
+        apiFetch,
+        draft,
+        null,
+        true,
+      );
+      const nextCustomization = withServerDefaults(savedCustomization);
+      setDraft(nextCustomization);
+      setCustomization(nextCustomization);
+      setSelectedLogo(null);
+      setLogoPreviewUrl("");
+      showSnackbar({ message: "تم حذف اللوجو." });
+    } catch (error) {
+      showSnackbar({
+        message:
+          error instanceof Error
+            ? settingsErrorMessage(error.message)
+            : "تعذر حذف اللوجو.",
+        tone: "danger",
+      });
+    } finally {
+      setIsSavingSettings(false);
+    }
+  }
+
   return (
     <div className="px-6 py-6">
       <PageTitle
         title="الإعدادات"
-        description="تخصيص ألوان اللوحة، الخط، وبيانات البراند الظاهرة في القائمة."
+        description="تخصيص ألوان اللوحة وبيانات البراند الظاهرة في القائمة."
         actions={
           <div className="flex flex-wrap gap-2">
-              <Button
+            <Button
               disabled={isLoadingSettings || isSavingSettings}
               onClick={handleReset}
               type="button"
@@ -334,7 +386,9 @@ export function SettingsPage() {
                 width={80}
               />
             </div>
-            <div className="mt-4 text-center text-xl font-bold">{brandName}</div>
+            <div className="mt-4 text-center text-xl font-bold">
+              {brandName}
+            </div>
             <div className="mt-1 text-center text-sm text-muted-foreground">
               {branchName}
             </div>
@@ -417,16 +471,18 @@ export function SettingsPage() {
               >
                 <span className="font-semibold">مخصص</span>
                 <span className="flex items-center gap-2">
-                  {dashboardCustomPaletteVariables(draft.customColors).swatches.map(
-                    (swatch) => (
-                      <span
-                        key={swatch}
-                        className="size-7 rounded-md border shadow-sm"
-                        style={{ backgroundColor: swatch }}
-                      />
-                    ),
-                  )}
-                  {draft.palette === "custom" ? <Check className="size-4" /> : null}
+                  {dashboardCustomPaletteVariables(
+                    draft.customColors,
+                  ).swatches.map((swatch) => (
+                    <span
+                      key={swatch}
+                      className="size-7 rounded-md border shadow-sm"
+                      style={{ backgroundColor: swatch }}
+                    />
+                  ))}
+                  {draft.palette === "custom" ? (
+                    <Check className="size-4" />
+                  ) : null}
                 </span>
               </button>
             </div>
@@ -486,13 +542,18 @@ export function SettingsPage() {
             </div>
           </SettingBlock>
 
-          <SettingBlock icon={<Store className="size-4" />} title="اللوجو واسم البراند">
+          <SettingBlock
+            icon={<Store className="size-4" />}
+            title="اللوجو واسم البراند"
+          >
             <div className="grid gap-4">
               <label className="grid gap-2 text-sm font-medium">
                 اسم البراند
                 <Input
                   data-testid="dashboard-brand-name-input"
-                  onChange={(event) => updateDraft({ brandName: event.target.value })}
+                  onChange={(event) =>
+                    updateDraft({ brandName: event.target.value })
+                  }
                   placeholder={t("brand.name")}
                   value={draft.brandName}
                 />
@@ -502,7 +563,9 @@ export function SettingsPage() {
                 الوصف الظاهر تحت اللوجو
                 <Input
                   data-testid="dashboard-brand-tagline-input"
-                  onChange={(event) => updateDraft({ branchName: event.target.value })}
+                  onChange={(event) =>
+                    updateDraft({ branchName: event.target.value })
+                  }
                   placeholder={t("branch.default")}
                   value={draft.branchName}
                 />
@@ -525,6 +588,17 @@ export function SettingsPage() {
                   <ImagePlus className="size-4" />
                   تغيير اللوجو
                 </Button>
+                {draft.logoDataUrl ? (
+                  <Button
+                    disabled={isSavingSettings}
+                    onClick={() => void removeLogo()}
+                    type="button"
+                    variant="outline"
+                    className="text-destructive hover:text-destructive"
+                  >
+                    حذف اللوجو
+                  </Button>
+                ) : null}
               </div>
             </div>
           </SettingBlock>

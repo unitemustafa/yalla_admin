@@ -1,13 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
   Check,
   CheckCircle,
-  Copy,
   Edit,
   Eye,
   MapPin,
@@ -39,7 +37,6 @@ import {
 } from "../admin-api";
 import { DashboardImage } from "../dashboard-image";
 import {
-  ActionMenu,
   AppSelect,
   Button,
   Card,
@@ -50,13 +47,11 @@ import {
   Switch,
 } from "../primitives";
 import { deliveryZones } from "../reference-data";
-import { useItemTableState } from "../hooks";
 import { useSnackbar } from "../snackbar";
 import { cn } from "@/lib/utils";
 
 type ItemFilters = {
   search: string;
-  category: string;
   shop: string;
   region: string;
   status: "all" | "active" | "inactive";
@@ -64,7 +59,6 @@ type ItemFilters = {
 
 const defaultFilters: ItemFilters = {
   search: "",
-  category: "all",
   shop: "all",
   region: "all",
   status: "all",
@@ -110,7 +104,7 @@ const itemSortCollator = new Intl.Collator("ar", {
   sensitivity: "base",
 });
 
-function uniqueValues(rows: ItemRow[], key: "category" | "shopName") {
+function uniqueValues(rows: ItemRow[], key: "shopName") {
   return Array.from(
     new Set(
       rows
@@ -202,8 +196,6 @@ function matchesFilters(row: ItemRow, filters: ItemFilters) {
       .join(" ")
       .toLowerCase()
       .includes(search);
-  const matchesCategory =
-    filters.category === "all" || row.category === filters.category;
   const matchesShop =
     filters.shop === "all" ||
     (filters.shop === "none"
@@ -215,7 +207,6 @@ function matchesFilters(row: ItemRow, filters: ItemFilters) {
 
   return (
     matchesSearch &&
-    matchesCategory &&
     matchesShop &&
     matchesStatus &&
     matchesRegion(row, filters.region)
@@ -284,14 +275,12 @@ function MetricCards({ rows }: { rows: ItemRow[] }) {
 }
 
 function ItemsFilters({
-  categories,
   filters,
   hasFilters,
   onChange,
   onReset,
   shops,
 }: {
-  categories: string[];
   filters: ItemFilters;
   hasFilters: boolean;
   onChange: (filters: ItemFilters) => void;
@@ -318,7 +307,7 @@ function ItemsFilters({
           إعادة ضبط
         </Button>
       </div>
-      <div className="grid gap-3 md:grid-cols-2 md:items-end xl:grid-cols-[minmax(280px,1fr)_170px_170px_190px_160px]">
+      <div className="grid gap-3 md:grid-cols-2 md:items-end xl:grid-cols-[minmax(280px,1fr)_170px_190px_160px]">
         <label className="grid gap-2 text-sm font-medium">
           بحث
           <span className="relative">
@@ -330,22 +319,6 @@ function ItemsFilters({
               className="h-10 w-full rounded-md border border-border bg-input px-3 ps-9 text-sm shadow-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
             />
           </span>
-        </label>
-        <label className="grid gap-2 text-sm font-medium">
-          الفئة
-          <AppSelect
-            value={filters.category}
-            onValueChange={(category) => onChange({ ...filters, category })}
-            options={[
-              { value: "all", label: "الكل" },
-              ...categories.map((category) => ({
-                value: category,
-                label: category,
-              })),
-            ]}
-            ariaLabel="الفئة"
-            className="h-10 rounded-md border border-border bg-input px-3 text-sm shadow-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
-          />
         </label>
         <label className="grid gap-2 text-sm font-medium">
           المحل
@@ -361,7 +334,7 @@ function ItemsFilters({
               })),
             ]}
             ariaLabel="المحل"
-            className="h-10 rounded-md border border-border bg-input px-3 text-sm shadow-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+            className="h-10 rounded-md border border-border bg-background px-3 text-sm shadow-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
           />
         </label>
         <label className="grid gap-2 text-sm font-medium">
@@ -379,7 +352,7 @@ function ItemsFilters({
             ]}
             ariaLabel="المنطقة"
             icon={<MapPin className="size-4" />}
-            className="h-10 rounded-md border border-border bg-input px-3 text-sm shadow-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+            className="h-10 rounded-md border border-border bg-background px-3 text-sm shadow-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
           />
         </label>
         <label className="grid gap-2 text-sm font-medium">
@@ -395,7 +368,7 @@ function ItemsFilters({
               { value: "inactive", label: "غير نشط" },
             ]}
             ariaLabel="الحالة"
-            className="h-10 rounded-md border border-border bg-input px-3 text-sm shadow-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+            className="h-10 rounded-md border border-border bg-background px-3 text-sm shadow-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
           />
         </label>
       </div>
@@ -405,60 +378,19 @@ function ItemsFilters({
 
 function RowActions({
   row,
-  open,
-  onOpen,
   onView,
-  onDuplicate,
   onDelete,
 }: {
   row: ItemRow;
-  open: boolean;
-  onOpen: () => void;
   onView: () => void;
-  onDuplicate: () => void;
   onDelete: () => void;
 }) {
   return (
-    <ActionMenu
-      open={open}
-      onToggle={onOpen}
-      label={`\u0625\u062c\u0631\u0627\u0621\u0627\u062a ${row.name}`}
-      title={"\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0645\u0646\u062a\u062c"}
-      triggerClassName="h-8 w-12"
-      menuClassName="w-56"
-      items={[
-        {
-          label: "بيانات المنتج",
-          icon: Eye,
-          onClick: () => {
-            onView();
-            onOpen();
-          },
-        },
-        {
-          label: "\u062a\u0639\u062f\u064a\u0644",
-          icon: Edit,
-          href: `/items/edit/${row.id}?returnTo=%2Fitems%3F`,
-        },
-        {
-          label: "\u0646\u0633\u062e",
-          icon: Copy,
-          onClick: () => {
-            onDuplicate();
-            onOpen();
-          },
-        },
-        {
-          label: "\u062d\u0630\u0641",
-          icon: Trash2,
-          onClick: () => {
-            onDelete();
-            onOpen();
-          },
-          tone: "danger",
-        },
-      ]}
-    />
+    <div className="flex min-w-[150px] items-center justify-end gap-2">
+      <button type="button" aria-label={`بيانات ${row.name}`} title={`بيانات ${row.name}`} onClick={onView} className="inline-flex size-10 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:bg-accent hover:text-foreground"><Eye className="size-4" /></button>
+      <Link href={`/items/edit/${row.id}?returnTo=%2Fitems%3F`} aria-label={`تعديل ${row.name}`} title={`تعديل ${row.name}`} className="inline-flex size-10 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:bg-accent hover:text-foreground"><Edit className="size-4" /></Link>
+      <button type="button" aria-label={`حذف ${row.name}`} title={`حذف ${row.name}`} onClick={onDelete} className="inline-flex size-10 items-center justify-center rounded-md border border-destructive/35 text-destructive transition hover:bg-destructive/10"><Trash2 className="size-4" /></button>
+    </div>
   );
 }
 
@@ -470,6 +402,7 @@ function ProductIdentity({ row, compact = false }: { row: ItemRow; compact?: boo
       <DashboardImage
         alt={row.name}
         src={row.image}
+        placeholderType="product"
         width={imageSize}
         height={imageSize}
         sizes={`${imageSize}px`}
@@ -691,6 +624,7 @@ function ProductDetailDialog({
                 <DashboardImage
                   alt={product.name}
                   src={primaryProductImageUrl(product)}
+                  placeholderType="product"
                   width={180}
                   height={180}
                   sizes="180px"
@@ -786,22 +720,16 @@ function ProductDetailDialog({
 function ItemsMobileCards({
   rows,
   selectedRows,
-  openRow,
-  onToggleRow,
   onToggleSelected,
   onToggleActive,
   onView,
-  onDuplicate,
   onDelete,
 }: {
   rows: ItemRow[];
   selectedRows: Set<string>;
-  openRow: string | null;
-  onToggleRow: (rowIndex: string) => void;
   onToggleSelected: (rowIndex: string) => void;
   onToggleActive: (row: ItemRow, active: boolean) => void;
   onView: (row: ItemRow) => void;
-  onDuplicate: (row: ItemRow) => void;
   onDelete: (rowId: string) => void;
 }) {
   return (
@@ -834,10 +762,7 @@ function ItemsMobileCards({
                 </div>
                 <RowActions
                   row={row}
-                  open={openRow === row.index}
-                  onOpen={() => onToggleRow(row.index)}
                   onView={() => onView(row)}
-                  onDuplicate={() => onDuplicate(row)}
                   onDelete={() => onDelete(row.id)}
                 />
               </div>
@@ -879,8 +804,6 @@ function ItemsMobileCards({
 
 export function ItemsPage() {
   const { apiFetch } = useAuth();
-  const router = useRouter();
-  const { openRow, toggleRow } = useItemTableState();
   const { showSnackbar } = useSnackbar();
   const [rows, setRows] = useState<ItemRow[]>(() =>
     itemRows.map(normalizeItemRow),
@@ -888,6 +811,7 @@ export function ItemsPage() {
   const [additionRows, setAdditionRows] = useState(() => new Map<string, string>());
   const [filters, setFilters] = useState<ItemFilters>(defaultFilters);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -906,17 +830,12 @@ export function ItemsPage() {
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStartIndex = (safeCurrentPage - 1) * itemsPageSize;
   const pagedRows = visibleRows.slice(pageStartIndex, pageStartIndex + itemsPageSize);
-  const categories = useMemo(
-    () => uniqueValues(rows, "category").sort(compareText),
-    [rows],
-  );
   const shops = useMemo(
     () => uniqueValues(rows, "shopName").sort(compareText),
     [rows],
   );
   const hasFilters =
     filters.search.trim().length > 0 ||
-    filters.category !== defaultFilters.category ||
     filters.shop !== defaultFilters.shop ||
     filters.region !== defaultFilters.region ||
     filters.status !== defaultFilters.status;
@@ -965,7 +884,7 @@ export function ItemsPage() {
     return () => {
       active = false;
     };
-  }, [apiFetch]);
+  }, [apiFetch, reloadKey]);
 
   function toggleSelectedRow(rowIndex: string) {
     setSelectedRows((currentRows) => {
@@ -1037,10 +956,6 @@ export function ItemsPage() {
     setDetailLoading(false);
   }
 
-  function duplicateRow(row: ItemRow) {
-    router.push(`/items/create?duplicate=${encodeURIComponent(row.id)}`);
-  }
-
   async function confirmDelete() {
     if (!deleteRow) {
       return;
@@ -1084,13 +999,19 @@ export function ItemsPage() {
         size="compact"
         className="rounded-lg border bg-card p-4 shadow-sm"
         actions={
-          <Link
-            href="/items/create"
-            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition hover:bg-primary/90 sm:w-[132px]"
-          >
-            <Plus className="size-4" />
-            منتج جديد
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => setReloadKey((current) => current + 1)} disabled={loading}>
+              <RotateCcw className={cn("size-4", loading && "animate-spin")} />
+              تحديث
+            </Button>
+            <Link
+              href="/items/create"
+              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition hover:bg-primary/90 sm:w-[132px]"
+            >
+              <Plus className="size-4" />
+              منتج جديد
+            </Link>
+          </div>
         }
       />
 
@@ -1103,7 +1024,6 @@ export function ItemsPage() {
           </div>
         ) : null}
         <ItemsFilters
-          categories={categories}
           filters={filters}
           hasFilters={hasFilters}
           shops={shops}
@@ -1124,12 +1044,9 @@ export function ItemsPage() {
           <ItemsMobileCards
             rows={pagedRows}
             selectedRows={selectedRows}
-            openRow={openRow}
-            onToggleRow={toggleRow}
             onToggleSelected={toggleSelectedRow}
             onToggleActive={toggleActive}
             onView={openProductDetail}
-            onDuplicate={duplicateRow}
             onDelete={setDeleteId}
           />
         ) : (
@@ -1140,15 +1057,12 @@ export function ItemsPage() {
         <div className="mt-4 hidden overflow-hidden rounded-md border transition-opacity duration-200 lg:block">
           <DataTable
             minWidth={1162}
-            columnWidths={[
-              78, 300, 210, 110, 120, 130, 112, 70,
-            ]}
+            columnWidths={[78, 300, 210, 120, 130, 112, 70, 190]}
             rowHeight="normal"
             headers={[
               "",
               "المنتج",
               "الوصف",
-              "الفئة",
               "المحل",
               "الظهور",
               "السعر",
@@ -1170,9 +1084,6 @@ export function ItemsPage() {
                   {row.description}
                 </p>
               </div>,
-              <div key={`category-${row.index}`} className="min-w-0">
-                <InfoPill>{row.category}</InfoPill>
-              </div>,
               <div key={`shop-${row.index}`} className="min-w-0">
                 <InfoPill>{itemShopLabel(row)}</InfoPill>
               </div>,
@@ -1188,13 +1099,10 @@ export function ItemsPage() {
                   onToggle={(active) => toggleActive(row, active)}
                 />
               </div>,
-              <div key={`actions-${row.index}`} className="flex items-center justify-center">
+              <div key={`actions-${row.index}`} className="flex items-center justify-end">
                 <RowActions
                   row={row}
-                  open={openRow === row.index}
-                  onOpen={() => toggleRow(row.index)}
                   onView={() => openProductDetail(row)}
-                  onDuplicate={() => duplicateRow(row)}
                   onDelete={() => setDeleteId(row.id)}
                 />
               </div>,

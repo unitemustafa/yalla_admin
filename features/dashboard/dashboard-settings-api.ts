@@ -1,4 +1,5 @@
 import {
+  dashboardPalettes,
   defaultDashboardCustomization,
   normalizeDashboardCustomColors,
   type DashboardCustomization,
@@ -52,8 +53,23 @@ function firstApiError(value: unknown): string | null {
 function dashboardSettingsFromBackend(
   value: BackendDashboardSettings,
 ): DashboardCustomization {
+  const customColors = normalizeDashboardCustomColors({
+    primary: value.primary_color,
+    surface: value.subtle_color,
+    accent: value.accent_color,
+  });
+  const palette = dashboardPalettes.find((item) =>
+    item.swatches.every(
+      (swatch, index) =>
+        swatch.toLowerCase() ===
+        [customColors.primary, customColors.surface, customColors.accent][
+          index
+        ].toLowerCase(),
+    ),
+  );
+
   return {
-    palette: "custom",
+    palette: palette?.id ?? "custom",
     font: fontFromBackend(value.font_family),
     brandName:
       typeof value.brand_name === "string"
@@ -67,18 +83,16 @@ function dashboardSettingsFromBackend(
       typeof value.logo_url === "string"
         ? value.logo_url
         : defaultDashboardCustomization.logoDataUrl,
-    customColors: normalizeDashboardCustomColors({
-      primary: value.primary_color,
-      surface: value.subtle_color,
-      accent: value.accent_color,
-    }),
+    customColors,
   };
 }
 
 async function readResponse(response: Response) {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) return null;
-  return (await response.json().catch(() => null)) as BackendDashboardSettings | null;
+  return (await response
+    .json()
+    .catch(() => null)) as BackendDashboardSettings | null;
 }
 
 async function parseSettingsResponse(response: Response, fallback: string) {
@@ -113,6 +127,7 @@ export async function saveDashboardSettings(
   apiFetch: ApiFetch,
   customization: DashboardCustomization,
   logo?: File | null,
+  removeLogo = false,
 ) {
   const payload = dashboardSettingsPayload(customization);
 
@@ -133,7 +148,10 @@ export async function saveDashboardSettings(
   const response = await apiFetch("dashboard/settings/", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      ...(removeLogo ? { remove_logo: true } : {}),
+    }),
   });
 
   return parseSettingsResponse(response, "تعذر حفظ إعدادات اللوحة.");

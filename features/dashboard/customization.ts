@@ -3,11 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 export type DashboardPaletteId =
-  | "teal"
-  | "emerald"
-  | "indigo"
-  | "rose"
-  | "custom";
+  "teal" | "emerald" | "market-blue" | "indigo" | "rose" | "custom";
 export type DashboardFontId = "cairo" | "tajawal" | "alexandria" | "system";
 
 type ThemeMode = "light" | "dark";
@@ -124,6 +120,41 @@ export const dashboardPalettes: Array<{
     },
   },
   {
+    id: "market-blue",
+    name: "أزرق يلا",
+    swatches: ["#4F60F6", "#EEF2FF", "#14B8A6"],
+    light: {
+      "--primary": "hsl(233 90% 64%)",
+      "--primary-foreground": "hsl(0 0% 100%)",
+      "--ring": "hsl(233 90% 70%)",
+      "--chart-1": "hsl(233 90% 64%)",
+      "--chart-2": "hsl(172 80% 40%)",
+      "--chart-5": "hsl(41 96% 57%)",
+      "--sidebar-foreground": "hsl(232 38% 26%)",
+      "--sidebar-primary": "hsl(233 90% 64%)",
+      "--sidebar-primary-foreground": "hsl(0 0% 100%)",
+      "--sidebar-accent": "hsl(233 100% 97%)",
+      "--sidebar-accent-foreground": "hsl(233 70% 38%)",
+      "--sidebar-border": "hsl(233 35% 88%)",
+      "--sidebar-ring": "hsl(233 90% 70%)",
+    },
+    dark: {
+      "--primary": "hsl(233 92% 68%)",
+      "--primary-foreground": "hsl(233 70% 10%)",
+      "--ring": "hsl(233 92% 68%)",
+      "--chart-1": "hsl(233 92% 68%)",
+      "--chart-2": "hsl(172 74% 48%)",
+      "--chart-5": "hsl(41 96% 62%)",
+      "--sidebar-foreground": "hsl(232 30% 92%)",
+      "--sidebar-primary": "hsl(233 92% 68%)",
+      "--sidebar-primary-foreground": "hsl(233 70% 10%)",
+      "--sidebar-accent": "hsl(232 30% 19%)",
+      "--sidebar-accent-foreground": "hsl(233 90% 94%)",
+      "--sidebar-border": "hsl(232 18% 27%)",
+      "--sidebar-ring": "hsl(233 92% 68%)",
+    },
+  },
+  {
     id: "indigo",
     name: "نيلي",
     swatches: ["#4f46e5", "#eef2ff", "#06b6d4"],
@@ -208,7 +239,8 @@ export const dashboardFonts: Array<{
   {
     id: "tajawal",
     name: "Tajawal",
-    cssValue: "var(--font-tajawal), Tajawal, var(--font-cairo), Cairo, sans-serif",
+    cssValue:
+      "var(--font-tajawal), Tajawal, var(--font-cairo), Cairo, sans-serif",
   },
   {
     id: "alexandria",
@@ -225,7 +257,10 @@ export const dashboardFonts: Array<{
 ];
 
 function isDashboardPaletteId(value: unknown): value is DashboardPaletteId {
-  return value === "custom" || dashboardPalettes.some((palette) => palette.id === value);
+  return (
+    value === "custom" ||
+    dashboardPalettes.some((palette) => palette.id === value)
+  );
 }
 
 function isDashboardFontId(value: unknown): value is DashboardFontId {
@@ -374,8 +409,7 @@ export function readDashboardCustomization(): DashboardCustomization {
       font: isDashboardFontId(parsed.font)
         ? parsed.font
         : defaultDashboardCustomization.font,
-      brandName:
-        typeof parsed.brandName === "string" ? parsed.brandName : "",
+      brandName: typeof parsed.brandName === "string" ? parsed.brandName : "",
       branchName:
         typeof parsed.branchName === "string" ? parsed.branchName : "",
       logoDataUrl:
@@ -437,9 +471,8 @@ export function resetDashboardCustomization() {
 }
 
 export function useDashboardCustomization() {
-  const [customization, setCurrentCustomization] = useState<DashboardCustomization>(
-    defaultDashboardCustomization,
-  );
+  const [customization, setCurrentCustomization] =
+    useState<DashboardCustomization>(defaultDashboardCustomization);
 
   useEffect(() => {
     function syncCustomization() {
@@ -466,9 +499,12 @@ export function useDashboardCustomization() {
     };
   }, []);
 
-  const setCustomization = useCallback((nextCustomization: DashboardCustomization) => {
-    saveDashboardCustomization(nextCustomization);
-  }, []);
+  const setCustomization = useCallback(
+    (nextCustomization: DashboardCustomization) => {
+      saveDashboardCustomization(nextCustomization);
+    },
+    [],
+  );
   const resetCustomization = useCallback(() => {
     resetDashboardCustomization();
   }, []);

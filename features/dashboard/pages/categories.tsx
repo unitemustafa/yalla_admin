@@ -232,6 +232,7 @@ function CategoryDetailDialog({
               <DashboardImage
                 alt={category.name}
                 src={category.image}
+                placeholderType="category"
                 width={180}
                 height={180}
                 sizes="180px"
@@ -377,6 +378,7 @@ function CategoryFormDialog({
                   <>
                     <DashboardImage
                       src={form.imagePreview}
+                      placeholderType="category"
                       alt="معاينة صورة الفئة"
                       width={360}
                       height={225}
@@ -774,6 +776,7 @@ export function CategoriesPage() {
       <DashboardImage
         alt={row.name}
         src={row.image}
+        placeholderType="category"
         width={48}
         height={48}
         sizes="48px"

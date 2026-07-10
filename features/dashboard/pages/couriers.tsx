@@ -315,6 +315,7 @@ function CourierForm({
   onSaved: (user: BackendDashboardUser) => void;
 }) {
   const { apiFetch } = useAuth();
+  const { showSnackbar } = useSnackbar();
   const isEditing = Boolean(courier);
   const [draft, setDraft] = useState<Draft>(() => draftFromCourier(courier ?? null, cities));
   const [saving, setSaving] = useState(false);
@@ -393,6 +394,40 @@ function CourierForm({
     setAvatarError(null);
     setAvatarFile(file);
     setAvatarPreviewUrl(URL.createObjectURL(file));
+  }
+
+  async function removeAvatar() {
+    setAvatarError(null);
+    if (!courier) {
+      setAvatarFile(null);
+      setAvatarPreviewUrl("");
+      setDraft((current) => ({ ...current, avatarUrl: "" }));
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await apiFetch(`auth/users/${courier.id}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ remove_avatar: true }),
+      });
+      const data = await apiResponseData(response);
+      if (!response.ok || !isBackendDashboardUser(data)) {
+        throw new Error(errorMessage(data, "تعذر حذف صورة المندوب."));
+      }
+      setAvatarFile(null);
+      setAvatarPreviewUrl("");
+      setDraft((current) => ({ ...current, avatarUrl: "" }));
+      onSaved(data);
+      showSnackbar({ message: "تم حذف صورة المندوب." });
+    } catch (reason) {
+      setAvatarError(
+        reason instanceof Error ? reason.message : "تعذر حذف صورة المندوب.",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -530,7 +565,7 @@ function CourierForm({
               <div className="h-36 rounded-t-[12px] bg-gradient-to-l from-primary via-primary/80 to-primary/50" />
               <div className="flex flex-1 flex-col px-5 pb-5">
                 <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 text-start">
-                  <div className="relative -mt-12 size-24"><DashboardImage src={avatarPreviewUrl || draft.avatarUrl || "/default-user-avatar.svg"} alt="صورة المندوب" width={96} height={96} className="size-24 overflow-hidden rounded-2xl border-4 border-card bg-background shadow-lg" imageClassName="object-cover" /><span className="absolute -bottom-1 -start-1 flex size-6 items-center justify-center rounded-full border-2 border-card bg-emerald-500 text-white"><CheckCircle2 className="size-3.5" /></span></div>
+                  <div className="relative -mt-12 size-24"><DashboardImage src={avatarPreviewUrl || draft.avatarUrl} placeholderType="courier" alt="صورة المندوب" width={96} height={96} className="size-24 overflow-hidden rounded-2xl border-4 border-card bg-background shadow-lg" imageClassName="object-cover" /><span className="absolute -bottom-1 -start-1 flex size-6 items-center justify-center rounded-full border-2 border-card bg-emerald-500 text-white"><CheckCircle2 className="size-3.5" /></span></div>
                   <div className="min-w-0">
                     <h3 className="truncate text-lg font-extrabold">{[draft.firstName, draft.lastName].filter(Boolean).join(" ") || "اسم المندوب"}</h3>
                     <p className="mt-1 truncate text-xs text-muted-foreground">{draft.phone || "رقم الهاتف سيظهر هنا"}</p>
@@ -551,6 +586,17 @@ function CourierForm({
                       onChange={(event) => uploadAvatar(event.target.files?.[0])}
                     />
                   </label>
+                  {(avatarFile || avatarPreviewUrl || draft.avatarUrl) ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-2 w-full text-destructive hover:text-destructive"
+                      disabled={saving}
+                      onClick={() => void removeAvatar()}
+                    >
+                      حذف الصورة
+                    </Button>
+                  ) : null}
                   {avatarError ? (
                     <p className="mt-2 text-xs font-semibold text-destructive">
                       {avatarError}
@@ -1102,7 +1148,7 @@ export function CouriersPage() {
                   <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">
                     {pageStartIndex + index + 1}
                   </span>
-                  <DashboardImage src={courier.avatar_url || "/default-user-avatar.svg"} alt={fullNameFromBackendUser(courier)} width={56} height={56} className="size-14 shrink-0 overflow-hidden rounded-full" imageClassName="object-cover" />
+                  <DashboardImage src={courier.avatar_url} placeholderType="courier" alt={fullNameFromBackendUser(courier)} width={56} height={56} className="size-14 shrink-0 overflow-hidden rounded-full" imageClassName="object-cover" />
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-bold">{fullNameFromBackendUser(courier)}</h3>

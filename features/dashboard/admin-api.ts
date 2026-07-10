@@ -800,6 +800,7 @@ export function addonRowFromApi(record: BackendRecord, index: number): AddonRow 
     category:
       nestedName(record.classification) ||
       text(record, ["classification_name", "category"], "غير مصنف"),
+    active: record.is_active !== false,
   };
 }
 

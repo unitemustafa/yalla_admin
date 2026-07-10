@@ -6,6 +6,7 @@ export type MarketClassification = {
   id: number;
   name: string;
   classification_type: MarketClassificationType;
+  is_active: boolean;
 };
 
 export type MarketClassificationType = "normal" | "featured" | "popular";
@@ -13,6 +14,7 @@ export type MarketClassificationType = "normal" | "featured" | "popular";
 export type MarketClassificationPayload = {
   name: string;
   classification_type: MarketClassificationType;
+  is_active?: boolean;
 };
 
 const endpoint = "home/market-classifications/";
@@ -37,7 +39,7 @@ function normalizeMarketClassification(
 
   if (!Number.isFinite(id) || !name) return null;
 
-  return { id, name, classification_type };
+  return { id, name, classification_type, is_active: record.is_active !== false };
 }
 
 function listFromResponse(value: unknown) {
@@ -64,6 +66,7 @@ function requestBody(payload: MarketClassificationPayload) {
   return JSON.stringify({
     name: payload.name.trim(),
     classification_type: payload.classification_type,
+    ...(payload.is_active === undefined ? {} : { is_active: payload.is_active }),
   });
 }
 

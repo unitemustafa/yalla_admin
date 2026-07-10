@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Edit3, LoaderCircle, MapPin, Plus, Search, Store, Trash2, X } from "lucide-react";
+import { AlertCircle, Edit3, ImagePlus, LoaderCircle, MapPin, Plus, RefreshCw, Search, Store, Trash2, X } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { AppSelect, Badge, Button, Card, DataTable, Input, PageTitle, Switch } from "../primitives";
+import { DashboardImage } from "../dashboard-image";
+import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
 import {
   loadServiceCities,
   type ServiceCity,
@@ -21,6 +23,8 @@ type MarketServiceCity = Partial<ServiceCity> & {
 type Market = {
   id: number;
   name: string;
+  description?: string;
+  image?: string | null;
   scope?: MarketScope;
   status: "active" | "inactive";
   classification?: Classification;
@@ -150,6 +154,30 @@ function MarketLocationsCell({
   );
 }
 
+function MarketActionButton({
+  label,
+  tone = "default",
+  onClick,
+  children,
+}: {
+  label: string;
+  tone?: "default" | "danger";
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={`inline-flex size-10 items-center justify-center rounded-md border transition hover:bg-accent ${tone === "danger" ? "border-destructive/35 text-destructive hover:bg-destructive/10" : "border-border text-muted-foreground hover:text-foreground"}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function MarketDialog({
   market,
   serviceCities,
@@ -172,13 +200,17 @@ function MarketDialog({
   const { apiFetch } = useAuth();
   const initialScope: MarketScope = market?.scope === "service_city" ? "service_city" : "general";
   const [name, setName] = useState(market?.name ?? "");
+  const [description, setDescription] = useState(market?.description ?? "");
   const [classificationId, setClassificationId] = useState(String(market?.classification?.id ?? classifications[0]?.id ?? ""));
-  const [selectedScope, setSelectedScope] = useState<MarketScope>(initialScope);
-  const [selectedServiceCityIds, setSelectedServiceCityIds] = useState<number[]>(() => initialScope === "service_city" && market ? marketServiceCityIds(market) : []);
-  const [active, setActive] = useState(market?.status !== "inactive");
+  const [showInGeneral, setShowInGeneral] = useState(initialScope === "general");
+  const [showInServiceCities, setShowInServiceCities] = useState(() => Boolean(market && marketServiceCityIds(market).length));
+  const [selectedServiceCityIds, setSelectedServiceCityIds] = useState<number[]>(() => market ? marketServiceCityIds(market) : []);
+  const [imagePreview, setImagePreview] = useState(market?.image ?? "");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageName, setImageName] = useState(market?.image ? "صورة المحل الحالية" : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const validBase = Boolean(name.trim() && classificationId && selectedScope);
+  const validBase = Boolean(name.trim() && classificationId && (showInGeneral || showInServiceCities));
 
   const availableServiceCities = useMemo(() => {
     const cities = new Map<number, ServiceCity>();
@@ -203,18 +235,41 @@ function MarketDialog({
     return Array.from(cities.values());
   }, [market, serviceCities]);
 
-  const selectedCityNames = selectedServiceCityIds.map((id) => {
-    const city = availableServiceCities.find((item) => item.id === id);
-    return city ? serviceCityName(city) : `مدينة رقم ${id}`;
-  });
-
-  function changeScope(nextScope: MarketScope) {
-    setSelectedScope(nextScope);
+  function setGeneralVisibility(enabled: boolean) {
+    if (!enabled && !showInServiceCities) return;
+    setShowInGeneral(enabled);
     setError("");
-    if (nextScope === "general") {
-      setSelectedServiceCityIds([]);
-    }
   }
+
+  function setServiceCityVisibility(enabled: boolean) {
+    if (!enabled && !showInGeneral) return;
+    setShowInServiceCities(enabled);
+    if (!enabled) setSelectedServiceCityIds([]);
+    setError("");
+  }
+
+  function handleImageChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setImagePreview(URL.createObjectURL(file));
+    setImageFile(file);
+    setImageName(file.name);
+    event.target.value = "";
+  }
+
+  function removeSelectedImage() {
+    if (imagePreview.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
+    setImagePreview(market?.image ?? "");
+    setImageFile(null);
+    setImageName(market?.image ? "صورة المحل الحالية" : "");
+  }
+
+  useEffect(
+    () => () => {
+      if (imageFile && imagePreview.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
+    },
+    [imageFile, imagePreview],
+  );
 
   function toggleServiceCity(cityId: number) {
     setError("");
@@ -238,7 +293,7 @@ function MarketDialog({
       setError("التصنيف مطلوب");
       return;
     }
-    if (!selectedScope) {
+    if (!showInGeneral && !showInServiceCities) {
       setError("اختر نطاق ظهور المحل");
       return;
     }
@@ -246,23 +301,48 @@ function MarketDialog({
     const basePayload = {
       classification_id: Number(classificationId),
       name: name.trim(),
-      scope: selectedScope,
-      status: active ? "active" as const : "inactive" as const,
+      description: description.trim(),
+      scope: showInGeneral ? "general" as const : "service_city" as const,
       delivery_area_ids: [],
     };
 
-    if (selectedScope === "general") {
+    async function saveMarket(payload: typeof basePayload & { service_city_ids?: number[] }) {
+      const path = market ? `home/markets/${market.id}/` : "home/markets/";
+      const method = market ? "PATCH" : "POST";
+      const response = imageFile
+        ? await apiFetch(path, {
+            method,
+            body: (() => {
+              const formData = new FormData();
+              formData.set("classification_id", String(payload.classification_id));
+              formData.set("name", payload.name);
+              formData.set("description", payload.description);
+              formData.set("scope", payload.scope);
+              formData.set("delivery_area_ids", "[]");
+              payload.service_city_ids?.forEach((serviceCityId) => {
+                formData.append("service_city_ids", String(serviceCityId));
+              });
+              formData.set("image", imageFile);
+              return formData;
+            })(),
+          })
+        : await apiFetch(path, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+      const data = await json(response);
+      if (!response.ok || !data || typeof data !== "object") {
+        throw new Error(errorMessage(data, "تعذر حفظ المحل."));
+      }
+      onSaved(data as Market);
+    }
+
+    if (!showInServiceCities) {
       setSaving(true);
       setError("");
       try {
-        const response = await apiFetch(market ? `home/markets/${market.id}/` : "home/markets/", {
-          method: market ? "PATCH" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(basePayload),
-        });
-        const data = await json(response);
-        if (!response.ok || !data || typeof data !== "object") throw new Error(errorMessage(data, "تعذر حفظ المحل."));
-        onSaved(data as Market);
+        await saveMarket(basePayload);
       } catch (reason) {
         setError(reason instanceof Error ? reason.message : "تعذر حفظ المحل.");
       } finally {
@@ -285,14 +365,7 @@ function MarketDialog({
     };
 
     try {
-      const response = await apiFetch(market ? `home/markets/${market.id}/` : "home/markets/", {
-        method: market ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await json(response);
-      if (!response.ok || !data || typeof data !== "object") throw new Error(errorMessage(data, "تعذر حفظ المحل."));
-      onSaved(data as Market);
+      await saveMarket(payload);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر حفظ المحل.");
     } finally {
@@ -309,29 +382,25 @@ function MarketDialog({
         </div>
         <form onSubmit={submit}>
           <div className="grid gap-4 p-6 sm:grid-cols-2">
-            <label className="grid gap-2 text-sm font-semibold sm:col-span-2">اسم المحل *<Input value={name} onChange={(event) => setName(event.target.value)} /></label>
-            <label className="grid gap-2 text-sm font-semibold sm:col-span-2">تصنيف المحل *<AppSelect value={classificationId} onValueChange={setClassificationId} options={classifications.map((item) => ({ value: String(item.id), label: `${item.name} - ${classificationTypeLabel(item.classification_type)}` }))} /></label>
+            <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/15 p-3 sm:col-span-2 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-center">
+              <label className="group relative flex aspect-[16/9] min-h-[138px] cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-background text-center transition hover:border-primary/50 hover:bg-accent/40">
+                <input accept="image/*" className="sr-only" type="file" onChange={handleImageChange} />
+                {imagePreview ? <DashboardImage src={imagePreview} placeholderType="store" alt="معاينة صورة المحل" width={640} height={360} sizes="260px" className="absolute inset-0 size-full" imageClassName="object-cover" /> : <span className="flex flex-col items-center gap-2 px-5 text-sm text-muted-foreground"><span className="flex size-10 items-center justify-center rounded-md bg-muted/50"><ImagePlus className="size-5 text-primary" /></span><span className="font-semibold text-foreground">اختيار صورة المحل</span></span>}
+              </label>
+              <div className="flex min-w-0 flex-col gap-3"><div><div className="text-sm font-semibold">صورة المحل</div><p className="mt-1 text-xs leading-5 text-muted-foreground">استخدم صورة أفقية واضحة للمحل. الصيغ المدعومة PNG, JPG, WEBP.</p></div><div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground"><span className="min-w-0 truncate">{imageName || "لم يتم اختيار صورة"}</span>{imagePreview ? <button type="button" onClick={removeSelectedImage} className="inline-flex shrink-0 items-center gap-1 font-semibold text-destructive transition hover:text-destructive/80"><X className="size-3.5" />حذف</button> : null}</div></div>
+            </div>
+            <label className="grid gap-2 text-sm font-semibold">اسم المحل *<Input value={name} onChange={(event) => setName(event.target.value)} /></label>
+            <label className="grid gap-2 text-sm font-semibold">فئة المحل *<AppSelect value={classificationId} onValueChange={setClassificationId} options={classifications.map((item) => ({ value: String(item.id), label: `${item.name} - ${classificationTypeLabel(item.classification_type)}` }))} /></label>
+            <label className="grid gap-2 text-sm font-semibold sm:col-span-2">وصف المحل<textarea value={description} onChange={(event) => setDescription(event.target.value)} className="min-h-24 resize-none rounded-md border border-border bg-input px-3 py-2 text-sm shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/40 focus:ring-2 focus:ring-primary/15" placeholder="اكتب وصفًا مختصرًا للمحل" /></label>
             <label className="grid gap-2 text-sm font-semibold sm:col-span-2">
               نطاق ظهور المحل *
-              <AppSelect
-                value={selectedScope}
-                onValueChange={(value) => changeScope(value as MarketScope)}
-                contentClassName="z-[80]"
-                options={[
-                  { value: "general", label: "عام" },
-                  { value: "service_city", label: "مدينة خدمة" },
-                ]}
-              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button type="button" onClick={() => setGeneralVisibility(!showInGeneral)} className={`flex h-16 items-center justify-between rounded-md border px-4 text-sm font-bold ${showInGeneral ? "border-primary bg-primary/10 text-foreground" : "bg-background text-muted-foreground hover:bg-accent"}`}><span>يظهر في العام</span><Switch checked={showInGeneral} onCheckedChange={setGeneralVisibility} /></button>
+                <button type="button" onClick={() => setServiceCityVisibility(!showInServiceCities)} className={`flex h-16 items-center justify-between rounded-md border px-4 text-sm font-bold ${showInServiceCities ? "border-primary bg-primary/10 text-foreground" : "bg-background text-muted-foreground hover:bg-accent"}`}><span>يظهر في المدن</span><Switch checked={showInServiceCities} onCheckedChange={setServiceCityVisibility} /></button>
+              </div>
             </label>
-            {selectedScope === "service_city" ? (
+            {showInServiceCities ? (
             <div className="grid gap-2 sm:col-span-2">
-              <div>
-                <p className="text-sm font-semibold">المدن *</p>
-                <p className="mt-1 text-xs text-muted-foreground">اختر المدن التي يظهر فيها المحل.</p>
-              </div>
-              <div className="grid gap-1 rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground">
-                <p><span className="font-semibold text-foreground">المدن: </span>{selectedCityNames.length ? selectedCityNames.join("، ") : "اختر المدن"}</p>
-              </div>
               <div className="rounded-lg border bg-muted/10 p-3">
                 <p className="mb-3 text-sm font-semibold">اختر المدن التي يظهر فيها المحل</p>
                 {serviceCitiesLoading ? (
@@ -360,13 +429,7 @@ function MarketDialog({
                 )}
               </div>
             </div>
-            ) : (
-              <div className="rounded-lg border bg-muted/10 p-4 text-sm text-muted-foreground sm:col-span-2">
-                <p className="font-semibold text-foreground">عام</p>
-                <p className="mt-1">هذا المحل عام ويظهر بدون ربطه بمدن خدمة محددة.</p>
-              </div>
-            )}
-            <div className="flex items-center justify-between rounded-lg border px-4 py-3 sm:col-span-2"><div><p className="text-sm font-semibold">المحل مفعّل</p><p className="text-xs text-muted-foreground">المحلات المعطلة لا تظهر للعملاء.</p></div><Switch checked={active} onCheckedChange={setActive} /></div>
+            ) : null}
             {error ? <p className="flex gap-2 text-sm text-destructive sm:col-span-2"><AlertCircle className="size-4" />{error}</p> : null}
           </div>
           <div className="flex justify-end gap-2 border-t px-6 py-4"><Button type="button" variant="outline" onClick={onClose}>إلغاء</Button><Button type="submit" disabled={!validBase || saving}>{saving ? <LoaderCircle className="size-4 animate-spin" /> : <Plus className="size-4" />}{saving ? "جاري الحفظ..." : "حفظ المحل"}</Button></div>
@@ -443,6 +506,7 @@ export function ShopsPage() {
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [dialogMarket, setDialogMarket] = useState<Market | null | undefined>();
+  const [deleteMarket, setDeleteMarket] = useState<Market | null>(null);
 
   const loadServiceCityOptions = useCallback(async () => {
     setServiceCitiesLoading(true);
@@ -495,8 +559,8 @@ export function ShopsPage() {
   }
 
   function remove(market: Market) {
-    if (!window.confirm(`هل تريد حذف محل ${market.name}؟`)) return;
     const marketIndex = markets.findIndex((item) => item.id === market.id);
+    setDeleteMarket(null);
 
     queueUndoableDelete({
       message: `تم حذف ${market.name}.`,
@@ -517,16 +581,60 @@ export function ShopsPage() {
     });
   }
 
+  async function toggleMarketActive(market: Market, nextActive: boolean) {
+    const nextStatus = nextActive ? "active" : "inactive";
+    setMarkets((current) =>
+      current.map((item) => item.id === market.id ? { ...item, status: nextStatus } : item),
+    );
+
+    try {
+      const response = await apiFetch(`home/markets/${market.id}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const data = await json(response);
+      if (!response.ok || !data || typeof data !== "object") {
+        throw new Error(errorMessage(data, "تعذر تحديث حالة المحل."));
+      }
+      setMarkets((current) =>
+        current.map((item) => item.id === market.id ? data as Market : item),
+      );
+      showSnackbar({
+        message: nextActive ? `تم تفعيل المحل ${market.name}.` : `تم تعطيل المحل ${market.name}.`,
+        tone: nextActive ? "success" : "danger",
+      });
+    } catch (reason) {
+      setMarkets((current) =>
+        current.map((item) => item.id === market.id ? market : item),
+      );
+      showSnackbar({
+        message: reason instanceof Error ? reason.message : "تعذر تحديث حالة المحل.",
+        tone: "danger",
+      });
+    }
+  }
+
   return (
     <div className="px-6 py-6">
-      <PageTitle title="المحلات" description="إدارة المحلات وربط ظهور منتجاتها بالمدن." actions={<Button size="sm" onClick={() => setDialogMarket(null)}><Plus className="size-4" />إضافة محل</Button>} />
+      <PageTitle title="المحلات" description="إدارة المحلات وربط ظهور منتجاتها بالمدن." actions={<div className="flex flex-wrap items-center gap-2"><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => void load()} disabled={loading}><RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />تحديث</Button><Button className="h-9 px-4 text-sm" onClick={() => setDialogMarket(null)}><Plus className="size-4" />إضافة محل</Button></div>} />
       <div className="mt-6 grid gap-3 md:grid-cols-3">
         {[["إجمالي المحلات", markets.length, Store], ["المحلات النشطة", markets.filter((item) => item.status === "active").length, Store], ["مدن الظهور", new Set(markets.flatMap((item) => marketServiceCityIds(item))).size, MapPin]].map(([label, value, Icon]) => { const MetricIcon = Icon as typeof Store; return <Card key={label as string} className="h-[80px]"><div className="flex h-full items-center gap-3 px-5"><span className="rounded-full bg-primary/10 p-3 text-primary"><MetricIcon className="size-5" /></span><div><p className="text-xs text-muted-foreground">{label as string}</p><p className="text-xl font-bold">{value as number}</p></div></div></Card>; })}
       </div>
       <Card className="mt-6 overflow-hidden">
-        <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold">كل المحلات</h2><p className="text-xs text-muted-foreground">المنتجات ترث نطاق الظهور من المحل.</p></div><div className="relative sm:w-72"><Search className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} className="pr-9" placeholder="ابحث عن محل..." /></div></div>
-        {loading ? <div className="flex min-h-56 items-center justify-center text-sm text-muted-foreground"><LoaderCircle className="me-2 size-5 animate-spin" />جاري التحميل...</div> : error ? <div className="flex min-h-56 flex-col items-center justify-center gap-3"><AlertCircle className="size-8 text-destructive" /><p>{error}</p><Button variant="outline" onClick={() => void load()}>إعادة المحاولة</Button></div> : <DataTable minWidth={900} columnWidths={[220, 150, 280, 100, 150]} headers={["المحل", "التصنيف", "المدن", "الحالة", <span key="actions" className="block text-center">الإجراءات</span>]} rows={filtered.map((market) => [<div key="name" className="px-2"><p className="font-semibold">{market.name}</p></div>, <Badge key="classification">{classificationName(market)}</Badge>, <MarketLocationsCell key="locations" market={market} serviceCities={serviceCities} />, <Badge key="status" tone={market.status === "active" ? "green" : "red"}>{market.status === "active" ? "نشط" : "معطل"}</Badge>, <div key="actions" className="flex justify-center gap-1"><Button size="icon" variant="ghost" onClick={() => setDialogMarket(market)}><Edit3 className="size-4" /></Button><Button size="icon" variant="ghost" onClick={() => void remove(market)}><Trash2 className="size-4 text-destructive" /></Button></div>])} />}
+        <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div><h2 className="font-semibold">كل المحلات</h2><p className="text-xs text-muted-foreground">المنتجات ترث نطاق الظهور من المحل.</p></div>
+          <div className="relative w-full sm:w-[700px]"><Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} className="h-11 ps-9" placeholder="ابحث عن محل..." /></div>
+        </div>
+        {loading ? <div className="flex min-h-56 items-center justify-center text-sm text-muted-foreground"><LoaderCircle className="me-2 size-5 animate-spin" />جاري التحميل...</div> : error ? <div className="flex min-h-56 flex-col items-center justify-center gap-3"><AlertCircle className="size-8 text-destructive" /><p>{error}</p><Button variant="outline" onClick={() => void load()}>إعادة المحاولة</Button></div> : <DataTable minWidth={1060} columnWidths={[80, 310, 170, 280, 245]} headers={["", "المحل", "الفئة", "المدن", ""]} rows={filtered.map((market, index) => [
+          <span key="index" className="mx-auto flex size-10 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">{index + 1}</span>,
+          <div key="name" className="flex min-w-0 items-center gap-2.5 py-1"><DashboardImage src={market.image} placeholderType="store" alt="صورة المتجر" width={52} height={52} sizes="52px" className="size-[52px] shrink-0 rounded-md border bg-muted/35 shadow-sm" imageClassName="object-cover" /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-semibold">{market.name}</p><span className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-bold ${market.status === "active" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600" : "border-destructive/40 bg-destructive/10 text-destructive"}`}>{market.status === "active" ? "مفعلة" : "معطلة"}</span></div><p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{market.description || "لا يوجد وصف للمحل."}</p></div></div>,
+          <Badge key="classification">{classificationName(market)}</Badge>,
+          <MarketLocationsCell key="locations" market={market} serviceCities={serviceCities} />,
+          <div key="actions" className="flex min-w-[225px] items-center justify-end gap-2"><div className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-2 text-xs font-semibold"><span>{market.status === "active" ? "مفعلة" : "معطلة"}</span><Switch checked={market.status === "active"} onCheckedChange={(checked) => void toggleMarketActive(market, checked)} aria-label={`تفعيل المحل ${market.name}`} /></div><MarketActionButton label={`تعديل ${market.name}`} onClick={() => setDialogMarket(market)}><Edit3 className="size-4" /></MarketActionButton><MarketActionButton tone="danger" label={`حذف ${market.name}`} onClick={() => setDeleteMarket(market)}><Trash2 className="size-4" /></MarketActionButton></div>,
+        ])} />}
       </Card>
+      {deleteMarket ? <ConfirmDeleteDialog title="حذف المحل" description={`هل تريد حذف المحل ${deleteMarket.name}؟`} busy={false} onCancel={() => setDeleteMarket(null)} onConfirm={() => remove(deleteMarket)} /> : null}
       {dialogMarket !== undefined ? (
         classifications.length ? (
           <MarketDialog market={dialogMarket ?? undefined} serviceCities={serviceCities} serviceCitiesLoading={serviceCitiesLoading} serviceCitiesError={serviceCitiesError} classifications={classifications} onReloadServiceCities={() => void loadServiceCityOptions()} onClose={() => setDialogMarket(undefined)} onSaved={(saved) => { setMarkets((current) => current.some((item) => item.id === saved.id) ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current]); setDialogMarket(undefined); showSnackbar({ message: "تم حفظ المحل وربطه بمدن الظهور." }); }} />

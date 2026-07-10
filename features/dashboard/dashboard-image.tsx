@@ -6,10 +6,16 @@ import { ImageIcon } from "lucide-react";
 import { SafeImage, type SafeImageProps } from "@/components/safe-image";
 import { defaultImageFallback, normalizeImageSrc } from "@/lib/media-url";
 import { cn } from "@/lib/utils";
+import {
+  DASHBOARD_PLACEHOLDERS,
+  imageOrPlaceholder,
+  type DashboardPlaceholderType,
+} from "./placeholders";
 
 type DashboardImageProps = Omit<SafeImageProps, "className" | "onError" | "onLoad"> & {
   className?: string;
   imageClassName?: string;
+  placeholderType?: DashboardPlaceholderType;
 };
 
 export function DashboardImage({
@@ -22,9 +28,16 @@ export function DashboardImage({
   imageClassName,
   unoptimized,
   fallbackSrc,
+  placeholderType,
   ...props
 }: DashboardImageProps) {
-  const resolvedSrc = normalizeImageSrc(src, fallbackSrc);
+  const placeholderSrc = placeholderType
+    ? DASHBOARD_PLACEHOLDERS[placeholderType]
+    : fallbackSrc ?? defaultImageFallback;
+  const resolvedSrc = normalizeImageSrc(
+    placeholderType ? imageOrPlaceholder(src, placeholderType) : src,
+    placeholderSrc,
+  );
   const sourceKey = resolvedSrc;
   const isBlobSource = resolvedSrc.startsWith("blob:");
   const [imageState, setImageState] = useState({
@@ -49,10 +62,10 @@ export function DashboardImage({
       {failed ? (
         <SafeImage
           alt={alt}
-          fallbackSrc={defaultImageFallback}
+          fallbackSrc={placeholderSrc}
           height={height}
           sizes={sizes}
-          src={fallbackSrc ?? defaultImageFallback}
+          src={placeholderSrc}
           unoptimized={unoptimized}
           width={width}
           className={cn(

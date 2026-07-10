@@ -18,6 +18,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import { DashboardImage } from "../dashboard-image";
 
 import { Badge, Card, CurrencyText } from "../primitives";
 import { useSnackbar } from "../snackbar";
@@ -123,7 +124,6 @@ function formatCurrency(value: number) {
   return `${currency.format(value)} EGP`;
 }
 
-const fallbackCustomerAvatar = "/default-user-avatar.svg";
 
 function normalizeCustomerPhone(phone: string) {
   return phone.replace(/[^\d]/g, "");
@@ -142,7 +142,7 @@ function customerForOrder(order: DashboardOrder) {
 }
 
 function customerAvatarForOrder(order: DashboardOrder) {
-  return customerForOrder(order)?.avatar || fallbackCustomerAvatar;
+  return customerForOrder(order)?.avatar;
 }
 
 function customerDetailsHref(order: DashboardOrder) {
@@ -157,14 +157,14 @@ function CustomerAvatarLink({ order }: { order: DashboardOrder }) {
       title="فتح تفاصيل المستخدم"
       className="inline-flex size-12 shrink-0 items-center justify-center rounded-md transition hover:ring-2 hover:ring-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <DashboardImage
         src={customerAvatarForOrder(order)}
+        placeholderType="customer"
         alt={order.customer}
-        className="size-12 rounded-md border bg-muted object-cover"
-        onError={(event) => {
-          event.currentTarget.src = fallbackCustomerAvatar;
-        }}
+        width={48}
+        height={48}
+        className="size-12 rounded-md border bg-muted"
+        imageClassName="object-cover"
       />
     </Link>
   );

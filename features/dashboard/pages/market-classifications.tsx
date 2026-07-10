@@ -26,7 +26,6 @@ import {
 } from "../market-classifications-api";
 import { DashboardImage } from "../dashboard-image";
 import {
-  ActionMenu,
   Badge,
   Button,
   Card,
@@ -34,8 +33,10 @@ import {
   Input,
   PageTitle,
   Pagination,
+  Switch,
 } from "../primitives";
 import { useSnackbar } from "../snackbar";
+import { useUndoableDelete } from "../use-undoable-delete";
 import { cn } from "@/lib/utils";
 
 const pageSize = 10;
@@ -67,6 +68,40 @@ function classificationTypeLabel(value: MarketClassificationType) {
   return (
     classificationTypeOptions.find((option) => option.value === value)?.label ??
     "عادية"
+  );
+}
+
+function translateMarketClassificationError(message: string) {
+  if (/cannot delete market classification while markets are using it/i.test(message)) {
+    return "لا يمكن حذف الفئة لأنها مستخدمة في محلات حالية.";
+  }
+  return message;
+}
+
+function ClassificationActionButton({
+  label,
+  tone = "default",
+  onClick,
+  children,
+}: {
+  label: string;
+  tone?: "default" | "danger";
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={cn(
+        "inline-flex size-10 items-center justify-center rounded-md border transition hover:bg-accent",
+        tone === "danger" ? "border-destructive/35 text-destructive hover:bg-destructive/10" : "border-border text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -430,23 +465,21 @@ function LoadingRows() {
 export function MarketClassificationsPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
+  const queueUndoableDelete = useUndoableDelete();
   const [classifications, setClassifications] = useState<MarketClassification[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [openActionMenu, setOpenActionMenu] = useState<number | null>(null);
   const [dialogClassification, setDialogClassification] = useState<
     MarketClassification | null | undefined
   >();
   const [deleteClassification, setDeleteClassification] =
     useState<MarketClassification | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError("");
-    setOpenActionMenu(null);
 
     try {
       setClassifications(await loadMarketClassifications(apiFetch));
@@ -529,30 +562,67 @@ export function MarketClassificationsPage() {
     }
   }
 
-  async function confirmDelete() {
-    if (!deleteClassification || deleting) return;
-
-    setDeleting(true);
+  async function toggleClassificationActive(
+    classification: MarketClassification,
+    nextActive: boolean,
+  ) {
+    setClassifications((current) =>
+      current.map((item) =>
+        item.id === classification.id ? { ...item, is_active: nextActive } : item,
+      ),
+    );
 
     try {
-      await deleteMarketClassification(apiFetch, deleteClassification.id);
+      const updated = await updateMarketClassification(apiFetch, classification.id, {
+        name: classification.name,
+        classification_type: classification.classification_type,
+        is_active: nextActive,
+      });
       setClassifications((current) =>
-        current.filter((item) => item.id !== deleteClassification.id),
+        current.map((item) => (item.id === classification.id ? updated : item)),
       );
-      setDeleteClassification(null);
       showSnackbar({
-        message: "تم حذف الفئة بنجاح.",
-        tone: "success",
+        message: nextActive ? `تم تفعيل الفئة ${classification.name}.` : `تم تعطيل الفئة ${classification.name}.`,
+        tone: nextActive ? "success" : "danger",
       });
     } catch (reason) {
+      setClassifications((current) =>
+        current.map((item) => (item.id === classification.id ? classification : item)),
+      );
       showSnackbar({
-        message:
-          reason instanceof Error ? reason.message : "تعذر حذف فئة المحل.",
+        message: reason instanceof Error ? reason.message : "تعذر تحديث حالة الفئة.",
         tone: "danger",
       });
-    } finally {
-      setDeleting(false);
     }
+  }
+
+  function confirmDelete() {
+    if (!deleteClassification) return;
+    const classification = deleteClassification;
+    const classificationIndex = classifications.findIndex((item) => item.id === classification.id);
+    setDeleteClassification(null);
+
+    queueUndoableDelete({
+      message: `تم حذف الفئة ${classification.name}.`,
+      onDelete: () => {
+        setClassifications((current) => current.filter((item) => item.id !== classification.id));
+      },
+      onUndo: () => {
+        setClassifications((current) => {
+          if (current.some((item) => item.id === classification.id)) return current;
+          const nextClassifications = [...current];
+          nextClassifications.splice(Math.max(0, classificationIndex), 0, classification);
+          return nextClassifications;
+        });
+      },
+      onCommit: async () => {
+        await deleteMarketClassification(apiFetch, classification.id);
+      },
+      onCommitError: (reason) => {
+        const message = reason instanceof Error ? reason.message : "تعذر حذف فئة المحل.";
+        showSnackbar({ message: translateMarketClassificationError(message), tone: "danger" });
+      },
+    });
   }
 
   return (
@@ -565,7 +635,7 @@ export function MarketClassificationsPage() {
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              className="h-9 px-4 text-sm"
               onClick={() => void load()}
               disabled={loading}
             >
@@ -574,7 +644,7 @@ export function MarketClassificationsPage() {
             </Button>
             <Button
               type="button"
-              size="sm"
+              className="h-9 px-4 text-sm"
               onClick={() => setDialogClassification(null)}
             >
               <Plus className="size-4" />
@@ -619,15 +689,15 @@ export function MarketClassificationsPage() {
               الفئة نفسها هي التصنيف الذي يختاره المحل.
             </p>
           </div>
-          <div className="relative sm:w-72">
-            <Search className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <div className="relative w-full sm:w-[700px]">
+            <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
                 setCurrentPage(1);
               }}
-              className="pr-9"
+              className="h-11 ps-9"
               placeholder="ابحث عن فئة..."
             />
           </div>
@@ -658,58 +728,58 @@ export function MarketClassificationsPage() {
         ) : (
           <>
             <DataTable
-              minWidth={720}
-              columnWidths={[80, 320, 160, 160]}
+              minWidth={820}
+              columnWidths={[80, 380, 150, 245]}
               headers={[
                 "#",
                 "اسم الفئة",
                 "نوع الفئة",
-                <span key="actions" className="block text-center">
-                  الإجراءات
-                </span>,
+                "",
               ]}
               rows={pagedClassifications.map((classification, index) => [
-                <span key="index" className="block px-3">
+                <span key="index" className="mx-auto flex size-10 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">
                   {pageStartIndex + index + 1}
                 </span>,
-                <div key="name" className="flex items-center gap-2 px-2">
-                  <Badge tone="secondary">{classification.id}</Badge>
-                  <span className="font-semibold">{classification.name}</span>
+                <div key="name" className="flex min-w-0 items-center gap-2.5 py-1">
+                  <DashboardImage
+                    src="/default-user-avatar.svg"
+                    alt=""
+                    width={52}
+                    height={52}
+                    sizes="52px"
+                    className="size-[52px] shrink-0 rounded-md border bg-muted/35 shadow-sm"
+                    imageClassName="object-contain p-1"
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold">{classification.name}</span>
+                    <span className={cn(
+                      "inline-flex rounded-md border px-2 py-0.5 text-xs font-bold",
+                      classification.is_active
+                        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600"
+                        : "border-destructive/40 bg-destructive/10 text-destructive",
+                    )}>
+                      {classification.is_active ? "مفعلة" : "معطلة"}
+                    </span>
+                  </div>
                 </div>,
                 <Badge key="type" tone="blue">
                   {classificationTypeLabel(classification.classification_type)}
                 </Badge>,
-                <div key="actions" className="flex justify-center">
-                  <ActionMenu
-                    open={openActionMenu === classification.id}
-                    onToggle={() =>
-                      setOpenActionMenu((current) =>
-                        current === classification.id ? null : classification.id,
-                      )
-                    }
-                    label={`إجراءات ${classification.name}`}
-                    align="end"
-                    menuClassName="w-36"
-                    items={[
-                      {
-                        label: "تعديل",
-                        icon: Edit3,
-                        onClick: () => {
-                          setOpenActionMenu(null);
-                          setDialogClassification(classification);
-                        },
-                      },
-                      {
-                        label: "حذف",
-                        icon: Trash2,
-                        tone: "danger",
-                        onClick: () => {
-                          setOpenActionMenu(null);
-                          setDeleteClassification(classification);
-                        },
-                      },
-                    ]}
-                  />
+                <div key="actions" className="flex min-w-[225px] items-center justify-end gap-2">
+                  <div className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-2 text-xs font-semibold">
+                    <span>{classification.is_active ? "مفعلة" : "معطلة"}</span>
+                    <Switch
+                      checked={classification.is_active}
+                      onCheckedChange={(checked) => void toggleClassificationActive(classification, checked)}
+                      aria-label={`تفعيل الفئة ${classification.name}`}
+                    />
+                  </div>
+                  <ClassificationActionButton label={`تعديل ${classification.name}`} onClick={() => setDialogClassification(classification)}>
+                    <Edit3 className="size-4" />
+                  </ClassificationActionButton>
+                  <ClassificationActionButton tone="danger" label={`حذف ${classification.name}`} onClick={() => setDeleteClassification(classification)}>
+                    <Trash2 className="size-4" />
+                  </ClassificationActionButton>
                 </div>,
               ])}
             />
@@ -744,9 +814,9 @@ export function MarketClassificationsPage() {
       {deleteClassification ? (
         <DeleteClassificationDialog
           classification={deleteClassification}
-          deleting={deleting}
+          deleting={false}
           onCancel={() => setDeleteClassification(null)}
-          onConfirm={() => void confirmDelete()}
+          onConfirm={confirmDelete}
         />
       ) : null}
     </div>

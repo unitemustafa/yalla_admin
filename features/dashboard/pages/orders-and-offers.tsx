@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpDown,
   Banknote,
@@ -20,6 +20,7 @@ import {
   Percent,
   PlayCircle,
   Plus,
+  RefreshCw,
   Search,
   ShoppingCart,
   Tag,
@@ -45,8 +46,8 @@ import {
   type BackendRecord,
 } from "../admin-api";
 import { DashboardImage } from "../dashboard-image";
+import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
 import {
-  ActionMenu,
   AppSelect,
   Button,
   Card,
@@ -62,6 +63,7 @@ import {
 } from "../primitives";
 import { cn } from "@/lib/utils";
 import { useSnackbar } from "../snackbar";
+import { useUndoableDelete } from "../use-undoable-delete";
 import { dashboardUsers, type DashboardUser } from "../users/default-dashboard-users";
 import {
   dashboardOrders,
@@ -78,7 +80,6 @@ function formatReferenceCurrency(value: number) {
   return `${currency.format(value)} EGP`;
 }
 
-const fallbackCustomerAvatar = "/default-user-avatar.svg";
 
 function normalizeCustomerPhone(phone: string) {
   return phone.replace(/[^\d]/g, "");
@@ -97,7 +98,7 @@ function customerForOrder(order: { customer: string; phone: string }) {
 }
 
 function customerAvatarForOrder(order: { customer: string; phone: string }) {
-  return customerForOrder(order)?.avatar || fallbackCustomerAvatar;
+  return customerForOrder(order)?.avatar;
 }
 
 function CustomerAvatar({
@@ -108,17 +109,17 @@ function CustomerAvatar({
   className?: string;
 }) {
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
+    <DashboardImage
       src={customerAvatarForOrder(order)}
+      placeholderType="customer"
       alt={order.customer}
+      width={40}
+      height={40}
       className={cn(
-        "size-10 shrink-0 rounded-md border bg-muted object-cover",
+        "size-10 shrink-0 rounded-md border bg-muted",
         className,
       )}
-      onError={(event) => {
-        event.currentTarget.src = fallbackCustomerAvatar;
-      }}
+      imageClassName="object-cover"
     />
   );
 }
@@ -503,33 +504,42 @@ function uniqueAddonCategories(rows: AddonRow[]) {
   return Array.from(new Set(rows.map((addon) => addon.category).filter(Boolean)));
 }
 
-function AddonActionsMenu({
-  addon,
-  open,
-  onToggle,
-  onEdit,
-  onDelete,
+type AddonCategoryRecord = {
+  id: string;
+  name: string;
+};
+
+function translateAddonCategoryDeleteError(message: string) {
+  if (/cannot delete addition classification while product additions are using it/i.test(message)) {
+    return "لا يمكن حذف التصنيف لأنه مستخدم في إضافات حالية.";
+  }
+  return message;
+}
+
+function AddonRowIconButton({
+  label,
+  tone = "default",
+  onClick,
+  children,
 }: {
-  addon: AddonRow;
-  open: boolean;
-  onToggle: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  label: string;
+  tone?: "default" | "danger";
+  onClick: () => void;
+  children: React.ReactNode;
 }) {
   return (
-    <ActionMenu
-      open={open}
-      onToggle={onToggle}
-      align="end"
-      label={`إجراءات ${addon.nameAr}`}
-      title="بيانات الإضافة"
-      triggerClassName="h-8 w-12"
-      menuClassName="w-56"
-      items={[
-        { label: "تعديل", icon: Edit, onClick: onEdit },
-        { label: "حذف", icon: Trash2, onClick: onDelete, tone: "danger" },
-      ]}
-    />
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={cn(
+        "inline-flex size-10 items-center justify-center rounded-md border transition hover:bg-accent",
+        tone === "danger" ? "border-destructive/35 text-destructive hover:bg-destructive/10" : "border-border text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -569,6 +579,7 @@ function AddonEditPanel({
             <DashboardImage
               alt={draft.nameAr}
               src={draft.image}
+              placeholderType="addon"
               width={96}
               height={96}
               sizes="64px"
@@ -645,6 +656,7 @@ function AddonIdentity({ addon }: { addon: AddonRow }) {
       <DashboardImage
         alt={addon.nameAr}
         src={addon.image}
+        placeholderType="addon"
         width={52}
         height={52}
         sizes="52px"
@@ -652,7 +664,17 @@ function AddonIdentity({ addon }: { addon: AddonRow }) {
         imageClassName="object-contain p-1"
       />
       <div className="min-w-0">
-        <h3 className="truncate text-[13px] font-black leading-5">{addon.nameAr}</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="truncate text-[13px] font-black leading-5">{addon.nameAr}</h3>
+          <span className={cn(
+            "inline-flex rounded-md border px-2 py-0.5 text-xs font-bold",
+            addon.active !== false
+              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600"
+              : "border-destructive/40 bg-destructive/10 text-destructive",
+          )}>
+            {addon.active !== false ? "مفعلة" : "معطلة"}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -1997,15 +2019,17 @@ export function CreateOrderPageLegacy() {
 export function AddonsPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
+  const queueUndoableDelete = useUndoableDelete();
   const [modalOpen, setModalOpen] = useState(false);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [addonsLoading, setAddonsLoading] = useState(false);
   const [addonSearch, setAddonSearch] = useState("");
   const [selectedAddonCategory, setSelectedAddonCategory] = useState("all");
   const [addonFormCategory, setAddonFormCategory] = useState(addonRows[0]?.category ?? "");
   const [addonNameAr, setAddonNameAr] = useState("");
   const [addonPrice, setAddonPrice] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
   const [rows, setRows] = useState<AddonRow[]>(() => addonRows);
   const [categoryOptions, setCategoryOptions] = useState<string[]>(() =>
     uniqueAddonCategories(addonRows),
@@ -2013,7 +2037,11 @@ export function AddonsPage() {
   const [categoryIds, setCategoryIds] = useState<Record<string, string | number>>(
     {},
   );
+  const [addonCategories, setAddonCategories] = useState<AddonCategoryRecord[]>([]);
   const [editingAddon, setEditingAddon] = useState<AddonRow | null>(null);
+  const [addonDeleteTarget, setAddonDeleteTarget] = useState<AddonRow | null>(null);
+  const [editingCategory, setEditingCategory] = useState<AddonCategoryRecord | null>(null);
+  const [categoryDeleteTarget, setCategoryDeleteTarget] = useState<AddonCategoryRecord | null>(null);
   const addonImageObjectUrlRef = useRef<string | null>(null);
   const editAddonImageObjectUrlRef = useRef<string | null>(null);
   const [addonImagePreview, setAddonImagePreview] = useState("");
@@ -2042,50 +2070,57 @@ export function AddonsPage() {
   );
   const currentAddonFormCategory = addonFormCategory || categoryOptions[0] || "";
 
-  useEffect(() => {
-    let active = true;
+  const loadAddons = useCallback(async (showFailure = false) => {
+    setAddonsLoading(true);
 
-    async function loadAddons() {
-      try {
-        const [addons, classificationsResponse] = await Promise.all([
-          fetchAdminRows(
-            apiFetch,
-            adminApiPaths.productAdditions,
-            addonRowFromApi,
-          ),
-          apiFetch(adminApiPaths.additionClassifications),
-        ]);
-        const classificationsData = await readApiData(classificationsResponse);
+    try {
+      const [addons, classificationsResponse] = await Promise.all([
+        fetchAdminRows(
+          apiFetch,
+          adminApiPaths.productAdditions,
+          addonRowFromApi,
+        ),
+        apiFetch(adminApiPaths.additionClassifications),
+      ]);
+      const classificationsData = await readApiData(classificationsResponse);
+      setRows(addons);
 
-        if (!active) return;
-        setRows(addons);
-
-        if (classificationsResponse.ok) {
-          const classifications = apiList(classificationsData)
-            .map((item) => String(item.name ?? "").trim())
-            .filter(Boolean);
-          const classificationIds = Object.fromEntries(
+      if (classificationsResponse.ok) {
+        const classifications = apiList(classificationsData)
+          .map((item) => String(item.name ?? "").trim())
+          .filter(Boolean);
+        const classificationIds = Object.fromEntries(
+          apiList(classificationsData)
+            .map((item) => [String(item.name ?? "").trim(), item.id])
+            .filter(([name, id]) => Boolean(name) && (typeof id === "string" || typeof id === "number")),
+        ) as Record<string, string | number>;
+        if (classifications.length) {
+          setAddonCategories(
             apiList(classificationsData)
-              .map((item) => [String(item.name ?? "").trim(), item.id])
-              .filter(([name, id]) => Boolean(name) && (typeof id === "string" || typeof id === "number")),
-          ) as Record<string, string | number>;
-          if (classifications.length) {
-            setCategoryOptions(classifications);
-            setCategoryIds(classificationIds);
-            setAddonFormCategory(classifications[0] ?? "");
-          }
+              .map((item) => ({ id: String(item.id ?? ""), name: String(item.name ?? "").trim() }))
+              .filter((item) => Boolean(item.id) && Boolean(item.name)),
+          );
+          setCategoryOptions(classifications);
+          setCategoryIds(classificationIds);
+          setAddonFormCategory(classifications[0] ?? "");
         }
-      } catch {
-        // Keep seed add-ons visible when the backend is unavailable.
       }
+    } catch (error) {
+      if (showFailure) {
+        showSnackbar({
+          message: error instanceof Error ? error.message : "تعذر تحديث الإضافات.",
+          tone: "danger",
+        });
+      }
+    } finally {
+      setAddonsLoading(false);
     }
+  }, [apiFetch, showSnackbar]);
 
-    void loadAddons();
-
-    return () => {
-      active = false;
-    };
-  }, [apiFetch]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadAddons(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadAddons]);
 
   function revokeAddonImageObjectUrl() {
     if (addonImageObjectUrlRef.current) {
@@ -2148,7 +2183,6 @@ export function AddonsPage() {
 
   function startEditingAddon(addon: AddonRow) {
     revokeEditAddonImageObjectUrl();
-    setOpenActionMenu(null);
     setEditingAddon(addon);
   }
 
@@ -2177,7 +2211,7 @@ export function AddonsPage() {
             name_ar: editingAddon.nameAr,
             name_en: editingAddon.nameAr,
             price: editingAddon.price.replace(/\s*EGP\s*$/i, ""),
-            is_active: true,
+            is_active: editingAddon.active !== false,
           }),
         },
       );
@@ -2211,29 +2245,68 @@ export function AddonsPage() {
     setEditingAddon(null);
   }
 
-  async function deleteAddon(addon: AddonRow) {
-    const previousRows = rows;
-    setRows((currentRows) => currentRows.filter((row) => row.id !== addon.id));
-    setOpenActionMenu(null);
-    setEditingAddon((currentAddon) =>
-      currentAddon?.id === addon.id ? null : currentAddon,
+  function deleteAddon(addon: AddonRow) {
+    const addonIndex = rows.findIndex((row) => row.id === addon.id);
+    setAddonDeleteTarget(null);
+    queueUndoableDelete({
+      message: `تم حذف ${addon.nameAr} من الباك.`,
+      onDelete: () => {
+        setRows((currentRows) => currentRows.filter((row) => row.id !== addon.id));
+        setEditingAddon((currentAddon) =>
+          currentAddon?.id === addon.id ? null : currentAddon,
+        );
+      },
+      onUndo: () => {
+        setRows((currentRows) => {
+          if (currentRows.some((row) => row.id === addon.id)) return currentRows;
+          const nextRows = [...currentRows];
+          nextRows.splice(Math.max(0, addonIndex), 0, addon);
+          return nextRows;
+        });
+      },
+      onCommit: async () => {
+        await sendAdminJson(
+          apiFetch,
+          `${adminApiPaths.productAdditions}${encodeURIComponent(addon.id)}/`,
+          { method: "DELETE" },
+        );
+      },
+      onCommitError: (error) => {
+        showSnackbar({
+          message:
+            error instanceof Error ? error.message : "تعذر حذف الإضافة من الباك.",
+          tone: "danger",
+        });
+      },
+    });
+  }
+
+  async function toggleAddonActive(addon: AddonRow, nextActive: boolean) {
+    const addonIndex = rows.findIndex((row) => row.id === addon.id);
+    setRows((currentRows) =>
+      currentRows.map((row) => row.id === addon.id ? { ...row, active: nextActive } : row),
     );
 
     try {
-      await sendAdminJson(
+      const data = await sendAdminJson(
         apiFetch,
         `${adminApiPaths.productAdditions}${encodeURIComponent(addon.id)}/`,
-        { method: "DELETE" },
+        { method: "PATCH", body: JSON.stringify({ is_active: nextActive }) },
+      );
+      const updatedAddon = addonRowFromApi(data as BackendRecord, Math.max(0, addonIndex));
+      setRows((currentRows) =>
+        currentRows.map((row) => row.id === addon.id ? updatedAddon : row),
       );
       showSnackbar({
-        message: `تم حذف ${addon.nameAr} من الباك.`,
-        tone: "danger",
+        message: nextActive ? `تم تفعيل الإضافة ${addon.nameAr}.` : `تم تعطيل الإضافة ${addon.nameAr}.`,
+        tone: nextActive ? "success" : "danger",
       });
     } catch (error) {
-      setRows(previousRows);
+      setRows((currentRows) =>
+        currentRows.map((row) => row.id === addon.id ? addon : row),
+      );
       showSnackbar({
-        message:
-          error instanceof Error ? error.message : "تعذر حذف الإضافة من الباك.",
+        message: error instanceof Error ? error.message : "تعذر تحديث حالة الإضافة.",
         tone: "danger",
       });
     }
@@ -2259,6 +2332,10 @@ export function AddonsPage() {
           : [...currentCategories, categoryName],
       );
       if (typeof record?.id === "string" || typeof record?.id === "number") {
+        setAddonCategories((currentCategories) => [
+          ...currentCategories,
+          { id: String(record.id), name: categoryName },
+        ]);
         setCategoryIds((currentIds) => ({
           ...currentIds,
           [categoryName]: record.id as string | number,
@@ -2278,6 +2355,102 @@ export function AddonsPage() {
         tone: "danger",
       });
     }
+  }
+
+  async function saveCategoryName() {
+    if (!editingCategory || !editingCategory.name.trim()) return;
+
+    const currentCategory = addonCategories.find((category) => category.id === editingCategory.id);
+    if (!currentCategory) return;
+    const nextName = editingCategory.name.trim();
+
+    try {
+      const data = await sendAdminJson(
+        apiFetch,
+        `${adminApiPaths.additionClassifications}${encodeURIComponent(editingCategory.id)}/`,
+        { method: "PATCH", body: JSON.stringify({ name: nextName }) },
+      );
+      const savedName = String((data as BackendRecord).name ?? nextName).trim();
+      setAddonCategories((currentCategories) =>
+        currentCategories.map((category) =>
+          category.id === editingCategory.id ? { ...category, name: savedName } : category,
+        ),
+      );
+      setCategoryOptions((currentCategories) =>
+        currentCategories.map((name) => name === currentCategory.name ? savedName : name),
+      );
+      setCategoryIds((currentIds) => {
+        const remaining = { ...currentIds };
+        delete remaining[currentCategory.name];
+        return { ...remaining, [savedName]: editingCategory.id };
+      });
+      setRows((currentRows) =>
+        currentRows.map((row) =>
+          row.category === currentCategory.name ? { ...row, category: savedName } : row,
+        ),
+      );
+      setSelectedAddonCategory((currentName) =>
+        currentName === currentCategory.name ? savedName : currentName,
+      );
+      setAddonFormCategory((currentName) =>
+        currentName === currentCategory.name ? savedName : currentName,
+      );
+      setEditingCategory(null);
+      showSnackbar({ message: `تم تعديل اسم التصنيف إلى ${savedName}.` });
+    } catch (error) {
+      showSnackbar({
+        message: error instanceof Error ? error.message : "تعذر تعديل اسم التصنيف.",
+        tone: "danger",
+      });
+    }
+  }
+
+  function deleteAddonCategory(category: AddonCategoryRecord) {
+    const categoryIndex = addonCategories.findIndex((currentCategory) => currentCategory.id === category.id);
+    setCategoryDeleteTarget(null);
+    queueUndoableDelete({
+      message: `تم حذف التصنيف ${category.name}.`,
+      onDelete: () => {
+        setAddonCategories((currentCategories) =>
+          currentCategories.filter((currentCategory) => currentCategory.id !== category.id),
+        );
+        setCategoryOptions((currentCategories) =>
+          currentCategories.filter((name) => name !== category.name),
+        );
+        setCategoryIds((currentIds) => {
+          const remaining = { ...currentIds };
+          delete remaining[category.name];
+          return remaining;
+        });
+      },
+      onUndo: () => {
+        setAddonCategories((currentCategories) => {
+          if (currentCategories.some((currentCategory) => currentCategory.id === category.id)) {
+            return currentCategories;
+          }
+          const nextCategories = [...currentCategories];
+          nextCategories.splice(Math.max(0, categoryIndex), 0, category);
+          return nextCategories;
+        });
+        setCategoryOptions((currentCategories) =>
+          currentCategories.includes(category.name)
+            ? currentCategories
+            : [...currentCategories, category.name],
+        );
+        setCategoryIds((currentIds) => ({ ...currentIds, [category.name]: category.id }));
+      },
+      onCommit: async () => {
+        await sendAdminJson(
+          apiFetch,
+          `${adminApiPaths.additionClassifications}${encodeURIComponent(category.id)}/`,
+          { method: "DELETE" },
+        );
+      },
+      onCommitError: (error) => {
+        const message = error instanceof Error ? error.message : "تعذر حذف تصنيف الإضافة.";
+        showSnackbar({ message: translateAddonCategoryDeleteError(message), tone: "danger" });
+      },
+    });
   }
 
   async function createAddon() {
@@ -2337,6 +2510,19 @@ export function AddonsPage() {
           title="الإضافات"
           description="إدارة الإضافات والاختيارات الإضافية للمنيو"
           size="compact"
+          className="w-full"
+          actions={
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 px-4 text-sm"
+              onClick={() => void loadAddons(true)}
+              disabled={addonsLoading}
+            >
+              <RefreshCw className={cn("size-4", addonsLoading && "animate-spin")} />
+              تحديث
+            </Button>
+          }
         />
       </div>
 
@@ -2347,6 +2533,10 @@ export function AddonsPage() {
             <p className="mt-2 text-sm text-muted-foreground">قائمة الإضافات</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => setCategoriesOpen((open) => !open)}>
+              <Tag className="size-4" />
+              التصنيفات
+            </Button>
             <Button variant="outline" onClick={() => setCategoryModalOpen(true)}>
               <Plus className="size-4" />
               إضافة تصنيف جديد
@@ -2358,6 +2548,56 @@ export function AddonsPage() {
           </div>
         </div>
         <div className="p-6">
+          {categoriesOpen ? (
+            <div className="mb-6 overflow-hidden rounded-md border bg-muted/10">
+              <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+                <div>
+                  <h3 className="font-semibold">تصنيفات الإضافات</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">تعديل اسم التصنيف أو حذفه.</p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={() => setCategoryModalOpen(true)}>
+                  <Plus className="size-4" />
+                  إضافة تصنيف
+                </Button>
+              </div>
+              <div className="divide-y">
+                {addonCategories.length ? addonCategories.map((category) => {
+                  const isEditing = editingCategory?.id === category.id;
+
+                  return (
+                    <div key={category.id} className="flex min-h-14 items-center justify-between gap-3 px-4 py-2">
+                      {isEditing ? (
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <Input
+                            value={editingCategory.name}
+                            className="h-9 max-w-sm"
+                            autoFocus
+                            onChange={(event) => setEditingCategory({ ...editingCategory, name: event.target.value })}
+                          />
+                          <Button type="button" size="sm" onClick={() => void saveCategoryName()}>حفظ</Button>
+                          <Button type="button" variant="outline" size="sm" onClick={() => setEditingCategory(null)}>إلغاء</Button>
+                        </div>
+                      ) : (
+                        <span className="font-semibold">{category.name}</span>
+                      )}
+                      {!isEditing ? (
+                        <div className="flex shrink-0 items-center gap-1">
+                          <AddonRowIconButton label={`تعديل تصنيف ${category.name}`} onClick={() => setEditingCategory(category)}>
+                            <Edit className="size-4" />
+                          </AddonRowIconButton>
+                          <AddonRowIconButton tone="danger" label={`حذف تصنيف ${category.name}`} onClick={() => setCategoryDeleteTarget(category)}>
+                            <Trash2 className="size-4" />
+                          </AddonRowIconButton>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                }) : (
+                  <div className="p-5 text-center text-sm text-muted-foreground">لا توجد تصنيفات.</div>
+                )}
+              </div>
+            </div>
+          ) : null}
           <div className="grid w-full gap-4 md:grid-cols-2">
             <div className="flex min-w-0 flex-col gap-2">
               <label htmlFor="addon-search" className="text-sm leading-5">
@@ -2402,7 +2642,7 @@ export function AddonsPage() {
               <div className="overflow-hidden rounded-md border transition-opacity duration-200">
                 <DataTable
                   minWidth={885}
-                  columnWidths={[80, 350, 210, 160, 90]}
+                  columnWidths={[80, 350, 210, 160, 235]}
                   rowHeight="tall"
                   headers={["", "الإضافة", "تصنيف الإضافة", "سعر الإضافة", ""]}
                   rows={pagedAddons.flatMap((addon, addonIndex) => {
@@ -2413,18 +2653,21 @@ export function AddonsPage() {
                       <AddonIdentity key={`identity-${addon.id}`} addon={addon} />,
                       <AddonInfoPill key={`category-${addon.id}`}>{addon.category}</AddonInfoPill>,
                       <AddonPriceCell key={`price-${addon.id}`} price={addon.price} />,
-                      <div key={`actions-${addon.id}`} className="flex items-center justify-center">
-                        <AddonActionsMenu
-                          addon={addon}
-                          open={openActionMenu === addon.id}
-                          onToggle={() =>
-                            setOpenActionMenu((current) =>
-                              current === addon.id ? null : addon.id,
-                            )
-                          }
-                          onEdit={() => startEditingAddon(addon)}
-                          onDelete={() => void deleteAddon(addon)}
-                        />
+                      <div key={`actions-${addon.id}`} className="flex min-w-[220px] items-center justify-end gap-2">
+                        <div className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-2 text-xs font-semibold">
+                          <span>{addon.active !== false ? "مفعلة" : "معطلة"}</span>
+                          <Switch
+                            checked={addon.active !== false}
+                            onCheckedChange={(checked) => void toggleAddonActive(addon, checked)}
+                            aria-label={`تفعيل الإضافة ${addon.nameAr}`}
+                          />
+                        </div>
+                        <AddonRowIconButton label={`تعديل ${addon.nameAr}`} onClick={() => startEditingAddon(addon)}>
+                          <Edit className="size-4" />
+                        </AddonRowIconButton>
+                        <AddonRowIconButton tone="danger" label={`حذف ${addon.nameAr}`} onClick={() => setAddonDeleteTarget(addon)}>
+                          <Trash2 className="size-4" />
+                        </AddonRowIconButton>
                       </div>,
                     ];
 
@@ -2495,6 +2738,26 @@ export function AddonsPage() {
           />
         </div>
       </Card>
+
+      {addonDeleteTarget ? (
+        <ConfirmDeleteDialog
+          title="حذف الإضافة"
+          description={`هل تريد حذف الإضافة ${addonDeleteTarget.nameAr}؟`}
+          busy={false}
+          onCancel={() => setAddonDeleteTarget(null)}
+          onConfirm={() => deleteAddon(addonDeleteTarget)}
+        />
+      ) : null}
+
+      {categoryDeleteTarget ? (
+        <ConfirmDeleteDialog
+          title="حذف تصنيف الإضافة"
+          description={`هل تريد حذف التصنيف ${categoryDeleteTarget.name}؟`}
+          busy={false}
+          onCancel={() => setCategoryDeleteTarget(null)}
+          onConfirm={() => deleteAddonCategory(categoryDeleteTarget)}
+        />
+      ) : null}
 
       {categoryModalOpen ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto overscroll-contain bg-foreground/30 p-4 backdrop-blur-[1px]">
@@ -2575,6 +2838,7 @@ export function AddonsPage() {
                       <>
                         <DashboardImage
                           src={addonImagePreview}
+                          placeholderType="addon"
                           alt="معاينة صورة الإضافة"
                           width={300}
                           height={300}
@@ -3037,6 +3301,7 @@ function OfferVisual({
       {offer.image ? (
         <DashboardImage
           src={offer.image}
+          placeholderType="offer"
           alt=""
           width={800}
           height={300}
@@ -3092,15 +3357,16 @@ export function OffersPage() {
   const router = useRouter();
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
+  const queueUndoableDelete = useUndoableDelete();
+  const { cities: availableServiceCities } = useServiceCities();
   const [offers, setOffers] = useState<OfferCard[]>([]);
   const [offersLoading, setOffersLoading] = useState(true);
   const [offerDeleteTarget, setOfferDeleteTarget] = useState<OfferCard | null>(null);
-  const [deletingOffer, setDeletingOffer] = useState(false);
+  const pendingOfferDeletionIdsRef = useRef<Set<string>>(new Set());
   const [now, setNow] = useState<number | null>(null);
   const [offerSearch, setOfferSearch] = useState("");
   const [offerTypeFilter, setOfferTypeFilter] = useState(allOffersFilterValue);
   const [offerCityFilter, setOfferCityFilter] = useState(allOffersFilterValue);
-  const [offerMarketFilter, setOfferMarketFilter] = useState(allOffersFilterValue);
   const [expandedOfferIds, setExpandedOfferIds] = useState<Record<string, boolean>>({});
   const activeOffers = offers.filter(
     (offer) => offer.backendStatus === "active" && offerDateLifecycle(offer.startsAt, offer.endsAt) === "current",
@@ -3114,32 +3380,18 @@ export function OffersPage() {
   const offerCityOptions = useMemo(() => {
     const cityOptions = new Map<string, string>();
 
-    offers.forEach((offer) => {
-      offer.serviceCityIds.forEach((cityId, index) => {
-        if (!cityId) return;
-        cityOptions.set(cityId, offer.serviceCityNames[index] || `مدينة #${cityId}`);
+    availableServiceCities
+      .filter((city) => city.is_active !== false)
+      .forEach((city) => {
+      cityOptions.set(String(city.id), city.name);
       });
-    });
 
     return [
       { value: allOffersFilterValue, label: "كل المدن" },
       { value: generalOffersFilterValue, label: "عام" },
       ...Array.from(cityOptions, ([value, label]) => ({ value, label })),
     ];
-  }, [offers]);
-  const offerMarketOptions = useMemo(() => {
-    const marketOptions = new Map<string, string>();
-
-    offers.forEach((offer) => {
-      if (!offer.marketId) return;
-      marketOptions.set(offer.marketId, offer.marketName || `محل #${offer.marketId}`);
-    });
-
-    return [
-      { value: allOffersFilterValue, label: "جميع المحلات" },
-      ...Array.from(marketOptions, ([value, label]) => ({ value, label })),
-    ];
-  }, [offers]);
+  }, [availableServiceCities]);
   const filteredOffers = useMemo(() => {
     const search = normalizeOfferFilterText(offerSearch);
 
@@ -3162,12 +3414,9 @@ export function OffersPage() {
         (offerCityFilter === generalOffersFilterValue
           ? offer.showInGeneral
           : offer.serviceCityIds.includes(offerCityFilter));
-      const matchesMarket =
-        offerMarketFilter === allOffersFilterValue || offer.marketId === offerMarketFilter;
-
-      return matchesSearch && matchesType && matchesCity && matchesMarket;
+      return matchesSearch && matchesType && matchesCity;
     });
-  }, [offers, offerSearch, offerTypeFilter, offerCityFilter, offerMarketFilter]);
+  }, [offers, offerSearch, offerTypeFilter, offerCityFilter]);
 
   useEffect(() => {
     const updateCountdown = () => setNow(Date.now());
@@ -3180,15 +3429,18 @@ export function OffersPage() {
     };
   }, []);
 
-  async function loadOffers() {
+  const reloadOffers = useCallback(async () => {
     setOffersLoading(true);
+
     try {
       const response = await apiFetch(adminApiPaths.offers);
       const data = await readApiData(response);
-      if (!response.ok) {
-        throw new Error(apiErrorMessage(data, "تعذر تحميل العروض من الباك."));
-      }
-      setOffers(apiList(data).map(offerCardFromApi));
+      if (!response.ok) throw new Error(apiErrorMessage(data, "تعذر تحميل العروض من الباك."));
+      setOffers(
+        apiList(data)
+          .map(offerCardFromApi)
+          .filter((offer) => !pendingOfferDeletionIdsRef.current.has(offer.id)),
+      );
     } catch (error) {
       showSnackbar({
         message: error instanceof Error ? error.message : "تعذر تحميل العروض.",
@@ -3197,33 +3449,15 @@ export function OffersPage() {
     } finally {
       setOffersLoading(false);
     }
-  }
+  }, [apiFetch, showSnackbar]);
 
   useEffect(() => {
-    let active = true;
+    const timeoutId = window.setTimeout(() => {
+      void reloadOffers();
+    }, 0);
 
-    void apiFetch(adminApiPaths.offers)
-      .then(async (response) => {
-        const data = await readApiData(response);
-        if (!response.ok) throw new Error(apiErrorMessage(data, "تعذر تحميل العروض من الباك."));
-        if (active) setOffers(apiList(data).map(offerCardFromApi));
-      })
-      .catch((error) => {
-        if (active) {
-          showSnackbar({
-            message: error instanceof Error ? error.message : "تعذر تحميل العروض.",
-            tone: "danger",
-          });
-        }
-      })
-      .finally(() => {
-        if (active) setOffersLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [apiFetch, showSnackbar]);
+    return () => window.clearTimeout(timeoutId);
+  }, [reloadOffers]);
 
   async function toggleOfferStatus(offerId: string) {
     const offer = offers.find((item) => item.id === offerId);
@@ -3263,25 +3497,45 @@ export function OffersPage() {
     }));
   }
 
-  async function deleteOffer(offerId: string) {
-    try {
-      setDeletingOffer(true);
-      await sendAdminJson(
-        apiFetch,
-        `${adminApiPaths.offers}${encodeURIComponent(offerId)}/`,
-        { method: "DELETE" },
-      );
-      await loadOffers();
-      setOfferDeleteTarget(null);
-      showSnackbar({ message: "تم حذف العرض.", tone: "success" });
-    } catch (error) {
-      showSnackbar({
-        message: error instanceof Error ? translateOfferErrorMessage(error.message) : "تعذر حذف العرض.",
-        tone: "danger",
-      });
-    } finally {
-      setDeletingOffer(false);
-    }
+  function deleteOffer(offer: OfferCard) {
+    const offerIndex = offers.findIndex((currentOffer) => currentOffer.id === offer.id);
+    setOfferDeleteTarget(null);
+    queueUndoableDelete({
+      message: `تم حذف العرض ${offer.title}.`,
+      onDelete: () => {
+        pendingOfferDeletionIdsRef.current.add(offer.id);
+        setOffers((currentOffers) =>
+          currentOffers.filter((currentOffer) => currentOffer.id !== offer.id),
+        );
+      },
+      onUndo: () => {
+        pendingOfferDeletionIdsRef.current.delete(offer.id);
+        setOffers((currentOffers) => {
+          if (currentOffers.some((currentOffer) => currentOffer.id === offer.id)) {
+            return currentOffers;
+          }
+          const nextOffers = [...currentOffers];
+          nextOffers.splice(Math.max(0, offerIndex), 0, offer);
+          return nextOffers;
+        });
+      },
+      onCommit: async () => {
+        await sendAdminJson(
+          apiFetch,
+          `${adminApiPaths.offers}${encodeURIComponent(offer.id)}/`,
+          { method: "DELETE" },
+        );
+      },
+      onCommitError: (error) => {
+        showSnackbar({
+          message:
+            error instanceof Error
+              ? translateOfferErrorMessage(error.message)
+              : "تعذر حذف العرض.",
+          tone: "danger",
+        });
+      },
+    });
   }
 
   return (
@@ -3291,13 +3545,19 @@ export function OffersPage() {
         description="إدارة العروض والخصومات لكل الفروع"
         size="compact"
         actions={
-          <Link
-            href="/offers/create"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90"
-          >
-            <Plus className="size-4" />
-            إنشاء عرض
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" className="h-9" onClick={() => void reloadOffers()} disabled={offersLoading}>
+              <RefreshCw className={cn("size-4", offersLoading && "animate-spin")} />
+              تحديث
+            </Button>
+            <Link
+              href="/offers/create"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90"
+            >
+              <Plus className="size-4" />
+              إنشاء عرض
+            </Link>
+          </div>
         }
       />
       <MetricCards
@@ -3309,7 +3569,7 @@ export function OffersPage() {
         ]}
       />
       <Card className="mt-6 p-4">
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_200px_200px_220px]">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_200px_220px]">
           <div className="relative">
             <Search className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -3339,13 +3599,6 @@ export function OffersPage() {
             ariaLabel="فلترة حسب المدينة"
             options={offerCityOptions}
           />
-          <AppSelect
-            value={offerMarketFilter}
-            onValueChange={setOfferMarketFilter}
-            className="h-12"
-            ariaLabel="فلترة حسب المحل"
-            options={offerMarketOptions}
-          />
         </div>
         <div className="hidden">
           عرض {filteredOffers.length} من {offers.length} عرض
@@ -3367,15 +3620,17 @@ export function OffersPage() {
       <div className="mt-6 grid gap-4 lg:grid-cols-2 2xl:grid-cols-4">
         {filteredOffers.map((offer) => {
           const Icon = offer.icon;
-          const activeDaysText = offer.activeDays.length
-            ? offer.activeDays.map((day) => weekDayLabels[day]).join("، ")
-            : "كل الأيام";
           const productText = offer.productNames.length
             ? offer.productNames.slice(0, 3).join("، ")
             : offer.productIds.length
               ? `${offer.productIds.length} منتجات`
               : "-";
           const isInactive = offer.backendStatus === "inactive";
+          const isExpired = offerDateLifecycle(offer.startsAt, offer.endsAt) === "expired";
+          const placement = [
+            offer.showInGeneral ? "عام" : "",
+            offer.serviceCityIds.length ? offer.serviceCityName : "",
+          ].filter(Boolean).join(" + ") || "غير محدد";
           const isCollapsed = !expandedOfferIds[offer.id];
 
           return (
@@ -3384,6 +3639,7 @@ export function OffersPage() {
               className={cn(
                 "overflow-hidden rounded-lg transition hover:border-primary/35 hover:bg-accent/20",
                 isInactive && "border-muted-foreground/20 bg-muted/20 opacity-60 grayscale",
+                isExpired && "border-destructive/50 bg-destructive/10 hover:border-destructive/70 hover:bg-destructive/15",
               )}
             >
               <div className={cn("flex flex-col p-4", isCollapsed ? "min-h-0" : "min-h-[410px]")}>
@@ -3409,7 +3665,7 @@ export function OffersPage() {
 
                 <div className="mt-5 flex flex-wrap gap-2">
                   <RefBadge tone="gray">{offer.type}</RefBadge>
-                  <RefBadge tone="blue">خصم {offer.discount}</RefBadge>
+                  <RefBadge tone="blue">{placement}</RefBadge>
                   <RefBadge tone={offer.status === "نشط" ? "green" : offer.status === "منتهي" ? "red" : offer.status === "مجدول" ? "orange" : "yellow"}>
                     {offer.status}
                   </RefBadge>
@@ -3434,7 +3690,6 @@ export function OffersPage() {
                       <OfferInfoRow label="مدن الخدمة" value={offer.serviceCityName} />
                     ) : null}
                     <OfferInfoRow label="المنتجات" value={productText} />
-                    <OfferInfoRow label="أيام التفعيل" value={activeDaysText} />
                     <OfferInfoRow label="حد الاستخدام" value={offer.useLimits} />
                     <OfferInfoRow label="حد العميل" value={offer.userLimit} />
                   </div>
@@ -3483,9 +3738,9 @@ export function OffersPage() {
       {offerDeleteTarget ? (
         <OfferDeleteModal
           offer={offerDeleteTarget}
-          deleting={deletingOffer}
+          deleting={false}
           onClose={() => setOfferDeleteTarget(null)}
-          onConfirm={() => void deleteOffer(offerDeleteTarget.id)}
+          onConfirm={() => deleteOffer(offerDeleteTarget)}
         />
       ) : null}
     </div>
@@ -3512,6 +3767,18 @@ function OfferDeleteModal({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  useEffect(() => {
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, []);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/45 px-4 py-6 backdrop-blur-sm">
       <div
@@ -3539,41 +3806,17 @@ function OfferDeleteModal({
   );
 }
 
-const weekDayOptions = [
-  { label: "الأحد", value: "sunday", short: "ح" },
-  { label: "الإثنين", value: "monday", short: "ن" },
-  { label: "الثلاثاء", value: "tuesday", short: "ث" },
-  { label: "الأربعاء", value: "wednesday", short: "ر" },
-  { label: "الخميس", value: "thursday", short: "خ" },
-  { label: "الجمعة", value: "friday", short: "ج" },
-  { label: "السبت", value: "saturday", short: "س" },
-] as const satisfies readonly { label: string; value: ActiveDay; short: string }[];
-const weekDayLabels: Record<ActiveDay, string> = {
-  sunday: "الأحد",
-  monday: "الإثنين",
-  tuesday: "الثلاثاء",
-  wednesday: "الأربعاء",
-  thursday: "الخميس",
-  friday: "الجمعة",
-  saturday: "السبت",
-};
 const selectableItems = itemRows;
 type OfferProductsContextValue = {
   products: ItemRow[];
   cities: ServiceCity[];
   citiesLoading: boolean;
-  markets: OfferMarket[];
-  selectedMarketFilter: string;
-  onMarketFilterChange: (marketId: string) => void;
 };
 
 const OfferProductsContext = createContext<OfferProductsContextValue>({
   products: selectableItems,
   cities: [],
   citiesLoading: false,
-  markets: [],
-  selectedMarketFilter: allOffersFilterValue,
-  onMarketFilterChange: () => undefined,
 });
 type BundleLine = {
   id: string;
@@ -3679,6 +3922,7 @@ function ProductPicker({
       <div className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-2 rounded-md border bg-background p-2 shadow-sm">
         <DashboardImage
           src={selectedItem.image}
+          placeholderType="product"
           alt=""
           width={88}
           height={88}
@@ -3733,27 +3977,13 @@ function PackageProductSearchModal({
   onClose: () => void;
   onSelect: (itemId: string) => void;
 }) {
-  const { products, markets, selectedMarketFilter, onMarketFilterChange } = useContext(OfferProductsContext);
+  const { products } = useContext(OfferProductsContext);
   const [query, setQuery] = useState("");
   const normalizedQuery = normalizeProductSearch(query);
-  const marketOptions = useMemo(
-    () => [
-      { value: allOffersFilterValue, label: "جميع المحلات" },
-      ...markets.map((market) => ({ value: market.id, label: market.name })),
-    ],
-    [markets],
-  );
   const filteredItems = useMemo(
     () =>
-      products.filter((item) => {
-        const matchesSearch = itemMatchesProductSearch(item, normalizedQuery);
-        const matchesMarket =
-          selectedMarketFilter === allOffersFilterValue ||
-          String(item.marketId ?? "") === selectedMarketFilter;
-
-        return matchesSearch && matchesMarket;
-      }),
-    [normalizedQuery, products, selectedMarketFilter],
+      products.filter((item) => itemMatchesProductSearch(item, normalizedQuery)),
+    [normalizedQuery, products],
   );
 
   useEffect(() => {
@@ -3816,7 +4046,7 @@ function PackageProductSearchModal({
         </div>
 
         <div className="grid gap-3 border-b bg-muted/15 p-4">
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="grid gap-3">
           <label className="grid gap-2 text-sm font-medium">
             بحث
             <div className="relative">
@@ -3829,16 +4059,6 @@ function PackageProductSearchModal({
                 autoFocus
               />
             </div>
-          </label>
-          <label className="grid gap-2 text-sm font-medium">
-            المحل
-            <AppSelect
-              value={selectedMarketFilter}
-              onValueChange={onMarketFilterChange}
-              ariaLabel="فلترة المنتجات حسب المحل"
-              className="h-10 border-border bg-background text-foreground hover:border-border hover:bg-background hover:text-foreground focus:border-border focus:ring-0 data-[state=open]:border-border data-[state=open]:bg-background data-[state=open]:text-foreground"
-              options={marketOptions}
-            />
           </label>
           </div>
         </div>
@@ -3863,6 +4083,7 @@ function PackageProductSearchModal({
                   >
                     <DashboardImage
                       src={item.image}
+                      placeholderType="product"
                       alt=""
                       width={128}
                       height={128}
@@ -3933,6 +4154,7 @@ function SingleOfferProductPanel({
   contextLabel?: string;
 }) {
   const { products } = useContext(OfferProductsContext);
+  const { showSnackbar } = useSnackbar();
   const [productsOpen, setProductsOpen] = useState(false);
   const [productSearchOpen, setProductSearchOpen] = useState(false);
   const [quantity, setQuantity] = useState(1);
@@ -3958,6 +4180,9 @@ function SingleOfferProductPanel({
   }
 
   function removeSingleProduct() {
+    if (selectedItem) {
+      showSnackbar({ message: `تم حذف ${selectedItem.name} من ${contextLabel}.`, tone: "danger" });
+    }
     onSelectItem("");
     setProductsOpen(false);
     setQuantity(1);
@@ -4088,6 +4313,7 @@ function PackageProductCard({
       <div className="grid gap-3 lg:grid-cols-[72px_minmax(0,1fr)_minmax(260px,320px)]">
         <DashboardImage
           src={item.image}
+          placeholderType="product"
           alt=""
           width={144}
           height={144}
@@ -4621,7 +4847,6 @@ export function CreateOfferPage() {
   const [offerTitle, setOfferTitle] = useState(editingOffer?.title ?? "");
   const [offerDescription, setOfferDescription] = useState("");
   const [selectedOfferCityIds, setSelectedOfferCityIds] = useState<string[]>([]);
-  const [selectedOfferMarketFilter, setSelectedOfferMarketFilter] = useState(allOffersFilterValue);
   const offerImageObjectUrlRef = useRef<string | null>(null);
   const [offerImagePreview, setOfferImagePreview] = useState(editingOffer?.image ?? "");
   const [offerImageName, setOfferImageName] = useState(
@@ -4644,9 +4869,10 @@ export function CreateOfferPage() {
     return markets.filter(
       (market) => {
         if (market.status !== "active") return false;
-        if (market.scope === "general") return offerAppearsInGeneral;
-        if (market.scope !== "service_city") return false;
-        if (!offerAppearsInServiceCity || !selectedOfferCityIds.length) return false;
+        if (offerAppearsInGeneral && market.scope !== "general") return false;
+        if (!offerAppearsInGeneral && market.scope !== "service_city") return false;
+        if (!offerAppearsInServiceCity || !selectedOfferCityIds.length) return true;
+
         return selectedOfferCityIds.every((selectedCityId) =>
           market.serviceCityIds.some((cityId) => Number(cityId) === Number(selectedCityId)),
         );
@@ -4664,11 +4890,6 @@ export function CreateOfferPage() {
       ),
     [allOfferProducts, marketIdsForScope],
   );
-  const effectiveOfferMarketFilter =
-    selectedOfferMarketFilter !== allOffersFilterValue &&
-    marketsForScope.some((market) => market.id === selectedOfferMarketFilter)
-      ? selectedOfferMarketFilter
-      : allOffersFilterValue;
   const discountRate = clampDiscountPercent(Number(discountPercent) || 0);
   const flashDiscountRate = clampDiscountPercent(Number(flashDiscountPercent) || 0);
   const packageDiscountRate = clampDiscountPercent(Number(packageDiscountPercent) || 0);
@@ -4690,7 +4911,6 @@ export function CreateOfferPage() {
   const [openScheduleTime, setOpenScheduleTime] = useState<"start" | "end" | null>(null);
   const [startTime, setStartTime] = useState(initialScheduleValues.time);
   const [endTime, setEndTime] = useState(initialScheduleValues.time);
-  const [activeWeekDays, setActiveWeekDays] = useState<ActiveDay[]>([]);
   const [useLimits, setUseLimits] = useState("");
   const [userLimit, setUserLimit] = useState("");
   const [serviceCityClearConfirmOpen, setServiceCityClearConfirmOpen] = useState(false);
@@ -4769,7 +4989,6 @@ export function CreateOfferPage() {
 
   function setOfferGeneralEnabled(enabled: boolean) {
     setOfferAppearsInGeneral(enabled);
-    setSelectedOfferMarketFilter(allOffersFilterValue);
     clearOfferProductSelectionWithReason();
   }
 
@@ -4783,7 +5002,6 @@ export function CreateOfferPage() {
     if (!enabled) {
       setSelectedOfferCityIds([]);
     }
-    setSelectedOfferMarketFilter(allOffersFilterValue);
     clearOfferProductSelectionWithReason();
   }
 
@@ -4791,7 +5009,6 @@ export function CreateOfferPage() {
     setServiceCityClearConfirmOpen(false);
     setOfferAppearsInServiceCity(false);
     setSelectedOfferCityIds([]);
-    setSelectedOfferMarketFilter(allOffersFilterValue);
     clearOfferProductSelectionWithReason();
   }
 
@@ -4801,7 +5018,6 @@ export function CreateOfferPage() {
         ? currentCityIds.filter((currentCityId) => currentCityId !== cityId)
         : [...currentCityIds, cityId],
     );
-    setSelectedOfferMarketFilter(allOffersFilterValue);
     clearOfferProductSelectionWithReason();
   }
 
@@ -4859,19 +5075,14 @@ export function CreateOfferPage() {
   }
 
   function removeBundleLine(lineId: string) {
-    setBundleItems((currentLines) =>
-      currentLines.length > 1 ? currentLines.filter((line) => line.id !== lineId) : currentLines,
-    );
-  }
-
-  function toggleActiveWeekDay(day: ActiveDay) {
-    setActiveWeekDays((currentDays) => {
-      if (currentDays.includes(day)) {
-        return currentDays.filter((currentDay) => currentDay !== day);
-      }
-
-      return [...currentDays, day];
-    });
+    const removedLine = bundleItems.find((line) => line.id === lineId);
+    const removedItem = removedLine
+      ? selectedItemFrom(offerProducts, removedLine.itemId)
+      : null;
+    setBundleItems((currentLines) => currentLines.filter((line) => line.id !== lineId));
+    if (removedItem) {
+      showSnackbar({ message: `تم حذف ${removedItem.name} من الباكج.`, tone: "danger" });
+    }
   }
 
   function selectedOfferItems() {
@@ -5001,7 +5212,7 @@ export function CreateOfferPage() {
       discount: discountNumber.toFixed(2),
       start_time: startTimeIso,
       end_time: endTimeIso,
-      active_days: activeWeekDays,
+      active_days: [],
       use_limits: useLimits ? Number(useLimits) : null,
       user_limit: userLimit ? Number(userLimit) : null,
     };
@@ -5095,13 +5306,11 @@ export function CreateOfferPage() {
         setOfferAppearsInGeneral(true);
         setOfferAppearsInServiceCity(false);
         setSelectedOfferCityIds([]);
-        setSelectedOfferMarketFilter(allOffersFilterValue);
         clearOfferProductSelection();
         setStartDate(nextScheduleValues.date);
         setEndDate(nextScheduleValues.date);
         setStartTime(nextScheduleValues.time);
         setEndTime(nextScheduleValues.time);
-        setActiveWeekDays([]);
         setOpenScheduleDate(null);
         setOpenScheduleTime(null);
       }
@@ -5148,10 +5357,6 @@ export function CreateOfferPage() {
             : products.map((product) => String(product.id));
           const start = new Date(String(record.start_time));
           const end = new Date(String(record.end_time));
-          const apiDays = Array.isArray(record.active_days)
-            ? record.active_days.map(String).filter(isActiveDay)
-            : [];
-
           setEditingOffer(card);
           setOfferTitle(card.title);
           setOfferDescription(String(record.description ?? ""));
@@ -5166,7 +5371,6 @@ export function CreateOfferPage() {
           setStartTime(formatTimeInputValue(start));
           setEndDate(formatDateInputValue(end));
           setEndTime(formatTimeInputValue(end));
-          setActiveWeekDays(apiDays);
           setUseLimits(record.use_limits == null ? "" : String(record.use_limits));
           setUserLimit(record.user_limit == null ? "" : String(record.user_limit));
           if (card.type === "فلاش") {
@@ -5201,9 +5405,6 @@ export function CreateOfferPage() {
         products: offerProducts,
         cities: serviceCities,
         citiesLoading: serviceCitiesLoading,
-        markets: marketsForScope,
-        selectedMarketFilter: effectiveOfferMarketFilter,
-        onMarketFilterChange: setSelectedOfferMarketFilter,
       }}
     >
     <div className="px-6 py-8">
@@ -5297,7 +5498,7 @@ export function CreateOfferPage() {
                             جاري تحميل المدن...
                           </div>
                         ) : serviceCities.length ? (
-                          serviceCities.map((city) => {
+                          serviceCities.filter((city) => city.is_active !== false).map((city) => {
                             const cityId = String(city.id);
                             const selected = selectedOfferCityIds.includes(cityId);
 
@@ -5351,6 +5552,7 @@ export function CreateOfferPage() {
                     <>
                       <DashboardImage
                         src={offerImagePreview}
+                        placeholderType="offer"
                         alt="معاينة صورة العرض"
                         width={640}
                         height={360}
@@ -5522,7 +5724,7 @@ export function CreateOfferPage() {
                             line={line}
                             item={item}
                             lineTotal={lineTotal}
-                            canRemove={bundleItems.length > 1}
+                            canRemove
                             onChange={(patch) => updateBundleLine(line.id, patch)}
                             onRemove={() => removeBundleLine(line.id)}
                           />
@@ -5696,65 +5898,6 @@ export function CreateOfferPage() {
                 />
               </Field>
             </div>
-              <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <div className="text-sm font-semibold">أيام التفعيل</div>
-                  <div className="inline-flex h-8 items-center gap-2 rounded-md border border-border/70 bg-background px-2.5 text-xs font-semibold text-muted-foreground shadow-sm">
-                    <Calendar className="size-3.5 text-primary" />
-                    <span>
-                      {activeWeekDays.length ? `${activeWeekDays.length} / ${weekDayOptions.length}` : "كل الأيام"}
-                    </span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7">
-                  {weekDayOptions.map((day) => {
-                    const selected = activeWeekDays.includes(day.value);
-
-                    return (
-                      <label
-                        key={day.value}
-                        className={cn(
-                          "group relative flex min-h-16 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border px-2 py-2 text-center text-sm shadow-sm transition duration-150",
-                          "hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus-within:ring-2 focus-within:ring-primary/30",
-                          selected
-                            ? "border-primary/45 bg-primary/10 text-foreground dark:bg-primary/15"
-                            : "border-border/70 bg-background text-muted-foreground",
-                        )}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selected}
-                          onChange={() => toggleActiveWeekDay(day.value)}
-                          className="sr-only"
-                          aria-label={`تفعيل يوم ${day.label}`}
-                        />
-                        <span
-                          className={cn(
-                            "grid size-8 shrink-0 place-items-center rounded-md border text-xs font-bold transition",
-                            selected
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : "border-border bg-muted/40 text-foreground",
-                          )}
-                        >
-                          {day.short}
-                        </span>
-                        <span className="max-w-full font-semibold leading-5">{day.label}</span>
-                        <span
-                          className={cn(
-                            "absolute start-2 top-2 grid size-5 place-items-center rounded-full border transition",
-                            selected
-                              ? "border-primary/30 bg-primary/15 text-primary"
-                              : "border-border/80 bg-muted/30 text-transparent group-hover:text-muted-foreground",
-                          )}
-                          aria-hidden="true"
-                        >
-                          <CheckCircle2 className="size-3.5" />
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
           </FormCard>
 
             <FormCard title="حدود الاستخدام">

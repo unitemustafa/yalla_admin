@@ -23,6 +23,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { currentUser } from "@/features/dashboard/profile-data";
 import { Button, Card, Input, PageTitle } from "@/features/dashboard/primitives";
 import { DashboardImage } from "@/features/dashboard/dashboard-image";
+import { DASHBOARD_PLACEHOLDERS, imageOrPlaceholder } from "@/features/dashboard/placeholders";
 import { useSnackbar } from "@/features/dashboard/snackbar";
 import {
   isNetworkError,
@@ -33,7 +34,7 @@ import {
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ACCOUNT_PASSWORD_CHANGE_ENABLED = true;
-const DEFAULT_AVATAR_SRC = "/default-user-avatar.svg";
+const DEFAULT_AVATAR_SRC = DASHBOARD_PLACEHOLDERS.user;
 const AVATAR_UPLOAD_FIELD = "avatar";
 
 function displayName(firstName?: string, lastName?: string, username?: string) {
@@ -59,7 +60,7 @@ function preventWhitespaceInput(event: KeyboardEvent<HTMLInputElement>) {
 }
 
 function avatarSrc(user?: Pick<AuthUser, "avatar_url"> | null) {
-  return user?.avatar_url?.trim() || DEFAULT_AVATAR_SRC;
+  return imageOrPlaceholder(user?.avatar_url, "user");
 }
 
 async function responseData(response: Response) {
@@ -294,6 +295,37 @@ export function AccountPage() {
     }
   }
 
+  async function removeAvatar() {
+    if (profileSaving) return;
+    setProfileSaving(true);
+    setProfileError("");
+    try {
+      const response = await apiFetch("auth/me/", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ remove_avatar: true }),
+      });
+      const data = await responseData(response);
+      if (!response.ok || !data || typeof data !== "object") {
+        throw new Error(localizedProfileError(data, "تعذر حذف صورة الحساب."));
+      }
+      updateUser(data as AuthUser);
+      setAvatarUrl(DEFAULT_AVATAR_SRC);
+      clearAvatarSelection();
+      showSnackbar({ message: "تم حذف صورة الحساب." });
+    } catch (error) {
+      setProfileError(
+        isNetworkError(error)
+          ? NETWORK_ERROR_MESSAGE
+          : error instanceof Error
+            ? error.message
+            : "تعذر حذف صورة الحساب.",
+      );
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
   function changeAvatar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -435,6 +467,7 @@ export function AccountPage() {
               <DashboardImage
                 alt={name}
                 src={avatarPreviewUrl || avatarUrl}
+                placeholderType="user"
                 width={112}
                 height={112}
                 sizes="112px"
@@ -458,6 +491,18 @@ export function AccountPage() {
               className="hidden"
               onChange={changeAvatar}
             />
+            {avatarUrl !== DEFAULT_AVATAR_SRC || selectedAvatar ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3 text-destructive hover:text-destructive"
+                disabled={profileSaving}
+                onClick={() => void removeAvatar()}
+              >
+                حذف الصورة
+              </Button>
+            ) : null}
             <h2 className="mt-4 text-xl font-bold">{name}</h2>
             <span className="mt-3 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
               <ShieldCheck className="size-3.5" />

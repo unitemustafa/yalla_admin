@@ -12,8 +12,10 @@ import {
 
 import type { BreadcrumbItem, NavGroup, PageKey } from "./types";
 
-export const logoSrc =
-  "https://bucket.ammenu.com/twins-cafe/tenantsthumbnails/1775081472381-tz4tlty8cn.webp";
+export const dashboardBrandLogos = {
+  light: "/images/branding/yalla-market-on-light.png",
+  dark: "/images/branding/yalla-market-on-dark.png",
+} as const;
 
 export const navGroups: NavGroup[] = [
   {
@@ -77,7 +79,11 @@ export const navGroups: NavGroup[] = [
             page: "delivery-zone",
           },
           { label: "المندوبين", href: "/delivery/couriers", page: "couriers" },
-          { label: "إضافة مندوب", href: "/delivery/couriers/new", page: "create-courier" },
+          {
+            label: "إضافة مندوب",
+            href: "/delivery/couriers/new",
+            page: "create-courier",
+          },
         ],
       },
       { label: "العملاء", icon: Users, href: "/customers", page: "customers" },
@@ -96,7 +102,10 @@ export const navGroups: NavGroup[] = [
   },
 ];
 
-const dashboardCrumb: BreadcrumbItem = { label: "لوحة التحكم", href: "/dashboard" };
+const dashboardCrumb: BreadcrumbItem = {
+  label: "لوحة التحكم",
+  href: "/dashboard",
+};
 
 export const breadcrumbByPage: Record<PageKey, BreadcrumbItem[]> = {
   overview: [{ label: "لوحة التحكم" }],
@@ -139,10 +148,7 @@ export const breadcrumbByPage: Record<PageKey, BreadcrumbItem[]> = {
     { label: "إنشاء عرض" },
   ],
   cities: [dashboardCrumb, { label: "المدن" }],
-  "delivery-zone": [
-    dashboardCrumb,
-    { label: "مناطق التوصيل" },
-  ],
+  "delivery-zone": [dashboardCrumb, { label: "مناطق التوصيل" }],
   couriers: [dashboardCrumb, { label: "التوصيل" }, { label: "المندوبين" }],
   "create-courier": [
     dashboardCrumb,
@@ -165,7 +171,11 @@ export function breadcrumbsFromPathname(
 }
 
 export function pageFromPathname(pathname: string): PageKey {
-  if (pathname === "/" || pathname === "/dashboard" || pathname === "/overview") {
+  if (
+    pathname === "/" ||
+    pathname === "/dashboard" ||
+    pathname === "/overview"
+  ) {
     return "overview";
   }
   if (pathname === "/items") return "items";
@@ -182,12 +192,17 @@ export function pageFromPathname(pathname: string): PageKey {
   if (pathname === "/cities") return "cities";
   if (pathname === "/delivery-zone") return "delivery-zone";
   if (pathname === "/delivery/couriers/new") return "create-courier";
-  if (pathname === "/delivery/couriers" || pathname.startsWith("/delivery/couriers/")) {
+  if (
+    pathname === "/delivery/couriers" ||
+    pathname.startsWith("/delivery/couriers/")
+  ) {
     return "couriers";
   }
-  if (pathname === "/customers" || pathname.startsWith("/customers/")) return "customers";
+  if (pathname === "/customers" || pathname.startsWith("/customers/"))
+    return "customers";
   if (pathname === "/account") return "account";
-  if (pathname === "/settings" || pathname.startsWith("/settings/")) return "settings";
+  if (pathname === "/settings" || pathname.startsWith("/settings/"))
+    return "settings";
   if (pathname === "/notifications") return "notifications";
   return "overview";
 }
@@ -232,6 +247,7 @@ export type AddonRow = {
   nameAr: string;
   price: string;
   category: string;
+  active?: boolean;
 };
 
 export const addonRows: AddonRow[] = [

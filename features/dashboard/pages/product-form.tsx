@@ -47,6 +47,7 @@ import {
 import { ProductLivePreview } from "../components/product-live-preview";
 import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
 import { DashboardImage } from "../dashboard-image";
+import { imageOrPlaceholder } from "../placeholders";
 import { AppSelect, Button, CurrencyText, Input, Switch } from "../primitives";
 import { useSnackbar } from "../snackbar";
 
@@ -1624,7 +1625,7 @@ export function ProductFormPage() {
             attributes={previewAttributes}
             description={description}
             discount={discount}
-            imageSrc={imagePreview}
+            imageSrc={imageOrPlaceholder(imagePreview, "product")}
             isAvailable={isAvailable}
             isPopular={isPopular}
             markets={markets}
@@ -1649,6 +1650,17 @@ export function ProductFormPage() {
                 multiple
                 onChange={selectImages}
                 type="file"
+              />
+              <DashboardImage
+                alt={name || "صورة المنتج"}
+                src={imagePreview}
+                placeholderType="product"
+                width={320}
+                height={220}
+                sizes="320px"
+                className="h-[220px] w-full rounded-lg"
+                imageClassName="object-contain p-2"
+                unoptimized={imagePreview?.startsWith("blob:")}
               />
               <ImagePlus className="size-6 text-primary" />
               <span className="text-sm font-semibold">
@@ -1686,6 +1698,7 @@ export function ProductFormPage() {
                         <DashboardImage
                           alt={`${name || "صورة المنتج"} ${index + 1}`}
                           src={src}
+                          placeholderType="product"
                           width={180}
                           height={112}
                           sizes="180px"

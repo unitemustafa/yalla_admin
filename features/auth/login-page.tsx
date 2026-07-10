@@ -21,7 +21,7 @@ import {
   Truck,
 } from "lucide-react";
 
-import { logoSrc } from "@/features/dashboard/data";
+import { dashboardBrandLogos } from "@/features/dashboard/data";
 import { applyDashboardCustomization } from "@/features/dashboard/customization";
 import { DashboardAutoTranslate } from "@/features/dashboard/auto-translate";
 import { DashboardI18nProvider } from "@/features/dashboard/i18n";
@@ -68,11 +68,7 @@ function cleanWhitespaceInput(event: FormEvent<HTMLInputElement>) {
   }
 }
 
-function LoginPageContent({
-  snapshot,
-}: {
-  snapshot: LoginDashboardSnapshot;
-}) {
+function LoginPageContent({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
   const router = useRouter();
   const { login } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
@@ -82,11 +78,23 @@ function LoginPageContent({
   const [sessionExpired, setSessionExpired] = useState(false);
   const loginBrandName = snapshot.branding.brandName || "يلا ماركت";
   const loginBrandTagline = snapshot.branding.brandTagline || "لوحة التحكم";
-  const loginLogo = snapshot.branding.logoUrl || logoSrc;
+  const loginLogo = snapshot.branding.logoUrl || dashboardBrandLogos.dark;
   const stats = [
-    { label: "طلبات اليوم", value: String(snapshot.todayOrders), icon: PackageCheck },
-    { label: "مدن متاحة", value: String(snapshot.availableCities), icon: MapPin },
-    { label: "مناطق توصيل", value: String(snapshot.deliveryZones), icon: Truck },
+    {
+      label: "طلبات اليوم",
+      value: String(snapshot.todayOrders),
+      icon: PackageCheck,
+    },
+    {
+      label: "مدن متاحة",
+      value: String(snapshot.availableCities),
+      icon: MapPin,
+    },
+    {
+      label: "مناطق توصيل",
+      value: String(snapshot.deliveryZones),
+      icon: Truck,
+    },
   ];
 
   useEffect(() => {
@@ -131,20 +139,18 @@ function LoginPageContent({
 
     try {
       const expiresAt = Number(
-        localStorage.getItem(
-          AUTH_STORAGE_KEYS.sessionExpiresAt,
-        ),
+        localStorage.getItem(AUTH_STORAGE_KEYS.sessionExpiresAt),
       );
       shouldShow =
         shouldShow ||
         localStorage.getItem(AUTH_STORAGE_KEYS.sessionExpiredNotice) ===
           "true" ||
-        (Number.isFinite(expiresAt) && expiresAt > 0 && expiresAt <= Date.now());
+        (Number.isFinite(expiresAt) &&
+          expiresAt > 0 &&
+          expiresAt <= Date.now());
       localStorage.removeItem(AUTH_STORAGE_KEYS.sessionExpiredNotice);
       if (expiresAt <= Date.now()) {
-        localStorage.removeItem(
-          AUTH_STORAGE_KEYS.sessionExpiresAt,
-        );
+        localStorage.removeItem(AUTH_STORAGE_KEYS.sessionExpiresAt);
       }
     } catch {
       // The login screen remains usable when browser storage is unavailable.
@@ -171,8 +177,8 @@ function LoginPageContent({
         isNetworkError(caughtError)
           ? NETWORK_ERROR_MESSAGE
           : caughtError instanceof Error
-          ? caughtError.message
-          : "تعذر تسجيل الدخول. حاول مرة أخرى.",
+            ? caughtError.message
+            : "تعذر تسجيل الدخول. حاول مرة أخرى.",
       );
       setPending(false);
       return;
@@ -212,7 +218,10 @@ function LoginPageContent({
             >
               انتهت الجلسة
             </h2>
-            <h2 id="session-expired-title" className="mt-4 text-2xl font-extrabold">
+            <h2
+              id="session-expired-title"
+              className="mt-4 text-2xl font-extrabold"
+            >
               انتهت الجلسة
             </h2>
             <p className="mt-3 leading-7 text-muted-foreground">
@@ -220,8 +229,8 @@ function LoginPageContent({
               &quot;افتكرني&quot; للاحتفاظ بتسجيل الدخول لمدة أطول.
             </p>
             <p className="hidden">
-              سجّل الدخول من جديد للمتابعة. فعّل «افتكرني» للاحتفاظ
-              بتسجيل الدخول لمدة 30 يومًا حتى بعد غلق التاب.
+              سجّل الدخول من جديد للمتابعة. فعّل «افتكرني» للاحتفاظ بتسجيل
+              الدخول لمدة 30 يومًا حتى بعد غلق التاب.
             </p>
             <button
               type="button"
@@ -229,9 +238,7 @@ function LoginPageContent({
               onClick={() => setSessionExpired(false)}
             >
               <span>تسجيل الدخول</span>
-              <span className="hidden">
-              تسجيل الدخول
-              </span>
+              <span className="hidden">تسجيل الدخول</span>
             </button>
           </div>
         </div>
@@ -318,7 +325,6 @@ function LoginPageContent({
               </div>
             </div>
           </div>
-
         </section>
 
         <section className="flex h-dvh items-center justify-center overflow-hidden px-5 py-8 sm:px-8 lg:px-12">
@@ -334,7 +340,9 @@ function LoginPageContent({
               />
               <div>
                 <p className="text-xl font-bold">{loginBrandName}</p>
-                <p className="text-sm text-muted-foreground">{loginBrandTagline}</p>
+                <p className="text-sm text-muted-foreground">
+                  {loginBrandTagline}
+                </p>
               </div>
             </div>
 
@@ -346,7 +354,8 @@ function LoginPageContent({
                 أهلا بيك، كمّل إدارة متجرك
               </h2>
               <p className="mt-3 text-base leading-7 text-muted-foreground">
-                ادخل بياناتك للوصول للطلبات، المنتجات، الفروڡ والتقارير من لوحة واحدة.
+                ادخل بياناتك للوصول للطلبات، المنتجات، الفروڡ والتقارير من لوحة
+                واحدة.
               </p>
             </div>
 
@@ -388,10 +397,14 @@ function LoginPageContent({
                     onClick={() => setPasswordVisible((visible) => !visible)}
                     className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     aria-label={
-                      passwordVisible ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"
+                      passwordVisible
+                        ? "إخفاء كلمة المرور"
+                        : "إظهار كلمة المرور"
                     }
                     title={
-                      passwordVisible ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"
+                      passwordVisible
+                        ? "إخفاء كلمة المرور"
+                        : "إظهار كلمة المرور"
                     }
                   >
                     {passwordVisible ? (
@@ -448,11 +461,7 @@ function LoginPageContent({
   );
 }
 
-export function LoginPage({
-  snapshot,
-}: {
-  snapshot: LoginDashboardSnapshot;
-}) {
+export function LoginPage({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
   return (
     <DashboardI18nProvider>
       <DashboardAutoTranslate>

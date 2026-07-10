@@ -451,6 +451,7 @@ export function ProductLivePreview({
               {imageSrc ? (
                 <DashboardImage
                   alt={productTitle}
+                  placeholderType="product"
                   className="h-full w-full bg-transparent"
                   height={226}
                   imageClassName="object-contain"

@@ -250,6 +250,7 @@ function CourierAvatar({
       {courier.photoUrl ? (
         <DashboardImage
           src={courier.photoUrl}
+          placeholderType="courier"
           alt={courier.name}
           width={96}
           height={96}
@@ -1195,6 +1196,7 @@ function CourierPhotoPicker({
           {value ? (
             <DashboardImage
               src={value}
+              placeholderType="courier"
               alt=""
               width={160}
               height={160}

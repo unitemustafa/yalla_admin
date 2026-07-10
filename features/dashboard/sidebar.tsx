@@ -18,7 +18,7 @@ import {
   User,
 } from "lucide-react";
 
-import { logoSrc, navGroups } from "./data";
+import { dashboardBrandLogos, navGroups } from "./data";
 import { DashboardImage } from "./dashboard-image";
 import { useDashboardCustomization } from "./customization";
 import { useSidebarGroups } from "./hooks";
@@ -100,18 +100,18 @@ export function Sidebar({
   const [iconTooltip, setIconTooltip] = useState<FloatingNavState | null>(null);
   const brandName = customization.brandName || t("brand.name");
   const branchName = customization.branchName || t("branch.default");
-  const brandLogo = customization.logoDataUrl || logoSrc;
   const userFullName =
     [user?.first_name, user?.last_name].filter(Boolean).join(" ") ||
     user?.username ||
     currentUser.fullName;
   const userAvatar = user?.avatar_url?.trim();
-  const userInitials = userFullName
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("") || currentUser.initials;
+  const userInitials =
+    userFullName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || currentUser.initials;
   const [theme, setTheme] = useState<ThemeChoice>(() => {
     if (typeof window === "undefined") {
       return "dark";
@@ -124,6 +124,27 @@ export function Sidebar({
       ? storedTheme
       : "dark";
   });
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => {
+    if (typeof window === "undefined") return "dark";
+    return document.documentElement.classList.contains("dark")
+      ? "dark"
+      : "light";
+  });
+  const brandLogo =
+    customization.logoDataUrl || dashboardBrandLogos[resolvedTheme];
+
+  useEffect(() => {
+    function syncResolvedTheme() {
+      setResolvedTheme(
+        document.documentElement.classList.contains("dark") ? "dark" : "light",
+      );
+    }
+
+    syncResolvedTheme();
+    window.addEventListener(themeChangeEvent, syncResolvedTheme);
+    return () =>
+      window.removeEventListener(themeChangeEvent, syncResolvedTheme);
+  }, []);
 
   useEffect(() => {
     if (!branchMenuOpen && !profileMenuOpen && !collapsedGroupOpen) {
@@ -180,7 +201,9 @@ export function Sidebar({
   }
 
   function groupLabel(index: number) {
-    return index === 0 ? t("sidebar.group.menu") : t("sidebar.group.management");
+    return index === 0
+      ? t("sidebar.group.menu")
+      : t("sidebar.group.management");
   }
 
   function navItemLabel(item: (typeof navGroups)[number]["items"][number]) {
@@ -276,13 +299,15 @@ export function Sidebar({
           title={iconOnly ? brandName : undefined}
           className={cn(
             "flex h-12 items-center gap-2 overflow-hidden rounded-md p-1.5 text-sm font-medium transition-colors hover:bg-sidebar-accent",
-            branchMenuOpen && "bg-sidebar-accent text-sidebar-accent-foreground",
+            branchMenuOpen &&
+              "bg-sidebar-accent text-sidebar-accent-foreground",
             iconOnly ? "w-12 justify-center" : "w-full",
           )}
         >
           <DashboardImage
             alt={brandName}
             src={brandLogo}
+            placeholderType="store"
             width={32}
             height={32}
             priority
@@ -451,7 +476,9 @@ export function Sidebar({
                                 ? collapsedGroupOpen?.label === item.label
                                 : undefined
                           }
-                          aria-haspopup={iconOnly && hasChildren ? "menu" : undefined}
+                          aria-haspopup={
+                            iconOnly && hasChildren ? "menu" : undefined
+                          }
                           disabled={disabled}
                           className={cn(
                             "flex h-8 items-center rounded-md text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
@@ -523,7 +550,9 @@ export function Sidebar({
                           role="menu"
                           className={cn(
                             "fixed z-50 w-60 -translate-y-1/2 rounded-lg border border-sidebar-border bg-sidebar p-1 text-sidebar-foreground shadow-2xl",
-                            direction === "rtl" ? "right-[72px]" : "left-[72px]",
+                            direction === "rtl"
+                              ? "right-[72px]"
+                              : "left-[72px]",
                           )}
                           style={{ top: collapsedGroupOpen.top }}
                         >
@@ -615,19 +644,14 @@ export function Sidebar({
             )}
           >
             <div className="mb-1 flex items-center gap-3 rounded-md bg-sidebar-accent/60 px-3 py-2">
-              {userAvatar ? (
-                <DashboardImage
-                  alt={userFullName}
-                  src={userAvatar}
-                  width={36}
-                  height={36}
-                  className="size-9 rounded-lg"
-                />
-              ) : (
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-semibold">
-                  {userInitials}
-                </span>
-              )}
+              <DashboardImage
+                alt={userFullName}
+                src={userAvatar}
+                placeholderType="user"
+                width={36}
+                height={36}
+                className="size-9 rounded-lg"
+              />
               <span className="min-w-0 flex-1 text-start">
                 <span className="block truncate text-sm font-semibold">
                   {userFullName}
@@ -774,23 +798,19 @@ export function Sidebar({
           title={iconOnly ? userFullName : undefined}
           className={cn(
             "flex h-12 items-center gap-2 rounded-md p-2 text-start transition-colors hover:bg-sidebar-accent",
-            profileMenuOpen && "bg-sidebar-accent text-sidebar-accent-foreground",
+            profileMenuOpen &&
+              "bg-sidebar-accent text-sidebar-accent-foreground",
             iconOnly ? "w-12 justify-center" : "w-full",
           )}
         >
-          {userAvatar ? (
-            <DashboardImage
-              alt={userFullName}
-              src={userAvatar}
-              width={32}
-              height={32}
-              className="size-8 rounded-lg"
-            />
-          ) : (
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-semibold">
-              {userInitials}
-            </span>
-          )}
+          <DashboardImage
+            alt={userFullName}
+            src={userAvatar}
+            placeholderType="user"
+            width={32}
+            height={32}
+            className="size-8 rounded-lg"
+          />
           {!iconOnly ? (
             <>
               <span className="flex min-w-0 flex-1 flex-col items-start justify-start text-sm leading-tight">

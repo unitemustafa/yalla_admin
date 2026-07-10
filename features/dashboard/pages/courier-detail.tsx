@@ -384,7 +384,8 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div className="flex min-w-0 items-center gap-4">
           <DashboardImage
-            src={courier.avatar_url || "/default-user-avatar.svg"}
+            src={courier.avatar_url}
+            placeholderType="courier"
             alt={fullNameFromBackendUser(courier)}
             width={72}
             height={72}
