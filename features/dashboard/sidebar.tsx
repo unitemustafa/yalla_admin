@@ -105,12 +105,6 @@ export function Sidebar({
     user?.username ||
     currentUser.fullName;
   const userAvatar = user?.avatar_url?.trim();
-    userFullName
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase())
-      .join("") || currentUser.initials;
   const [theme, setTheme] = useState<ThemeChoice>(() => {
     if (typeof window === "undefined") {
       return "dark";
