@@ -9,6 +9,12 @@ export const DASHBOARD_PLACEHOLDERS = {
   courier: "/images/placeholders/default_courier.png",
 } as const;
 
+export function userAvatarPlaceholder(gender: string | null | undefined) {
+  return gender?.trim().toLowerCase() === "female"
+    ? DASHBOARD_PLACEHOLDERS.customer
+    : DASHBOARD_PLACEHOLDERS.user;
+}
+
 export type DashboardPlaceholderType = keyof typeof DASHBOARD_PLACEHOLDERS;
 
 export function imageOrPlaceholder(

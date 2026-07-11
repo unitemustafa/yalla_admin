@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Edit3, ImagePlus, LoaderCircle, MapPin, Plus, RefreshCw, Search, Store, Trash2, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Edit3, ImagePlus, LoaderCircle, MapPin, Plus, RefreshCw, Search, Store, Trash2, X } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { AppSelect, Badge, Button, Card, DataTable, Input, PageTitle, Switch } from "../primitives";
@@ -13,6 +13,7 @@ import {
 } from "../markets-api";
 import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
+import { cn } from "@/lib/utils";
 
 type Classification = { id: number; name: string; classification_type?: string };
 type MarketScope = "general" | "service_city";
@@ -203,8 +204,10 @@ function MarketDialog({
   const [description, setDescription] = useState(market?.description ?? "");
   const [classificationId, setClassificationId] = useState(String(market?.classification?.id ?? classifications[0]?.id ?? ""));
   const [showInGeneral, setShowInGeneral] = useState(initialScope === "general");
-  const [showInServiceCities, setShowInServiceCities] = useState(() => Boolean(market && marketServiceCityIds(market).length));
-  const [selectedServiceCityIds, setSelectedServiceCityIds] = useState<number[]>(() => market ? marketServiceCityIds(market) : []);
+  const [showInServiceCities, setShowInServiceCities] = useState(initialScope === "service_city");
+  const [selectedServiceCityIds, setSelectedServiceCityIds] = useState<number[]>(() =>
+    initialScope === "service_city" && market ? marketServiceCityIds(market).slice(0, 1) : [],
+  );
   const [imagePreview, setImagePreview] = useState(market?.image ?? "");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageName, setImageName] = useState(market?.image ? "صورة المحل الحالية" : "");
@@ -236,14 +239,17 @@ function MarketDialog({
   }, [market, serviceCities]);
 
   function setGeneralVisibility(enabled: boolean) {
-    if (!enabled && !showInServiceCities) return;
     setShowInGeneral(enabled);
+    if (enabled) {
+      setShowInServiceCities(false);
+      setSelectedServiceCityIds([]);
+    }
     setError("");
   }
 
   function setServiceCityVisibility(enabled: boolean) {
-    if (!enabled && !showInGeneral) return;
     setShowInServiceCities(enabled);
+    if (enabled) setShowInGeneral(false);
     if (!enabled) setSelectedServiceCityIds([]);
     setError("");
   }
@@ -278,7 +284,7 @@ function MarketDialog({
       return;
     }
 
-    setSelectedServiceCityIds((current) => uniqueNumbers([...current, cityId]));
+    setSelectedServiceCityIds([cityId]);
   }
 
   async function submit(event: React.FormEvent) {
@@ -297,6 +303,10 @@ function MarketDialog({
       setError("اختر نطاق ظهور المحل");
       return;
     }
+    if (showInGeneral && showInServiceCities) {
+      setError("اختر العام أو مدينة واحدة فقط.");
+      return;
+    }
 
     const basePayload = {
       classification_id: Number(classificationId),
@@ -304,9 +314,10 @@ function MarketDialog({
       description: description.trim(),
       scope: showInGeneral ? "general" as const : "service_city" as const,
       delivery_area_ids: [],
+      service_city_ids: [] as number[],
     };
 
-    async function saveMarket(payload: typeof basePayload & { service_city_ids?: number[] }) {
+    async function saveMarket(payload: typeof basePayload) {
       const path = market ? `home/markets/${market.id}/` : "home/markets/";
       const method = market ? "PATCH" : "POST";
       const response = imageFile
@@ -319,7 +330,7 @@ function MarketDialog({
               formData.set("description", payload.description);
               formData.set("scope", payload.scope);
               formData.set("delivery_area_ids", "[]");
-              payload.service_city_ids?.forEach((serviceCityId) => {
+              payload.service_city_ids.forEach((serviceCityId) => {
                 formData.append("service_city_ids", String(serviceCityId));
               });
               formData.set("image", imageFile);
@@ -354,6 +365,10 @@ function MarketDialog({
     const serviceCityIds = uniqueNumbers(selectedServiceCityIds);
     if (!serviceCityIds.length) {
       setError("اختر مدينة واحدة على الأقل");
+      return;
+    }
+    if (serviceCityIds.length > 1) {
+      setError("يمكن اختيار مدينة واحدة فقط للمحل.");
       return;
     }
 
@@ -392,42 +407,62 @@ function MarketDialog({
             <label className="grid gap-2 text-sm font-semibold">اسم المحل *<Input value={name} onChange={(event) => setName(event.target.value)} /></label>
             <label className="grid gap-2 text-sm font-semibold">فئة المحل *<AppSelect value={classificationId} onValueChange={setClassificationId} options={classifications.map((item) => ({ value: String(item.id), label: `${item.name} - ${classificationTypeLabel(item.classification_type)}` }))} /></label>
             <label className="grid gap-2 text-sm font-semibold sm:col-span-2">وصف المحل<textarea value={description} onChange={(event) => setDescription(event.target.value)} className="min-h-24 resize-none rounded-md border border-border bg-input px-3 py-2 text-sm shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/40 focus:ring-2 focus:ring-primary/15" placeholder="اكتب وصفًا مختصرًا للمحل" /></label>
-            <label className="grid gap-2 text-sm font-semibold sm:col-span-2">
-              نطاق ظهور المحل *
+            <div className="grid gap-3 sm:col-span-2">
+              <div className="text-sm font-medium">نطاق ظهور المحل *</div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <button type="button" onClick={() => setGeneralVisibility(!showInGeneral)} className={`flex h-16 items-center justify-between rounded-md border px-4 text-sm font-bold ${showInGeneral ? "border-primary bg-primary/10 text-foreground" : "bg-background text-muted-foreground hover:bg-accent"}`}><span>يظهر في العام</span><Switch checked={showInGeneral} onCheckedChange={setGeneralVisibility} /></button>
-                <button type="button" onClick={() => setServiceCityVisibility(!showInServiceCities)} className={`flex h-16 items-center justify-between rounded-md border px-4 text-sm font-bold ${showInServiceCities ? "border-primary bg-primary/10 text-foreground" : "bg-background text-muted-foreground hover:bg-accent"}`}><span>يظهر في المدن</span><Switch checked={showInServiceCities} onCheckedChange={setServiceCityVisibility} /></button>
+                <label className="flex min-h-16 cursor-pointer items-center justify-between gap-3 rounded-md border bg-background px-4 py-3 shadow-sm transition hover:border-primary/40">
+                  <span className="block text-sm font-semibold">يظهر في العام</span>
+                  <Switch checked={showInGeneral} disabled={showInServiceCities} onCheckedChange={setGeneralVisibility} />
+                </label>
+                <label className="flex min-h-16 cursor-pointer items-center justify-between gap-3 rounded-md border bg-background px-4 py-3 shadow-sm transition hover:border-primary/40">
+                  <span className="block text-sm font-semibold">يظهر في المدن</span>
+                  <Switch checked={showInServiceCities} disabled={showInGeneral} onCheckedChange={setServiceCityVisibility} />
+                </label>
               </div>
-            </label>
+            </div>
             {showInServiceCities ? (
-            <div className="grid gap-2 sm:col-span-2">
-              <div className="rounded-lg border bg-muted/10 p-3">
-                <p className="mb-3 text-sm font-semibold">اختر المدن التي يظهر فيها المحل</p>
+            <div className="grid gap-3 sm:col-span-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-medium">المدن</div>
+                <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold leading-none text-blue-700 dark:bg-blue-500/15 dark:text-blue-200">
+                  {selectedServiceCityIds.length} مدينة
+                </span>
+              </div>
                 {serviceCitiesLoading ? (
-                  <div className="flex min-h-20 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground"><LoaderCircle className="me-2 size-4 animate-spin" />جاري تحميل المدن...</div>
+                  <div className="flex h-14 items-center justify-center rounded-md border bg-muted/20 text-xs font-semibold text-muted-foreground"><LoaderCircle className="me-2 size-4 animate-spin" />جاري تحميل المدن...</div>
                 ) : serviceCitiesError ? (
-                  <div className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><span>{serviceCitiesError}</span><Button type="button" variant="outline" size="sm" onClick={onReloadServiceCities}>إعادة المحاولة</Button></div>
+                  <div className="flex min-h-14 flex-col items-center justify-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><span>{serviceCitiesError}</span><Button type="button" variant="outline" size="sm" onClick={onReloadServiceCities}>إعادة المحاولة</Button></div>
                 ) : availableServiceCities.length ? (
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {availableServiceCities.map((city) => {
                       const selected = selectedServiceCityIds.includes(city.id);
                       return (
                         <button
                           key={city.id}
                           type="button"
+                          aria-pressed={selected}
+                          disabled={selectedServiceCityIds.length > 0 && !selected}
                           onClick={() => toggleServiceCity(city.id)}
-                          className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm font-semibold ${selected ? "border-primary bg-primary/10 text-primary" : "bg-background hover:bg-accent"}`}
+                          className={cn(
+                            "flex h-14 w-full items-center justify-between gap-3 rounded-md border px-3 text-sm font-semibold shadow-sm transition",
+                            selected
+                              ? "border-primary bg-primary/10 text-primary"
+                              : selectedServiceCityIds.length > 0
+                                ? "cursor-not-allowed border-border bg-muted/40 text-muted-foreground opacity-60"
+                                : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-accent",
+                          )}
                         >
-                          <span>{serviceCityName(city)}</span>
-                          <span className="size-4 rounded border text-center text-[10px]">{selected ? "✓" : ""}</span>
+                          <span className="truncate">{serviceCityName(city)}</span>
+                          <span className={cn("grid size-5 shrink-0 place-items-center rounded-full border", selected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-muted/40 text-transparent")}>
+                            <CheckCircle2 className="size-3.5" />
+                          </span>
                         </button>
                       );
                     })}
                   </div>
                 ) : (
-                  <div className="rounded-md border border-dashed bg-background px-3 py-4 text-center text-sm text-muted-foreground">لا توجد مدن متاحة.</div>
+                  <div className="flex h-14 items-center justify-center rounded-md border bg-muted/20 text-xs font-semibold text-muted-foreground sm:col-span-2 lg:col-span-3 xl:col-span-4">لا توجد مدن خدمة نشطة.</div>
                 )}
-              </div>
             </div>
             ) : null}
             {error ? <p className="flex gap-2 text-sm text-destructive sm:col-span-2"><AlertCircle className="size-4" />{error}</p> : null}
@@ -621,6 +656,25 @@ export function ShopsPage() {
       <div className="mt-6 grid gap-3 md:grid-cols-3">
         {[["إجمالي المحلات", markets.length, Store], ["المحلات النشطة", markets.filter((item) => item.status === "active").length, Store], ["مدن الظهور", new Set(markets.flatMap((item) => marketServiceCityIds(item))).size, MapPin]].map(([label, value, Icon]) => { const MetricIcon = Icon as typeof Store; return <Card key={label as string} className="h-[80px]"><div className="flex h-full items-center gap-3 px-5"><span className="rounded-full bg-primary/10 p-3 text-primary"><MetricIcon className="size-5" /></span><div><p className="text-xs text-muted-foreground">{label as string}</p><p className="text-xl font-bold">{value as number}</p></div></div></Card>; })}
       </div>
+      {!loading && !error && markets.length === 0 ? (
+        <Card className="mt-6 flex min-h-[420px] items-center justify-center bg-card shadow">
+          <div className="mx-auto flex w-full max-w-[520px] flex-col items-center px-6 py-12 text-center">
+            <div className="flex size-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
+              <Store className="size-8" />
+            </div>
+            <h2 className="mt-6 text-xl font-semibold leading-7">لا توجد محلات حتى الآن</h2>
+            <p className="mt-2 max-w-[430px] text-sm leading-6 text-muted-foreground">
+              سيظهر هنا أول محل تنشئه وتربطه بمدن الظهور.
+            </p>
+            <div className="mt-6 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row">
+              <Button type="button" className="h-10 px-4" onClick={() => setDialogMarket(null)}>
+                <Plus className="size-4" />
+                إنشاء أول محل
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ) : (
       <Card className="mt-6 overflow-hidden">
         <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
           <div><h2 className="font-semibold">كل المحلات</h2><p className="text-xs text-muted-foreground">المنتجات ترث نطاق الظهور من المحل.</p></div>
@@ -634,6 +688,7 @@ export function ShopsPage() {
           <div key="actions" className="flex min-w-[225px] items-center justify-end gap-2"><div className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-2 text-xs font-semibold"><span>{market.status === "active" ? "مفعلة" : "معطلة"}</span><Switch checked={market.status === "active"} onCheckedChange={(checked) => void toggleMarketActive(market, checked)} aria-label={`تفعيل المحل ${market.name}`} /></div><MarketActionButton label={`تعديل ${market.name}`} onClick={() => setDialogMarket(market)}><Edit3 className="size-4" /></MarketActionButton><MarketActionButton tone="danger" label={`حذف ${market.name}`} onClick={() => setDeleteMarket(market)}><Trash2 className="size-4" /></MarketActionButton></div>,
         ])} />}
       </Card>
+      )}
       {deleteMarket ? <ConfirmDeleteDialog title="حذف المحل" description={`هل تريد حذف المحل ${deleteMarket.name}؟`} busy={false} onCancel={() => setDeleteMarket(null)} onConfirm={() => remove(deleteMarket)} /> : null}
       {dialogMarket !== undefined ? (
         classifications.length ? (

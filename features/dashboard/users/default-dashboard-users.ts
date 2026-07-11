@@ -5,6 +5,7 @@ export type DashboardUser = {
   phone: string;
   email: string;
   avatar: string;
+  gender?: string;
   role: string;
   branch: string;
   location: string;
@@ -18,6 +19,7 @@ export type DashboardUser = {
   active?: boolean;
   notes: string;
   hasPassword?: boolean;
+  hasSignedIn?: boolean;
   isLocal?: boolean;
 };
 
@@ -37,7 +39,7 @@ export const dashboardUsers: DashboardUser[] = [
     orders: 1,
     totalSpent: "250.00 EGP",
     lastOrder: "ORD-20260524-D2W0RJ",
-    status: "نشط",
+    status: "مفعل",
     notes: "مستخدم افتراضي جاهز لاختبار بيانات لوحة التحكم.",
   },
 ];

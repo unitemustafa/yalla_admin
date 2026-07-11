@@ -292,16 +292,6 @@ function CityDialog({
                     onChange={(event) => update("radiusKm", event.target.value)}
                   />
                 </label>
-                <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-                  <div>
-                    <p className="text-sm font-semibold">المدينة مفعّلة</p>
-                    <p className="text-xs text-muted-foreground">تظهر داخل تطبيق العميل والاختيارات.</p>
-                  </div>
-                  <Switch
-                    checked={draft.active}
-                    onCheckedChange={(checked) => update("active", checked)}
-                  />
-                </div>
                 <Button type="button" variant="outline" onClick={useCurrentLocation} disabled={locating} className="h-11">
                   {locating ? <LoaderCircle className="size-4 animate-spin" /> : <MapPin className="size-4" />}
                   {locating ? "جاري تحديد الموقع..." : "استخدام موقعي الحالي"}

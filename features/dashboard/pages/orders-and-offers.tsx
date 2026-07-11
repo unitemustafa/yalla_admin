@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertCircle,
   ArrowUpDown,
   Banknote,
   Calendar,
@@ -21,6 +22,7 @@ import {
   PlayCircle,
   Plus,
   RefreshCw,
+  RefreshCcw,
   Search,
   ShoppingCart,
   Tag,
@@ -2949,7 +2951,7 @@ const offerTypeOptions = [
   { label: "فلاش", icon: Zap, accent: "text-amber-400", bg: "bg-amber-500/15", disabled: false },
   { label: "خصم", icon: Percent, accent: "text-rose-400", bg: "bg-rose-500/15", disabled: false },
   { label: "توصيل", icon: Truck, accent: "text-emerald-400", bg: "bg-emerald-500/15", disabled: false },
-  { label: "إعلان", icon: Megaphone, accent: "text-fuchsia-400", bg: "bg-fuchsia-500/15", disabled: true },
+  { label: "إعلان", icon: Megaphone, accent: "text-fuchsia-400", bg: "bg-fuchsia-500/15", disabled: false },
 ] as const satisfies readonly {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -3361,6 +3363,7 @@ export function OffersPage() {
   const { cities: availableServiceCities } = useServiceCities();
   const [offers, setOffers] = useState<OfferCard[]>([]);
   const [offersLoading, setOffersLoading] = useState(true);
+  const [offersError, setOffersError] = useState<string | null>(null);
   const [offerDeleteTarget, setOfferDeleteTarget] = useState<OfferCard | null>(null);
   const pendingOfferDeletionIdsRef = useRef<Set<string>>(new Set());
   const [now, setNow] = useState<number | null>(null);
@@ -3431,6 +3434,7 @@ export function OffersPage() {
 
   const reloadOffers = useCallback(async () => {
     setOffersLoading(true);
+    setOffersError(null);
 
     try {
       const response = await apiFetch(adminApiPaths.offers);
@@ -3442,8 +3446,10 @@ export function OffersPage() {
           .filter((offer) => !pendingOfferDeletionIdsRef.current.has(offer.id)),
       );
     } catch (error) {
+      const message = error instanceof Error ? error.message : "تعذر تحميل العروض.";
+      setOffersError(message);
       showSnackbar({
-        message: error instanceof Error ? error.message : "تعذر تحميل العروض.",
+        message,
         tone: "danger",
       });
     } finally {
@@ -3552,9 +3558,9 @@ export function OffersPage() {
             </Button>
             <Link
               href="/offers/create"
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90"
             >
-              <Plus className="size-4" />
+              <CheckCircle2 className="size-4" />
               إنشاء عرض
             </Link>
           </div>
@@ -3608,9 +3614,39 @@ export function OffersPage() {
         <Card className="mt-6 flex min-h-52 items-center justify-center">
           <Clock className="size-6 animate-spin text-primary" />
         </Card>
+      ) : offersError ? (
+        <Card className="mt-6 border-destructive/30 bg-destructive/10 shadow-none">
+          <div role="alert" className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex gap-3">
+              <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-destructive/15 text-destructive">
+                <AlertCircle className="size-4" />
+              </div>
+              <div>
+                <div className="font-semibold text-foreground">تعذر تحميل العروض</div>
+                <p className="mt-1 text-sm text-muted-foreground">{offersError}</p>
+              </div>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => void reloadOffers()} className="self-start sm:self-center">
+              <RefreshCcw className="size-4" />
+              إعادة المحاولة
+            </Button>
+          </div>
+        </Card>
       ) : offers.length === 0 ? (
-        <Card className="mt-6 p-10 text-center text-sm text-muted-foreground">
-          لا توجد عروض.
+        <Card className="mt-6 flex min-h-[420px] items-center justify-center bg-card shadow">
+          <div className="mx-auto flex w-full max-w-[520px] flex-col items-center px-6 py-12 text-center">
+            <div className="flex size-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
+              <Tag className="size-8" />
+            </div>
+            <h2 className="mt-6 text-xl font-semibold leading-7">لا توجد عروض حتى الآن</h2>
+            <p className="mt-2 max-w-[430px] text-sm leading-6 text-muted-foreground">سيظهر هنا أول عرض تنشئه للعملاء في تطبيق يلا ماركت.</p>
+            <div className="mt-6 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row">
+              <Link href="/offers/create" className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90">
+                <Plus className="size-4" />
+                إنشاء أول عرض
+              </Link>
+            </div>
+          </div>
         </Card>
       ) : filteredOffers.length === 0 ? (
         <Card className="mt-6 p-10 text-center text-sm text-muted-foreground">
@@ -4859,8 +4895,10 @@ export function CreateOfferPage() {
   const [flashProductIds, setFlashProductIds] = useState<string[]>([]);
   const [flashDiscountPercent, setFlashDiscountPercent] = useState("30");
   const [deliveryProductId, setDeliveryProductId] = useState("");
-  const [announcementLinkType, setAnnouncementLinkType] = useState<"link" | "product">("link");
-  const [announcementProductId, setAnnouncementProductId] = useState("");
+  const [announcementUrl, setAnnouncementUrl] = useState("");
+  const [announcementCtaLabel, setAnnouncementCtaLabel] = useState("تسوق الآن");
+  const [announcementPriority, setAnnouncementPriority] = useState("0");
+  const [announcementDisplaySeconds, setAnnouncementDisplaySeconds] = useState("15");
   const [packageDiscountPercent, setPackageDiscountPercent] = useState("15");
   const [bundleItems, setBundleItems] = useState<BundleLine[]>([]);
   const [packageProductsOpen, setPackageProductsOpen] = useState(false);
@@ -4972,7 +5010,6 @@ export function CreateOfferPage() {
     setDiscountProductId("");
     setFlashProductIds([]);
     setDeliveryProductId("");
-    setAnnouncementProductId("");
     setBundleItems([]);
     setPackageProductsOpen(false);
     setPackageProductSearchOpen(false);
@@ -4989,6 +5026,10 @@ export function CreateOfferPage() {
 
   function setOfferGeneralEnabled(enabled: boolean) {
     setOfferAppearsInGeneral(enabled);
+    if (enabled) {
+      setOfferAppearsInServiceCity(false);
+      setSelectedOfferCityIds([]);
+    }
     clearOfferProductSelectionWithReason();
   }
 
@@ -4999,6 +5040,9 @@ export function CreateOfferPage() {
     }
 
     setOfferAppearsInServiceCity(enabled);
+    if (enabled) {
+      setOfferAppearsInGeneral(false);
+    }
     if (!enabled) {
       setSelectedOfferCityIds([]);
     }
@@ -5015,8 +5059,8 @@ export function CreateOfferPage() {
   function changeOfferCity(cityId: string) {
     setSelectedOfferCityIds((currentCityIds) =>
       currentCityIds.includes(cityId)
-        ? currentCityIds.filter((currentCityId) => currentCityId !== cityId)
-        : [...currentCityIds, cityId],
+        ? []
+        : [cityId],
     );
     clearOfferProductSelectionWithReason();
   }
@@ -5099,8 +5143,7 @@ export function CreateOfferPage() {
       return item ? [item] : [];
     }
     if (selectedType === "إعلان") {
-      const item = offerProducts.find((currentItem) => currentItem.id === announcementProductId);
-      return item ? [item] : [];
+      return [];
     }
     const item = offerProducts.find((currentItem) => currentItem.id === discountProductId);
     return item ? [item] : [];
@@ -5116,11 +5159,19 @@ export function CreateOfferPage() {
       showSnackbar({ message: "اختر الظهور في العام أو المدن واحدة على الأقل.", tone: "danger" });
       return;
     }
+    if (offerAppearsInGeneral && offerAppearsInServiceCity) {
+      showSnackbar({ message: "اختر العام أو مدينة واحدة فقط.", tone: "danger" });
+      return;
+    }
     if (offerAppearsInServiceCity && !selectedOfferCityIds.length) {
       showSnackbar({ message: "اختر المدن", tone: "danger" });
       return;
     }
-    if (!marketsForScope.length) {
+    if (selectedOfferCityIds.length > 1) {
+      showSnackbar({ message: "يمكن اختيار مدينة واحدة فقط للعرض.", tone: "danger" });
+      return;
+    }
+    if (selectedType !== "إعلان" && !marketsForScope.length) {
       showSnackbar({
         message:
           offerAppearsInGeneral && marketsForScope.length === 0
@@ -5136,15 +5187,20 @@ export function CreateOfferPage() {
       showSnackbar({ message: "نوع العرض مطلوب", tone: "danger" });
       return;
     }
-    if (offerTypeOptions.find((option) => option.label === selectedType)?.disabled) {
-      showSnackbar({ message: "نوع الإعلان معطل حاليا.", tone: "danger" });
-      return;
+    if (selectedType === "إعلان") {
+      try {
+        const url = new URL(announcementUrl.trim());
+        if (url.protocol !== "https:") throw new Error();
+      } catch {
+        showSnackbar({ message: "أدخل رابط HTTPS خارجيًا صحيحًا للإعلان.", tone: "danger" });
+        return;
+      }
     }
     const selectedItems = selectedOfferItems();
     const productIds = Array.from(
       new Set(selectedItems.map((item) => Number(item.id)).filter(Number.isFinite)),
     );
-    if (!productIds.length) {
+    if (selectedType !== "إعلان" && !productIds.length) {
       showSnackbar({ message: "اختر منتجًا واحدًا على الأقل", tone: "danger" });
       return;
     }
@@ -5155,15 +5211,15 @@ export function CreateOfferPage() {
           .filter((marketId): marketId is string => Boolean(marketId)),
       ),
     );
-    if (selectedMarketIds.length !== 1) {
+    if (selectedType !== "إعلان" && selectedMarketIds.length !== 1) {
       showSnackbar({ message: "اختار منتجات العرض من نفس المحل.", tone: "danger" });
       return;
     }
-    const inferredMarketId = selectedMarketIds[0];
+    const inferredMarketId = selectedMarketIds[0] ?? "";
     const staleProductIds = productIds.filter((productId) =>
       !offerProducts.some((product) => Number(product.id) === productId),
     );
-    if (staleProductIds.length) {
+    if (selectedType !== "إعلان" && staleProductIds.length) {
       clearOfferProductSelectionWithReason();
       showSnackbar({
         message: "تم منع حفظ منتجات غير متوافقة مع السوق أو مدن الظهور الحالية.",
@@ -5200,7 +5256,7 @@ export function CreateOfferPage() {
     const endTimeIso = formatLocalIsoDateTime(endDateTime);
 
     const payload = {
-      market_id: Number(inferredMarketId),
+      ...(selectedType === "إعلان" ? {} : { market_id: Number(inferredMarketId) }),
       show_in_general: offerAppearsInGeneral,
       service_city_ids: offerAppearsInServiceCity
         ? selectedOfferCityIds.map((cityId) => Number(cityId))
@@ -5215,8 +5271,20 @@ export function CreateOfferPage() {
       active_days: [],
       use_limits: useLimits ? Number(useLimits) : null,
       user_limit: userLimit ? Number(userLimit) : null,
+      announcement_url: selectedType === "إعلان" ? announcementUrl.trim() : "",
+      announcement_cta_label: selectedType === "إعلان" ? announcementCtaLabel.trim() : "",
+      announcement_priority: selectedType === "إعلان" ? Number(announcementPriority || 0) : 0,
+      announcement_display_seconds: selectedType === "إعلان" ? Number(announcementDisplaySeconds || 15) : 15,
     };
     if (payload.use_limits === null) {
+      payload.user_limit = null;
+    }
+    if (selectedType === "إعلان") {
+      if (!Number.isInteger(payload.announcement_priority) || payload.announcement_priority < 0 || !Number.isInteger(payload.announcement_display_seconds) || payload.announcement_display_seconds < 1) {
+        showSnackbar({ message: "أدخل أولوية صحيحة ومدة ظهور بالثواني أكبر من صفر.", tone: "danger" });
+        return;
+      }
+      payload.use_limits = null;
       payload.user_limit = null;
     }
     if (
@@ -5243,7 +5311,7 @@ export function CreateOfferPage() {
             method,
             body: (() => {
               const formData = new FormData();
-              formData.append("market_id", String(payload.market_id));
+              if (selectedType !== "إعلان") formData.append("market_id", String(inferredMarketId));
               formData.append("show_in_general", String(payload.show_in_general));
               formData.append("service_city_ids", JSON.stringify(payload.service_city_ids));
               formData.append("product_ids", JSON.stringify(payload.product_ids));
@@ -5254,6 +5322,10 @@ export function CreateOfferPage() {
               formData.append("start_time", payload.start_time);
               formData.append("end_time", payload.end_time);
               formData.append("active_days", JSON.stringify(payload.active_days));
+              formData.append("announcement_url", payload.announcement_url);
+              formData.append("announcement_cta_label", payload.announcement_cta_label);
+              formData.append("announcement_priority", String(payload.announcement_priority));
+              formData.append("announcement_display_seconds", String(payload.announcement_display_seconds));
               if (payload.use_limits !== null) formData.append("use_limits", String(payload.use_limits));
               if (payload.user_limit !== null) formData.append("user_limit", String(payload.user_limit));
               formData.append("image", offerImageFile);
@@ -5362,8 +5434,8 @@ export function CreateOfferPage() {
           setOfferDescription(String(record.description ?? ""));
           setSelectedType(card.type);
           setOfferAppearsInGeneral(card.showInGeneral);
-          setOfferAppearsInServiceCity(card.serviceCityIds.length > 0);
-          setSelectedOfferCityIds(card.serviceCityIds);
+          setOfferAppearsInServiceCity(!card.showInGeneral && card.serviceCityIds.length > 0);
+          setSelectedOfferCityIds(card.showInGeneral ? [] : card.serviceCityIds.slice(0, 1));
           setOfferImageFile(null);
           setOfferImagePreview(card.image ?? "");
           setOfferImageName(card.image ? "صورة العرض الحالية" : "");
@@ -5373,6 +5445,10 @@ export function CreateOfferPage() {
           setEndTime(formatTimeInputValue(end));
           setUseLimits(record.use_limits == null ? "" : String(record.use_limits));
           setUserLimit(record.user_limit == null ? "" : String(record.user_limit));
+          setAnnouncementUrl(String(record.announcement_url ?? ""));
+          setAnnouncementCtaLabel(String(record.announcement_cta_label ?? "تسوق الآن"));
+          setAnnouncementPriority(String(record.announcement_priority ?? 0));
+          setAnnouncementDisplaySeconds(String(record.announcement_display_seconds ?? 15));
           if (card.type === "فلاش") {
             setFlashProductIds(productIds);
             setFlashDiscountPercent(String(record.discount ?? "0"));
@@ -5381,9 +5457,7 @@ export function CreateOfferPage() {
             setPackageDiscountPercent(String(record.discount ?? "0"));
           } else if (card.type === "توصيل") {
             setDeliveryProductId(productIds[0] ?? "");
-          } else if (card.type === "إعلان") {
-            setAnnouncementProductId(productIds[0] ?? "");
-          } else {
+          } else if (card.type !== "إعلان") {
             setDiscountProductId(productIds[0] ?? "");
             setDiscountPercent(String(record.discount ?? "0"));
           }
@@ -5422,19 +5496,18 @@ export function CreateOfferPage() {
           <>
             <Link
               href="/offers"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border bg-background px-3 text-[0px] font-medium text-muted-foreground shadow-sm transition hover:bg-accent hover:text-foreground"
+              className="inline-flex h-10 items-center justify-center gap-3 rounded-md border bg-background px-4 text-sm font-medium text-muted-foreground shadow-sm transition hover:bg-accent hover:text-foreground"
             >
               <ChevronRight className="size-4" />
-              <span className="text-sm">الرجوع للعروض</span>
-              الرجوع
+              <span>الرجوع للعروض</span>
             </Link>
             <Button
-              className="h-10"
+              className="h-10 px-5"
               disabled={savingOffer}
               onClick={saveOffer}
             >
               <CheckCircle2 className="size-4" />
-              {savingOffer ? "جار الحفظ..." : formMode === "edit" ? "حفظ التعديل" : "إنشاء"}
+              {savingOffer ? "جار الحفظ..." : formMode === "edit" ? "حفظ التعديل" : "إنشاء العرض"}
             </Button>
           </>
         }
@@ -5475,13 +5548,21 @@ export function CreateOfferPage() {
                       <span>
                         <span className="block text-sm font-semibold">يظهر في العام</span>
                       </span>
-                      <Switch checked={offerAppearsInGeneral} onCheckedChange={setOfferGeneralEnabled} />
+                      <Switch
+                        checked={offerAppearsInGeneral}
+                        disabled={offerAppearsInServiceCity}
+                        onCheckedChange={setOfferGeneralEnabled}
+                      />
                     </label>
                     <label className="flex min-h-16 cursor-pointer items-center justify-between gap-3 rounded-md border bg-background px-4 py-3 shadow-sm transition hover:border-primary/40">
                       <span>
                         <span className="block text-sm font-semibold">يظهر في المدن</span>
                       </span>
-                      <Switch checked={offerAppearsInServiceCity} onCheckedChange={setOfferServiceCityEnabled} />
+                      <Switch
+                        checked={offerAppearsInServiceCity}
+                        disabled={offerAppearsInGeneral}
+                        onCheckedChange={setOfferServiceCityEnabled}
+                      />
                     </label>
                   </div>
                 </div>
@@ -5489,7 +5570,7 @@ export function CreateOfferPage() {
                   <div className="grid gap-3 lg:col-span-2">
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-sm font-medium">المدن</div>
-                      <RefBadge tone="blue">{selectedOfferCityIds.length} مدن</RefBadge>
+                      <RefBadge tone="blue">{selectedOfferCityIds.length} مدينة</RefBadge>
                     </div>
                     <div>
                       <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -5507,12 +5588,15 @@ export function CreateOfferPage() {
                                 key={city.id}
                                 type="button"
                                 aria-pressed={selected}
+                                disabled={selectedOfferCityIds.length > 0 && !selected}
                                 onClick={() => changeOfferCity(cityId)}
                                 className={cn(
                                   "flex h-14 w-full items-center justify-between gap-3 rounded-md border px-3 text-sm font-semibold shadow-sm transition",
                                   selected
                                     ? "border-primary bg-primary/10 text-primary"
-                                    : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-accent",
+                                    : selectedOfferCityIds.length > 0
+                                      ? "cursor-not-allowed border-border bg-muted/40 text-muted-foreground opacity-60"
+                                      : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-accent",
                                 )}
                               >
                                 <span className="truncate">{city.name}</span>
@@ -5589,10 +5673,10 @@ export function CreateOfferPage() {
                       <button
                         type="button"
                         onClick={removeOfferImage}
-                        className="inline-flex shrink-0 items-center gap-1 font-semibold text-destructive transition hover:text-destructive/80"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-destructive/50 px-3 py-1.5 font-semibold text-destructive transition hover:bg-destructive/10"
                       >
                         <X className="size-3.5" />
-                        حذف
+                        حذف الصورة
                       </button>
                     ) : null}
                   </div>
@@ -5787,42 +5871,18 @@ export function CreateOfferPage() {
             ) : selectedType === "إعلان" ? (
               <div key="announcement-settings" className="grid gap-4">
                 <div className="grid gap-4 lg:grid-cols-3">
-                  <Field label="نوع الرابط">
-                    <AppSelect
-                      value={announcementLinkType}
-                      onValueChange={(value) =>
-                        setAnnouncementLinkType(value as "link" | "product")
-                      }
-                      ariaLabel="نوع الرابط"
-                      className="h-10 bg-input"
-                      options={[
-                        { value: "link", label: "رابط" },
-                        { value: "product", label: "منتج" },
-                      ]}
-                    />
-                  </Field>
                   <Field label="أولوية الظهور">
-                    <Input type="number" min="1" defaultValue="1" className="h-10" />
+                    <Input type="number" min="0" value={announcementPriority} onChange={(event) => setAnnouncementPriority(event.target.value)} className="h-10" />
                   </Field>
                   <Field label="مدة العرض (ثانية)">
-                    <Input type="number" min="1" defaultValue="15" className="h-10" />
+                    <Input type="number" min="1" value={announcementDisplaySeconds} onChange={(event) => setAnnouncementDisplaySeconds(event.target.value)} className="h-10" />
                   </Field>
                 </div>
-                {announcementLinkType === "link" ? (
-                  <Field label="إضافة رابط">
-                    <Input dir="ltr" className="h-10 text-left" placeholder="/items/pizza-margherita" />
-                  </Field>
-                ) : null}
-                <SingleOfferProductPanel
-                  title="منتج الإعلان"
-                  description="اختار المنتج المرتبط بالإعلان."
-                  selectedItemId={announcementProductId}
-                  onSelectItem={setAnnouncementProductId}
-                  badgeTone="blue"
-                  contextLabel="الإعلان"
-                />
+                <Field label="الرابط الخارجي (HTTPS) *">
+                  <Input dir="rtl" type="url" className="h-10 text-right" placeholder="https://example.com/campaign" value={announcementUrl} onChange={(event) => setAnnouncementUrl(event.target.value)} />
+                </Field>
                 <Field label="نص زر الإعلان">
-                  <Input className="h-10" defaultValue="تسوق الآن" />
+                  <Input className="h-10" value={announcementCtaLabel} onChange={(event) => setAnnouncementCtaLabel(event.target.value)} placeholder="تسوق الآن" />
                 </Field>
               </div>
             ) : (
@@ -5900,7 +5960,7 @@ export function CreateOfferPage() {
             </div>
           </FormCard>
 
-            <FormCard title="حدود الاستخدام">
+            {selectedType !== "إعلان" ? <FormCard title="حدود الاستخدام">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="إجمالي الاستخدام">
                   <Input
@@ -5923,7 +5983,7 @@ export function CreateOfferPage() {
                   />
                 </Field>
               </div>
-            </FormCard>
+            </FormCard> : null}
         </div>
 
       </div>

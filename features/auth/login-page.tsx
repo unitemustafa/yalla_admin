@@ -49,6 +49,7 @@ const productImages = [
 ];
 
 const supportWhatsAppUrl = "https://web.whatsapp.com/send?phone=201016487371";
+const themeChangeEvent = "yalla-theme-change";
 
 function stripWhitespace(value: string) {
   return value.replace(/\s/g, "");
@@ -76,9 +77,16 @@ function LoginPageContent({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
   const [pending, setPending] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => {
+    if (typeof window === "undefined") return "dark";
+    return document.documentElement.classList.contains("dark")
+      ? "dark"
+      : "light";
+  });
   const loginBrandName = snapshot.branding.brandName || "يلا ماركت";
   const loginBrandTagline = snapshot.branding.brandTagline || "لوحة التحكم";
-  const loginLogo = snapshot.branding.logoUrl || dashboardBrandLogos.dark;
+  const serverLogo = snapshot.branding.logoUrl?.trim() ?? "";
+  const loginLogo = serverLogo || dashboardBrandLogos[resolvedTheme];
   const stats = [
     {
       label: "طلبات اليوم",
@@ -98,6 +106,19 @@ function LoginPageContent({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
   ];
 
   useEffect(() => {
+    function syncResolvedTheme() {
+      setResolvedTheme(
+        document.documentElement.classList.contains("dark") ? "dark" : "light",
+      );
+    }
+
+    syncResolvedTheme();
+    window.addEventListener(themeChangeEvent, syncResolvedTheme);
+    return () =>
+      window.removeEventListener(themeChangeEvent, syncResolvedTheme);
+  }, []);
+
+  useEffect(() => {
     const font = {
       Cairo: "cairo",
       Tajawal: "tajawal",
@@ -109,14 +130,20 @@ function LoginPageContent({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
       font: font[snapshot.branding.fontFamily],
       brandName: loginBrandName,
       branchName: loginBrandTagline,
-      logoDataUrl: loginLogo,
+      logoDataUrl: serverLogo,
       customColors: {
         primary: snapshot.branding.primaryColor,
         surface: snapshot.branding.subtleColor,
         accent: snapshot.branding.accentColor,
       },
     });
-  }, [loginBrandName, loginBrandTagline, loginLogo, snapshot.branding]);
+  }, [
+    loginBrandName,
+    loginBrandTagline,
+    resolvedTheme,
+    serverLogo,
+    snapshot.branding,
+  ]);
 
   const finishSplash = useCallback(() => {
     markLoginSplashSeen();

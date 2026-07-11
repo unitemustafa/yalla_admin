@@ -25,7 +25,14 @@ import {
 } from "../users/api-users";
 import type { DashboardUser } from "../users/default-dashboard-users";
 import { DashboardImage } from "../dashboard-image";
-import { Badge, Button, Card, CurrencyText, PageTitle, Switch } from "../primitives";
+import {
+  Badge,
+  Button,
+  Card,
+  CurrencyText,
+  PageTitle,
+  Switch,
+} from "../primitives";
 import { useSnackbar } from "../snackbar";
 
 type CustomerRecentOrder = {
@@ -40,7 +47,9 @@ function recentOrdersFromBackend(value: unknown): CustomerRecentOrder[] {
   if (!Array.isArray(value)) return [];
 
   return value
-    .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+    .filter((item): item is Record<string, unknown> =>
+      Boolean(item && typeof item === "object"),
+    )
     .map((item) => ({
       id: String(item.id ?? item.number ?? ""),
       number: String(item.number ?? item.id ?? ""),
@@ -67,7 +76,9 @@ export function UserDetailApiPage({ userId }: { userId: string }) {
     setError(null);
 
     try {
-      const response = await apiFetch(`auth/users/${encodeURIComponent(userId)}/`);
+      const response = await apiFetch(
+        `auth/users/${encodeURIComponent(userId)}/`,
+      );
       const data = await apiResponseData(response);
 
       if (!response.ok) {
@@ -114,12 +125,18 @@ export function UserDetailApiPage({ userId }: { userId: string }) {
     };
 
     window.addEventListener("focus", refreshWhenDashboardRegainsFocus);
-    document.addEventListener("visibilitychange", refreshWhenDocumentBecomesVisible);
+    document.addEventListener(
+      "visibilitychange",
+      refreshWhenDocumentBecomesVisible,
+    );
 
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener("focus", refreshWhenDashboardRegainsFocus);
-      document.removeEventListener("visibilitychange", refreshWhenDocumentBecomesVisible);
+      document.removeEventListener(
+        "visibilitychange",
+        refreshWhenDocumentBecomesVisible,
+      );
     };
   }, [loadUser]);
 
@@ -128,11 +145,14 @@ export function UserDetailApiPage({ userId }: { userId: string }) {
 
     setActivationPending(true);
     try {
-      const response = await apiFetch(`auth/users/${encodeURIComponent(userId)}/`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_active: checked }),
-      });
+      const response = await apiFetch(
+        `auth/users/${encodeURIComponent(userId)}/`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ is_active: checked }),
+        },
+      );
       const data = await apiResponseData(response);
 
       if (!response.ok) {
@@ -185,6 +205,7 @@ export function UserDetailApiPage({ userId }: { userId: string }) {
       orders={orders}
       activationPending={activationPending}
       onActivationChange={handleActivationChange}
+      onRefresh={() => void loadUser()}
     />
   );
 }
@@ -203,7 +224,10 @@ function UserDetailLoadingState() {
         </div>
         <div className="grid gap-0 md:grid-cols-3">
           {Array.from({ length: 3 }, (_, index) => (
-            <div key={index} className="min-h-24 border-b p-6 md:border-b-0 md:border-e">
+            <div
+              key={index}
+              className="min-h-24 border-b p-6 md:border-b-0 md:border-e"
+            >
               <div className="h-4 w-24 animate-pulse rounded-md bg-muted" />
               <div className="mt-3 h-5 w-40 animate-pulse rounded-md bg-muted/70" />
             </div>
@@ -233,7 +257,7 @@ function UserDetailErrorState({
             className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
           >
             <ArrowRight className="size-4" />
-            رجوع للمستخدمين
+            رجوع للعملاء
           </Link>
         }
       />
@@ -272,18 +296,24 @@ export function UserDetailPage({
   orders,
   activationPending,
   onActivationChange,
+  onRefresh,
 }: {
   user: DashboardUser;
   orders: CustomerRecentOrder[];
   activationPending: boolean;
   onActivationChange: (checked: boolean) => void;
+  onRefresh: () => void;
 }) {
   const hasOrderData = orders.length > 0;
   const orderCount = user.orders.toLocaleString("en-US");
-  const totalSpentValue = user.totalSpent === unavailable ? unavailable : formatMoney(user.totalSpent);
+  const totalSpentValue =
+    user.totalSpent === unavailable
+      ? unavailable
+      : formatMoney(user.totalSpent);
   const lastOrder = hasOrderData ? orders[0].number : user.lastOrder;
   const active = user.active !== false;
-  const statusTone = user.status === "نشط" ? "green" : "secondary";
+  const hasSignedIn = user.hasSignedIn !== false;
+  const statusTone = !hasSignedIn ? "blue" : active ? "green" : "red";
 
   return (
     <div className="space-y-6 px-6 py-10">
@@ -292,13 +322,26 @@ export function UserDetailPage({
         description="ملف بيانات الحساب الخاص بعميل تطبيق يلا ماركت"
         size="compact"
         actions={
-          <Link
-            href="/customers"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            <ArrowRight className="size-4" />
-            رجوع للمستخدمين
-          </Link>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 px-4 text-sm"
+              onClick={onRefresh}
+              aria-label="تحديث بيانات العميل"
+              title="تحديث بيانات العميل"
+            >
+              <RefreshCcw className="size-4" />
+              تحديث
+            </Button>
+            <Link
+              href="/customers"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <ArrowRight className="size-4" />
+              رجوع للعملاء
+            </Link>
+          </div>
         }
       />
 
@@ -316,16 +359,27 @@ export function UserDetailPage({
             />
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-2xl font-semibold leading-8">{user.name}</h2>
-                <Badge tone={statusTone}>{user.status}</Badge>
+                <h2 className="text-2xl font-semibold leading-8">
+                  {user.name}
+                </h2>
+                <Badge tone={statusTone}>
+                  {hasSignedIn ? user.status : "لم يسجل الحساب بعد"}
+                </Badge>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">{user.role}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3 rounded-lg border px-4 py-3">
+          <div
+            className="flex items-center gap-3 rounded-lg border px-4 py-3"
+            title={
+              !hasSignedIn
+                ? "يتاح التعطيل بعد أول تسجيل دخول للحساب."
+                : undefined
+            }
+          >
             <Switch
               checked={active}
-              disabled={activationPending}
+              disabled={activationPending || !hasSignedIn}
               onCheckedChange={onActivationChange}
             />
             <span className="text-sm font-semibold">
@@ -339,7 +393,9 @@ export function UserDetailPage({
             icon={<Mail className="size-4" />}
             label="البريد الإلكتروني"
             value={user.email}
-            extraValue={user.username === "غير متاح" ? undefined : `@${user.username}`}
+            extraValue={
+              user.username === "غير متاح" ? undefined : `@${user.username}`
+            }
             dir="ltr"
           />
           <DetailBlock
@@ -357,7 +413,10 @@ export function UserDetailPage({
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <InfoCard title="نشاط الطلبات" icon={<ShoppingCart className="size-4" />}>
+        <InfoCard
+          title="نشاط الطلبات"
+          icon={<ShoppingCart className="size-4" />}
+        >
           <InfoRow
             label="عدد الطلبات"
             href={hasOrderData ? "#user-orders" : undefined}
@@ -368,7 +427,10 @@ export function UserDetailPage({
               </span>
             }
           />
-          <InfoRow label="إجمالي الإنفاق" value={<CurrencyText>{totalSpentValue}</CurrencyText>} />
+          <InfoRow
+            label="إجمالي الإنفاق"
+            value={<CurrencyText>{totalSpentValue}</CurrencyText>}
+          />
           <InfoRow label="آخر طلب" value={lastOrder} />
         </InfoCard>
 
@@ -404,7 +466,10 @@ function DetailBlock({
       </div>
       <div className="min-w-0">
         <div className="text-xs text-muted-foreground">{label}</div>
-        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2" dir={dir}>
+        <div
+          className="mt-1 flex min-w-0 flex-wrap items-center gap-2"
+          dir={dir}
+        >
           <span className="truncate text-sm font-medium">{value}</span>
           {extraValue ? (
             <span className="shrink-0 rounded-md border border-primary/25 bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
@@ -481,9 +546,13 @@ function UserOrdersSection({
       <Card className="overflow-hidden shadow">
         <div className="flex flex-col gap-2 border-b p-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <h3 className="text-base font-semibold">طلبات المستخدم</h3>
+            <h3 className="text-base font-semibold">طلبات العميل</h3>
           </div>
-          <Badge>{hasOrderData ? `${orders.length.toLocaleString("en-US")} طلب` : "0 طلب"}</Badge>
+          <Badge>
+            {hasOrderData
+              ? `${orders.length.toLocaleString("en-US")} طلب`
+              : "0 طلب"}
+          </Badge>
         </div>
 
         {orders.length ? (
@@ -500,7 +569,10 @@ function UserOrdersSection({
               </thead>
               <tbody>
                 {orders.map((order) => (
-                  <tr key={order.number} className="h-14 border-b last:border-0">
+                  <tr
+                    key={order.number}
+                    className="h-14 border-b last:border-0"
+                  >
                     <td className="px-4 font-medium">
                       <Link
                         href={`/orders/view/${encodeURIComponent(order.id)}`}
@@ -509,12 +581,21 @@ function UserOrdersSection({
                         {order.number}
                       </Link>
                     </td>
-                    <td className="px-4">{translateOrderStatus(order.status)}</td>
+                    <td className="px-4">
+                      {translateOrderStatus(order.status)}
+                    </td>
                     <td className="px-4 font-semibold">
                       <CurrencyText>{formatMoney(order.total)}</CurrencyText>
                     </td>
                     <td className="px-4">
-                      <div>{order.created_at ? new Intl.DateTimeFormat("ar-EG-u-nu-latn", { dateStyle: "medium", timeStyle: "short" }).format(new Date(order.created_at)) : unavailable}</div>
+                      <div>
+                        {order.created_at
+                          ? new Intl.DateTimeFormat("ar-EG-u-nu-latn", {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                            }).format(new Date(order.created_at))
+                          : unavailable}
+                      </div>
                     </td>
                     <td className="px-4">
                       <Link
@@ -531,7 +612,7 @@ function UserOrdersSection({
           </div>
         ) : (
           <div className="p-8 text-center text-sm text-muted-foreground">
-            لا توجد طلبات لهذا المستخدم حتى الآن.
+            لا توجد طلبات لهذا العميل حتى الآن.
           </div>
         )}
       </Card>

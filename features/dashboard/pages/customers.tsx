@@ -12,7 +12,6 @@ import {
   Plus,
   RefreshCcw,
   Search,
-  Trash2,
   Users,
 } from "lucide-react";
 
@@ -25,9 +24,16 @@ import {
   translateApiMessage,
 } from "../users/api-users";
 import type { DashboardUser } from "../users/default-dashboard-users";
-import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
 import { DashboardImage } from "../dashboard-image";
-import { Badge, Button, Card, Input, PageTitle, Pagination, Switch } from "../primitives";
+import {
+  Badge,
+  Button,
+  Card,
+  Input,
+  PageTitle,
+  Pagination,
+  Switch,
+} from "../primitives";
 import { useSnackbar } from "../snackbar";
 import {
   availabilityMessage,
@@ -84,7 +90,7 @@ function splitFullName(name: string) {
 
   return {
     first_name: firstName,
-    last_name: lastName || "-",
+    last_name: lastName,
   };
 }
 
@@ -102,28 +108,13 @@ function createCustomerPayload(draft: CustomerDraft) {
   };
 }
 
-function restoreCustomerPayload(user: DashboardUser) {
-  const temporaryPassword = `Restore${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}!1a`;
-
-  return {
-    ...splitFullName(user.name),
-    username: normalizeUsername(user.username),
-    email: normalizeEmail(user.email),
-    phone: canonicalPhoneValue(user.phone),
-    password: temporaryPassword,
-    role: "client",
-    is_active: user.active !== false,
-    is_staff: false,
-    is_superuser: false,
-  };
-}
-
 function apiErrorMessage(data: unknown, fallback: string) {
   return firstApiError(data) ?? fallback;
 }
 
 function collectApiMessages(value: unknown): string[] {
-  if (typeof value === "string" && value.trim()) return [translateApiMessage(value)];
+  if (typeof value === "string" && value.trim())
+    return [translateApiMessage(value)];
   if (Array.isArray(value)) return value.flatMap(collectApiMessages);
   if (value && typeof value === "object") {
     return Object.values(value).flatMap(collectApiMessages);
@@ -135,7 +126,9 @@ function customerCreateErrorFromApi(data: unknown, fallback: string) {
   const fieldErrors: CustomerFieldErrors = {};
   if (data && typeof data === "object" && !Array.isArray(data)) {
     for (const field of ["username", "email", "phone", "password"] as const) {
-      const messages = collectApiMessages((data as Record<string, unknown>)[field]);
+      const messages = collectApiMessages(
+        (data as Record<string, unknown>)[field],
+      );
       if (messages.length) fieldErrors[field] = messages.join(" ");
     }
   }
@@ -162,8 +155,6 @@ export function CustomersPage() {
   const [pageState, setPageState] = useState<CustomerPageState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
-  const [deleteCustomer, setDeleteCustomer] = useState<DashboardUser | null>(null);
-  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [activationUserId, setActivationUserId] = useState<string | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
 
@@ -236,96 +227,19 @@ export function CustomersPage() {
     });
   }
 
-  async function restoreDeletedCustomer(user: DashboardUser, index: number) {
-    try {
-      const response = await apiFetch("auth/users/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(restoreCustomerPayload(user)),
-      });
-      const data = await apiResponseData(response);
-
-      if (!response.ok) {
-        throw new Error(apiErrorMessage(data, "تعذر التراجع عن حذف المستخدم."));
-      }
-
-      if (!isBackendDashboardUser(data)) {
-        throw new Error("تم التراجع لكن استجابة الباك غير مكتملة.");
-      }
-
-      const restoredCustomer = dashboardUserFromBackend(data);
-      setCustomers((currentCustomers) => {
-        if (currentCustomers.some((customer) => customer.id === restoredCustomer.id)) {
-          return currentCustomers;
-        }
-        const nextCustomers = [...currentCustomers];
-        nextCustomers.splice(Math.max(0, index), 0, restoredCustomer);
-        return nextCustomers;
-      });
-      showSnackbar({
-        message: `تم التراجع واستعادة ${restoredCustomer.name}.`,
-        tone: "success",
-      });
-    } catch (error) {
-      showSnackbar({
-        message:
-          error instanceof Error
-            ? error.message
-            : "تعذر التراجع عن حذف المستخدم.",
-        tone: "danger",
-      });
-    }
-  }
-
-  async function handleDeleteCustomer() {
-    if (!deleteCustomer || deletingUserId) return;
-
-    const user = deleteCustomer;
-    const userIndex = customers.findIndex((customer) => customer.id === user.id);
-    setDeletingUserId(user.id);
-    try {
-      const response = await apiFetch(`auth/users/${encodeURIComponent(user.id)}/`, {
-        method: "DELETE",
-      });
-      const data = await apiResponseData(response);
-
-      if (!response.ok) {
-        throw new Error(apiErrorMessage(data, "تعذر حذف المستخدم من الباك."));
-      }
-
-      setCustomers((currentCustomers) =>
-        currentCustomers.filter((customer) => customer.id !== user.id),
-      );
-      setDeleteCustomer(null);
-      showSnackbar({
-        message: `تم حذف ${user.name} من الباك.`,
-        tone: "danger",
-        actionLabel: "تراجع",
-        onAction: () => void restoreDeletedCustomer(user, userIndex),
-      });
-    } catch (error) {
-      showSnackbar({
-        message:
-          error instanceof Error
-            ? error.message
-            : "تعذر حذف المستخدم من الباك.",
-        tone: "danger",
-      });
-    } finally {
-      setDeletingUserId(null);
-    }
-  }
-
   async function handleActivationChange(userId: string, checked: boolean) {
     if (activationUserId) return;
 
     setActivationUserId(userId);
     try {
-      const response = await apiFetch(`auth/users/${encodeURIComponent(userId)}/`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_active: checked }),
-      });
+      const response = await apiFetch(
+        `auth/users/${encodeURIComponent(userId)}/`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ is_active: checked }),
+        },
+      );
       const data = await apiResponseData(response);
 
       if (!response.ok) {
@@ -382,14 +296,17 @@ export function CustomersPage() {
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              className="h-9 px-4 text-sm"
               onClick={() => void loadCustomers()}
               disabled={isLoading}
             >
               <RefreshCcw className="size-4" />
               تحديث
             </Button>
-            <Button size="sm" onClick={() => setAddCustomerOpen(true)}>
+            <Button
+              className="h-9 px-4 text-sm"
+              onClick={() => setAddCustomerOpen(true)}
+            >
               <Plus className="size-4" />
               إضافة عميل
             </Button>
@@ -429,16 +346,17 @@ export function CustomersPage() {
         <CustomersEmptyState onAdd={() => setAddCustomerOpen(true)} />
       ) : null}
 
-      {!isLoading && !hasError && hasCustomers && filteredCustomers.length === 0 ? (
+      {!isLoading &&
+      !hasError &&
+      hasCustomers &&
+      filteredCustomers.length === 0 ? (
         <CustomersNoResults query={customerSearch} />
       ) : null}
 
       {!isLoading && !hasError && filteredCustomers.length > 0 ? (
         <CustomersTable
           customers={filteredCustomers}
-          deletingUserId={deletingUserId}
           activationUserId={activationUserId}
-          onDelete={setDeleteCustomer}
           onActivationChange={(userId, checked) =>
             void handleActivationChange(userId, checked)
           }
@@ -452,15 +370,6 @@ export function CustomersPage() {
         />
       ) : null}
 
-      {deleteCustomer ? (
-        <ConfirmDeleteDialog
-          title="حذف العميل"
-          description={`هل تريد حذف العميل ${deleteCustomer.name}؟`}
-          busy={deletingUserId === deleteCustomer.id}
-          onCancel={() => setDeleteCustomer(null)}
-          onConfirm={() => void handleDeleteCustomer()}
-        />
-      ) : null}
     </div>
   );
 }
@@ -553,7 +462,8 @@ function CustomersNoResults({ query }: { query: string }) {
         <Search className="mx-auto size-8 text-muted-foreground" />
         <h2 className="mt-4 font-semibold">لا توجد نتائج مطابقة</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          جرّب البحث باسم مختلف أو يوزر آخر{query.trim() ? `: ${query.trim()}` : "."}
+          جرّب البحث باسم مختلف أو يوزر آخر
+          {query.trim() ? `: ${query.trim()}` : "."}
         </p>
       </div>
     </Card>
@@ -600,7 +510,8 @@ function AddCustomerDialog({
   const availabilityChecksPassed = Object.values(availabilityStates).every(
     (state) => state === "available",
   );
-  const canCreate = Object.keys(errors).length === 0 && availabilityChecksPassed;
+  const canCreate =
+    Object.keys(errors).length === 0 && availabilityChecksPassed;
 
   useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;
@@ -616,7 +527,10 @@ function AddCustomerDialog({
   }, []);
 
   function updateDraft(field: keyof CustomerDraft, value: string) {
-    setDraft((currentDraft) => ({ ...currentDraft, [field]: sanitizeCustomerInput(field, value) }));
+    setDraft((currentDraft) => ({
+      ...currentDraft,
+      [field]: sanitizeCustomerInput(field, value),
+    }));
     setApiError(null);
     setSubmitted(false);
     setApiFieldErrors((currentErrors) => {
@@ -656,14 +570,20 @@ function AddCustomerDialog({
   function errorFor(field: keyof CustomerDraft) {
     if (field === "username" || field === "email" || field === "phone") {
       const state = availabilityStates[field];
-      if (state === "invalid" || state === "taken" || state === "request_error") {
+      if (
+        state === "invalid" ||
+        state === "taken" ||
+        state === "request_error"
+      ) {
         return availabilityMessage(field, state);
       }
     }
     if (field === "password" && draft.password) {
       return apiFieldErrors.password;
     }
-    return submitted ? errors[field] ?? apiFieldErrors[field] : apiFieldErrors[field];
+    return submitted
+      ? (errors[field] ?? apiFieldErrors[field])
+      : apiFieldErrors[field];
   }
 
   return (
@@ -676,7 +596,10 @@ function AddCustomerDialog({
         className="relative flex max-h-[calc(100vh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl"
       >
         <div className="border-b bg-muted/20 px-6 py-5">
-          <h2 id="add-customer-title" className="text-xl font-semibold leading-7">
+          <h2
+            id="add-customer-title"
+            className="text-xl font-semibold leading-7"
+          >
             إضافة عميل جديد
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -684,7 +607,11 @@ function AddCustomerDialog({
           </p>
         </div>
 
-        <form onSubmit={submitCustomer} autoComplete="off" className="flex min-h-0 flex-1 flex-col">
+        <form
+          onSubmit={submitCustomer}
+          autoComplete="off"
+          className="flex min-h-0 flex-1 flex-col"
+        >
           <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-6">
             {apiError ? (
               <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">
@@ -716,7 +643,9 @@ function AddCustomerDialog({
                   onKeyDown={(event) => {
                     if (event.key === " ") event.preventDefault();
                   }}
-                  onChange={(event) => updateDraft("username", event.target.value)}
+                  onChange={(event) =>
+                    updateDraft("username", event.target.value)
+                  }
                   onFocus={() => setFocusedAvailabilityField("username")}
                   onBlur={() => setFocusedAvailabilityField(null)}
                   placeholder="اسم فريد لتسجيل الدخول"
@@ -754,7 +683,10 @@ function AddCustomerDialog({
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <CustomerField label="البريد الإلكتروني *" error={errorFor("email")}>
+              <CustomerField
+                label="البريد الإلكتروني *"
+                error={errorFor("email")}
+              >
                 <Input
                   dir="ltr"
                   type="email"
@@ -816,11 +748,20 @@ function AddCustomerDialog({
           </div>
 
           <div className="flex shrink-0 justify-end gap-2 border-t border-border/70 px-6 py-4">
-            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={saving}
+            >
               إلغاء
             </Button>
             <Button type="submit" disabled={saving || !canCreate}>
-              {saving ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+              {saving ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Plus className="size-4" />
+              )}
               {saving ? "جاري الإنشاء..." : "إنشاء العميل"}
             </Button>
           </div>
@@ -854,7 +795,8 @@ function CustomerField({
 
 function sanitizeCustomerInput(field: keyof CustomerDraft, value: string) {
   if (field === "phone") return value.replace(/\D/g, "").slice(0, 11);
-  if (field === "username" || field === "email") return value.replace(/\s/g, "").trim();
+  if (field === "username" || field === "email")
+    return value.replace(/\s/g, "").trim();
   if (field === "password") return value.replace(/\s/g, "");
   return value;
 }
@@ -897,7 +839,11 @@ function AvailabilityHint({
         isAvailable ? "text-emerald-600" : "text-destructive"
       }`}
     >
-      {isAvailable ? <CheckCircle2 className="size-3" /> : <AlertCircle className="size-3" />}
+      {isAvailable ? (
+        <CheckCircle2 className="size-3" />
+      ) : (
+        <AlertCircle className="size-3" />
+      )}
       {message}
     </span>
   );
@@ -938,7 +884,8 @@ function validateCustomerDraftWithBackendAvailability(draft: CustomerDraft) {
   if (!normalizeUsername(draft.username)) {
     errors.username = "اكتب اسم المستخدم.";
   } else if (!isValidUsername(draft.username)) {
-    errors.username = "اسم المستخدم يبدأ بحرف ويكون من 3 إلى 150 حرفًا دون مسافات.";
+    errors.username =
+      "اسم المستخدم يبدأ بحرف ويكون من 3 إلى 150 حرفًا دون مسافات.";
   }
   if (!draft.phone.trim()) {
     errors.phone = "اكتب رقم الهاتف.";
@@ -961,20 +908,19 @@ function validateCustomerDraftWithBackendAvailability(draft: CustomerDraft) {
 
 function CustomersTable({
   customers,
-  deletingUserId,
   activationUserId,
-  onDelete,
   onActivationChange,
 }: {
   customers: DashboardUser[];
-  deletingUserId: string | null;
   activationUserId: string | null;
-  onDelete: (user: DashboardUser) => void;
   onActivationChange: (userId: string, checked: boolean) => void;
 }) {
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(customers.length / customersPageSize));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(customers.length / customersPageSize),
+  );
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStartIndex = (safeCurrentPage - 1) * customersPageSize;
   const pagedCustomers = customers.slice(
@@ -1014,11 +960,24 @@ function CustomersTable({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-bold text-foreground">{customer.name}</h3>
-                <Badge tone={customer.active !== false ? "green" : "red"}>
-                  {customer.status}
+                <Badge
+                  tone={
+                    customer.hasSignedIn === false
+                      ? "blue"
+                      : customer.active !== false
+                        ? "green"
+                        : "red"
+                  }
+                >
+                  {customer.hasSignedIn === false
+                    ? "لم يسجل الحساب بعد"
+                    : customer.status}
                 </Badge>
               </div>
-              <p className="mt-1 truncate text-sm text-muted-foreground" dir="ltr">
+              <p
+                className="mt-1 truncate text-sm text-muted-foreground"
+                dir="ltr"
+              >
                 {customer.phone} - {customer.email}
               </p>
               <p className="mt-1 truncate text-sm text-muted-foreground">
@@ -1029,21 +988,37 @@ function CustomersTable({
 
           <div className="grid grid-cols-2 gap-2 text-center text-sm">
             <div className="rounded-md bg-muted px-3 py-2">
-              <div className="truncate font-bold" dir="ltr">@{customer.username}</div>
+              <div className="truncate font-bold" dir="ltr">
+                @{customer.username}
+              </div>
               <div className="text-xs text-muted-foreground">اسم الدخول</div>
             </div>
             <div className="rounded-md bg-muted px-3 py-2">
               <div className="truncate font-bold">{customer.joinedAt}</div>
-              <div className="text-xs text-muted-foreground">تاريخ الانضمام</div>
+              <div className="text-xs text-muted-foreground">
+                تاريخ الانضمام
+              </div>
             </div>
           </div>
 
           <div className="flex items-center justify-start gap-2 xl:justify-end">
-            <div className="flex shrink-0 items-center gap-2 rounded-md border px-2 py-1">
+            <div
+              className="flex shrink-0 items-center gap-2 rounded-md border px-2 py-1"
+              title={
+                customer.hasSignedIn === false
+                  ? "يتاح التعطيل بعد أول تسجيل دخول للحساب."
+                  : undefined
+              }
+            >
               <Switch
                 checked={customer.active !== false}
-                disabled={activationUserId === customer.id}
-                onCheckedChange={(checked) => onActivationChange(customer.id, checked)}
+                disabled={
+                  activationUserId === customer.id ||
+                  customer.hasSignedIn === false
+                }
+                onCheckedChange={(checked) =>
+                  onActivationChange(customer.id, checked)
+                }
               />
               <span className="text-xs font-semibold">
                 {customer.active !== false ? "مفعّل" : "معطّل"}
@@ -1060,18 +1035,6 @@ function CustomersTable({
             >
               <Eye className="size-4" />
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label={`حذف ${customer.name}`}
-              title="حذف"
-              className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-              disabled={deletingUserId === customer.id}
-              onClick={() => onDelete(customer)}
-            >
-              <Trash2 className="size-4" />
-            </Button>
           </div>
         </Card>
       ))}
@@ -1083,7 +1046,9 @@ function CustomersTable({
           previousDisabled={safeCurrentPage === 1}
           nextDisabled={safeCurrentPage === totalPages}
           onPrevious={() =>
-            setCurrentPage((page) => Math.max(1, Math.min(page, totalPages) - 1))
+            setCurrentPage((page) =>
+              Math.max(1, Math.min(page, totalPages) - 1),
+            )
           }
           onNext={() =>
             setCurrentPage((page) =>

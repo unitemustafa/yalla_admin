@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   CalendarDays,
@@ -84,6 +84,7 @@ const statusLabels: Record<CourierOrderStatus, string> = {
   failed_delivery: "تعذر التوصيل",
   cancelled: "ملغي",
 };
+const courierStatusPollMs = 10_000;
 
 function statusTone(status: CourierOrderStatus) {
   if (status === "delivered") return "green" as const;
@@ -260,6 +261,7 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const statusRefreshInFlightRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -310,6 +312,46 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  const refreshCourierStatus = useCallback(async () => {
+    if (statusRefreshInFlightRef.current) return;
+
+    statusRefreshInFlightRef.current = true;
+    try {
+      const response = await apiFetch(
+        `auth/users/${encodeURIComponent(courierId)}/`,
+      );
+      const data = await apiResponseData(response);
+
+      if (response.ok && isBackendDashboardUser(data) && data.role === "representative") {
+        setCourier(data);
+        setError(null);
+      }
+    } finally {
+      statusRefreshInFlightRef.current = false;
+    }
+  }, [apiFetch, courierId]);
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refreshCourierStatus();
+      }
+    };
+    const pollTimer = window.setInterval(
+      refreshWhenVisible,
+      courierStatusPollMs,
+    );
+
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(pollTimer);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [refreshCourierStatus]);
 
   const activeOrders = useMemo(
     () => orders.filter(isActiveAssignedOrder),
@@ -375,6 +417,7 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
   }
 
   const profile = courier.courier_profile;
+  const hasSignedIn = courier.last_login != null;
   const isAvailable =
     courier.is_active !== false && profile?.is_available !== false;
   const maxActiveOrders = profile?.max_active_orders ?? 0;
@@ -397,8 +440,8 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
               <h1 className="truncate text-2xl font-semibold">
                 {fullNameFromBackendUser(courier)}
               </h1>
-              <Badge tone={isAvailable ? "green" : "red"}>
-                {isAvailable ? "متاح" : "غير متاح"}
+              <Badge tone={!hasSignedIn ? "blue" : isAvailable ? "green" : "red"}>
+                {!hasSignedIn ? "لم يسجل الحساب بعد" : isAvailable ? "متاح" : "غير متاح"}
               </Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">

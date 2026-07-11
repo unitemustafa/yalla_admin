@@ -132,10 +132,10 @@ Endpoint index:
 | `/api/v1/auth/login/admin`, `/login/admin/` | POST | public, admin role required |
 | `/api/v1/auth/refresh`, `/refresh/` | POST | public |
 | `/api/v1/auth/logout`, `/logout/` | POST | authenticated |
-| `/api/v1/auth/me`, `/me/` | GET, PATCH, DELETE | authenticated |
+| `/api/v1/auth/me`, `/me/` | GET, PATCH | authenticated |
 | `/api/v1/auth/client/profile`, `/client/profile/` | PUT, PATCH | authenticated client |
 | `/api/v1/auth/users`, `/users/` | GET, POST | authenticated admin |
-| `/api/v1/auth/users/{user_id}`, `/users/{user_id}/` | GET, PATCH, DELETE | authenticated admin |
+| `/api/v1/auth/users/{user_id}`, `/users/{user_id}/` | GET, PATCH | authenticated admin |
 | `/api/v1/auth/representatives/` | GET | authenticated admin |
 | `/api/v1/auth/check-username`, `/check-username/` | GET | public |
 | `/api/v1/auth/check-email`, `/check-email/` | GET | public |
@@ -259,11 +259,10 @@ Auth/account contracts:
 | `POST /auth/logout` | `refresh` or `refreshToken` | `{"detail": "Logout successful."}` |
 | `GET /auth/me` | none | `UserSerializer` |
 | `PATCH /auth/me` | profile fields below | `UserSerializer` |
-| `DELETE /auth/me` | `password` | `{"detail": "Account deleted."}` |
 | `PATCH/PUT /auth/client/profile` | same profile fields | `UserSerializer`; client role only |
 | `GET /auth/users` | none | list of `AdminUserSerializer` |
 | `POST /auth/users` | admin user write fields | `AdminUserSerializer` |
-| `GET/PATCH/DELETE /auth/users/{id}` | admin user write fields for PATCH | detail/stats for GET/PATCH, 204 for DELETE |
+| `GET/PATCH /auth/users/{id}` | admin user write fields for PATCH | detail/stats for GET/PATCH |
 | `GET /auth/representatives/` | none | admin user list filtered to representatives |
 | `GET /auth/check-username` | query `username`, optional `exclude_user_id` for admin | `{available, registered}` |
 | `GET /auth/check-email` | query `email`, optional `exclude_user_id` for admin | `{available, registered}` |

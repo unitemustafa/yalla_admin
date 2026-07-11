@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   Camera,
   ChevronDown,
   ChevronRight,
-  CheckCircle2,
   Eye,
   EyeOff,
   IdCard,
@@ -23,7 +22,6 @@ import {
   Search,
   Send,
   ShieldCheck,
-  Trash2,
   Truck,
   Upload,
   UserRound,
@@ -47,8 +45,6 @@ import {
 } from "../order-display";
 import { AppSelect, Badge, Button, Card, Field, Input, PageTitle, Pagination, Switch } from "../primitives";
 import { useSnackbar } from "../snackbar";
-import { useUndoableDelete } from "../use-undoable-delete";
-import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
 import {
   apiResponseData,
   firstApiError,
@@ -97,6 +93,7 @@ type Draft = {
 };
 
 const couriersPageSize = 10;
+const courierStatusPollMs = 10_000;
 
 const emptyDraft: Draft = {
   firstName: "",
@@ -226,7 +223,6 @@ function validateCourierDraft(draft: Draft, isEditing: boolean) {
   const password = draft.password;
 
   if (!draft.firstName.trim()) errors.firstName = "اكتب الاسم الأول.";
-  if (!draft.lastName.trim()) errors.lastName = "اكتب اسم العائلة.";
   if (!draft.username.trim()) {
     errors.username = "اكتب اسم المستخدم.";
   } else if (!courierUsernameValid(draft.username)) {
@@ -546,7 +542,7 @@ function CourierForm({
               </div>
               <div className="grid gap-x-5 gap-y-5 md:grid-cols-2">
                 <Field label="الاسم الأول"><Input required autoComplete="off" placeholder="مثال: أحمد" value={draft.firstName} onChange={(e) => update("firstName", e.target.value)} className="h-10 rounded-md" /></Field>
-                <Field label="اسم العائلة"><Input required autoComplete="off" placeholder="مثال: محمد" value={draft.lastName} onChange={(e) => update("lastName", e.target.value)} className="h-10 rounded-md" /></Field>
+                <Field label="اسم العائلة (اختياري)"><Input autoComplete="off" placeholder="مثال: محمد" value={draft.lastName} onChange={(e) => update("lastName", e.target.value)} className="h-10 rounded-md" /></Field>
                 <Field label="اسم المستخدم *"><div className="space-y-2"><div className="relative"><IdCard className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoComplete="off" dir="ltr" placeholder="اسم فريد لتسجيل الدخول" value={draft.username} onFocus={() => setFocusedAvailabilityField("username")} onBlur={() => setFocusedAvailabilityField(null)} onKeyDown={(event) => { if (event.key === " ") event.preventDefault(); }} onChange={(e) => update("username", e.target.value)} className="h-10 rounded-md ps-11 text-right" /></div><AvailabilityLine field="username" state={usernameAvailability.state} error={errorFor("username")} showSuccess={focusedAvailabilityField === "username"} /></div></Field>
                 <Field label="رقم الهاتف *"><div className="space-y-2"><div className="relative"><Phone className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoComplete="off" inputMode="tel" dir="ltr" placeholder="01xxxxxxxxx" value={draft.phone} onFocus={() => setFocusedAvailabilityField("phone")} onBlur={() => setFocusedAvailabilityField(null)} onChange={(e) => update("phone", e.target.value)} className="h-10 rounded-md ps-11 text-right" /></div><AvailabilityLine field="phone" state={phoneAvailability.state} error={errorFor("phone")} showSuccess={focusedAvailabilityField === "phone"} /></div></Field>
                 <Field label="البريد الإلكتروني *"><div className="space-y-2"><div className="relative"><Mail className="pointer-events-none absolute end-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input required autoComplete="new-password" type="email" dir="ltr" placeholder="name@example.com" value={draft.email} onFocus={() => setFocusedAvailabilityField("email")} onBlur={() => setFocusedAvailabilityField(null)} onKeyDown={(event) => { if (event.key === " ") event.preventDefault(); }} onChange={(e) => update("email", e.target.value)} className="h-10 rounded-md ps-11 text-right" /></div><AvailabilityLine field="email" state={emailAvailability.state} error={errorFor("email")} showSuccess={focusedAvailabilityField === "email"} /></div></Field>
@@ -565,7 +561,7 @@ function CourierForm({
               <div className="h-36 rounded-t-[12px] bg-gradient-to-l from-primary via-primary/80 to-primary/50" />
               <div className="flex flex-1 flex-col px-5 pb-5">
                 <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 text-start">
-                  <div className="relative -mt-12 size-24"><DashboardImage src={avatarPreviewUrl || draft.avatarUrl} placeholderType="courier" alt="صورة المندوب" width={96} height={96} className="size-24 overflow-hidden rounded-2xl border-4 border-card bg-background shadow-lg" imageClassName="object-cover" /><span className="absolute -bottom-1 -start-1 flex size-6 items-center justify-center rounded-full border-2 border-card bg-emerald-500 text-white"><CheckCircle2 className="size-3.5" /></span></div>
+                  <div className="-mt-12 size-24"><DashboardImage src={avatarPreviewUrl || draft.avatarUrl} placeholderType="courier" alt="صورة المندوب" width={96} height={96} className="size-24 overflow-hidden rounded-2xl border-4 border-card bg-background shadow-lg" imageClassName="object-cover" /></div>
                   <div className="min-w-0">
                     <h3 className="truncate text-lg font-extrabold">{[draft.firstName, draft.lastName].filter(Boolean).join(" ") || "اسم المندوب"}</h3>
                     <p className="mt-1 truncate text-xs text-muted-foreground">{draft.phone || "رقم الهاتف سيظهر هنا"}</p>
@@ -782,7 +778,6 @@ function PasswordDialog({
 export function CouriersPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
-  const queueUndoableDelete = useUndoableDelete();
   const searchParams = useSearchParams();
   const focusedCourier = searchParams.get("courier")?.trim() ?? "";
   const [couriers, setCouriers] = useState<BackendDashboardUser[]>([]);
@@ -792,12 +787,12 @@ export function CouriersPage() {
   const [error, setError] = useState<string | null>(null);
   const [assigning, setAssigning] = useState<BackendDashboardUser | null>(null);
   const [passwordCourier, setPasswordCourier] = useState<BackendDashboardUser | null>(null);
-  const [deleteCourier, setDeleteCourier] = useState<BackendDashboardUser | null>(null);
   const [selectedOrder, setSelectedOrder] = useState("");
   const [orderSearch, setOrderSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [busy, setBusy] = useState<string | null>(null);
+  const statusRefreshInFlightRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -830,6 +825,43 @@ export function CouriersPage() {
     const timer = window.setTimeout(() => { void load(); }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  const refreshCourierStatuses = useCallback(async () => {
+    if (statusRefreshInFlightRef.current) return;
+
+    statusRefreshInFlightRef.current = true;
+    try {
+      const response = await apiFetch("auth/representatives/");
+      const data = await apiResponseData(response);
+
+      if (response.ok && Array.isArray(data)) {
+        setCouriers(data.filter(isBackendDashboardUser));
+      }
+    } finally {
+      statusRefreshInFlightRef.current = false;
+    }
+  }, [apiFetch]);
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refreshCourierStatuses();
+      }
+    };
+    const pollTimer = window.setInterval(
+      refreshWhenVisible,
+      courierStatusPollMs,
+    );
+
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(pollTimer);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [refreshCourierStatuses]);
 
   const assignableOrders = useMemo(
     () => orders.filter(isAssignmentEligible),
@@ -977,81 +1009,6 @@ export function CouriersPage() {
     }
   }
 
-  async function restoreCourier(courier: BackendDashboardUser, index: number) {
-    setBusy(`restore-${courier.id}`);
-    try {
-      const response = await apiFetch(`auth/users/${courier.id}/restore/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: courier.email,
-          username: courier.username,
-          phone: courier.phone,
-          is_active: courier.is_active !== false,
-        }),
-      });
-      const data = await apiResponseData(response);
-      if (!response.ok || !isBackendDashboardUser(data)) {
-        throw new Error(errorMessage(data, "تعذر التراجع عن حذف المندوب."));
-      }
-      setCouriers((rows) => {
-        if (rows.some((row) => row.id === data.id)) return rows;
-        const nextRows = [...rows];
-        nextRows.splice(Math.max(0, index), 0, data);
-        return nextRows;
-      });
-      showSnackbar({ message: `تمت استعادة المندوب ${fullNameFromBackendUser(data)}.`, tone: "success" });
-    } catch (reason) {
-      showSnackbar({
-        message: reason instanceof Error ? reason.message : "تعذر التراجع عن حذف المندوب.",
-        tone: "danger",
-      });
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function confirmDelete() {
-    if (!deleteCourier) return;
-    const courier = deleteCourier;
-    const courierIndex = couriers.findIndex((row) => row.id === courier.id);
-    setBusy(`delete-${courier.id}`);
-    const response = await apiFetch(`auth/users/${courier.id}/`, { method: "DELETE" });
-    const data = await apiResponseData(response);
-    if (!response.ok) {
-      showSnackbar({
-        message: errorMessage(data, "تعذر حذف المندوب."),
-        tone: "danger",
-      });
-      setBusy(null);
-      return;
-    }
-    queueUndoableDelete({
-      message: "تم حذف حساب المندوب.",
-      onDelete: () => {
-        setCouriers((rows) => rows.filter((row) => row.id !== courier.id));
-        setDeleteCourier(null);
-      },
-      onUndo: () => {
-        return restoreCourier(courier, courierIndex);
-      },
-      onCommit: async () => {
-        const response: { ok: boolean } = { ok: true };
-        const data = null;
-        if (!response.ok) {
-          throw new Error(errorMessage(data, "تعذر حذف المندوب."));
-        }
-      },
-      onCommitError: (reason) => {
-        showSnackbar({
-          message: reason instanceof Error ? reason.message : "تعذر حذف المندوب.",
-          tone: "danger",
-        });
-      },
-    });
-    setBusy(null);
-  }
-
   return (
     <div className="px-6 py-8">
       <PageTitle
@@ -1125,12 +1082,15 @@ export function CouriersPage() {
             const active = orders.filter((order) => isActiveAssignedOrder(order) && assignedRepresentativeId(order) === String(courier.id)).length;
             const delivered = orders.filter((order) => order.status === "delivered" && assignedRepresentativeId(order) === String(courier.id)).length;
             const maxActiveOrders = profile?.max_active_orders ?? 0;
+            const hasSignedIn = courier.last_login != null;
             const isAvailable = courier.is_active !== false && profile?.is_available !== false;
             const isAtCapacity = maxActiveOrders > 0 && active >= maxActiveOrders;
             const assignableCount = assignableOrders.length + reassignableOrders.length;
-            const canAssign = isAvailable && !isAtCapacity && assignableCount > 0 && busy === null;
+            const canAssign = hasSignedIn && isAvailable && !isAtCapacity && assignableCount > 0 && busy === null;
             const assignmentDisabledReason =
-              assignableCount === 0
+              !hasSignedIn
+                ? "لم يسجل الحساب بعد"
+                : assignableCount === 0
                 ? "لا توجد طلبات مؤهلة للإسناد"
                 : !isAvailable
                   ? "المندوب غير متاح"
@@ -1152,8 +1112,8 @@ export function CouriersPage() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-bold">{fullNameFromBackendUser(courier)}</h3>
-                      <Badge tone={courier.is_active === false ? "red" : profile?.is_available === false ? "blue" : "green"}>
-                        {courier.is_active === false ? "معطل" : profile?.is_available === false ? "غير متاح" : "متاح"}
+                      <Badge tone={!hasSignedIn ? "blue" : courier.is_active === false ? "red" : profile?.is_available === false ? "blue" : "green"}>
+                        {!hasSignedIn ? "لم يسجل الحساب بعد" : courier.is_active === false ? "معطل" : profile?.is_available === false ? "غير متاح" : "متاح"}
                       </Badge>
                       {isAtCapacity ? <Badge tone="red">ممتلئ</Badge> : null}
                     </div>
@@ -1167,10 +1127,10 @@ export function CouriersPage() {
                   <div className="rounded-md bg-muted px-3 py-2"><div className="font-bold">{maxActiveOrders}</div><div className="text-xs text-muted-foreground">السعة</div></div>
                 </div>
                 <div className="flex flex-nowrap justify-start gap-2 xl:justify-end">
-                  <div className="flex shrink-0 items-center gap-2 rounded-md border px-2 py-1">
+                  <div className="flex shrink-0 items-center gap-2 rounded-md border px-2 py-1" title={!hasSignedIn ? "يتاح تغيير التوفر بعد أول تسجيل دخول للحساب." : undefined}>
                     <Switch
                       checked={profile?.is_available !== false}
-                      disabled={busy !== null || !profile?.service_city}
+                      disabled={busy !== null || !profile?.service_city || !hasSignedIn}
                       onCheckedChange={(checked) =>
                         void handleAvailabilityChange(courier, checked)
                       }
@@ -1197,7 +1157,6 @@ export function CouriersPage() {
                   </Button>
                   <Link href={`/delivery/couriers/${courier.id}/edit`} aria-label="تعديل" title="تعديل" className="inline-flex size-9 items-center justify-center rounded-md border border-border bg-background text-muted-foreground shadow-sm transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"><Pencil className="size-4" /></Link>
                   <Button size="icon" variant="outline" disabled={busy !== null} title="تغيير كلمة المرور" aria-label="تغيير كلمة المرور" onClick={() => setPasswordCourier(courier)}><KeyRound className="size-4" /></Button>
-                  <Button size="icon" variant="outline" disabled={busy !== null} onClick={() => setDeleteCourier(courier)} aria-label="حذف" className="text-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 className="size-4" /></Button>
                 </div>
               </Card>
             );
@@ -1224,15 +1183,6 @@ export function CouriersPage() {
 
       {passwordCourier ? (
         <PasswordDialog courier={passwordCourier} busy={busy === `password-${passwordCourier.id}`} onClose={() => setPasswordCourier(null)} onConfirm={(password) => void confirmPassword(password)} />
-      ) : null}
-      {deleteCourier ? (
-        <ConfirmDeleteDialog
-          title="حذف المندوب"
-          description={`هل تريد حذف المندوب ${fullNameFromBackendUser(deleteCourier)}؟`}
-          busy={busy === `delete-${deleteCourier.id}`}
-          onCancel={() => setDeleteCourier(null)}
-          onConfirm={() => void confirmDelete()}
-        />
       ) : null}
       {assigning ? (
         <Modal title={`إسناد طلب إلى ${fullNameFromBackendUser(assigning)}`} onClose={() => { setAssigning(null); setSelectedOrder(""); setOrderSearch(""); }}>

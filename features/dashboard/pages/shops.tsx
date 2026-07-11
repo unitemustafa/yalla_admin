@@ -90,21 +90,19 @@ function AddShopDrawer({
 }) {
   const [name, setName] = useState(initialShop?.name ?? "");
   const [category, setCategory] = useState(initialShop?.category ?? "");
-  const [appearsInGeneral, setAppearsInGeneral] = useState(initialShop?.scope !== "service_city");
+  const [appearsInGeneral, setAppearsInGeneralState] = useState(initialShop?.scope !== "service_city");
   const [appearsInServiceCities, setAppearsInServiceCities] = useState(
-    Boolean(initialShop?.serviceCityIds?.length) || initialShop?.scope === "service_city",
+    initialShop?.scope === "service_city",
   );
   const [selectedServiceCityIds, setSelectedServiceCityIds] = useState<string[]>(
-    initialShop?.serviceCityIds ?? [],
+    initialShop?.scope === "service_city" ? initialShop?.serviceCityIds?.slice(0, 1) ?? [] : [],
   );
   const canSave =
     name.trim() &&
     category.trim() &&
     (appearsInGeneral || (appearsInServiceCities && selectedServiceCityIds.length > 0));
   const mode = initialShop ? "edit" : "create";
-  const scopeDescription = appearsInGeneral && appearsInServiceCities
-    ? "هذا المحل يظهر في القسم العام وكذلك داخل مدن الخدمة المختارة."
-    : appearsInGeneral
+  const scopeDescription = appearsInGeneral
       ? "هذا المحل عام ويظهر دون ربطه بمدن خدمة محددة."
       : appearsInServiceCities
         ? "هذا المحل يظهر في مدن الخدمة المختارة فقط."
@@ -126,13 +124,22 @@ function AddShopDrawer({
   function toggleServiceCity(cityId: string) {
     setSelectedServiceCityIds((currentIds) =>
       currentIds.includes(cityId)
-        ? currentIds.filter((currentId) => currentId !== cityId)
-        : [...currentIds, cityId],
+        ? []
+        : [cityId],
     );
+  }
+
+  function setAppearsInGeneral(enabled: boolean) {
+    setAppearsInGeneralState(enabled);
+    if (enabled) {
+      setAppearsInServiceCities(false);
+      setSelectedServiceCityIds([]);
+    }
   }
 
   function setServiceCitiesEnabled(enabled: boolean) {
     setAppearsInServiceCities(enabled);
+    if (enabled) setAppearsInGeneralState(false);
     if (!enabled) {
       setSelectedServiceCityIds([]);
     }
@@ -218,14 +225,14 @@ function AddShopDrawer({
                     <span className="block text-sm font-semibold">يظهر في العام</span>
                     <span className="mt-1 block text-xs text-muted-foreground">القسم العام داخل التطبيق.</span>
                   </span>
-                  <Switch checked={appearsInGeneral} onCheckedChange={setAppearsInGeneral} />
+                  <Switch checked={appearsInGeneral} disabled={appearsInServiceCities} onCheckedChange={setAppearsInGeneral} />
                 </label>
                 <label className="flex min-h-16 cursor-pointer items-center justify-between gap-3 rounded-md border bg-background px-4 py-3 shadow-sm transition hover:border-primary/40">
                   <span>
                     <span className="block text-sm font-semibold">يظهر في مدن الخدمة</span>
-                    <span className="mt-1 block text-xs text-muted-foreground">اختر مدينة واحدة أو أكثر.</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">اختر مدينة واحدة فقط.</span>
                   </span>
-                  <Switch checked={appearsInServiceCities} onCheckedChange={setServiceCitiesEnabled} />
+                  <Switch checked={appearsInServiceCities} disabled={appearsInGeneral} onCheckedChange={setServiceCitiesEnabled} />
                 </label>
               </div>
             </div>
@@ -235,7 +242,7 @@ function AddShopDrawer({
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-medium">مدن الخدمة *</div>
                   <span className="text-xs text-muted-foreground">
-                    {serviceCitiesLoading ? "جاري التحميل..." : `${selectedServiceCityIds.length} محددة`}
+                    {serviceCitiesLoading ? "جاري التحميل..." : `${selectedServiceCityIds.length} مدينة`}
                   </span>
                 </div>
                 <div className="grid max-h-48 gap-2 overflow-y-auto rounded-md border bg-muted/10 p-2 sm:grid-cols-2">
@@ -251,6 +258,7 @@ function AddShopDrawer({
                         <input
                           type="checkbox"
                           checked={selected}
+                          disabled={selectedServiceCityIds.length > 0 && !selected}
                           onChange={() => toggleServiceCity(cityId)}
                           className="size-4 accent-primary"
                         />

@@ -5,7 +5,7 @@ import "./globals.css";
 import "leaflet/dist/leaflet.css";
 
 export const metadata: Metadata = {
-  title: "Yalla Admin",
+  title: "يلا أدمن",
   description: "Yalla Admin dashboard",
 };
 
@@ -101,32 +101,6 @@ const themeScript = `
           "--sidebar-accent-foreground": "hsl(233 90% 94%)",
           "--sidebar-border": "hsl(232 18% 27%)",
           "--sidebar-ring": "hsl(233 92% 68%)"
-        }
-      },
-      indigo: {
-        light: {
-          "--primary": "hsl(239 72% 56%)",
-          "--primary-foreground": "hsl(0 0% 100%)",
-          "--ring": "hsl(239 72% 62%)",
-          "--sidebar-foreground": "hsl(235 28% 27%)",
-          "--sidebar-primary": "hsl(239 72% 56%)",
-          "--sidebar-primary-foreground": "hsl(0 0% 100%)",
-          "--sidebar-accent": "hsl(233 75% 95%)",
-          "--sidebar-accent-foreground": "hsl(239 65% 34%)",
-          "--sidebar-border": "hsl(233 35% 88%)",
-          "--sidebar-ring": "hsl(239 72% 62%)"
-        },
-        dark: {
-          "--primary": "hsl(238 82% 70%)",
-          "--primary-foreground": "hsl(238 62% 12%)",
-          "--ring": "hsl(238 82% 70%)",
-          "--sidebar-foreground": "hsl(232 30% 92%)",
-          "--sidebar-primary": "hsl(238 82% 70%)",
-          "--sidebar-primary-foreground": "hsl(238 62% 12%)",
-          "--sidebar-accent": "hsl(238 26% 20%)",
-          "--sidebar-accent-foreground": "hsl(233 85% 94%)",
-          "--sidebar-border": "hsl(238 16% 27%)",
-          "--sidebar-ring": "hsl(238 82% 70%)"
         }
       },
       rose: {

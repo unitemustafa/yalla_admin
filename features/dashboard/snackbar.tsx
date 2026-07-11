@@ -130,8 +130,8 @@ function SnackbarItem({
               : "border-current/30 bg-background/70 hover:bg-background",
           )}
           onClick={() => {
-            snackbar.onAction?.();
             onClose();
+            snackbar.onAction?.();
           }}
           type="button"
         >

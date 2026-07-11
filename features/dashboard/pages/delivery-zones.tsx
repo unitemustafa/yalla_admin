@@ -497,7 +497,7 @@ function ZonesTable({
                 </div>
               </td>
               <td className="p-2 align-middle font-semibold">
-                {deliveryPriceLabel(zone)}
+                <CurrencyText>{deliveryPriceLabel(zone)}</CurrencyText>
               </td>
               <td className="p-2 align-middle">
                 <StatusBadge status={zone.status} />
@@ -572,8 +572,9 @@ function ZonesMobileList({
               <MapPin className="size-5" />
             </span>
             <div className="min-w-0">
-              <div className="grid gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-bold text-foreground">{zone.name}</h3>
+                <StatusBadge status={zone.status} />
               </div>
             </div>
           </div>
@@ -588,7 +589,9 @@ function ZonesMobileList({
               <div className="text-xs text-muted-foreground">مدينة التوصيل</div>
             </div>
             <div className="rounded-md bg-muted px-3 py-2">
-              <div className="truncate font-bold" dir="ltr">{deliveryPriceLabel(zone)}</div>
+              <div className="truncate font-bold" dir="ltr">
+                <CurrencyText>{deliveryPriceLabel(zone)}</CurrencyText>
+              </div>
               <div className="text-xs text-muted-foreground">سعر التوصيل</div>
             </div>
           </div>

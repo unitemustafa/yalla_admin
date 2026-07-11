@@ -1,6 +1,7 @@
 import type { DashboardUser } from "./default-dashboard-users";
 import { normalizeImageSrc } from "@/lib/media-url";
 import { displayLocalPhone } from "./account-fields";
+import { userAvatarPlaceholder } from "../placeholders";
 
 export type BackendDashboardUser = {
   id: string | number;
@@ -49,21 +50,24 @@ export type BackendDashboardUser = {
   } | null;
 };
 
-const defaultAvatar = "/default-user-avatar.svg";
 const unavailable = "غير متاح";
 const unset = "غير محدد";
 
-export function isBackendDashboardUser(value: unknown): value is BackendDashboardUser {
+export function isBackendDashboardUser(
+  value: unknown,
+): value is BackendDashboardUser {
   return Boolean(value && typeof value === "object" && "id" in value);
 }
 
 export function fullNameFromBackendUser(user: BackendDashboardUser) {
   const name = [user.first_name, user.last_name]
     .map((value) => String(value ?? "").trim())
-    .filter(Boolean)
+    .filter((value) => value && value !== "-")
     .join(" ");
 
-  return name || user.username?.trim() || user.email?.trim() || `مستخدم #${user.id}`;
+  return (
+    name || user.username?.trim() || user.email?.trim() || `مستخدم #${user.id}`
+  );
 }
 
 export function roleLabel(role: string | null | undefined) {
@@ -86,7 +90,9 @@ export function formatBackendDate(value: string | null | undefined) {
   }).format(date);
 }
 
-export function dashboardUserFromBackend(user: BackendDashboardUser): DashboardUser {
+export function dashboardUserFromBackend(
+  user: BackendDashboardUser,
+): DashboardUser {
   const active = user.is_active !== false;
   const serviceCityName = user.market_region_service_city_name?.trim();
   const location =
@@ -102,7 +108,11 @@ export function dashboardUserFromBackend(user: BackendDashboardUser): DashboardU
     username: user.username?.trim() || unavailable,
     phone: displayLocalPhone(user.phone),
     email: user.email?.trim() || unavailable,
-    avatar: normalizeImageSrc(user.avatar_url, defaultAvatar),
+    avatar: normalizeImageSrc(
+      user.avatar_url,
+      userAvatarPlaceholder(user.gender),
+    ),
+    gender: user.gender?.trim() || undefined,
     role: roleLabel(user.role),
     branch: unset,
     location,
@@ -115,10 +125,11 @@ export function dashboardUserFromBackend(user: BackendDashboardUser): DashboardU
         ? unavailable
         : String(user.customer_stats.total_spent),
     lastOrder: formatBackendDate(user.customer_stats?.last_order_at),
-    status: user.is_active === false ? "غير مفعل" : "نشط",
+    status: user.is_active === false ? "غير مفعل" : "مفعل",
     notes: "بيانات الحساب قادمة من الباك.",
     active,
     hasPassword: Boolean(user.has_password),
+    hasSignedIn: user.last_login != null,
   };
 }
 
@@ -127,7 +138,8 @@ export async function apiResponseData(response: Response) {
 }
 
 export function firstApiError(value: unknown): string | null {
-  if (typeof value === "string" && value.trim()) return translateApiMessage(value);
+  if (typeof value === "string" && value.trim())
+    return translateApiMessage(value);
 
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -152,32 +164,47 @@ export function translateApiMessage(message: string) {
     .toLowerCase()
     .replace(/[.!؟?]+$/u, "");
   const translations: Record<string, string> = {
-    "delivery area cannot be deleted while representatives are using it": "لا يمكن حذف منطقة التوصيل لأنها مستخدمة بواسطة مندوبين.",
+    "delivery area cannot be deleted while representatives are using it":
+      "لا يمكن حذف منطقة التوصيل لأنها مستخدمة بواسطة مندوبين.",
     "service city must be active": "يجب أن تكون مدينة الخدمة مفعلة.",
-    "reassign active orders before deleting this courier": "أعد إسناد الطلبات النشطة قبل حذف هذا المندوب.",
-    "password must contain at least one uppercase letter": "يجب أن تحتوي كلمة المرور على حرف إنجليزي كبير واحد على الأقل.",
-    "password must contain at least one lowercase letter": "يجب أن تحتوي كلمة المرور على حرف إنجليزي صغير واحد على الأقل.",
-    "password must contain at least one number": "يجب أن تحتوي كلمة المرور على رقم واحد على الأقل.",
-    "password must contain at least one special character": "يجب أن تحتوي كلمة المرور على رمز خاص واحد على الأقل.",
-    "password must be at least 8 characters": "يجب ألا تقل كلمة المرور عن 8 أحرف.",
-    "new password must be different from the current password": "كلمة المرور الجديدة يجب أن تكون مختلفة عن كلمة المرور الحالية.",
-    "spaces are not allowed in this field": "لا يسمح بوجود مسافات داخلية في هذا الحقل.",
+    "reassign active orders before deleting this courier":
+      "أعد إسناد الطلبات النشطة قبل حذف هذا المندوب.",
+    "password must contain at least one uppercase letter":
+      "يجب أن تحتوي كلمة المرور على حرف إنجليزي كبير واحد على الأقل.",
+    "password must contain at least one lowercase letter":
+      "يجب أن تحتوي كلمة المرور على حرف إنجليزي صغير واحد على الأقل.",
+    "password must contain at least one number":
+      "يجب أن تحتوي كلمة المرور على رقم واحد على الأقل.",
+    "password must contain at least one special character":
+      "يجب أن تحتوي كلمة المرور على رمز خاص واحد على الأقل.",
+    "password must be at least 8 characters":
+      "يجب ألا تقل كلمة المرور عن 8 أحرف.",
+    "new password must be different from the current password":
+      "كلمة المرور الجديدة يجب أن تكون مختلفة عن كلمة المرور الحالية.",
+    "spaces are not allowed in this field":
+      "لا يسمح بوجود مسافات داخلية في هذا الحقل.",
     "service city is required for couriers": "مدينة التشغيل مطلوبة للمندوب.",
-    "upload a valid profile photo: jpg, jpeg, png, or webp": "ارفع صورة شخصية بصيغة JPG أو JPEG أو PNG أو WEBP.",
-    "profile photo must be 5 mb or smaller": "يجب ألا يتجاوز حجم الصورة الشخصية 5 ميجابايت.",
+    "upload a valid profile photo: jpg, jpeg, png, or webp":
+      "ارفع صورة شخصية بصيغة JPG أو JPEG أو PNG أو WEBP.",
+    "profile photo must be 5 mb or smaller":
+      "يجب ألا يتجاوز حجم الصورة الشخصية 5 ميجابايت.",
     "this username is already taken": "اسم الدخول مستخدم بالفعل.",
     "user with this username already exists": "اسم الدخول مستخدم بالفعل.",
     "an account with this username already exists": "اسم الدخول مستخدم بالفعل.",
     "user with this email already exists": "البريد الإلكتروني مسجل بالفعل.",
-    "an account with this email already exists": "البريد الإلكتروني مسجل بالفعل.",
+    "an account with this email already exists":
+      "البريد الإلكتروني مسجل بالفعل.",
     "user with this phone already exists": "رقم الهاتف مسجل بالفعل.",
     "user with this phone number already exists": "رقم الهاتف مسجل بالفعل.",
     "an account with this phone already exists": "رقم الهاتف مسجل بالفعل.",
-    "an account with this phone number already exists": "رقم الهاتف مسجل بالفعل.",
+    "an account with this phone number already exists":
+      "رقم الهاتف مسجل بالفعل.",
     "account is inactive": "الحساب غير نشط حاليًا.",
     "This username is already taken.": "اسم الدخول مستخدم بالفعل.",
-    "An account with this email already exists.": "البريد الإلكتروني مسجل بالفعل.",
-    "An account with this phone number already exists.": "رقم الهاتف مسجل بالفعل.",
+    "An account with this email already exists.":
+      "البريد الإلكتروني مسجل بالفعل.",
+    "An account with this phone number already exists.":
+      "رقم الهاتف مسجل بالفعل.",
     "Account is inactive.": "الحساب غير نشط حاليًا.",
   };
 

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 export type DashboardPaletteId =
-  "teal" | "emerald" | "market-blue" | "indigo" | "rose" | "custom";
+  "teal" | "emerald" | "market-blue" | "rose" | "custom";
 export type DashboardFontId = "cairo" | "tajawal" | "alexandria" | "system";
 
 type ThemeMode = "light" | "dark";
@@ -152,41 +152,6 @@ export const dashboardPalettes: Array<{
       "--sidebar-accent-foreground": "hsl(233 90% 94%)",
       "--sidebar-border": "hsl(232 18% 27%)",
       "--sidebar-ring": "hsl(233 92% 68%)",
-    },
-  },
-  {
-    id: "indigo",
-    name: "نيلي",
-    swatches: ["#4f46e5", "#eef2ff", "#06b6d4"],
-    light: {
-      "--primary": "hsl(239 72% 56%)",
-      "--primary-foreground": "hsl(0 0% 100%)",
-      "--ring": "hsl(239 72% 62%)",
-      "--chart-1": "hsl(239 72% 56%)",
-      "--chart-2": "hsl(190 84% 42%)",
-      "--chart-5": "hsl(24 91% 58%)",
-      "--sidebar-foreground": "hsl(235 28% 27%)",
-      "--sidebar-primary": "hsl(239 72% 56%)",
-      "--sidebar-primary-foreground": "hsl(0 0% 100%)",
-      "--sidebar-accent": "hsl(233 75% 95%)",
-      "--sidebar-accent-foreground": "hsl(239 65% 34%)",
-      "--sidebar-border": "hsl(233 35% 88%)",
-      "--sidebar-ring": "hsl(239 72% 62%)",
-    },
-    dark: {
-      "--primary": "hsl(238 82% 70%)",
-      "--primary-foreground": "hsl(238 62% 12%)",
-      "--ring": "hsl(238 82% 70%)",
-      "--chart-1": "hsl(238 82% 70%)",
-      "--chart-2": "hsl(190 84% 52%)",
-      "--chart-5": "hsl(24 91% 62%)",
-      "--sidebar-foreground": "hsl(232 30% 92%)",
-      "--sidebar-primary": "hsl(238 82% 70%)",
-      "--sidebar-primary-foreground": "hsl(238 62% 12%)",
-      "--sidebar-accent": "hsl(238 26% 20%)",
-      "--sidebar-accent-foreground": "hsl(233 85% 94%)",
-      "--sidebar-border": "hsl(238 16% 27%)",
-      "--sidebar-ring": "hsl(238 82% 70%)",
     },
   },
   {
