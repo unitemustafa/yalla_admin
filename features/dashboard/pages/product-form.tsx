@@ -477,6 +477,19 @@ export function ProductFormPage() {
     return additions.filter((addition) => selectedIds.has(addition.id));
   }, [additions, selectedAdditionIds]);
 
+  const hasUnusedAttributeValues = useMemo(
+    () =>
+      attributes.some((attribute) =>
+        attribute.options.some(
+          (option) =>
+            !variantRows.some(
+              (variant) => variant.selections[attribute.clientId] === option.clientId,
+            ),
+        ),
+      ),
+    [attributes, variantRows],
+  );
+
   const filteredMarkets = useMemo(() => {
     const query = marketQuery.trim().toLowerCase();
     return markets.filter((market) => {
@@ -1439,6 +1452,14 @@ export function ProductFormPage() {
           </Section>
 
           <Section title="خصائص المنتج">
+            {hasUnusedAttributeValues ? (
+              <div
+                className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900"
+                role="status"
+              >
+                بعض قيم الخصائص غير مرتبطة بمتغيرات، ولذلك لن تظهر كاختيارات متاحة للعملاء.
+              </div>
+            ) : null}
             <div className="grid gap-3">
               {attributes.map((attribute, attributeIndex) => (
                 <div key={attribute.clientId} className="grid gap-3 rounded-md border bg-background p-3">
