@@ -65,6 +65,7 @@ type ProductLivePreviewProps = {
   isPopular: boolean;
   markets: ProductLivePreviewMarket[];
   name: string;
+  previewSource: "api" | "draft";
   selectedAdditionIds: number[];
   selectedMarketId: string;
   theme: "clothing" | "consumer" | "other";
@@ -352,6 +353,7 @@ export function ProductLivePreview({
   isPopular,
   markets,
   name,
+  previewSource,
   selectedAdditionIds,
   selectedMarketId,
   variantRows,
@@ -442,6 +444,16 @@ export function ProductLivePreview({
           </span>
           معاينة مباشرة
         </div>
+        <span
+          className={cn(
+            "rounded-full border px-2.5 py-1 text-[11px] font-bold",
+            previewSource === "api"
+              ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-100"
+              : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100",
+          )}
+        >
+          {previewSource === "api" ? "بيانات محفوظة من API" : "بيانات غير محفوظة"}
+        </span>
       </div>
 
       <div className="mt-4 overflow-hidden rounded-[28px] border border-white/10 bg-[#1A1A1A] p-2 text-white shadow-xl">

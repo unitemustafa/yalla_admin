@@ -499,6 +499,21 @@ function assertReadableProduct(product: NormalizedProduct, fallback: string) {
   return product;
 }
 
+function assertSaleReadyProduct(
+  product: NormalizedProduct,
+  payload: ProductWritePayload,
+) {
+  if (payload.is_available === true && product.variants.length === 0) {
+    throw new AdminApiError(
+      "حفظ الخادم المنتج دون سعر أو متغير صالح. راجع البيانات وحاول مرة أخرى.",
+      200,
+      { variants: ["يجب إضافة سعر أو متغير صالح قبل إتاحة المنتج للبيع."] },
+    );
+  }
+
+  return product;
+}
+
 async function parseAdminResponse(
   response: Response,
   fallback: string,
@@ -885,7 +900,10 @@ export async function createProduct(
   );
   const data = await parseAdminResponse(response, "تعذر حفظ المنتج");
 
-  return assertReadableProduct(normalizeProduct(data), "تعذر قراءة بيانات المنتج");
+  return assertSaleReadyProduct(
+    assertReadableProduct(normalizeProduct(data), "تعذر قراءة بيانات المنتج"),
+    payload,
+  );
 }
 
 export async function updateProduct(
@@ -901,7 +919,10 @@ export async function updateProduct(
   );
   const data = await parseAdminResponse(response, "تعذر حفظ المنتج");
 
-  return assertReadableProduct(normalizeProduct(data), "تعذر قراءة بيانات المنتج");
+  return assertSaleReadyProduct(
+    assertReadableProduct(normalizeProduct(data), "تعذر قراءة بيانات المنتج"),
+    payload,
+  );
 }
 
 export async function uploadProductImages(

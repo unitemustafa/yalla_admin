@@ -4,7 +4,6 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import {
-  AlertCircle,
   ArrowRight,
   CalendarClock,
   Eye,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
+import { PageLoadError } from "../load-error-card";
 import { formatMoney, translateOrderStatus } from "../admin-api";
 import {
   apiResponseData,
@@ -170,8 +170,10 @@ export function UserDetailApiPage({ userId }: { userId: string }) {
         await loadUser();
       }
       showSnackbar({
-        message: checked ? "تم تفعيل المستخدم." : "تم تعطيل المستخدم.",
-        tone: "success",
+        message: checked
+          ? `تم تفعيل العميل ${user.name}.`
+          : `تم تعطيل العميل ${user.name}.`,
+        tone: checked ? "success" : "danger",
       });
     } catch (activationError) {
       showSnackbar({
@@ -245,8 +247,11 @@ function UserDetailErrorState({
   message: string;
   onRetry: () => void;
 }) {
+  void message;
   return (
     <div className="space-y-6 px-6 py-10">
+      <PageLoadError onRetry={onRetry} />
+      {/*
       <PageTitle
         title="بيانات المستخدم"
         description="تعذر فتح ملف المستخدم من الباك"
@@ -287,6 +292,7 @@ function UserDetailErrorState({
           </Button>
         </div>
       </Card>
+      */}
     </div>
   );
 }

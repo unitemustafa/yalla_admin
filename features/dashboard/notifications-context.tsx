@@ -59,13 +59,17 @@ export function DashboardNotificationsProvider({
     if (inFlightRef.current) return inFlightRef.current;
 
     const request = (async () => {
-      const response = await apiFetch("notifications/unread-count/");
-      const data = await apiResponseData(response);
-      if (!response.ok) return unreadCountRef.current;
+      try {
+        const response = await apiFetch("notifications/unread-count/");
+        const data = await apiResponseData(response);
+        if (!response.ok) return unreadCountRef.current;
 
-      const nextCount = unreadCountFromApi(data);
-      setUnreadCount(nextCount);
-      return nextCount;
+        const nextCount = unreadCountFromApi(data);
+        setUnreadCount(nextCount);
+        return nextCount;
+      } catch {
+        return unreadCountRef.current;
+      }
     })();
 
     inFlightRef.current = request;
@@ -81,10 +85,10 @@ export function DashboardNotificationsProvider({
     if (!shouldRun) return;
 
     const initialTimer = window.setTimeout(() => {
-      void refreshUnreadCount();
+      void refreshUnreadCount().catch(() => undefined);
     }, 0);
     const pollTimer = window.setInterval(() => {
-      void refreshUnreadCount();
+      void refreshUnreadCount().catch(() => undefined);
     }, unreadCountPollMs);
 
     return () => {

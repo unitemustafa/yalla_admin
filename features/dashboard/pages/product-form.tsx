@@ -447,6 +447,8 @@ export function ProductFormPage() {
   const [deleteImageId, setDeleteImageId] = useState<number | null>(null);
   const [variantRows, setVariantRows] = useState<VariantDraft[]>(() => [emptyVariant()]);
   const [variantsDirty, setVariantsDirty] = useState(false);
+  const [previewSource, setPreviewSource] = useState<"api" | "draft">("draft");
+  const [legacyMissingPrice, setLegacyMissingPrice] = useState(false);
 
   const selectedMarket = markets.find((market) => market.id === selectedMarketId) ?? null;
   const primaryImage =
@@ -581,6 +583,10 @@ export function ProductFormPage() {
     );
     setVariantRows(variants);
     setVariantsDirty(false);
+    setPreviewSource(options.clone ? "draft" : "api");
+    setLegacyMissingPrice(
+      !options.clone && product.isAvailable && product.variants.length === 0,
+    );
     setSaveError("");
   }, []);
 
@@ -1043,8 +1049,12 @@ export function ProductFormPage() {
     const cleanAttributes = attributes.filter((attribute) => attribute.name.trim());
     if (!cleanAttributes.length) {
       const priced = variantRows.filter((variant) => variant.price.trim());
+      if (!isAvailable && priced.length === 0) return null;
       if (priced.length !== 1) return "أدخل السعر الأساسي فقط";
       if (!validPrice(priced[0].price)) return "سعر المنتج غير صالح";
+      return null;
+    }
+    if (!isAvailable && variantRows.every((variant) => !variant.price.trim())) {
       return null;
     }
     const seen = new Map<string, number>();
@@ -1092,7 +1102,7 @@ export function ProductFormPage() {
   function variantPayloads(): ProductVariantPayload[] {
     const activeAttributes = attributes.filter((attribute) => attribute.name.trim());
     const sourceRows = activeAttributes.length
-      ? variantRows
+      ? variantRows.filter((variant) => isAvailable || variant.price.trim())
       : variantRows.filter((variant) => variant.price.trim()).slice(0, 1);
 
     return sourceRows.map((variant) => ({
@@ -1125,8 +1135,9 @@ export function ProductFormPage() {
       description: description.trim(),
       discount: Number(discount || 0).toFixed(2),
       additions: additionIds,
-      attributes: attributePayload(),
-      ...(!isEditing || variantsDirty ? { variants: variantPayloads() } : {}),
+      ...(!isEditing || variantsDirty
+        ? { attributes: attributePayload(), variants: variantPayloads() }
+        : {}),
     };
     const localImages = productImages.filter(
       (image): image is Extract<ProductImageDraft, { kind: "local" }> =>
@@ -1236,6 +1247,8 @@ export function ProductFormPage() {
     <form
       className="min-h-screen bg-muted/20 px-4 py-6 sm:px-6 lg:px-8"
       dir="rtl"
+      onChangeCapture={() => setPreviewSource("draft")}
+      onClickCapture={() => setPreviewSource("draft")}
       onSubmit={saveProduct}
     >
       <div className="rounded-lg border bg-card p-4 shadow-sm">
@@ -1270,6 +1283,11 @@ export function ProductFormPage() {
               .map((line) => (
                 <div key={line}>{line}</div>
               ))}
+          </div>
+        ) : null}
+        {legacyMissingPrice ? (
+          <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
+            هذا المنتج لا يحتوي سعرًا محفوظًا، أدخل السعر ثم احفظه.
           </div>
         ) : null}
       </div>
@@ -1630,6 +1648,7 @@ export function ProductFormPage() {
             isPopular={isPopular}
             markets={markets}
             name={name}
+            previewSource={previewSource}
             selectedAdditionIds={selectedAdditionIds}
             selectedMarketId={selectedMarketId}
             theme={theme}

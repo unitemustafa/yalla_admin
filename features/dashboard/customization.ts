@@ -30,15 +30,15 @@ export const dashboardCustomizationChangeEvent =
   "yalla-dashboard-customization-change";
 
 export const defaultDashboardCustomization: DashboardCustomization = {
-  palette: "teal",
+  palette: "market-blue",
   font: "cairo",
   brandName: "",
   branchName: "",
   logoDataUrl: "",
   customColors: {
-    primary: "#155d72",
-    surface: "#e7f2f4",
-    accent: "#f0b64f",
+    primary: "#4F60F6",
+    surface: "#EEF2FF",
+    accent: "#14B8A6",
   },
 };
 

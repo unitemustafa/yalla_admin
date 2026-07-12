@@ -74,6 +74,10 @@ function LoginPageContent({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
   const { login } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{
+    email?: string;
+    password?: string;
+  }>({});
   const [pending, setPending] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -190,13 +194,31 @@ function LoginPageContent({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    setPending(true);
 
     const formData = new FormData(event.currentTarget);
+    const email = stripWhitespace(String(formData.get("email") ?? ""));
+    const password = stripWhitespace(String(formData.get("password") ?? ""));
+    const nextFieldErrors: { email?: string; password?: string } = {};
+
+    if (!email) {
+      nextFieldErrors.email = "يرجى إدخال البريد الإلكتروني.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      nextFieldErrors.email = "يرجى إدخال بريد إلكتروني صحيح.";
+    }
+
+    if (!password) {
+      nextFieldErrors.password = "يرجى إدخال كلمة المرور.";
+    }
+
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) return;
+
+    setPending(true);
+
     try {
       await login({
-        email: stripWhitespace(String(formData.get("email") ?? "")),
-        password: stripWhitespace(String(formData.get("password") ?? "")),
+        email,
+        password,
         remember: formData.get("remember") === "on",
       });
     } catch (caughtError) {
@@ -386,10 +408,16 @@ function LoginPageContent({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} noValidate className="space-y-5">
               <label className="block text-sm font-bold">
                 البريد الإلكتروني
-                <span className="mt-2 flex h-12 items-center gap-3 rounded-lg border border-border bg-card px-3 shadow-sm transition focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15">
+                <span
+                  className={`mt-2 flex h-12 items-center gap-3 rounded-lg border bg-card px-3 shadow-sm transition focus-within:ring-4 ${
+                    fieldErrors.email
+                      ? "border-red-500 focus-within:border-red-500 focus-within:ring-red-500/15"
+                      : "border-border focus-within:border-primary focus-within:ring-primary/15"
+                  }`}
+                >
                   <Mail className="size-5 text-muted-foreground" />
                   <input
                     name="email"
@@ -400,14 +428,39 @@ function LoginPageContent({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
                     className="h-full min-w-0 flex-1 bg-transparent text-right text-base outline-none placeholder:text-sm placeholder:font-bold placeholder:text-muted-foreground"
                     autoComplete="email"
                     onKeyDown={preventWhitespaceInput}
-                    onInput={cleanWhitespaceInput}
+                    onInput={(event) => {
+                      cleanWhitespaceInput(event);
+                      if (fieldErrors.email) {
+                        setFieldErrors((current) => ({
+                          ...current,
+                          email: undefined,
+                        }));
+                      }
+                    }}
+                    aria-invalid={Boolean(fieldErrors.email)}
+                    aria-describedby={fieldErrors.email ? "email-error" : undefined}
                   />
                 </span>
+                {fieldErrors.email ? (
+                  <span
+                    id="email-error"
+                    role="alert"
+                    className="mt-2 block text-sm font-semibold text-red-600 dark:text-red-400"
+                  >
+                    {fieldErrors.email}
+                  </span>
+                ) : null}
               </label>
 
               <label className="block text-sm font-bold">
                 كلمة المرور
-                <span className="mt-2 flex h-12 items-center gap-3 rounded-lg border border-border bg-card px-3 shadow-sm transition focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15">
+                <span
+                  className={`mt-2 flex h-12 items-center gap-3 rounded-lg border bg-card px-3 shadow-sm transition focus-within:ring-4 ${
+                    fieldErrors.password
+                      ? "border-red-500 focus-within:border-red-500 focus-within:ring-red-500/15"
+                      : "border-border focus-within:border-primary focus-within:ring-primary/15"
+                  }`}
+                >
                   <LockKeyhole className="size-5 text-muted-foreground" />
                   <input
                     name="password"
@@ -417,7 +470,19 @@ function LoginPageContent({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
                     className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-sm placeholder:font-bold placeholder:text-muted-foreground"
                     autoComplete="current-password"
                     onKeyDown={preventWhitespaceInput}
-                    onInput={cleanWhitespaceInput}
+                    onInput={(event) => {
+                      cleanWhitespaceInput(event);
+                      if (fieldErrors.password) {
+                        setFieldErrors((current) => ({
+                          ...current,
+                          password: undefined,
+                        }));
+                      }
+                    }}
+                    aria-invalid={Boolean(fieldErrors.password)}
+                    aria-describedby={
+                      fieldErrors.password ? "password-error" : undefined
+                    }
                   />
                   <button
                     type="button"
@@ -441,6 +506,15 @@ function LoginPageContent({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
                     )}
                   </button>
                 </span>
+                {fieldErrors.password ? (
+                  <span
+                    id="password-error"
+                    role="alert"
+                    className="mt-2 block text-sm font-semibold text-red-600 dark:text-red-400"
+                  >
+                    {fieldErrors.password}
+                  </span>
+                ) : null}
               </label>
 
               <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">

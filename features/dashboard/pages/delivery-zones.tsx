@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertCircle,
   ArrowUpDown,
   BadgeCheck,
   CheckCircle2,
@@ -36,6 +35,7 @@ import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
 import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
 import { useAuth } from "@/features/auth/auth-provider";
+import { PageLoadError } from "../load-error-card";
 import {
   deleteDeliveryZone,
   loadDeliveryZones,
@@ -932,6 +932,9 @@ export function DeliveryZonesPage() {
               ))}
             </div>
           ) : loadError ? (
+            <>
+              <PageLoadError className="mt-4 min-h-[280px]" onRetry={() => void loadZones()} />
+              {/*
             <Card className="mt-4 border-destructive/30 bg-destructive/10 p-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3 text-destructive">
@@ -944,6 +947,8 @@ export function DeliveryZonesPage() {
                 </Button>
               </div>
             </Card>
+              */}
+            </>
           ) : (
             <>
               <div className="mt-4">

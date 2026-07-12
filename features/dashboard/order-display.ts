@@ -59,6 +59,7 @@ export type OrderOfferLike = {
   section_id?: string | number | null;
   offer_id?: string | number | null;
   title?: string | null;
+  offer_title?: string | null;
   discount_amount?: OrderMoneyValue;
   created_at?: string | null;
   offer?: {
@@ -116,6 +117,8 @@ export type DashboardOrderLike = {
   pickup_stops?: OrderPickupStopLike[] | null;
   items?: OrderItemLike[] | null;
   offers?: OrderOfferLike[] | null;
+  has_offer?: boolean | null;
+  offer_titles?: string[] | null;
 };
 
 export const unknownLabel = "غير محدد";
@@ -202,6 +205,61 @@ export function getDeliveryTypeLabel(order: DashboardOrderLike) {
     return "دليفري";
   }
   return cleanText(order.delivery_type) || unknownLabel;
+}
+
+export function getOrderOffers(order: DashboardOrderLike) {
+  const offers = getMarketSections(order).flatMap((section) => section.offers ?? []);
+  if (offers.length > 0) return offers;
+  return Array.isArray(order.offers) ? order.offers : [];
+}
+
+export function orderOfferTitle(offer: OrderOfferLike) {
+  return (
+    cleanText(offer.offer?.title) ||
+    cleanText(offer.offer_title) ||
+    cleanText(offer.title) ||
+    (offer.offer_id ? `عرض #${offer.offer_id}` : "عرض")
+  );
+}
+
+export function getDashboardOrderOfferTitles(order: DashboardOrderLike) {
+  const explicitTitles = Array.isArray(order.offer_titles)
+    ? order.offer_titles.map(cleanText).filter(Boolean)
+    : [];
+  if (explicitTitles.length > 0) return explicitTitles;
+  return getOrderOffers(order).map(orderOfferTitle).filter(Boolean);
+}
+
+export function dashboardOrderHasOffer(order: DashboardOrderLike) {
+  if (typeof order.has_offer === "boolean") return order.has_offer;
+  return getOrderOffers(order).length > 0;
+}
+
+export function getDashboardOrderTypeLabel(order: DashboardOrderLike) {
+  const deliveryType = cleanText(order.delivery_type).toLowerCase();
+  const address = order.delivery_address;
+  const fixedArea =
+    deliveryType === "fixed_area" ||
+    (!deliveryType && Boolean(order.delivery_area || order.delivery_area_id || address?.delivery_area || address?.delivery_area_id));
+  const delivery =
+    deliveryType === "delivery" ||
+    deliveryType === "manual_quote" ||
+    (!deliveryType && (
+      cleanText(order.order_scope).toLowerCase() === "general" ||
+      Boolean(cleanText(address?.manual_city) || cleanText(address?.manual_area))
+    ));
+  const baseLabel = fixedArea ? "توصيل" : delivery ? "دليفري" : "دليفري";
+  return dashboardOrderHasOffer(order) ? `${baseLabel} عرض` : baseLabel;
+}
+
+export function formatEgyptPhoneForDisplay(phone: unknown) {
+  const original = cleanText(phone);
+  if (!original) return "-";
+  const digits = original.replace(/\D/g, "");
+  if (/^00201\d{9}$/.test(digits)) return `0${digits.slice(4)}`;
+  if (/^201\d{9}$/.test(digits)) return `0${digits.slice(2)}`;
+  if (/^01\d{9}$/.test(digits)) return digits;
+  return original;
 }
 
 export function getDeliveryPriceLabel(order: DashboardOrderLike) {

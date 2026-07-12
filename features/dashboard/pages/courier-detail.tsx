@@ -21,6 +21,7 @@ import {
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { DashboardImage } from "../dashboard-image";
+import { PageLoadError } from "../load-error-card";
 import {
   assignedRepresentativeId,
   isActiveAssignedOrder,
@@ -335,7 +336,7 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
   useEffect(() => {
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") {
-        void refreshCourierStatus();
+        void refreshCourierStatus().catch(() => undefined);
       }
     };
     const pollTimer = window.setInterval(
@@ -400,6 +401,8 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
   if (error || !courier) {
     return (
       <div className="px-6 py-8">
+        <PageLoadError onRetry={() => void load()} />
+        {/*
         <Card className="p-6">
           <div className="text-sm text-destructive">
             {error ?? "حساب المندوب غير موجود."}
@@ -412,6 +415,7 @@ export function CourierDetailPage({ courierId }: { courierId: string }) {
             الرجوع إلى المندوبين
           </Link>
         </Card>
+        */}
       </div>
     );
   }

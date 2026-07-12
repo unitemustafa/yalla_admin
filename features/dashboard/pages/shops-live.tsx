@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, Edit3, ImagePlus, LoaderCircle, MapPin, Plus, RefreshCw, Search, Store, Trash2, X } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
+import { PageLoadError, PageLoadingState } from "../load-error-card";
 import { AppSelect, Badge, Button, Card, DataTable, Input, PageTitle, Switch } from "../primitives";
 import { DashboardImage } from "../dashboard-image";
 import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
@@ -680,7 +681,7 @@ export function ShopsPage() {
           <div><h2 className="font-semibold">كل المحلات</h2><p className="text-xs text-muted-foreground">المنتجات ترث نطاق الظهور من المحل.</p></div>
           <div className="relative w-full sm:w-[700px]"><Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} className="h-11 ps-9" placeholder="ابحث عن محل..." /></div>
         </div>
-        {loading ? <div className="flex min-h-56 items-center justify-center text-sm text-muted-foreground"><LoaderCircle className="me-2 size-5 animate-spin" />جاري التحميل...</div> : error ? <div className="flex min-h-56 flex-col items-center justify-center gap-3"><AlertCircle className="size-8 text-destructive" /><p>{error}</p><Button variant="outline" onClick={() => void load()}>إعادة المحاولة</Button></div> : <DataTable minWidth={1060} columnWidths={[80, 310, 170, 280, 245]} headers={["", "المحل", "الفئة", "المدن", ""]} rows={filtered.map((market, index) => [
+        {loading ? <PageLoadingState /> : error ? <PageLoadError onRetry={() => void load()} /> : <DataTable minWidth={1060} columnWidths={[80, 310, 170, 280, 245]} headers={["", "المحل", "الفئة", "المدن", ""]} rows={filtered.map((market, index) => [
           <span key="index" className="mx-auto flex size-10 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">{index + 1}</span>,
           <div key="name" className="flex min-w-0 items-center gap-2.5 py-1"><DashboardImage src={market.image} placeholderType="store" alt="صورة المتجر" width={52} height={52} sizes="52px" className="size-[52px] shrink-0 rounded-md border bg-muted/35 shadow-sm" imageClassName="object-cover" /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-semibold">{market.name}</p><span className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-bold ${market.status === "active" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600" : "border-destructive/40 bg-destructive/10 text-destructive"}`}>{market.status === "active" ? "مفعلة" : "معطلة"}</span></div><p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{market.description || "لا يوجد وصف للمحل."}</p></div></div>,
           <Badge key="classification">{classificationName(market)}</Badge>,

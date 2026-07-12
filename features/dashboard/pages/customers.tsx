@@ -256,7 +256,9 @@ export function CustomersPage() {
         ),
       );
       showSnackbar({
-        message: checked ? "تم تفعيل المستخدم." : "تم تعطيل المستخدم.",
+        message: checked
+          ? `تم تفعيل العميل ${updatedCustomer.name}.`
+          : `تم تعطيل العميل ${updatedCustomer.name}.`,
         tone: checked ? "success" : "danger",
       });
     } catch (error) {
@@ -603,7 +605,7 @@ function AddCustomerDialog({
             إضافة عميل جديد
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            سيتم إنشاء حساب عميل في الباك ليظهر ضمن عملاء تطبيق يلا ماركت.
+            سيتم إنشاء حساب عميل ليظهر ضمن عملاء تطبيق يلا ماركت.
           </p>
         </div>
 
@@ -957,7 +959,7 @@ function CustomersTable({
               className="size-14 shrink-0 overflow-hidden rounded-full"
               imageClassName="object-cover"
             />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-bold text-foreground">{customer.name}</h3>
                 <Badge
@@ -975,7 +977,7 @@ function CustomersTable({
                 </Badge>
               </div>
               <p
-                className="mt-1 truncate text-sm text-muted-foreground"
+                className="mt-1 truncate text-right text-sm text-muted-foreground"
                 dir="ltr"
               >
                 {customer.phone} - {customer.email}

@@ -30,7 +30,6 @@ import {
 import {
   deleteServiceCity,
   loadDeliveryAreas,
-  saveDeliveryArea,
   type DeliveryArea,
   saveServiceCity,
   type ServiceCity,
@@ -40,6 +39,7 @@ import {
 import { useSnackbar } from "../snackbar";
 import { useAuth } from "@/features/auth/auth-provider";
 import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
+import { PageLoadError, PageLoadingState } from "../load-error-card";
 
 const CityCoverageMap = dynamic(() => import("../city-coverage-map"), {
   ssr: false,
@@ -360,19 +360,15 @@ function DeliveryAreasDialog({
   areas,
   loading,
   loadError,
-  busyAreaId,
   onClose,
   onReload,
-  onToggleArea,
 }: {
   city: ServiceCity;
   areas: DeliveryArea[];
   loading: boolean;
   loadError: string | null;
-  busyAreaId: number | null;
   onClose: () => void;
   onReload: () => void;
-  onToggleArea: (area: DeliveryArea, checked: boolean) => void;
 }) {
   useLockedPageScroll();
 
@@ -431,20 +427,18 @@ function DeliveryAreasDialog({
                   <col className="w-[220px]" />
                   <col className="w-[180px]" />
                   <col className="w-[120px]" />
-                  <col className="w-[210px]" />
                 </colgroup>
                 <thead>
                   <tr className="border-b bg-muted/35 text-xs text-muted-foreground">
                     <th className="px-4 py-3 text-start">اسم المنطقة</th>
                     <th className="px-4 py-3 text-start">سعر التوصيل</th>
                     <th className="px-4 py-3 text-start">الحالة</th>
-                    <th className="px-4 py-3 text-start" aria-label="تعطيل أو تفعيل" />
                   </tr>
                 </thead>
                 <tbody>
                   {areas.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="p-0">
+                      <td colSpan={3} className="p-0">
                         <div className="flex min-h-48 flex-col items-center justify-center gap-2 bg-muted/10 px-4 text-center">
                           <MapPin className="size-8 text-muted-foreground" />
                           <p className="font-semibold">لا توجد مناطق توصيل لهذه المدينة</p>
@@ -461,20 +455,6 @@ function DeliveryAreasDialog({
                           <Badge tone={area.is_active ? "green" : "red"}>
                             {area.is_active ? "مفعلة" : "معطلة"}
                           </Badge>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-2 whitespace-nowrap">
-                            <div className="flex h-9 items-center gap-2 rounded-md border bg-background px-3">
-                              <Switch
-                                checked={area.is_active}
-                                disabled={busyAreaId === area.id}
-                                onCheckedChange={(checked) => onToggleArea(area, checked)}
-                              />
-                              <span className="text-xs font-semibold">
-                                {area.is_active ? "تعطيل" : "تفعيل"}
-                              </span>
-                            </div>
-                          </div>
                         </td>
                       </tr>
                     ))
@@ -502,7 +482,6 @@ export function CitiesPage() {
   const [deliveryAreas, setDeliveryAreas] = useState<DeliveryArea[]>([]);
   const [areasLoading, setAreasLoading] = useState(false);
   const [areasError, setAreasError] = useState<string | null>(null);
-  const [busyAreaId, setBusyAreaId] = useState<number | null>(null);
 
   const loadAreasForCity = useCallback(
     async (city: ServiceCity) => {
@@ -622,39 +601,6 @@ export function CitiesPage() {
     setAreasError(null);
   }
 
-  async function toggleArea(area: DeliveryArea, checked: boolean) {
-    if (!selectedCityForAreas) return;
-
-    setBusyAreaId(area.id);
-    try {
-      await saveDeliveryArea(
-        apiFetch,
-        {
-          service_city_id: selectedCityForAreas.id,
-          name: area.name,
-          center_latitude: area.center_latitude,
-          center_longitude: area.center_longitude,
-          radius_km: area.radius_km,
-          delivery_price: Number(area.delivery_price).toFixed(2),
-          is_active: checked,
-        },
-        area.id,
-      );
-      await loadAreasForCity(selectedCityForAreas);
-      showSnackbar({
-        message: checked ? "تم تفعيل منطقة التوصيل." : "تم تعطيل منطقة التوصيل.",
-        tone: checked ? "success" : "danger",
-      });
-    } catch (reason) {
-      showSnackbar({
-        message: reason instanceof Error ? reason.message : "تعذر تحديث منطقة التوصيل.",
-        tone: "danger",
-      });
-    } finally {
-      setBusyAreaId(null);
-    }
-  }
-
   const activeCount = cities.filter((city) => city.is_active).length;
   const deliveryAreaTotal = cities.reduce((total, city) => total + city.delivery_area_count, 0);
   const linkedMarkets = cities.reduce((total, city) => total + city.market_count, 0);
@@ -719,9 +665,9 @@ export function CitiesPage() {
         </div>
 
         {loading ? (
-          <div className="flex min-h-56 items-center justify-center text-sm text-muted-foreground"><LoaderCircle className="me-2 size-5 animate-spin" />جاري تحميل المدن...</div>
+          <PageLoadingState />
         ) : error ? (
-          <div className="flex min-h-56 flex-col items-center justify-center gap-3 px-6 text-center"><AlertCircle className="size-8 text-destructive" /><p className="text-sm">{error}</p><Button variant="outline" onClick={() => void reload()}>إعادة المحاولة</Button></div>
+          <PageLoadError onRetry={() => void reload()} />
         ) : filteredCities.length === 0 ? (
           <div className="flex min-h-56 flex-col items-center justify-center gap-2 text-center"><MapPinned className="size-9 text-muted-foreground" /><p className="font-semibold">لا توجد مدن مطابقة</p><p className="text-sm text-muted-foreground">أضف أول مدينة أو غيّر عبارة البحث.</p></div>
         ) : (
@@ -840,10 +786,8 @@ export function CitiesPage() {
           areas={deliveryAreas}
           loading={areasLoading}
           loadError={areasError}
-          busyAreaId={busyAreaId}
           onClose={closeDeliveryAreas}
           onReload={() => void loadAreasForCity(selectedCityForAreas)}
-          onToggleArea={(area, checked) => void toggleArea(area, checked)}
         />
       ) : null}
     </div>

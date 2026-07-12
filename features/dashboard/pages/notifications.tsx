@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle,
   BarChart3,
   Bell,
   CheckCheck,
@@ -21,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
+import { PageLoadError, PageLoadingState } from "../load-error-card";
 import { useDashboardI18n } from "@/features/dashboard/i18n";
 import {
   Badge,
@@ -669,40 +669,11 @@ export function NotificationsPage() {
           </div>
         </div>
 
-        {error ? (
-          <div className="border-b border-destructive/30 bg-destructive/10 px-5 py-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-start gap-2 text-sm font-semibold text-destructive">
-                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                <span>{error}</span>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={loading}
-                onClick={() =>
-                  void loadNotifications(activeFilter, { showLoading: true })
-                }
-              >
-                {loading ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="size-4" />
-                )}
-                {t("notifications.retry")}
-              </Button>
-            </div>
-          </div>
-        ) : null}
+        {error ? <PageLoadError className={hasNotifications ? "min-h-40" : "min-h-[320px]"} onRetry={() => void loadNotifications(activeFilter, { showLoading: true })} retrying={loading} /> : null}
 
-        {loading ? (
-          <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 px-6 py-12 text-center">
-            <Loader2 className="size-7 animate-spin text-primary" />
-            <div className="text-sm font-semibold text-muted-foreground">
-              {t("notifications.loading")}
-            </div>
-          </div>
-        ) : hasNotifications ? (
+        {loading && !error ? (
+          <PageLoadingState className="min-h-[320px]" />
+        ) : !error && hasNotifications ? (
           <>
             <div className="divide-y">
               {pagedNotifications.map((notification) => {

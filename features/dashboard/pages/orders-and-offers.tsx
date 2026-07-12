@@ -34,7 +34,7 @@ import {
   Zap,
 } from "lucide-react";
 
-import { addonRows, itemRows, type AddonRow, type ItemRow } from "../data";
+import { type AddonRow, type ItemRow } from "../data";
 import { useAuth } from "@/features/auth/auth-provider";
 import {
   addonRowFromApi,
@@ -67,10 +67,7 @@ import { cn } from "@/lib/utils";
 import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
 import { dashboardUsers, type DashboardUser } from "../users/default-dashboard-users";
-import {
-  dashboardOrders,
-  type DashboardOrder,
-} from "../static-data";
+import { type DashboardOrder } from "../static-data";
 import { useServiceCities, type ServiceCity } from "../cities-api";
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -502,10 +499,6 @@ function addonMatchesSearch(addon: AddonRow, search: string) {
     .includes(normalizedSearch);
 }
 
-function uniqueAddonCategories(rows: AddonRow[]) {
-  return Array.from(new Set(rows.map((addon) => addon.category).filter(Boolean)));
-}
-
 type AddonCategoryRecord = {
   id: string;
   name: string;
@@ -916,9 +909,7 @@ function MobileDateFilters({
 }
 
 export function OrdersPage() {
-  const [orders] = useState<DashboardOrder[]>(() =>
-    dashboardOrders.map((order) => ({ ...order })),
-  );
+  const [orders] = useState<DashboardOrder[]>([]);
   const [filters, setFilters] = useState<OrderFilters>(defaultOrderFilters);
   const [loading] = useState(false);
   const [error] = useState("");
@@ -1187,7 +1178,7 @@ export function OrdersPage() {
 export function CreateOrderPage() {
   const { showSnackbar } = useSnackbar();
   const orderFormRef = useRef<HTMLFormElement>(null);
-  const activeSeedItems = useMemo(() => itemRows.filter((item) => item.active), []);
+  const activeSeedItems = useMemo<ItemRow[]>(() => [], []);
   const initialItem = activeSeedItems[0];
   const [savingOrder, setSavingOrder] = useState(false);
   const [customer, setCustomer] = useState("");
@@ -1213,7 +1204,7 @@ export function CreateOrderPage() {
   }
 
   const productsById = useMemo(
-    () => new Map(itemRows.map((item) => [item.id, item])),
+    () => new Map<string, ItemRow>(),
     [],
   );
   const selectedOrderItemIds = orderLines.map((line) => line.itemId);
@@ -2028,14 +2019,12 @@ export function AddonsPage() {
   const [addonsLoading, setAddonsLoading] = useState(false);
   const [addonSearch, setAddonSearch] = useState("");
   const [selectedAddonCategory, setSelectedAddonCategory] = useState("all");
-  const [addonFormCategory, setAddonFormCategory] = useState(addonRows[0]?.category ?? "");
+  const [addonFormCategory, setAddonFormCategory] = useState("");
   const [addonNameAr, setAddonNameAr] = useState("");
   const [addonPrice, setAddonPrice] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [rows, setRows] = useState<AddonRow[]>(() => addonRows);
-  const [categoryOptions, setCategoryOptions] = useState<string[]>(() =>
-    uniqueAddonCategories(addonRows),
-  );
+  const [rows, setRows] = useState<AddonRow[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
   const [categoryIds, setCategoryIds] = useState<Record<string, string | number>>(
     {},
   );
@@ -2934,6 +2923,7 @@ export function AddonsPage() {
 
 type OfferType = "package" | "flash" | "discount" | "announcement" | "delivery";
 type OfferStatus = "active" | "inactive" | "expired";
+type OfferEffectiveStatus = OfferStatus | "scheduled";
 type OfferScope = "general" | "service_city";
 type ActiveDay =
   | "sunday"
@@ -2972,6 +2962,12 @@ type OfferCard = {
   method: string;
   status: OfferDisplayStatus;
   backendStatus: OfferStatus;
+  effectiveStatus: OfferEffectiveStatus;
+  canSendNotification: boolean;
+  lastNotificationSentAt: string | null;
+  notificationSendCount: number;
+  sendPushNotification: boolean;
+  pushSentAt: string | null;
   showInGeneral: boolean;
   scope: OfferScope;
   marketId: string;
@@ -3031,12 +3027,6 @@ const offerTypeValues: Record<ArabicOfferType, OfferType> = {
   توصيل: "delivery",
 };
 
-const offerStatusLabels: Record<OfferStatus, OfferDisplayStatus> = {
-  active: "نشط",
-  inactive: "متوقف",
-  expired: "منتهي",
-};
-
 function offerDateLifecycle(startsAt: string, endsAt: string, now = Date.now()) {
   const startTime = new Date(startsAt).getTime();
   const endTime = new Date(endsAt).getTime();
@@ -3044,19 +3034,6 @@ function offerDateLifecycle(startsAt: string, endsAt: string, now = Date.now()) 
   if (Number.isFinite(endTime) && endTime < now) return "expired";
   if (Number.isFinite(startTime) && startTime > now) return "scheduled";
   return "current";
-}
-
-function offerDisplayStatus(
-  backendStatus: OfferStatus,
-  startsAt: string,
-  endsAt: string,
-): OfferDisplayStatus {
-  const lifecycle = offerDateLifecycle(startsAt, endsAt);
-
-  if (lifecycle === "expired") return "منتهي";
-  if (backendStatus !== "active") return offerStatusLabels[backendStatus];
-  if (lifecycle === "scheduled") return "مجدول";
-  return "نشط";
 }
 
 function isOfferType(value: unknown): value is OfferType {
@@ -3071,6 +3048,10 @@ function isOfferType(value: unknown): value is OfferType {
 
 function isOfferStatus(value: unknown): value is OfferStatus {
   return value === "active" || value === "inactive" || value === "expired";
+}
+
+function isOfferEffectiveStatus(value: unknown): value is OfferEffectiveStatus {
+  return isOfferStatus(value) || value === "scheduled";
 }
 
 function isActiveDay(value: unknown): value is ActiveDay {
@@ -3129,6 +3110,15 @@ function offerCardFromApi(record: BackendRecord): OfferCard {
   const endsAt = String(record.end_time ?? "");
   const rawStatus = String(record.status ?? "active").toLowerCase();
   const backendStatus = isOfferStatus(rawStatus) ? rawStatus : "active";
+  const rawEffectiveStatus = String(record.effective_status ?? "").toLowerCase();
+  const dateLifecycle = offerDateLifecycle(startsAt, endsAt);
+  const effectiveStatus: OfferEffectiveStatus = isOfferEffectiveStatus(rawEffectiveStatus)
+    ? rawEffectiveStatus
+    : backendStatus === "inactive"
+      ? "inactive"
+      : dateLifecycle === "current"
+        ? "active"
+        : dateLifecycle;
   const market = record.market && typeof record.market === "object" ? (record.market as BackendRecord) : null;
   const serviceCities = Array.isArray(record.service_cities)
     ? record.service_cities.filter((city): city is BackendRecord =>
@@ -3161,8 +3151,14 @@ function offerCardFromApi(record: BackendRecord): OfferCard {
     apiType,
     discount: String(record.discount ?? "0"),
     method: "تطبيق تلقائي",
-    status: offerDisplayStatus(backendStatus, startsAt, endsAt),
+    status: effectiveStatus === "active" ? "نشط" : effectiveStatus === "inactive" ? "متوقف" : effectiveStatus === "scheduled" ? "مجدول" : "منتهي",
     backendStatus,
+    effectiveStatus,
+    canSendNotification: Boolean(record.can_send_notification),
+    lastNotificationSentAt: typeof record.last_notification_sent_at === "string" ? record.last_notification_sent_at : null,
+    notificationSendCount: Number(record.notification_send_count ?? 0),
+    sendPushNotification: Boolean(record.send_push_notification),
+    pushSentAt: typeof record.push_sent_at === "string" ? record.push_sent_at : null,
     showInGeneral: Boolean(record.show_in_general),
     scope: serviceCityIds.length && !record.show_in_general ? "service_city" : "general",
     marketId: String(record.market_id ?? market?.id ?? ""),
@@ -3366,6 +3362,8 @@ export function OffersPage() {
   const [offersError, setOffersError] = useState<string | null>(null);
   const [offerDeleteTarget, setOfferDeleteTarget] = useState<OfferCard | null>(null);
   const pendingOfferDeletionIdsRef = useRef<Set<string>>(new Set());
+  const pendingDispatchIdsRef = useRef<Map<string, string>>(new Map());
+  const [sendingOfferIds, setSendingOfferIds] = useState<Set<string>>(new Set());
   const [now, setNow] = useState<number | null>(null);
   const [offerSearch, setOfferSearch] = useState("");
   const [offerTypeFilter, setOfferTypeFilter] = useState(allOffersFilterValue);
@@ -3487,6 +3485,36 @@ export function OffersPage() {
       showSnackbar({
         message: error instanceof Error ? error.message : "تعذر تحديث العرض.",
         tone: "danger",
+      });
+    }
+  }
+
+  async function sendOfferNotification(offer: OfferCard) {
+    if (!offer.canSendNotification || sendingOfferIds.has(offer.id)) return;
+    if (!window.confirm("سيتم إرسال إشعار جديد للعملاء المستهدفين بهذا العرض. الإشعارات السابقة ستظل محفوظة.")) return;
+    const requestId = pendingDispatchIdsRef.current.get(offer.id) ?? crypto.randomUUID();
+    pendingDispatchIdsRef.current.set(offer.id, requestId);
+    setSendingOfferIds((current) => new Set(current).add(offer.id));
+    try {
+      const data = await sendAdminJson(apiFetch, `${adminApiPaths.offers}${encodeURIComponent(offer.id)}/send-notification/`, {
+        method: "POST",
+        body: JSON.stringify({ request_id: requestId }),
+      }) as BackendRecord;
+      pendingDispatchIdsRef.current.delete(offer.id);
+      const count = Number(data.notification_count ?? data.recipient_count ?? 0);
+      setOffers((current) => current.map((item) => item.id === offer.id ? {
+        ...item,
+        lastNotificationSentAt: typeof data.sent_at === "string" ? data.sent_at : item.lastNotificationSentAt,
+        notificationSendCount: item.notificationSendCount + 1,
+      } : item));
+      showSnackbar({ message: `تم إرسال الإشعار إلى ${count} عميل.`, tone: "success" });
+    } catch (error) {
+      showSnackbar({ message: error instanceof Error ? error.message : "تعذر إرسال الإشعار.", tone: "danger" });
+    } finally {
+      setSendingOfferIds((current) => {
+        const next = new Set(current);
+        next.delete(offer.id);
+        return next;
       });
     }
   }
@@ -3734,12 +3762,22 @@ export function OffersPage() {
                     <span className="text-end font-medium">{offer.period}</span>
                   </div>
                   <OfferCountdown endsAt={offer.endsAt} now={now} />
+                  <OfferInfoRow label="آخر إرسال" value={offer.lastNotificationSentAt ? new Date(offer.lastNotificationSentAt).toLocaleString("ar-EG") : "لم يُرسل"} />
+                  <OfferInfoRow label="عدد مرات الإرسال" value={String(offer.notificationSendCount)} />
                 </div>
                 )}
 
                 <div className={cn("flex items-center justify-between border-t pt-4", isCollapsed ? "mt-4" : "mt-auto")}>
                   <span className="text-xs text-muted-foreground">إجراءات العرض</span>
                   <div className="flex items-center gap-1">
+                    <MiniIconButton
+                      tone="green"
+                      ariaLabel={offer.effectiveStatus === "scheduled" ? "يمكن إرسال الإشعار بعد بداية العرض." : offer.effectiveStatus === "expired" ? "عدّل توقيت العرض أولًا." : offer.effectiveStatus === "inactive" ? "فعّل العرض أولًا." : "إرسال إشعار"}
+                      disabled={!offer.canSendNotification || sendingOfferIds.has(offer.id)}
+                      onClick={() => void sendOfferNotification(offer)}
+                    >
+                      <Megaphone className={cn("size-4", sendingOfferIds.has(offer.id) && "animate-pulse")} />
+                    </MiniIconButton>
                     {offer.backendStatus === "inactive" ? (
                       <MiniIconButton
                         tone="green"
@@ -3842,7 +3880,6 @@ function OfferDeleteModal({
   );
 }
 
-const selectableItems = itemRows;
 type OfferProductsContextValue = {
   products: ItemRow[];
   cities: ServiceCity[];
@@ -3850,7 +3887,7 @@ type OfferProductsContextValue = {
 };
 
 const OfferProductsContext = createContext<OfferProductsContextValue>({
-  products: selectableItems,
+  products: [],
   cities: [],
   citiesLoading: false,
 });
@@ -3875,18 +3912,8 @@ function itemPriceLabel(item: ItemRow) {
   return item.displayPriceLabel ?? item.price;
 }
 
-function fallbackSelectableItem(): ItemRow {
-  const item = selectableItems[0] ?? itemRows[0];
-
-  if (!item) {
-    throw new Error("No dashboard products available for offers.");
-  }
-
-  return item;
-}
-
-function selectedItemFrom(rows: ItemRow[], itemId: string): ItemRow {
-  return rows.find((item) => item.id === itemId) ?? rows[0] ?? fallbackSelectableItem();
+function selectedItemFrom(rows: ItemRow[], itemId: string): ItemRow | null {
+  return rows.find((item) => item.id === itemId) ?? null;
 }
 
 function clampDiscountPercent(value: number) {
@@ -3957,7 +3984,7 @@ function ProductPicker({
 
       <div className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-2 rounded-md border bg-background p-2 shadow-sm">
         <DashboardImage
-          src={selectedItem.image}
+          src={selectedItem?.image ?? ""}
           placeholderType="product"
           alt=""
           width={88}
@@ -3967,15 +3994,16 @@ function ProductPicker({
           imageClassName="object-cover"
         />
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold">{selectedItem.name}</div>
+          <div className="truncate text-sm font-semibold">{selectedItem?.name ?? "لم يتم اختيار منتج"}</div>
           <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className="truncate">{selectedItem.category}</span>
-            <span className="shrink-0">{itemPriceLabel(selectedItem)}</span>
+            <span className="truncate">{selectedItem?.category ?? ""}</span>
+            <span className="shrink-0">{selectedItem ? itemPriceLabel(selectedItem) : ""}</span>
           </div>
         </div>
         <button
           type="button"
           onClick={() => setPickerOpen(true)}
+          disabled={products.length === 0}
           className="inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-md border border-border px-2 text-xs font-semibold text-muted-foreground transition hover:bg-accent hover:text-foreground"
         >
           <Search className="size-3.5" />
@@ -4135,6 +4163,9 @@ function PackageProductSearchModal({
                         {selected ? <RefBadge tone="blue">{selectedLabel}</RefBadge> : null}
                       </span>
                       <span className="mt-2 block truncate text-sm font-bold">{item.name}</span>
+                      <span className="mt-1 block truncate text-xs font-semibold text-primary">
+                        {item.shopName || `محل #${item.marketId ?? "-"}`}
+                      </span>
                       <span className="mt-1 block truncate font-mono text-[11px] text-muted-foreground">
                         {code}
                       </span>
@@ -4880,6 +4911,8 @@ export function CreateOfferPage() {
   const [offerAppearsInGeneral, setOfferAppearsInGeneral] = useState(true);
   const [offerAppearsInServiceCity, setOfferAppearsInServiceCity] = useState(false);
   const [savingOffer, setSavingOffer] = useState(false);
+  const [sendPushNotification, setSendPushNotification] = useState(false);
+  const [pushSentAt, setPushSentAt] = useState<string | null>(null);
   const [offerTitle, setOfferTitle] = useState(editingOffer?.title ?? "");
   const [offerDescription, setOfferDescription] = useState("");
   const [selectedOfferCityIds, setSelectedOfferCityIds] = useState<string[]>([]);
@@ -4933,15 +4966,25 @@ export function CreateOfferPage() {
   const packageDiscountRate = clampDiscountPercent(Number(packageDiscountPercent) || 0);
   const packageSubtotal = bundleItems.reduce((total, line) => {
     const item = selectedItemFrom(offerProducts, line.itemId);
-    return total + itemDisplayPrice(item) * line.quantity;
+    return total + (item ? itemDisplayPrice(item) : 0) * line.quantity;
   }, 0);
   const packageFinalPrice = packageSubtotal * (1 - packageDiscountRate / 100);
   const packageSaving = Math.max(packageSubtotal - packageFinalPrice, 0);
   const packageProductNames = bundleItems
-    .map((line) => selectedItemFrom(offerProducts, line.itemId).name)
+    .map((line) => selectedItemFrom(offerProducts, line.itemId)?.name)
+    .filter((name): name is string => Boolean(name))
     .slice(0, 3)
     .join("، ");
   const packageProductIds = bundleItems.map((line) => line.itemId);
+  const packageMarkets = Array.from(
+    new Map(
+      bundleItems
+        .map((line) => selectedItemFrom(allOfferProducts, line.itemId))
+        .filter((item): item is ItemRow => Boolean(item?.marketId))
+        .map((item) => [String(item.marketId), item.shopName || `محل #${item.marketId}`]),
+    ),
+  );
+  const packageMarketNames = packageMarkets.map(([, name]) => name).join("، ");
   const [initialScheduleValues] = useState(currentScheduleValues);
   const [startDate, setStartDate] = useState(initialScheduleValues.date);
   const [endDate, setEndDate] = useState(initialScheduleValues.date);
@@ -5057,11 +5100,27 @@ export function CreateOfferPage() {
   }
 
   function changeOfferCity(cityId: string) {
-    setSelectedOfferCityIds((currentCityIds) =>
-      currentCityIds.includes(cityId)
-        ? []
-        : [cityId],
-    );
+    const nextCityIds = selectedOfferCityIds.includes(cityId) ? [] : [cityId];
+    setSelectedOfferCityIds(nextCityIds);
+    if (selectedType === "باكج" && nextCityIds.length) {
+      const validMarketIds = new Set(
+        markets
+          .filter((market) => market.status === "active" && market.scope === "service_city")
+          .filter((market) => market.serviceCityIds.some((id) => Number(id) === Number(cityId)))
+          .map((market) => market.id),
+      );
+      setBundleItems((current) => {
+        const kept = current.filter((line) => {
+          const product = allOfferProducts.find((item) => item.id === line.itemId);
+          return Boolean(product?.marketId && validMarketIds.has(String(product.marketId)));
+        });
+        if (kept.length !== current.length) {
+          showSnackbar({ message: `تم حذف ${current.length - kept.length} منتج غير صالح لمدينة الخدمة الجديدة.` });
+        }
+        return kept;
+      });
+      return;
+    }
     clearOfferProductSelectionWithReason();
   }
 
@@ -5131,7 +5190,9 @@ export function CreateOfferPage() {
 
   function selectedOfferItems() {
     if (selectedType === "باكج") {
-      return bundleItems.map((line) => selectedItemFrom(offerProducts, line.itemId));
+      return bundleItems
+        .map((line) => selectedItemFrom(offerProducts, line.itemId))
+        .filter((item): item is ItemRow => Boolean(item));
     }
     if (selectedType === "فلاش") {
       return flashProductIds
@@ -5211,8 +5272,8 @@ export function CreateOfferPage() {
           .filter((marketId): marketId is string => Boolean(marketId)),
       ),
     );
-    if (selectedType !== "إعلان" && selectedMarketIds.length !== 1) {
-      showSnackbar({ message: "اختار منتجات العرض من نفس المحل.", tone: "danger" });
+    if (selectedType !== "إعلان" && selectedType !== "باكج" && selectedMarketIds.length !== 1) {
+      showSnackbar({ message: "هذا النوع من العروض يجب أن يكون تابعًا لمحل واحد.", tone: "danger" });
       return;
     }
     const inferredMarketId = selectedMarketIds[0] ?? "";
@@ -5275,6 +5336,7 @@ export function CreateOfferPage() {
       announcement_cta_label: selectedType === "إعلان" ? announcementCtaLabel.trim() : "",
       announcement_priority: selectedType === "إعلان" ? Number(announcementPriority || 0) : 0,
       announcement_display_seconds: selectedType === "إعلان" ? Number(announcementDisplaySeconds || 15) : 15,
+      send_push_notification: sendPushNotification,
     };
     if (payload.use_limits === null) {
       payload.user_limit = null;
@@ -5326,6 +5388,7 @@ export function CreateOfferPage() {
               formData.append("announcement_cta_label", payload.announcement_cta_label);
               formData.append("announcement_priority", String(payload.announcement_priority));
               formData.append("announcement_display_seconds", String(payload.announcement_display_seconds));
+              formData.append("send_push_notification", String(payload.send_push_notification));
               if (payload.use_limits !== null) formData.append("use_limits", String(payload.use_limits));
               if (payload.user_limit !== null) formData.append("user_limit", String(payload.user_limit));
               formData.append("image", offerImageFile);
@@ -5341,6 +5404,7 @@ export function CreateOfferPage() {
       if (!response.ok) {
         throw new Error(apiErrorMessage(data, "تعذر حفظ العرض."));
       }
+      const savedOffer = offerCardFromApi(data as BackendRecord);
       showSnackbar({
         message:
           formMode === "edit"
@@ -5348,6 +5412,23 @@ export function CreateOfferPage() {
             : "تم إنشاء العرض بنجاح.",
         tone: "success",
       });
+      if (sendPushNotification) {
+        if (!savedOffer.canSendNotification) {
+          showSnackbar({ message: "تم حفظ العرض، لكن لا يمكن إرسال الإشعار قبل أن يصبح العرض نشطًا.", tone: "danger" });
+        } else {
+          const requestId = crypto.randomUUID();
+          try {
+            const dispatch = await sendAdminJson(
+              apiFetch,
+              `${adminApiPaths.offers}${encodeURIComponent(savedOffer.id)}/send-notification/`,
+              { method: "POST", body: JSON.stringify({ request_id: requestId }) },
+            ) as BackendRecord;
+            showSnackbar({ message: `تم إرسال الإشعار إلى ${Number(dispatch.notification_count ?? 0)} عميل.`, tone: "success" });
+          } catch {
+            showSnackbar({ message: "تم حفظ العرض، لكن تعذر إرسال الإشعار.", tone: "danger" });
+          }
+        }
+      }
       router.push("/offers");
     } catch (error) {
       showSnackbar({
@@ -5378,6 +5459,8 @@ export function CreateOfferPage() {
         setOfferAppearsInGeneral(true);
         setOfferAppearsInServiceCity(false);
         setSelectedOfferCityIds([]);
+        setSendPushNotification(false);
+        setPushSentAt(null);
         clearOfferProductSelection();
         setStartDate(nextScheduleValues.date);
         setEndDate(nextScheduleValues.date);
@@ -5436,6 +5519,8 @@ export function CreateOfferPage() {
           setOfferAppearsInGeneral(card.showInGeneral);
           setOfferAppearsInServiceCity(!card.showInGeneral && card.serviceCityIds.length > 0);
           setSelectedOfferCityIds(card.showInGeneral ? [] : card.serviceCityIds.slice(0, 1));
+          setSendPushNotification(card.sendPushNotification);
+          setPushSentAt(card.pushSentAt);
           setOfferImageFile(null);
           setOfferImagePreview(card.image ?? "");
           setOfferImageName(card.image ? "صورة العرض الحالية" : "");
@@ -5763,10 +5848,11 @@ export function CreateOfferPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-semibold">منتجات الباكج</span>
                         <RefBadge tone="blue">{bundleItems.length} منتجات</RefBadge>
+                        <RefBadge tone="blue">{packageMarkets.length} محل</RefBadge>
                         <RefBadge tone="gray">{formatReferenceCurrency(packageSubtotal)}</RefBadge>
                       </div>
                       <p className="mt-1 truncate text-xs text-muted-foreground">
-                        {packageProductNames || "اختار المنتجات اللي هتدخل في الباكج."}
+                        {packageMarketNames || packageProductNames || "اختار المنتجات اللي هتدخل في الباكج."}
                       </p>
                     </button>
                     <div className="flex flex-wrap items-center gap-2">
@@ -5800,7 +5886,8 @@ export function CreateOfferPage() {
                     <div className="grid gap-3 border-t bg-background/30 p-3">
                       {bundleItems.map((line) => {
                         const item = selectedItemFrom(offerProducts, line.itemId);
-                        const lineTotal = itemDisplayPrice(item) * line.quantity;
+                        if (!item) return null;
+                        const lineTotal = (item ? itemDisplayPrice(item) : 0) * line.quantity;
 
                         return (
                           <PackageProductCard
@@ -5913,6 +6000,29 @@ export function CreateOfferPage() {
                 />
               </div>
             )}
+          </FormCard>
+
+          <FormCard title="إشعارات العرض">
+            <label className="flex min-h-20 items-center justify-between gap-4 rounded-md border bg-background px-4 py-3 shadow-sm">
+              <span>
+                <span className="block text-sm font-semibold">إرسال إشعار للعملاء عند نشر العرض</span>
+                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                  سيصل الإشعار للعملاء الذين اختاروا نفس مدينة العرض.
+                </span>
+                {pushSentAt ? (
+                  <span className="mt-1 block text-xs font-semibold text-emerald-600">
+                    تم إرسال إشعار هذا العرض بالفعل.
+                  </span>
+                ) : null}
+              </span>
+              <div className="flex shrink-0 items-center gap-2">
+                {pushSentAt ? <RefBadge tone="green">تم الإرسال</RefBadge> : null}
+                <Switch
+                  checked={sendPushNotification}
+                  onCheckedChange={setSendPushNotification}
+                />
+              </div>
+            </label>
           </FormCard>
 
           <FormCard title="الجدولة">

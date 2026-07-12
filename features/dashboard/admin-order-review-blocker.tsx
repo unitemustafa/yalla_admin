@@ -20,17 +20,17 @@ import { cn } from "@/lib/utils";
 import {
   dashboardOrdersChangedEvent,
   deliveryLaterLabel,
+  formatEgyptPhoneForDisplay,
   getDeliveryAreaName as orderDeliveryAreaName,
   getDeliveryDestination,
   getDeliveryPriceLabel,
-  getDeliveryTypeLabel,
+  getDashboardOrderTypeLabel,
   getManualArea,
   getManualCity,
   getMarketCount,
   getMarketSections,
   getOrderMarketsSummary,
   getOrderScopeLabel,
-  getPickupStatusLabel,
   getServiceCityName as orderServiceCityName,
   isGeneralOrder,
   isMultiMarket,
@@ -252,7 +252,7 @@ function deliveryDetails(order: ApiRecord) {
   }
 
   return {
-    type: isServiceCityOrder(typedOrder) ? "دليفري يدوي داخل مدينة خدمة" : getDeliveryTypeLabel(typedOrder),
+    type: getDashboardOrderTypeLabel(typedOrder),
     city: serviceCityName(order),
     area: deliveryAreaName(order) || "-",
     price: deliveryLaterLabel,
@@ -506,11 +506,11 @@ function OrderDetails({ order }: { order: ApiRecord }) {
           label="هاتف العميل"
           value={
             <span dir="ltr" className="[unicode-bidi:plaintext]">
-              {textAt(order, [["customer", "phone"], ["customer_phone"], ["phone"]])}
+              {formatEgyptPhoneForDisplay(textAt(order, [["customer", "phone"], ["customer_phone"], ["phone"]]))}
             </span>
           }
         />
-        <DetailItem label="نوع الطلب" value={getOrderScopeLabel(typedOrder)} />
+        <DetailItem label="نوع الطلب" value={getDashboardOrderTypeLabel(typedOrder)} />
         <DetailItem label="محلات الطلب" value={marketName(order)} />
         <DetailItem label="عدد المحلات" value={String(getMarketCount(typedOrder) || "-")} />
         <DetailItem label="نوع التجميع" value={isMultiMarket(typedOrder) ? "متعدد المحلات" : "محل واحد"} />
@@ -575,9 +575,6 @@ function OrderDetails({ order }: { order: ApiRecord }) {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-bold">{marketNameText}</span>
-                    <Badge tone={textValue(section.pickup_status) === "picked_up" ? "green" : "secondary"}>
-                      {getPickupStatusLabel(section.pickup_status)}
-                    </Badge>
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
                     المنتجات: {itemsCount.toLocaleString("en-US")} - العروض: {offersCount.toLocaleString("en-US")}

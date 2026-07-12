@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
+import { PageLoadError, PageLoadingState } from "../load-error-card";
 import { cn } from "@/lib/utils";
 import { DashboardImage } from "../dashboard-image";
 import {
@@ -845,7 +846,7 @@ export function CouriersPage() {
   useEffect(() => {
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") {
-        void refreshCourierStatuses();
+        void refreshCourierStatuses().catch(() => undefined);
       }
     };
     const pollTimer = window.setInterval(
@@ -1061,9 +1062,9 @@ export function CouriersPage() {
       </Card>
 
       {loading ? (
-        <div className="flex min-h-64 items-center justify-center"><Loader2 className="size-7 animate-spin text-primary" /></div>
+        <PageLoadingState className="min-h-64" />
       ) : error ? (
-        <Card className="mt-8 p-6"><div className="flex items-center gap-2 text-destructive"><AlertCircle className="size-5" />{error}</div></Card>
+        <PageLoadError onRetry={() => void load()} />
       ) : filteredCouriers.length === 0 ? (
         <Card className="mt-8 overflow-hidden border-dashed bg-card/70">
           <div className="flex min-h-44 flex-col items-center justify-center gap-4 px-6 py-10 text-center">

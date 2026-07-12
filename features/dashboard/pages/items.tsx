@@ -18,7 +18,7 @@ import {
   XCircle,
 } from "lucide-react";
 
-import { itemRows, type ItemRow } from "../data";
+import { type ItemRow } from "../data";
 import { useAuth } from "@/features/auth/auth-provider";
 import {
   AdminApiError,
@@ -805,9 +805,7 @@ function ItemsMobileCards({
 export function ItemsPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
-  const [rows, setRows] = useState<ItemRow[]>(() =>
-    itemRows.map(normalizeItemRow),
-  );
+  const [rows, setRows] = useState<ItemRow[]>([]);
   const [additionRows, setAdditionRows] = useState(() => new Map<string, string>());
   const [filters, setFilters] = useState<ItemFilters>(defaultFilters);
   const [deleteId, setDeleteId] = useState<string | null>(null);

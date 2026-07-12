@@ -12,13 +12,22 @@ export const AUTH_STORAGE_KEYS = {
 } as const;
 
 export const NETWORK_ERROR_MESSAGE =
-  "تعذر الاتصال بالخادم. تحقق من اتصال الإنترنت ثم حاول مرة أخرى.";
+  "تحقق من اتصال الإنترنت ثم حاول مرة أخرى.";
+
+export function isAbortError(error: unknown) {
+  return (
+    error instanceof DOMException
+      ? error.name === "AbortError"
+      : error instanceof Error && error.name === "AbortError"
+  );
+}
 
 export function isNetworkError(error: unknown) {
   return (
-    error instanceof TypeError ||
+    !isAbortError(error) &&
+    (error instanceof TypeError ||
     (error instanceof Error &&
-      /failed to fetch|networkerror|load failed/i.test(error.message))
+      /failed to fetch|networkerror|load failed|err_connection_refused/i.test(error.message)))
   );
 }
 

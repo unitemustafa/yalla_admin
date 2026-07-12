@@ -44,6 +44,7 @@ import {
   AnimatedProgressBar,
 } from "../animations";
 import { AnimatedCircularStatCard } from "../animated-circular-stat-card";
+import { PageLoadError } from "../load-error-card";
 import { Button, Card, CardHeader, HoverTooltip, PageTitle } from "../primitives";
 import { useDashboardI18n } from "../i18n";
 import { cn } from "@/lib/utils";
@@ -1052,6 +1053,18 @@ export function OverviewPage() {
     void loadDashboard(range);
   }, [loadDashboard, range]);
 
+  if (error) {
+    return (
+      <div className="px-6 py-6">
+        <PageLoadError
+          className="min-h-[calc(100vh-112px)]"
+          onRetry={() => void loadDashboard(range)}
+          retrying={loading}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="px-6 py-6">
       <PageTitle
@@ -1073,9 +1086,11 @@ export function OverviewPage() {
         </div>
       ) : null}
       {error ? (
-        <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
-          {error}
-        </div>
+        <PageLoadError
+          className="mt-4 min-h-[280px]"
+          onRetry={() => void loadDashboard(range)}
+          retrying={loading}
+        />
       ) : null}
 
       <div className="mt-6 grid gap-4 xl:grid-cols-3">
@@ -1277,7 +1292,7 @@ export function OverviewPage() {
         </div>
       </div>
 
-      <TopCategoriesCard currency={currency} shops={topShops} />
+      {!error ? <TopCategoriesCard currency={currency} shops={topShops} /> : null}
     </div>
   );
 }

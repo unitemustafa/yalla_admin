@@ -18,6 +18,7 @@ import {
   type AuthSession,
   type AuthTokens,
   type AuthUser,
+  isAbortError,
   isAccessTokenUsable,
   isNetworkError,
   jwtExpiresAt,
@@ -204,6 +205,10 @@ function localizedAuthError(value: unknown, fallback: string) {
   return message;
 }
 
+function shouldKeepLocalSession(error: unknown) {
+  return isNetworkError(error) || isAbortError(error);
+}
+
 async function refreshTokens() {
   if (refreshPromise) return refreshPromise;
 
@@ -231,11 +236,14 @@ async function refreshTokens() {
     const data = (await responseData(response)) as Partial<AuthTokens> | null;
 
     if (
-      !response.ok ||
+      (response.status === 401 || response.status === 403) ||
       typeof data?.accessToken !== "string" ||
       typeof data.refreshToken !== "string"
     ) {
-      throw new Error("انتهت الجلسة. سجّل الدخول من جديد.");
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("انتهت الجلسة. سجّل الدخول من جديد.");
+      }
+      throw new Error(localizedAuthError(data, "تعذر تحديث الجلسة من الخادم."));
     }
 
     const nextTokens = {
@@ -340,7 +348,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshTimer.current = setTimeout(() => {
         void refreshTokens()
           .then((tokens) => schedule(tokens.accessToken))
-          .catch(() => clearSession(true));
+          .catch((error) => {
+            if (!shouldKeepLocalSession(error)) clearSession(true);
+          });
       }, delay);
     },
     [clearSession],
@@ -387,8 +397,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(nextUser);
         setStatus("authenticated");
         scheduleRefresh(usableAccessToken);
-      } catch {
-        if (active) clearSession(true);
+      } catch (error) {
+        if (active && !shouldKeepLocalSession(error)) clearSession(true);
+        if (active && shouldKeepLocalSession(error)) {
+          const savedUser = cookies.get(AUTH_COOKIE_NAMES.user) as AuthUser | undefined;
+          if (savedUser?.role === "admin") setUser(savedUser);
+          setStatus("authenticated");
+        }
       }
     });
 
@@ -476,10 +491,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async function request(accessToken: string) {
         const headers = new Headers(init.headers);
         headers.set("Authorization", `Bearer ${accessToken}`);
-        return fetch(
-          path.startsWith("http") ? path : `${API_BASE_URL}/${path.replace(/^\/+/, "")}`,
-          { ...init, headers },
-        );
+        try {
+          return await fetch(
+            path.startsWith("http") ? path : `${API_BASE_URL}/${path.replace(/^\/+/, "")}`,
+            { ...init, headers },
+          );
+        } catch (error) {
+          if (isNetworkError(error)) throw new Error(NETWORK_ERROR_MESSAGE);
+          throw error;
+        }
       }
 
       let accessToken = cookies.get(AUTH_COOKIE_NAMES.accessToken, {
@@ -491,7 +511,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           accessToken = (await refreshTokens()).accessToken;
           scheduleRefresh(accessToken);
         } catch (error) {
-          clearSession(true);
+          if (!shouldKeepLocalSession(error)) clearSession(true);
           throw error;
         }
       }
@@ -505,7 +525,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         response = await request(accessToken);
         return response;
       } catch (error) {
-        clearSession(true);
+        if (!shouldKeepLocalSession(error)) clearSession(true);
         throw error;
       }
     },

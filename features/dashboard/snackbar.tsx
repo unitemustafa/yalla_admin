@@ -56,10 +56,7 @@ export function SnackbarProvider({ children }: { children: React.ReactNode }) {
     }: SnackbarInput) => {
       const id = Date.now() + Math.random();
 
-      setSnackbars((currentSnackbars) => [
-        ...currentSnackbars.slice(-2),
-        { id, message, tone, actionLabel, durationMs, onAction },
-      ]);
+      setSnackbars([{ id, message, tone, actionLabel, durationMs, onAction }]);
     },
     [],
   );

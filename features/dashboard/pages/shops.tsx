@@ -25,10 +25,10 @@ import {
   Pagination,
   Switch,
 } from "../primitives";
-import { categoryRows } from "../data";
+import { PageLoadError } from "../load-error-card";
 import { useServiceCities, type ServiceCity } from "../cities-api";
 
-const initialShopRows: ShopRow[] = [
+export const initialShopRows: ShopRow[] = [
   {
     id: "shop-fish-market",
     name: "أسماك الطازج",
@@ -323,16 +323,17 @@ export function ShopsPage() {
   const { apiFetch } = useAuth();
   const { cities: serviceCities, loading: serviceCitiesLoading } = useServiceCities({ activeOnly: true });
   const [currentPage, setCurrentPage] = useState(1);
-  const [shops, setShops] = useState(initialShopRows);
+  const [shops, setShops] = useState<ShopRow[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [marketClassifications, setMarketClassifications] = useState<string[]>(
-    () => categoryRows.map((row) => row.name),
-  );
+  const [marketClassifications, setMarketClassifications] = useState<string[]>([]);
   const [marketClassificationIds, setMarketClassificationIds] = useState<
     Record<string, string | number>
   >({});
   const [addShopOpen, setAddShopOpen] = useState(false);
   const [editingShop, setEditingShop] = useState<ShopRow | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const filteredShops = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLocaleLowerCase("ar-EG");
     if (!normalizedSearch) return shops;
@@ -353,6 +354,8 @@ export function ShopsPage() {
     let active = true;
 
     async function loadMarkets() {
+      setLoading(true);
+      setLoadError(null);
       try {
         const [markets, classificationsResponse] = await Promise.all([
           fetchAdminRows(apiFetch, adminApiPaths.markets, shopRowFromApi),
@@ -363,6 +366,9 @@ export function ShopsPage() {
         if (!active) return;
         setShops(markets);
 
+        if (!classificationsResponse.ok) {
+          throw new Error("تعذر تحميل تصنيفات المحلات.");
+        }
         if (classificationsResponse.ok) {
           const classifications = apiList(classificationsData)
             .map((item) => String(item.name ?? "").trim())
@@ -377,8 +383,12 @@ export function ShopsPage() {
             setMarketClassificationIds(classificationIds);
           }
         }
-      } catch {
-        // Keep seed rows visible when the backend is unavailable.
+      } catch (reason) {
+        if (active) {
+          setLoadError(reason instanceof Error ? reason.message : "تعذر تحميل المحلات.");
+        }
+      } finally {
+        if (active) setLoading(false);
       }
     }
 
@@ -387,7 +397,7 @@ export function ShopsPage() {
     return () => {
       active = false;
     };
-  }, [apiFetch]);
+  }, [apiFetch, reloadKey]);
 
   function classificationIdByName(name: string) {
     if (marketClassificationIds[name]) return marketClassificationIds[name];
@@ -485,7 +495,7 @@ export function ShopsPage() {
         }
       />
 
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
+      {!loadError || shops.length > 0 ? <div className="mt-8 grid gap-4 md:grid-cols-3">
         <Card>
           <div className="flex items-center gap-3 p-4">
             <span className="flex size-10 items-center justify-center rounded-md bg-primary/10 text-primary">
@@ -521,7 +531,16 @@ export function ShopsPage() {
             </div>
           </div>
         </Card>
-      </div>
+      </div> : null}
+
+      {loadError && shops.length === 0 ? (
+        <div className="mt-6">
+          <PageLoadError
+            onRetry={() => setReloadKey((key) => key + 1)}
+            retrying={loading}
+          />
+        </div>
+      ) : null}
 
       <Card className="mt-6 overflow-hidden">
         <div className="flex flex-col gap-4 border-b px-6 py-4 lg:flex-row lg:items-end lg:justify-between">

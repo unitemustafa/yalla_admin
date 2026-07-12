@@ -40,8 +40,8 @@ import { cn } from "@/lib/utils";
 
 const MAX_LOGO_SIZE = 5 * 1024 * 1024;
 const ALLOWED_LOGO_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const DEFAULT_SERVER_BRAND_NAME = "يلا ماركت";
-const DEFAULT_SERVER_TAGLINE = "أول أونلاين ماركت في النيل الكبير";
+const DEFAULT_SERVER_BRAND_NAME = "يلا أدمن";
+const DEFAULT_SERVER_TAGLINE = "أول أونلاين ماركت في التل الكبير";
 const THEME_CHANGE_EVENT = "yalla-theme-change";
 
 function SettingBlock({
@@ -132,6 +132,7 @@ export function SettingsPage() {
     withServerDefaults(customization),
   );
   const [selectedLogo, setSelectedLogo] = useState<File | null>(null);
+  const [shouldRemoveLogo, setShouldRemoveLogo] = useState(false);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
@@ -242,6 +243,7 @@ export function SettingsPage() {
     const nextPreview = URL.createObjectURL(file);
     objectUrlRef.current = nextPreview;
     setSelectedLogo(file);
+    setShouldRemoveLogo(false);
     setLogoPreviewUrl(nextPreview);
     setStatus("تم اختيار اللوجو. احفظ لتطبيق التغيير.");
   }
@@ -270,11 +272,13 @@ export function SettingsPage() {
         apiFetch,
         nextDraft,
         selectedLogo,
+        shouldRemoveLogo,
       );
       const nextCustomization = withServerDefaults(savedCustomization);
       setDraft(nextCustomization);
       setCustomization(nextCustomization);
       setSelectedLogo(null);
+      setShouldRemoveLogo(false);
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current);
         objectUrlRef.current = null;
@@ -294,21 +298,46 @@ export function SettingsPage() {
     }
   }
 
-  function handleReset() {
-    setDraft({
+  async function handleReset() {
+    if (isSavingSettings) return;
+
+    const defaults = {
       ...defaultDashboardCustomization,
-      palette: "custom",
       brandName: DEFAULT_SERVER_BRAND_NAME,
       branchName: DEFAULT_SERVER_TAGLINE,
-      logoDataUrl: draft.logoDataUrl,
-    });
-    setSelectedLogo(null);
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current);
-      objectUrlRef.current = null;
+    };
+
+    setIsSavingSettings(true);
+    setStatus(null);
+    try {
+      const savedCustomization = await saveDashboardSettings(
+        apiFetch,
+        defaults,
+        null,
+        true,
+      );
+      const nextCustomization = withServerDefaults(savedCustomization);
+      setDraft(nextCustomization);
+      setCustomization(nextCustomization);
+      setSelectedLogo(null);
+      setShouldRemoveLogo(false);
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+      setLogoPreviewUrl("");
+      setStatus("تم الرجوع إلى الإعدادات الافتراضية.");
+      showSnackbar({ message: "تم الرجوع إلى الإعدادات الافتراضية." });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? settingsErrorMessage(error.message)
+          : "تعذر الرجوع إلى الإعدادات الافتراضية.";
+      setStatus("تعذر الرجوع إلى الإعدادات الافتراضية.");
+      showSnackbar({ message, tone: "danger" });
+    } finally {
+      setIsSavingSettings(false);
     }
-    setLogoPreviewUrl("");
-    setStatus("تم تجهيز القيم الافتراضية. احفظ لتطبيقها.");
   }
 
   async function removeLogo() {
@@ -349,7 +378,7 @@ export function SettingsPage() {
           <div className="flex flex-wrap gap-2">
             <Button
               disabled={isLoadingSettings || isSavingSettings}
-              onClick={handleReset}
+              onClick={() => void handleReset()}
               type="button"
               variant="outline"
             >

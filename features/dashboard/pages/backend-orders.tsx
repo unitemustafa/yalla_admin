@@ -23,26 +23,27 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
+import { PageLoadError, PageLoadingState } from "../load-error-card";
 import { cn } from "@/lib/utils";
 import { AppSelect, Badge, Button, Card, CurrencyText, Field, Input, PageTitle, Pagination } from "../primitives";
 import { useSnackbar } from "../snackbar";
 import {
   cleanText,
+  formatEgyptPhoneForDisplay,
   dashboardOrdersChangedEvent,
   deliveryLaterLabel,
   formatOrderMoney,
   getDeliveryAreaName as orderDeliveryAreaName,
   getDeliveryDestination,
   getDeliveryPriceLabel,
-  getDeliveryTypeLabel,
+  getDashboardOrderOfferTitles,
+  getDashboardOrderTypeLabel,
   getManualArea,
   getManualCity,
   getMarketCount,
   getMarketSections,
   getOrderMarketsSummary,
   getOrderScopeLabel,
-  getPickupStops,
-  getPickupStatusLabel,
   getServiceCityName as orderServiceCityName,
   isGeneralOrder,
   isMultiMarket,
@@ -50,6 +51,7 @@ import {
   numberValue,
   objectName,
   orderReviewStatusLabels,
+  orderOfferTitle,
   orderStatusLabels,
   type OrderMarketSectionLike,
 } from "../order-display";
@@ -148,6 +150,8 @@ type BackendOrder = {
     picked_up_at?: string | null;
     sort_order?: number | string | null;
   }> | null;
+  has_offer?: boolean | null;
+  offer_titles?: string[] | null;
   discount?: string | null;
   description?: string | null;
   delivery_note?: string | null;
@@ -216,6 +220,7 @@ type BackendOrderOffer = {
   section_id?: number | string | null;
   offer_id?: number | string | null;
   title?: string | null;
+  offer_title?: string | null;
   discount_amount?: string | null;
   created_at?: string | null;
   offer?: {
@@ -380,7 +385,7 @@ function statusTone(status: BackendOrderStatus): "blue" | "green" | "red" | "sec
 }
 
 function deliveryTypeLabel(order: BackendOrder) {
-  return getDeliveryTypeLabel(order);
+  return getDashboardOrderTypeLabel(order);
 }
 
 function isDeliveryOrder(order: BackendOrder) {
@@ -1137,11 +1142,6 @@ export function BackendOrdersPage() {
     });
   }, [orders, query, status, deliveryType, representatives]);
 
-  const representativeMap = useMemo(
-    () => new Map(representatives.map((representative) => [String(representative.id), representative])),
-    [representatives],
-  );
-
   const totalPages = Math.max(1, Math.ceil(visibleOrders.length / ordersPageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStartIndex = (safeCurrentPage - 1) * ordersPageSize;
@@ -1241,11 +1241,9 @@ export function BackendOrdersPage() {
         </div>
 
         {loading ? (
-          <div className="flex min-h-64 items-center justify-center">
-            <Loader2 className="size-7 animate-spin text-primary" />
-          </div>
+          <PageLoadingState className="min-h-64" />
         ) : error ? (
-          <div className="p-6 text-sm text-destructive">{error}</div>
+          <PageLoadError onRetry={() => void loadOrders()} />
         ) : visibleOrders.length === 0 ? (
           <div className="p-10 text-center text-sm text-muted-foreground">
             لا توجد طلبات مطابقة.
@@ -1268,7 +1266,7 @@ export function BackendOrdersPage() {
                     }
                   }}
                   className={cn(
-                    "grid cursor-pointer gap-4 rounded-md border bg-card p-4 shadow-sm transition hover:border-primary/35 hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 xl:grid-cols-[minmax(270px,1.15fr)_minmax(170px,0.8fr)_minmax(170px,0.8fr)_minmax(170px,0.8fr)_minmax(170px,0.8fr)_minmax(190px,0.9fr)] xl:items-center",
+                    "grid cursor-pointer gap-4 rounded-md border bg-card p-4 shadow-sm transition hover:border-primary/35 hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 md:grid-cols-2 xl:grid-cols-[minmax(240px,1.1fr)_minmax(170px,0.8fr)_minmax(170px,0.8fr)_minmax(180px,0.8fr)_minmax(190px,0.9fr)] xl:items-center",
                     deliveryOrder &&
                       "border-red-400/40 bg-red-500/5 hover:border-red-400/60 hover:bg-red-500/10",
                   )}
@@ -1307,13 +1305,6 @@ export function BackendOrdersPage() {
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <Badge tone={statusTone(order.status)}>{statusLabels[order.status]}</Badge>
                         <Badge tone={reviewStatusTone(order.review_status)}>{reviewStatusLabel(order.review_status)}</Badge>
-                        <Badge tone={isGeneralOrder(order) ? "secondary" : "blue"}>
-                          {getOrderScopeLabel(order)}
-                        </Badge>
-                        <Badge tone={isMultiMarket(order) ? "green" : "secondary"}>
-                          {isMultiMarket(order) ? "متعدد المحلات" : "محل واحد"}
-                        </Badge>
-                        <DeliveryTypeBadge order={order} />
                       </div>
                     </div>
                   </div>
@@ -1326,7 +1317,7 @@ export function BackendOrdersPage() {
                     >
                       <span className="truncate">{customerName(order)}</span>
                       <span className="truncate text-start text-xs font-normal text-muted-foreground [unicode-bidi:plaintext]" dir="ltr">
-                        {order.customer?.phone ?? `user_id: ${order.user_id ?? "-"}`}
+                        {formatEgyptPhoneForDisplay(order.customer?.phone ?? `user_id: ${order.user_id ?? "-"}`)}
                       </span>
                     </Link>
                   </div>
@@ -1339,34 +1330,17 @@ export function BackendOrdersPage() {
                     </div>
                   </div>
 
-                  <div className="min-w-0 text-sm">
-                    <div className="text-xs font-bold text-muted-foreground">التوصيل</div>
-                    <div className="mt-1 truncate font-semibold">
-                      {isGeneralOrder(order) ? getManualCity(order) : serviceCityName(order)}
-                    </div>
-                    <div className="mt-1 truncate text-xs text-muted-foreground">
-                      {deliveryAreaName(order)}
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {deliveryTypeLabel(order)}
-                    </div>
-                  </div>
-
                   <div className="min-w-0">
-                    <div className="text-xs font-bold text-muted-foreground">المندوب</div>
-                    <div className="mt-1">
-                      {assignedRepresentativeId(order) ? (
-                        <Link
-                          href={representativeHref(order)}
-                          onClick={(event) => event.stopPropagation()}
-                          className="inline-flex max-w-full items-center rounded-md border border-emerald-300 bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 transition hover:border-emerald-400 hover:bg-emerald-200 hover:underline dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-200"
-                        >
-                          <span className="truncate">{representativeNameWithLookup(order, representativeMap)}</span>
-                        </Link>
-                      ) : (
-                        <Badge tone="secondary">غير مسند</Badge>
-                      )}
-                    </div>
+                    <div className="text-xs font-bold text-muted-foreground">نوع الطلب</div>
+                    <div className="mt-1"><DeliveryTypeBadge order={order} /></div>
+                    {getDashboardOrderOfferTitles(order).length > 0 ? (
+                      <div
+                        className="mt-2 line-clamp-2 text-xs font-medium text-emerald-700 dark:text-emerald-300"
+                        title={getDashboardOrderOfferTitles(order).join("، ")}
+                      >
+                        {getDashboardOrderOfferTitles(order).length === 1 ? "العرض" : "العروض"}: {getDashboardOrderOfferTitles(order).join("، ")}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="min-w-0 text-xs">
@@ -2025,11 +1999,9 @@ export function BackendCreateOrderPage() {
       />
 
       {loading ? (
-        <div className="flex min-h-64 items-center justify-center">
-          <Loader2 className="size-7 animate-spin text-primary" />
-        </div>
+        <PageLoadingState className="min-h-64" />
       ) : error ? (
-        <Card className="mt-6 p-6 text-sm text-destructive">{error}</Card>
+        <PageLoadError onRetry={() => void loadInitialData()} />
       ) : (
         <form onSubmit={submitOrder} className="mt-6 grid items-stretch gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
           <Card className="p-5 xl:sticky xl:top-6">
@@ -2592,7 +2564,7 @@ function CustomerPicker({
                       <span className="block truncate text-sm font-bold">{customerDisplayName(customer)}</span>
                       <span className="mt-1 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
                         {customer.username ? <span dir="ltr">@{customer.username}</span> : null}
-                        {customer.phone ? <span dir="ltr">{customer.phone}</span> : null}
+                        {customer.phone ? <span dir="ltr" className="[unicode-bidi:plaintext]">{formatEgyptPhoneForDisplay(customer.phone)}</span> : null}
                         {customer.email ? <span dir="ltr">{customer.email}</span> : null}
                       </span>
                     </span>
@@ -2892,14 +2864,6 @@ function sectionMarketDisplayName(section: OrderMarketSectionLike) {
   return objectName(section.market) || (section.market_id ? `محل #${section.market_id}` : "محل غير محدد");
 }
 
-function orderOfferTitle(offer: BackendOrderOffer, index: number) {
-  return (
-    cleanText(offer.offer?.title) ||
-    cleanText(offer.title) ||
-    `عرض ${index + 1}`
-  );
-}
-
 function MarketSectionsCard({ order }: { order: BackendOrder }) {
   const sections = getMarketSections(order);
 
@@ -2936,9 +2900,6 @@ function MarketSectionsCard({ order }: { order: BackendOrder }) {
                         {cleanText(section.market?.branch) ? (
                           <Badge tone="secondary">{cleanText(section.market?.branch)}</Badge>
                         ) : null}
-                        <Badge tone={cleanText(section.pickup_status) === "picked_up" ? "green" : "secondary"}>
-                          {getPickupStatusLabel(section.pickup_status)}
-                        </Badge>
                       </div>
                     </div>
                     <div className="grid gap-2 text-xs sm:grid-cols-3">
@@ -2984,78 +2945,26 @@ function MarketSectionsCard({ order }: { order: BackendOrder }) {
                   </table>
                 </div>
 
-                <div className="border-t p-4">
-                  <div className="mb-3 font-semibold">عروض المحل</div>
-                  {offers.length === 0 ? (
-                    <div className="rounded-md border bg-muted/10 px-3 py-3 text-sm text-muted-foreground">
-                      لا توجد عروض لهذا المحل.
-                    </div>
-                  ) : (
+                {offers.length > 0 ? (
+                  <div className="border-t p-4">
+                    <div className="mb-3 font-semibold">عروض المحل</div>
                     <div className="grid gap-2">
                       {offers.map((offer, index) => (
                         <div key={`${offer.id ?? offer.offer_id ?? index}`} className="flex items-center justify-between gap-3 rounded-md border bg-muted/10 px-3 py-2 text-sm">
-                          <span className="font-medium">{orderOfferTitle(offer, index)}</span>
+                          <span className="font-medium">{orderOfferTitle(offer)}</span>
                           <span className="text-muted-foreground">
                             {money(offer.discount_amount)}
                           </span>
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
+                  </div>
+                ) : null}
               </section>
             );
           })}
         </div>
       )}
-    </Card>
-  );
-}
-
-function PickupStopsCard({ order }: { order: BackendOrder }) {
-  const stops = getPickupStops(order);
-  if (stops.length === 0) return null;
-
-  const sections = getMarketSections(order);
-
-  return (
-    <Card className="p-5 text-sm">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="font-semibold">نقاط الاستلام</div>
-        <Badge tone={stops.length > 1 ? "green" : "secondary"}>
-          {stops.length.toLocaleString("en-US")} {stops.length > 1 ? "محلات" : "محل"}
-        </Badge>
-      </div>
-      <div className="grid gap-2">
-        {stops.map((stop, index) => {
-          const section = sections.find(
-            (item) => cleanText(item.market_id) === cleanText(stop.market_id),
-          );
-          const marketLabelText =
-            objectName(stop.market) ||
-            (section ? sectionMarketDisplayName(section) : "") ||
-            (stop.market_id ? `محل #${stop.market_id}` : `محل ${index + 1}`);
-
-          return (
-            <div
-              key={`${stop.market_id ?? "stop"}-${index}`}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/10 px-3 py-2"
-            >
-              <div className="min-w-0">
-                <div className="truncate font-semibold">{marketLabelText}</div>
-                {cleanText(stop.picked_up_at) ? (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    تم الاستلام: {dateTime(stop.picked_up_at)}
-                  </div>
-                ) : null}
-              </div>
-              <Badge tone={cleanText(stop.pickup_status) === "picked_up" ? "green" : "secondary"}>
-                {getPickupStatusLabel(stop.pickup_status)}
-              </Badge>
-            </div>
-          );
-        })}
-      </div>
     </Card>
   );
 }
@@ -3299,7 +3208,14 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
   }
 
   if (error || !order) {
+    return (
+      <div className="px-6 py-8">
+        <PageLoadError onRetry={() => void loadOrder()} />
+      </div>
+    );
+    /*
     return <div className="px-6 py-8 text-sm text-destructive">{error ?? "الطلب غير موجود."}</div>;
+    */
   }
 
   const deliveryPriceLocked = order.delivery_price !== null && order.delivery_price !== undefined && order.delivery_price !== "";
@@ -3324,7 +3240,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
               {customerName(order)}
             </Link>
             <span className="w-fit max-w-full truncate text-start text-muted-foreground [unicode-bidi:plaintext]" dir="ltr">
-              {order.customer?.phone ?? `user_id: ${order.user_id ?? "-"}`}
+              {formatEgyptPhoneForDisplay(order.customer?.phone ?? `user_id: ${order.user_id ?? "-"}`)}
             </span>
             <span className="text-xs text-muted-foreground">
               {marketName(order)} - {dateTime(order.created_at)}
@@ -3351,7 +3267,6 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
       <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="grid gap-5">
           <MarketSectionsCard order={order} />
-          <PickupStopsCard order={order} />
           <FinancialSummaryCard order={order} />
         </div>
 
@@ -3422,9 +3337,9 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                     </Link>
                   }
                 />
-                <SummaryRow label="الهاتف" value={order.customer?.phone ?? "-"} />
+                <SummaryRow label="الهاتف" value={<span dir="ltr" className="[unicode-bidi:plaintext]">{formatEgyptPhoneForDisplay(order.customer?.phone)}</span>} />
                 <SummaryRow label="طريقة الدفع" value={paymentMethodLabel(order.payment_method || "cash")} />
-                <SummaryRow label="نوع الطلب" value={getOrderScopeLabel(order)} />
+                <SummaryRow label="نوع الطلب" value={getDashboardOrderTypeLabel(order)} />
                 <SummaryRow label="حالة المراجعة" value={reviewStatusLabel(order.review_status)} />
                 <SummaryRow label="محلات الطلب" value={marketName(order)} />
                 <SummaryRow label="عدد المحلات" value={String(getMarketCount(order) || "-")} />
@@ -3495,7 +3410,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                             options={representativeOptions.map((representative) => ({
                               value: representative.id,
                               label: representative.phone
-                                ? `${representative.name} - ${representative.phone}`
+                                ? `${representative.name} - ${formatEgyptPhoneForDisplay(representative.phone)}`
                                 : representative.name,
                             }))}
                           />
@@ -3550,7 +3465,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                         options={representativeOptions.map((representative) => ({
                           value: representative.id,
                           label: representative.phone
-                            ? `${representative.name} - ${representative.phone}`
+                            ? `${representative.name} - ${formatEgyptPhoneForDisplay(representative.phone)}`
                             : representative.name,
                         }))}
                       />
@@ -3671,7 +3586,7 @@ function AssignedRepresentativeDetails({
     >
       <span className="truncate">{name}</span>
       <span className="truncate text-start text-xs font-normal text-muted-foreground [unicode-bidi:plaintext]" dir="ltr">
-        {order.assigned_representative?.phone ?? `#${representativeId}`}
+        <span dir="ltr" className="[unicode-bidi:plaintext]">{formatEgyptPhoneForDisplay(order.assigned_representative?.phone ?? `#${representativeId}`)}</span>
       </span>
     </Link>
   );

@@ -3,7 +3,6 @@
 import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertCircle,
   Edit3,
   ImagePlus,
   Plus,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
+import { PageLoadError } from "../load-error-card";
 import {
   createMarketClassification,
   deleteMarketClassification,
@@ -706,6 +706,9 @@ export function MarketClassificationsPage() {
         {loading ? (
           <LoadingRows />
         ) : loadError ? (
+          <>
+            <PageLoadError onRetry={() => void load()} />
+            {/*
           <div className="flex min-h-56 flex-col items-center justify-center gap-3 px-6 text-center">
             <AlertCircle className="size-8 text-destructive" />
             <p className="text-sm font-medium">{loadError}</p>
@@ -713,6 +716,8 @@ export function MarketClassificationsPage() {
               إعادة المحاولة
             </Button>
           </div>
+            */}
+          </>
         ) : filteredClassifications.length === 0 ? (
           <div className="flex min-h-56 flex-col items-center justify-center gap-2 px-6 text-center">
             <Tags className="size-9 text-muted-foreground" />
