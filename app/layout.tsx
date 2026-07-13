@@ -51,32 +51,6 @@ const themeScript = `
           "--sidebar-ring": "hsl(190 70% 45%)"
         }
       },
-      emerald: {
-        light: {
-          "--primary": "hsl(154 69% 30%)",
-          "--primary-foreground": "hsl(0 0% 100%)",
-          "--ring": "hsl(154 64% 44%)",
-          "--sidebar-foreground": "hsl(160 34% 22%)",
-          "--sidebar-primary": "hsl(154 69% 30%)",
-          "--sidebar-primary-foreground": "hsl(0 0% 100%)",
-          "--sidebar-accent": "hsl(150 42% 93%)",
-          "--sidebar-accent-foreground": "hsl(154 72% 22%)",
-          "--sidebar-border": "hsl(155 24% 86%)",
-          "--sidebar-ring": "hsl(154 64% 44%)"
-        },
-        dark: {
-          "--primary": "hsl(154 64% 45%)",
-          "--primary-foreground": "hsl(160 85% 8%)",
-          "--ring": "hsl(154 64% 45%)",
-          "--sidebar-foreground": "hsl(155 20% 92%)",
-          "--sidebar-primary": "hsl(154 64% 45%)",
-          "--sidebar-primary-foreground": "hsl(160 85% 8%)",
-          "--sidebar-accent": "hsl(158 28% 17%)",
-          "--sidebar-accent-foreground": "hsl(150 48% 92%)",
-          "--sidebar-border": "hsl(158 18% 24%)",
-          "--sidebar-ring": "hsl(154 64% 45%)"
-        }
-      },
       "market-blue": {
         light: {
           "--primary": "hsl(233 90% 64%)",
@@ -216,7 +190,7 @@ const themeScript = `
     root.classList.add(theme);
     root.style.colorScheme = theme;
     var customization = JSON.parse(localStorage.getItem(customizationKey) || "{}");
-    var palette = customization.palette === "custom" ? customPalette(customization.customColors) : (palettes[customization.palette] || palettes.teal);
+    var palette = customization.palette === "custom" ? customPalette(customization.customColors) : (palettes[customization.palette] || palettes["market-blue"]);
     var variables = palette[theme] || palette.light;
     Object.keys(variables).forEach(function (key) {
       root.style.setProperty(key, variables[key]);

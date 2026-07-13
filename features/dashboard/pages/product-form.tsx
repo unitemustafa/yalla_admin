@@ -156,31 +156,17 @@ const themeTemplates: Record<ProductTheme, AttributeDraft[]> = {
     {
       clientId: createId("attr-color"),
       name: "اللون",
-      options: [
-        { clientId: createId("opt-color"), value: "أخضر" },
-        { clientId: createId("opt-color"), value: "أسود" },
-        { clientId: createId("opt-color"), value: "أحمر" },
-        { clientId: createId("opt-color"), value: "كريمي" },
-      ],
+      options: [],
     },
     {
       clientId: createId("attr-size"),
       name: "المقاس",
-      options: [
-        { clientId: createId("opt-size"), value: "صغير" },
-        { clientId: createId("opt-size"), value: "متوسط" },
-        { clientId: createId("opt-size"), value: "كبير" },
-        { clientId: createId("opt-size"), value: "كبير جدًا" },
-      ],
+      options: [],
     },
     {
       clientId: createId("attr-type"),
       name: "النوع",
-      options: [
-        { clientId: createId("opt-type"), value: "رجالي" },
-        { clientId: createId("opt-type"), value: "حريمي" },
-        { clientId: createId("opt-type"), value: "أطفال" },
-      ],
+      options: [],
     },
   ],
   consumer: [
@@ -192,6 +178,34 @@ const themeTemplates: Record<ProductTheme, AttributeDraft[]> = {
 
 function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.round(Math.random() * 100000)}`;
+}
+
+function useLockedPageScroll(locked: boolean) {
+  useEffect(() => {
+    if (!locked) return;
+
+    const scrollY = window.scrollY;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousBodyPosition = document.body.style.position;
+    const previousBodyTop = document.body.style.top;
+    const previousBodyWidth = document.body.style.width;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+
+    return () => {
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+      document.body.style.position = previousBodyPosition;
+      document.body.style.top = previousBodyTop;
+      document.body.style.width = previousBodyWidth;
+      window.scrollTo(0, scrollY);
+    };
+  }, [locked]);
 }
 
 function cloneTemplate(theme: ProductTheme) {
@@ -451,6 +465,8 @@ export function ProductFormPage() {
   const [variantsDirty, setVariantsDirty] = useState(false);
   const [previewSource, setPreviewSource] = useState<"api" | "draft">("draft");
   const [legacyMissingPrice, setLegacyMissingPrice] = useState(false);
+
+  useLockedPageScroll(marketModalOpen);
 
   const selectedMarket = markets.find((market) => market.id === selectedMarketId) ?? null;
   const primaryImage =
@@ -1887,7 +1903,7 @@ export function ProductFormPage() {
       </div>
 
       {additionPickerOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/45 px-4 py-6 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30 px-4 py-6 backdrop-blur-[1px]">
           <div
             aria-modal="true"
             className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-lg border bg-background text-foreground shadow-2xl"
@@ -1992,7 +2008,7 @@ export function ProductFormPage() {
       ) : null}
 
       {marketModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/45 px-4 py-6 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30 px-4 py-6 backdrop-blur-[1px]">
           <div
             aria-modal="true"
             className="max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-lg border bg-background text-foreground shadow-2xl"
@@ -2067,9 +2083,31 @@ export function ProductFormPage() {
                     </button>
                   ))}
                   {!filteredMarkets.length ? (
-                    <div className="rounded-md border border-dashed bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
-                      لا توجد محلات مطابقة.
-                    </div>
+                    markets.length === 0 ? (
+                      <div className="flex min-h-[230px] flex-col items-center justify-center rounded-md border border-dashed bg-muted/10 px-5 py-8 text-center">
+                        <div className="flex size-14 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
+                          <Store className="size-7" />
+                        </div>
+                        <h3 className="mt-4 text-lg font-semibold text-foreground">
+                          لا توجد محلات حتى الآن
+                        </h3>
+                        <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
+                          أضف محلًا أولًا قبل ربط المنتج بالمحل المناسب.
+                        </p>
+                        <Link
+                          href="/items/shops"
+                          className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow transition hover:bg-primary/90"
+                          onClick={() => setMarketModalOpen(false)}
+                        >
+                          <Plus className="size-4" />
+                          إضافة محل
+                        </Link>
+                      </div>
+                    ) : (
+                      <div className="rounded-md border border-dashed bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
+                        لا توجد محلات مطابقة.
+                      </div>
+                    )
                   ) : null}
                 </div>
               </div>

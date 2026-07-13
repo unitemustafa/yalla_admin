@@ -162,7 +162,7 @@ function AddShopDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-contain bg-background/80 px-4 py-6 backdrop-blur-sm sm:px-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-contain bg-foreground/30 px-4 py-6 backdrop-blur-[1px] sm:px-6">
       <section
         dir="rtl"
         role="dialog"

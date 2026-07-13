@@ -843,7 +843,7 @@ export function NotificationsPage() {
       </Card>
       {deleteDialogTarget ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30 px-4 backdrop-blur-[1px]"
           role="presentation"
           onClick={() => {
             if (!deletingId && !clearingRead) {

@@ -176,6 +176,10 @@ export const autoTextEn: Record<string, string> = {
   "ابحث عن إضافة...": "Search add-ons...",
   "أنشئ إضافة للمنتجات.": "Create an add-on for products.",
   "سعر الإضافة": "Add-on price",
+  "أنشئ تصنيف إضافة أولًا": "Create an add-on category first",
+  "أنشئ تصنيفًا للإضافات أولًا، مثل الصوصات أو الإضافات الساخنة، قبل إنشاء إضافة جديدة.":
+    "Create an add-on category first, such as sauces or hot extras, before creating a new add-on.",
+  "إضافة تصنيف": "Add category",
 
   "العروض": "Offers",
   "إدارة العروض والخصومات لكل الفروع": "Manage offers and discounts for all branches",

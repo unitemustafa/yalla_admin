@@ -206,7 +206,7 @@ function CityDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-foreground/60 px-4 py-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-foreground/30 px-4 py-4 backdrop-blur-[1px]">
       <section
         dir="rtl"
         role="dialog"
@@ -373,7 +373,7 @@ function DeliveryAreasDialog({
   useLockedPageScroll();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/60 px-4 py-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/30 px-4 py-6 backdrop-blur-[1px]">
       <section
         dir="rtl"
         role="dialog"
@@ -443,6 +443,16 @@ function DeliveryAreasDialog({
                           <MapPin className="size-8 text-muted-foreground" />
                           <p className="font-semibold">لا توجد مناطق توصيل لهذه المدينة</p>
                           <p className="text-sm text-muted-foreground">أضف منطقة توصيل ثابتة السعر.</p>
+                          <Button
+                            type="button"
+                            className="mt-1"
+                            onClick={() => {
+                              window.location.href = "/delivery-zone";
+                            }}
+                          >
+                            <Plus className="size-4" />
+                            أضف أول منطقة توصيل
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -669,7 +679,19 @@ export function CitiesPage() {
         ) : error ? (
           <PageLoadError onRetry={() => void reload()} />
         ) : filteredCities.length === 0 ? (
-          <div className="flex min-h-56 flex-col items-center justify-center gap-2 text-center"><MapPinned className="size-9 text-muted-foreground" /><p className="font-semibold">لا توجد مدن مطابقة</p><p className="text-sm text-muted-foreground">أضف أول مدينة أو غيّر عبارة البحث.</p></div>
+          <div className="flex min-h-56 flex-col items-center justify-center gap-2 text-center">
+            <MapPinned className="size-9 text-muted-foreground" />
+            <p className="font-semibold">{cities.length ? "لا توجد مدن مطابقة" : "لا توجد مدن حتى الآن"}</p>
+            <p className="text-sm text-muted-foreground">
+              {cities.length ? "غيّر عبارة البحث وحاول مرة أخرى." : "أضف أول مدينة لتحديد نطاقات الخدمة والتوصيل."}
+            </p>
+            {!cities.length ? (
+              <Button type="button" onClick={() => setEditingCity(null)} className="mt-1">
+                <Plus className="size-4" />
+                أضف أول مدينة
+              </Button>
+            ) : null}
+          </div>
         ) : (
           <div className="grid gap-3 p-4">
             {pagedCities.map((city, index) => {

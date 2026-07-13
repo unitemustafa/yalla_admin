@@ -29,6 +29,7 @@ type Market = {
   image?: string | null;
   scope?: MarketScope;
   status: "active" | "inactive";
+  is_popular?: boolean;
   classification?: Classification;
   service_city_ids?: Array<number | string>;
   service_cities?: MarketServiceCity[];
@@ -73,14 +74,17 @@ function listFromResponse(value: unknown) {
   return [];
 }
 
-function classificationName(market: Market) {
-  return market.classification?.name || "بدون تصنيف";
-}
-
 function classificationTypeLabel(value: string | undefined) {
   if (value === "popular") return "شائعة";
   if (value === "featured") return "مميزة";
   return "عادية";
+}
+
+function classificationLabel(market: Market) {
+  const classification = market.classification;
+  if (!classification) return "بدون تصنيف";
+
+  return `${classification.name} — ${classificationTypeLabel(classification.classification_type)}`;
 }
 
 function normalizeClassification(value: unknown): Classification | null {
@@ -203,6 +207,7 @@ function MarketDialog({
   const initialScope: MarketScope = market?.scope === "service_city" ? "service_city" : "general";
   const [name, setName] = useState(market?.name ?? "");
   const [description, setDescription] = useState(market?.description ?? "");
+  const [isPopular, setIsPopular] = useState(market?.is_popular ?? false);
   const [classificationId, setClassificationId] = useState(String(market?.classification?.id ?? classifications[0]?.id ?? ""));
   const [showInGeneral, setShowInGeneral] = useState(initialScope === "general");
   const [showInServiceCities, setShowInServiceCities] = useState(initialScope === "service_city");
@@ -313,6 +318,7 @@ function MarketDialog({
       classification_id: Number(classificationId),
       name: name.trim(),
       description: description.trim(),
+      is_popular: isPopular,
       scope: showInGeneral ? "general" as const : "service_city" as const,
       delivery_area_ids: [],
       service_city_ids: [] as number[],
@@ -329,8 +335,8 @@ function MarketDialog({
               formData.set("classification_id", String(payload.classification_id));
               formData.set("name", payload.name);
               formData.set("description", payload.description);
+              formData.set("is_popular", String(payload.is_popular));
               formData.set("scope", payload.scope);
-              formData.set("delivery_area_ids", "[]");
               payload.service_city_ids.forEach((serviceCityId) => {
                 formData.append("service_city_ids", String(serviceCityId));
               });
@@ -390,7 +396,7 @@ function MarketDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-foreground/60 px-4 py-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-foreground/30 px-4 py-6 backdrop-blur-[1px]">
       <section role="dialog" aria-modal="true" className="mx-auto w-full max-w-4xl rounded-xl border bg-background shadow-2xl">
         <div className="flex items-start justify-between border-b bg-muted/20 px-6 py-5">
           <div><h2 className="text-xl font-bold">{market ? "تعديل المحل" : "إضافة محل"}</h2><p className="mt-1 text-sm text-muted-foreground">حدد نطاق ظهور المحل، عام أو مرتبط بمدن خدمة.</p></div>
@@ -408,6 +414,13 @@ function MarketDialog({
             <label className="grid gap-2 text-sm font-semibold">اسم المحل *<Input value={name} onChange={(event) => setName(event.target.value)} /></label>
             <label className="grid gap-2 text-sm font-semibold">فئة المحل *<AppSelect value={classificationId} onValueChange={setClassificationId} options={classifications.map((item) => ({ value: String(item.id), label: `${item.name} - ${classificationTypeLabel(item.classification_type)}` }))} /></label>
             <label className="grid gap-2 text-sm font-semibold sm:col-span-2">وصف المحل<textarea value={description} onChange={(event) => setDescription(event.target.value)} className="min-h-24 resize-none rounded-md border border-border bg-input px-3 py-2 text-sm shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/40 focus:ring-2 focus:ring-primary/15" placeholder="اكتب وصفًا مختصرًا للمحل" /></label>
+            <label className="flex min-h-16 cursor-pointer items-center justify-between gap-4 rounded-md border bg-background px-4 py-3 shadow-sm transition hover:border-primary/40 sm:col-span-2">
+              <span>
+                <span className="block text-sm font-semibold">محل شائع</span>
+                <span className="mt-1 block text-xs font-normal text-muted-foreground">يظهر بأولوية داخل فئته في صفحة المتجر.</span>
+              </span>
+              <Switch checked={isPopular} onCheckedChange={setIsPopular} aria-label="تحديد المحل كشائع" />
+            </label>
             <div className="grid gap-3 sm:col-span-2">
               <div className="text-sm font-medium">نطاق ظهور المحل *</div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -481,7 +494,7 @@ function MissingClassificationsDialog({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/60 px-4 py-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/30 px-4 py-6 backdrop-blur-[1px]">
       <section
         dir="rtl"
         role="dialog"
@@ -582,7 +595,7 @@ export function ShopsPage() {
 
   const filtered = useMemo(() => {
     const value = query.trim().toLowerCase();
-    return value ? markets.filter((market) => [market.name, classificationName(market)].some((item) => item.toLowerCase().includes(value))) : markets;
+    return value ? markets.filter((market) => [market.name, classificationLabel(market)].some((item) => item.toLowerCase().includes(value))) : markets;
   }, [markets, query]);
 
   function restoreMarket(market: Market, index: number) {
@@ -683,8 +696,8 @@ export function ShopsPage() {
         </div>
         {loading ? <PageLoadingState /> : error ? <PageLoadError onRetry={() => void load()} /> : <DataTable minWidth={1060} columnWidths={[80, 310, 170, 280, 245]} headers={["", "المحل", "الفئة", "المدن", ""]} rows={filtered.map((market, index) => [
           <span key="index" className="mx-auto flex size-10 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">{index + 1}</span>,
-          <div key="name" className="flex min-w-0 items-center gap-2.5 py-1"><DashboardImage src={market.image} placeholderType="store" alt="صورة المتجر" width={52} height={52} sizes="52px" className="size-[52px] shrink-0 rounded-md border bg-muted/35 shadow-sm" imageClassName="object-cover" /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-semibold">{market.name}</p><span className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-bold ${market.status === "active" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600" : "border-destructive/40 bg-destructive/10 text-destructive"}`}>{market.status === "active" ? "مفعلة" : "معطلة"}</span></div><p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{market.description || "لا يوجد وصف للمحل."}</p></div></div>,
-          <Badge key="classification">{classificationName(market)}</Badge>,
+          <div key="name" className="flex min-w-0 items-center gap-2.5 py-1"><DashboardImage src={market.image} placeholderType="store" alt="صورة المتجر" width={52} height={52} sizes="52px" className="size-[52px] shrink-0 rounded-md border bg-muted/35 shadow-sm" imageClassName="object-cover" /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-semibold">{market.name}</p><span className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-bold ${market.status === "active" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600" : "border-destructive/40 bg-destructive/10 text-destructive"}`}>{market.status === "active" ? "مفعلة" : "معطلة"}</span>{market.is_popular ? <span className="inline-flex rounded-md border border-primary/35 bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">شائع</span> : null}</div><p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{market.description || "لا يوجد وصف للمحل."}</p></div></div>,
+          <Badge key="classification">{classificationLabel(market)}</Badge>,
           <MarketLocationsCell key="locations" market={market} serviceCities={serviceCities} />,
           <div key="actions" className="flex min-w-[225px] items-center justify-end gap-2"><div className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-2 text-xs font-semibold"><span>{market.status === "active" ? "مفعلة" : "معطلة"}</span><Switch checked={market.status === "active"} onCheckedChange={(checked) => void toggleMarketActive(market, checked)} aria-label={`تفعيل المحل ${market.name}`} /></div><MarketActionButton label={`تعديل ${market.name}`} onClick={() => setDialogMarket(market)}><Edit3 className="size-4" /></MarketActionButton><MarketActionButton tone="danger" label={`حذف ${market.name}`} onClick={() => setDeleteMarket(market)}><Trash2 className="size-4" /></MarketActionButton></div>,
         ])} />}

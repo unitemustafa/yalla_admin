@@ -180,7 +180,7 @@ function Modal({
   maxWidth?: string;
 }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-foreground/60 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-foreground/30 p-4 backdrop-blur-[1px]">
       <div className={`w-full ${maxWidth} rounded-xl border bg-background shadow-2xl`}>
         <div className="flex items-center justify-between border-b px-5 py-4">
           <h2 className="text-lg font-bold">{title}</h2>
@@ -1073,7 +1073,7 @@ export function CouriersPage() {
               <h3 className="text-lg font-bold text-foreground">لا توجد حسابات مندوبين هنا</h3>
               <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">غيّر فلتر المنطقة أو أضف مندوبًا جديدًا.</p>
             </div>
-            <Link href="/delivery/couriers/new" className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90"><Plus className="size-4" />إضافة مندوب</Link>
+            <Link href="/delivery/couriers/new" className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90"><Plus className="size-4" />أضف أول مندوب</Link>
           </div>
         </Card>
       ) : (

@@ -303,7 +303,7 @@ function ZoneFormDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/60 px-4 py-3 backdrop-blur-sm sm:px-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/30 px-4 py-3 backdrop-blur-[1px] sm:px-6">
       <section
         dir="rtl"
         role="dialog"
@@ -421,6 +421,7 @@ function ZonesTable({
   onToggleMenu,
   onEdit,
   onDelete,
+  onCreate,
 }: {
   zones: DeliveryZone[];
   startIndex: number;
@@ -428,6 +429,7 @@ function ZonesTable({
   onToggleMenu: (zoneId: string) => void;
   onEdit: (zone: DeliveryZone) => void;
   onDelete: (zone: DeliveryZone) => void;
+  onCreate: () => void;
 }) {
   if (!zones.length) {
     return (
@@ -439,6 +441,10 @@ function ZonesTable({
         <p className="max-w-md text-sm leading-6 text-muted-foreground">
           أضف أول منطقة لتحديد نطاقات التوصيل وأسعارها.
         </p>
+        <Button type="button" onClick={onCreate} className="mt-1">
+          <Plus className="size-4" />
+          أضف أول منطقة توصيل
+        </Button>
       </div>
     );
   }
@@ -620,6 +626,55 @@ function ZonesMobileList({
   );
 }
 
+function MissingServiceCitiesDialog({ onClose }: { onClose: () => void }) {
+  useLockedPageScroll();
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/30 px-4 py-6 backdrop-blur-[1px]">
+      <section
+        dir="rtl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="missing-service-cities-title"
+        className="w-full max-w-lg overflow-hidden rounded-xl border bg-background shadow-2xl"
+      >
+        <div className="flex items-start justify-between gap-4 border-b bg-muted/20 px-6 py-5">
+          <div>
+            <h2 id="missing-service-cities-title" className="text-xl font-bold leading-7">
+              أنشئ مدينة أولًا
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              أنشئ مدينة خدمة مفعّلة أولًا لتحديد المدينة التي تتبع لها منطقة التوصيل الجديدة.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border bg-background shadow-sm transition hover:bg-accent"
+            aria-label="إغلاق"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+        <div className="flex justify-end gap-2 px-6 py-4">
+          <Button type="button" variant="outline" onClick={onClose}>
+            إلغاء
+          </Button>
+          <Button
+            type="button"
+            onClick={() => {
+              window.location.href = "/cities";
+            }}
+          >
+            <Plus className="size-4" />
+            إضافة مدينة
+          </Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export function DeliveryZonesPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
@@ -633,6 +688,7 @@ export function DeliveryZonesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [editingZone, setEditingZone] = useState<DeliveryZone | null>(null);
   const [creating, setCreating] = useState(false);
+  const [missingServiceCities, setMissingServiceCities] = useState(false);
   const [deleteZone, setDeleteZone] = useState<DeliveryZone | null>(null);
   const [deletingZoneId, setDeletingZoneId] = useState<string | null>(null);
   const [changingStatusId, setChangingStatusId] = useState<string | null>(null);
@@ -647,6 +703,15 @@ export function DeliveryZonesPage() {
     ],
     [cities],
   );
+  const hasActiveServiceCity = cities.some((city) => city.is_active !== false);
+
+  function startCreatingZone() {
+    if (!hasActiveServiceCity) {
+      setMissingServiceCities(true);
+      return;
+    }
+    setCreating(true);
+  }
 
   const loadZones = useCallback(async () => {
     setLoading(true);
@@ -833,7 +898,7 @@ export function DeliveryZonesPage() {
               <RefreshCw className={cn("size-4", loading && "animate-spin")} />
               تحديث
             </Button>
-            <Button onClick={() => setCreating(true)} disabled={citiesLoading || Boolean(citiesError)}>
+            <Button onClick={startCreatingZone} disabled={citiesLoading || Boolean(citiesError)}>
               <Plus className="size-4" />
               منطقة جديدة
             </Button>
@@ -969,6 +1034,7 @@ export function DeliveryZonesPage() {
                     onToggleMenu={() => undefined}
                     onEdit={setEditingZone}
                     onDelete={setDeleteZone}
+                    onCreate={startCreatingZone}
                   />
                 ) : null}
               </div>
@@ -998,6 +1064,9 @@ export function DeliveryZonesPage() {
           onClose={() => setCreating(false)}
           onSave={saveZone}
         />
+      ) : null}
+      {missingServiceCities ? (
+        <MissingServiceCitiesDialog onClose={() => setMissingServiceCities(false)} />
       ) : null}
       {editingZone ? (
         <ZoneFormDialog

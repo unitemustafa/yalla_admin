@@ -481,7 +481,7 @@ function DeleteDialog({
   useBodyScrollLock(true);
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center overflow-hidden overscroll-none bg-foreground/40 px-4">
+    <div className="fixed inset-0 z-40 flex items-center justify-center overflow-hidden overscroll-none bg-foreground/30 px-4 backdrop-blur-[1px]">
       <div
         role="alertdialog"
         aria-modal="true"
@@ -583,7 +583,7 @@ function ProductDetailDialog({
   const additions = product?.additions ?? [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-none bg-foreground/45 px-4 py-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-none bg-foreground/30 px-4 py-6 backdrop-blur-[1px]">
       <div
         aria-labelledby="product-detail-title"
         aria-modal="true"
@@ -839,6 +839,7 @@ export function ItemsPage() {
     filters.status !== defaultFilters.status;
   const deleteRow = rows.find((row) => row.id === deleteId);
   const detailDialogOpen = detailLoading || Boolean(detailError) || Boolean(detailProduct);
+  const showEmptyState = !loading && !error && rows.length === 0;
 
   useEffect(() => {
     let active = true;
@@ -1016,120 +1017,147 @@ export function ItemsPage() {
       <MetricCards rows={visibleRows} />
 
       <div className="mt-6">
-        {error ? (
-          <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-200">
-            {error}
-          </div>
-        ) : null}
-        <ItemsFilters
-          filters={filters}
-          hasFilters={hasFilters}
-          shops={shops}
-          onChange={(nextFilters) => {
-            setFilters(nextFilters);
-            setCurrentPage(1);
-          }}
-          onReset={() => {
-            setFilters(defaultFilters);
-            setCurrentPage(1);
-          }}
-        />
-        {loading ? (
-          <div className="mt-4 flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground lg:hidden">
-            جاري تحميل المنتجات...
-          </div>
-        ) : visibleRows.length ? (
-          <ItemsMobileCards
-            rows={pagedRows}
-            selectedRows={selectedRows}
-            onToggleSelected={toggleSelectedRow}
-            onToggleActive={toggleActive}
-            onView={openProductDetail}
-            onDelete={setDeleteId}
-          />
+        {showEmptyState ? (
+          <Card className="flex min-h-[280px] items-center justify-center bg-card shadow">
+            <div className="mx-auto flex w-full max-w-[520px] flex-col items-center px-6 py-8 text-center">
+              <div className="flex size-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
+                <Package className="size-8" />
+              </div>
+              <h2 className="mt-4 text-xl font-semibold leading-7">
+                لا توجد منتجات حتى الآن
+              </h2>
+              <p className="mt-2 max-w-[430px] text-sm leading-6 text-muted-foreground">
+                سيظهر هنا أول منتج تضيفه للعملاء في تطبيق يلا ماركت.
+              </p>
+              <div className="mt-4 flex w-full justify-center sm:w-auto">
+                <Link
+                  href="/items/create"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow transition hover:bg-primary/90"
+                >
+                  <Plus className="size-4" />
+                  إضافة أول منتج
+                </Link>
+              </div>
+            </div>
+          </Card>
         ) : (
-          <div className="mt-4 flex h-24 items-center justify-center rounded-md border text-sm text-muted-foreground lg:hidden">
-            لا توجد نتائج مطابقة.
-          </div>
+          <>
+            {error ? (
+              <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-200">
+                {error}
+              </div>
+            ) : null}
+            <ItemsFilters
+              filters={filters}
+              hasFilters={hasFilters}
+              shops={shops}
+              onChange={(nextFilters) => {
+                setFilters(nextFilters);
+                setCurrentPage(1);
+              }}
+              onReset={() => {
+                setFilters(defaultFilters);
+                setCurrentPage(1);
+              }}
+            />
+            {loading ? (
+              <div className="mt-4 flex h-16 items-center justify-center rounded-md border text-sm text-muted-foreground lg:hidden">
+                جاري تحميل المنتجات...
+              </div>
+            ) : visibleRows.length ? (
+              <ItemsMobileCards
+                rows={pagedRows}
+                selectedRows={selectedRows}
+                onToggleSelected={toggleSelectedRow}
+                onToggleActive={toggleActive}
+                onView={openProductDetail}
+                onDelete={setDeleteId}
+              />
+            ) : (
+              <div className="mt-4 flex h-16 items-center justify-center rounded-md border text-sm text-muted-foreground lg:hidden">
+                لا توجد نتائج مطابقة.
+              </div>
+            )}
+            <div className="mt-4 hidden overflow-hidden rounded-md border transition-opacity duration-200 lg:block">
+              <DataTable
+                minWidth={1162}
+                columnWidths={[78, 300, 210, 120, 130, 112, 70, 190]}
+                rowHeight="normal"
+                headers={[
+                  "",
+                  "المنتج",
+                  "الوصف",
+                  "المحل",
+                  "الظهور",
+                  "السعر",
+                  "نشط",
+                  "",
+                ]}
+                rows={(loading ? [] : pagedRows).map((row, rowPosition) => [
+                  <span key={`index-${row.index}`} className="mx-auto flex size-10 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">
+                    {pageStartIndex + rowPosition + 1}
+                  </span>,
+                  <div
+                    key={`product-${row.index}`}
+                    className="min-w-0 py-1.5"
+                  >
+                    <ProductIdentity row={row} />
+                  </div>,
+                  <div key={`description-${row.index}`} className="min-w-0 py-1.5">
+                    <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+                      {row.description}
+                    </p>
+                  </div>,
+                  <div key={`shop-${row.index}`} className="min-w-0">
+                    <InfoPill>{itemShopLabel(row)}</InfoPill>
+                  </div>,
+                  <div key={`visibility-${row.index}`} className="min-w-0">
+                    <InfoPill>{itemVisibilityLabel(row)}</InfoPill>
+                  </div>,
+                  <div key={`price-${row.index}`} className="flex justify-start">
+                    <PriceCell price={row.price} />
+                  </div>,
+                  <div key={`active-wrap-${row.index}`} className="flex items-center gap-3">
+                    <ActiveToggleButton
+                      active={row.active}
+                      onToggle={(active) => toggleActive(row, active)}
+                    />
+                  </div>,
+                  <div key={`actions-${row.index}`} className="flex items-center justify-end">
+                    <RowActions
+                      row={row}
+                      onView={() => openProductDetail(row)}
+                      onDelete={() => setDeleteId(row.id)}
+                    />
+                  </div>,
+                ])}
+              />
+              {loading ? (
+                <div className="flex h-16 items-center justify-center text-sm text-muted-foreground">
+                  جاري تحميل المنتجات...
+                </div>
+              ) : !visibleRows.length ? (
+                <div className="flex h-16 items-center justify-center text-sm text-muted-foreground">
+                  لا توجد نتائج مطابقة.
+                </div>
+              ) : null}
+            </div>
+            <Pagination
+              text={`عرض ${pagedRows.length} من ${visibleRows.length} نتيجة`}
+              pages={`${safeCurrentPage} / ${totalPages}`}
+              previousDisabled={safeCurrentPage === 1}
+              nextDisabled={safeCurrentPage === totalPages}
+              onPrevious={() =>
+                setCurrentPage((page) => Math.max(1, Math.min(page, totalPages) - 1))
+              }
+              onNext={() =>
+                setCurrentPage((page) =>
+                  Math.min(totalPages, Math.min(page, totalPages) + 1),
+                )
+              }
+            />
+          </>
         )}
-        <div className="mt-4 hidden overflow-hidden rounded-md border transition-opacity duration-200 lg:block">
-          <DataTable
-            minWidth={1162}
-            columnWidths={[78, 300, 210, 120, 130, 112, 70, 190]}
-            rowHeight="normal"
-            headers={[
-              "",
-              "المنتج",
-              "الوصف",
-              "المحل",
-              "الظهور",
-              "السعر",
-              "نشط",
-              "",
-            ]}
-            rows={(loading ? [] : pagedRows).map((row, rowPosition) => [
-              <span key={`index-${row.index}`} className="mx-auto flex size-10 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">
-                {pageStartIndex + rowPosition + 1}
-              </span>,
-              <div
-                key={`product-${row.index}`}
-                className="min-w-0 py-1.5"
-              >
-                <ProductIdentity row={row} />
-              </div>,
-              <div key={`description-${row.index}`} className="min-w-0 py-1.5">
-                <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-                  {row.description}
-                </p>
-              </div>,
-              <div key={`shop-${row.index}`} className="min-w-0">
-                <InfoPill>{itemShopLabel(row)}</InfoPill>
-              </div>,
-              <div key={`visibility-${row.index}`} className="min-w-0">
-                <InfoPill>{itemVisibilityLabel(row)}</InfoPill>
-              </div>,
-              <div key={`price-${row.index}`} className="flex justify-start">
-                <PriceCell price={row.price} />
-              </div>,
-              <div key={`active-wrap-${row.index}`} className="flex items-center gap-3">
-                <ActiveToggleButton
-                  active={row.active}
-                  onToggle={(active) => toggleActive(row, active)}
-                />
-              </div>,
-              <div key={`actions-${row.index}`} className="flex items-center justify-end">
-                <RowActions
-                  row={row}
-                  onView={() => openProductDetail(row)}
-                  onDelete={() => setDeleteId(row.id)}
-                />
-              </div>,
-            ])}
-          />
-          {loading ? (
-            <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
-              جاري تحميل المنتجات...
-            </div>
-          ) : !visibleRows.length ? (
-            <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
-              لا توجد نتائج مطابقة.
-            </div>
-          ) : null}
-        </div>
-        <Pagination
-          text={`عرض ${pagedRows.length} من ${visibleRows.length} نتيجة`}
-          pages={`${safeCurrentPage} / ${totalPages}`}
-          previousDisabled={safeCurrentPage === 1}
-          nextDisabled={safeCurrentPage === totalPages}
-          onPrevious={() =>
-            setCurrentPage((page) => Math.max(1, Math.min(page, totalPages) - 1))
-          }
-          onNext={() =>
-            setCurrentPage((page) =>
-              Math.min(totalPages, Math.min(page, totalPages) + 1),
-            )
-          }
-        />
       </div>
 
       {detailDialogOpen ? (

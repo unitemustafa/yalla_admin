@@ -504,6 +504,57 @@ type AddonCategoryRecord = {
   name: string;
 };
 
+function MissingAddonCategoriesDialog({
+  onClose,
+  onCreateCategory,
+}: {
+  onClose: () => void;
+  onCreateCategory: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/30 px-4 py-6 backdrop-blur-[1px]">
+      <section
+        dir="rtl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="missing-addon-categories-title"
+        className="w-full max-w-lg overflow-hidden rounded-xl border bg-background shadow-2xl"
+      >
+        <div className="flex items-start justify-between gap-4 border-b bg-muted/20 px-6 py-5">
+          <div>
+            <h2
+              id="missing-addon-categories-title"
+              className="text-xl font-bold leading-7"
+            >
+              أنشئ تصنيف إضافة أولًا
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              أنشئ تصنيفًا للإضافات أولًا، مثل الصوصات أو الإضافات الساخنة، قبل إنشاء إضافة جديدة.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border bg-background shadow-sm transition hover:bg-accent"
+            aria-label="إغلاق"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+        <div className="flex justify-end gap-2 px-6 py-4">
+          <Button type="button" variant="outline" onClick={onClose}>
+            إلغاء
+          </Button>
+          <Button type="button" onClick={onCreateCategory}>
+            <Plus className="size-4" />
+            إضافة تصنيف
+          </Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function translateAddonCategoryDeleteError(message: string) {
   if (/cannot delete addition classification while product additions are using it/i.test(message)) {
     return "لا يمكن حذف التصنيف لأنه مستخدم في إضافات حالية.";
@@ -1723,7 +1774,7 @@ function CustomerSearchModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overscroll-none bg-foreground/45 px-4 py-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overscroll-none bg-foreground/30 px-4 py-6 backdrop-blur-[1px]">
       <div
         role="dialog"
         aria-modal="true"
@@ -2016,7 +2067,7 @@ export function AddonsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
-  const [addonsLoading, setAddonsLoading] = useState(false);
+  const [addonsLoading, setAddonsLoading] = useState(true);
   const [addonSearch, setAddonSearch] = useState("");
   const [selectedAddonCategory, setSelectedAddonCategory] = useState("all");
   const [addonFormCategory, setAddonFormCategory] = useState("");
@@ -2085,16 +2136,19 @@ export function AddonsPage() {
             .map((item) => [String(item.name ?? "").trim(), item.id])
             .filter(([name, id]) => Boolean(name) && (typeof id === "string" || typeof id === "number")),
         ) as Record<string, string | number>;
-        if (classifications.length) {
-          setAddonCategories(
-            apiList(classificationsData)
-              .map((item) => ({ id: String(item.id ?? ""), name: String(item.name ?? "").trim() }))
-              .filter((item) => Boolean(item.id) && Boolean(item.name)),
-          );
-          setCategoryOptions(classifications);
-          setCategoryIds(classificationIds);
-          setAddonFormCategory(classifications[0] ?? "");
-        }
+        setAddonCategories(
+          apiList(classificationsData)
+            .map((item) => ({ id: String(item.id ?? ""), name: String(item.name ?? "").trim() }))
+            .filter((item) => Boolean(item.id) && Boolean(item.name)),
+        );
+        setCategoryOptions(classifications);
+        setCategoryIds(classificationIds);
+        setAddonFormCategory(classifications[0] ?? "");
+        setSelectedAddonCategory((currentCategory) =>
+          currentCategory === "all" || classifications.includes(currentCategory)
+            ? currentCategory
+            : "all",
+        );
       }
     } catch (error) {
       if (showFailure) {
@@ -2454,6 +2508,7 @@ export function AddonsPage() {
       formData.set("name_ar", addonNameAr.trim());
       formData.set("name_en", addonNameAr.trim());
       formData.set("price", addonPrice.trim());
+      formData.set("is_active", "true");
       if (addonImageFile) formData.set("image", addonImageFile);
 
       const response = await apiFetch(adminApiPaths.productAdditions, {
@@ -2532,7 +2587,7 @@ export function AddonsPage() {
               <Plus className="size-4" />
               إضافة تصنيف جديد
             </Button>
-            <Button onClick={() => setModalOpen(true)}>
+            <Button onClick={() => setModalOpen(true)} disabled={addonsLoading}>
               <Plus className="size-4" />
               إضافة جديدة
             </Button>
@@ -2546,10 +2601,23 @@ export function AddonsPage() {
                   <h3 className="font-semibold">تصنيفات الإضافات</h3>
                   <p className="mt-1 text-xs text-muted-foreground">تعديل اسم التصنيف أو حذفه.</p>
                 </div>
-                <Button type="button" variant="outline" size="sm" onClick={() => setCategoryModalOpen(true)}>
-                  <Plus className="size-4" />
-                  إضافة تصنيف
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setCategoryModalOpen(true)}>
+                    <Plus className="size-4" />
+                    إضافة تصنيف
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setCategoriesOpen(false);
+                      setEditingCategory(null);
+                    }}
+                  >
+                    إلغاء
+                  </Button>
+                </div>
               </div>
               <div className="divide-y">
                 {addonCategories.length ? addonCategories.map((category) => {
@@ -2803,7 +2871,17 @@ export function AddonsPage() {
         </div>
       ) : null}
 
-      {modalOpen ? (
+      {modalOpen && !categoryOptions.length ? (
+        <MissingAddonCategoriesDialog
+          onClose={closeAddonModal}
+          onCreateCategory={() => {
+            closeAddonModal();
+            setCategoryModalOpen(true);
+          }}
+        />
+      ) : null}
+
+      {modalOpen && categoryOptions.length ? (
         <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto overscroll-contain bg-foreground/30 p-4 backdrop-blur-[1px] sm:items-center">
           <div className="max-h-[calc(100vh-2rem)] w-full max-w-[620px] overflow-y-auto rounded-lg border bg-background p-6 shadow-lg">
             <div className="flex items-start justify-between gap-4">
@@ -3661,14 +3739,14 @@ export function OffersPage() {
           </div>
         </Card>
       ) : offers.length === 0 ? (
-        <Card className="mt-6 flex min-h-[420px] items-center justify-center bg-card shadow">
-          <div className="mx-auto flex w-full max-w-[520px] flex-col items-center px-6 py-12 text-center">
+        <Card className="mt-6 flex min-h-[280px] items-center justify-center bg-card shadow">
+          <div className="mx-auto flex w-full max-w-[520px] flex-col items-center px-6 py-8 text-center">
             <div className="flex size-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
               <Tag className="size-8" />
             </div>
-            <h2 className="mt-6 text-xl font-semibold leading-7">لا توجد عروض حتى الآن</h2>
+            <h2 className="mt-4 text-xl font-semibold leading-7">لا توجد عروض حتى الآن</h2>
             <p className="mt-2 max-w-[430px] text-sm leading-6 text-muted-foreground">سيظهر هنا أول عرض تنشئه للعملاء في تطبيق يلا ماركت.</p>
-            <div className="mt-6 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row">
+            <div className="mt-4 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row">
               <Link href="/offers/create" className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90">
                 <Plus className="size-4" />
                 إنشاء أول عرض
@@ -3677,7 +3755,7 @@ export function OffersPage() {
           </div>
         </Card>
       ) : filteredOffers.length === 0 ? (
-        <Card className="mt-6 p-10 text-center text-sm text-muted-foreground">
+        <Card className="mt-6 p-6 text-center text-sm text-muted-foreground">
           لا توجد عروض مطابقة للفلاتر الحالية.
         </Card>
       ) : (
@@ -3854,7 +3932,7 @@ function OfferDeleteModal({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/45 px-4 py-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30 px-4 py-6 backdrop-blur-[1px]">
       <div
         role="dialog"
         aria-modal="true"
@@ -4083,7 +4161,7 @@ function PackageProductSearchModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overscroll-none bg-foreground/45 px-4 py-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overscroll-none bg-foreground/30 px-4 py-6 backdrop-blur-[1px]">
       <div
         role="dialog"
         aria-modal="true"
@@ -5298,8 +5376,18 @@ export function CreateOfferPage() {
             ? discountPercent
             : "0";
     const discountNumber = Number(discount || 0);
-    const startDateTime = new Date(`${startDate}T${startTime}`);
+    const selectedStartDateTime = new Date(`${startDate}T${startTime}`);
     const endDateTime = new Date(`${endDate}T${endTime}`);
+    const now = new Date();
+    const isImmediateExpiredOfferReactivation =
+      formMode === "edit" &&
+      editingOffer?.effectiveStatus === "expired" &&
+      sendPushNotification &&
+      selectedStartDateTime.getTime() > now.getTime() &&
+      selectedStartDateTime.getTime() - now.getTime() <= 60_000;
+    const startDateTime = isImmediateExpiredOfferReactivation
+      ? new Date(now.getTime() - 1_000)
+      : selectedStartDateTime;
 
     if (!Number.isFinite(discountNumber) || discountNumber < 0) {
       showSnackbar({ message: "قيمة الخصم يجب أن تكون صفر أو أكثر.", tone: "danger" });
@@ -6098,7 +6186,7 @@ export function CreateOfferPage() {
 
       </div>
       {serviceCityClearConfirmOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/45 px-4 py-6 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30 px-4 py-6 backdrop-blur-[1px]">
           <div
             role="dialog"
             aria-modal="true"

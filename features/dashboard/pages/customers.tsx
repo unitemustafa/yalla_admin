@@ -589,7 +589,7 @@ function AddCustomerDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/60 px-3 py-6 backdrop-blur-sm sm:px-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/30 px-3 py-6 backdrop-blur-[1px] sm:px-5">
       <section
         dir="rtl"
         role="dialog"

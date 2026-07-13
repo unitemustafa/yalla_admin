@@ -1067,7 +1067,7 @@ export function AdminOrderReviewBlocker() {
   const pendingLabel = pendingCount > 0 ? pendingCount : orders.length;
 
   return (
-    <div className="fixed inset-0 z-[70] overflow-y-auto overscroll-none bg-foreground/60 px-4 py-5 backdrop-blur-sm sm:px-6">
+    <div className="fixed inset-0 z-[70] overflow-y-auto overscroll-none bg-foreground/30 px-4 py-5 backdrop-blur-[1px] sm:px-6">
       <section
         role="dialog"
         aria-modal="true"

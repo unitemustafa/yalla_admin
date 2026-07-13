@@ -5,6 +5,8 @@ type ApiFetch = (path: string, init?: RequestInit) => Promise<Response>;
 export type MarketClassification = {
   id: number;
   name: string;
+  description: string;
+  image: string | null;
   classification_type: MarketClassificationType;
   is_active: boolean;
 };
@@ -13,6 +15,7 @@ export type MarketClassificationType = "normal" | "featured" | "popular";
 
 export type MarketClassificationPayload = {
   name: string;
+  description?: string;
   classification_type: MarketClassificationType;
   is_active?: boolean;
 };
@@ -31,6 +34,12 @@ function normalizeMarketClassification(
   const record = value as Record<string, unknown>;
   const id = Number(record.id);
   const name = typeof record.name === "string" ? record.name.trim() : "";
+  const description =
+    typeof record.description === "string" ? record.description.trim() : "";
+  const image =
+    typeof record.image === "string" && record.image.trim()
+      ? record.image.trim()
+      : null;
   const rawType = record.classification_type;
   const classification_type =
     rawType === "popular" || rawType === "featured" || rawType === "normal"
@@ -39,7 +48,14 @@ function normalizeMarketClassification(
 
   if (!Number.isFinite(id) || !name) return null;
 
-  return { id, name, classification_type, is_active: record.is_active !== false };
+  return {
+    id,
+    name,
+    description,
+    image,
+    classification_type,
+    is_active: record.is_active !== false,
+  };
 }
 
 function listFromResponse(value: unknown) {
@@ -65,9 +81,35 @@ async function checkedData(response: Response, fallback: string) {
 function requestBody(payload: MarketClassificationPayload) {
   return JSON.stringify({
     name: payload.name.trim(),
+    description: payload.description?.trim() ?? "",
     classification_type: payload.classification_type,
     ...(payload.is_active === undefined ? {} : { is_active: payload.is_active }),
   });
+}
+
+function requestInit(
+  method: "POST" | "PATCH",
+  payload: MarketClassificationPayload,
+  imageFile?: File | null,
+): RequestInit {
+  if (!imageFile) {
+    return {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: requestBody(payload),
+    };
+  }
+
+  const formData = new FormData();
+  formData.set("name", payload.name.trim());
+  formData.set("description", payload.description?.trim() ?? "");
+  formData.set("classification_type", payload.classification_type);
+  if (payload.is_active !== undefined) {
+    formData.set("is_active", String(payload.is_active));
+  }
+  formData.set("image", imageFile);
+
+  return { method, body: formData };
 }
 
 export async function loadMarketClassifications(apiFetch: ApiFetch) {
@@ -84,13 +126,14 @@ export async function loadMarketClassifications(apiFetch: ApiFetch) {
 export async function createMarketClassification(
   apiFetch: ApiFetch,
   payload: MarketClassificationPayload,
+  imageFile?: File | null,
 ) {
+  const createPayload: MarketClassificationPayload = {
+    ...payload,
+    is_active: payload.is_active ?? true,
+  };
   const data = await checkedData(
-    await apiFetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: requestBody(payload),
-    }),
+    await apiFetch(endpoint, requestInit("POST", createPayload, imageFile)),
     "تعذر حفظ التصنيف.",
   );
   const classification = normalizeMarketClassification(data);
@@ -106,13 +149,13 @@ export async function updateMarketClassification(
   apiFetch: ApiFetch,
   id: number,
   payload: MarketClassificationPayload,
+  imageFile?: File | null,
 ) {
   const data = await checkedData(
-    await apiFetch(`${endpoint}${encodeURIComponent(id)}/`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: requestBody(payload),
-    }),
+    await apiFetch(
+      `${endpoint}${encodeURIComponent(id)}/`,
+      requestInit("PATCH", payload, imageFile),
+    ),
     "تعذر حفظ التصنيف.",
   );
   const classification = normalizeMarketClassification(data);

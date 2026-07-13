@@ -493,7 +493,7 @@ function CourierDetailsDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center overflow-y-auto bg-foreground/60 px-4 py-6 backdrop-blur-sm sm:px-6">
+    <div className="fixed inset-0 z-40 flex items-center overflow-y-auto bg-foreground/30 px-4 py-6 backdrop-blur-[1px] sm:px-6">
       <section className="relative mx-auto flex max-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl">
         <button
           type="button"
@@ -875,7 +875,7 @@ function ZoneCreateDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/60 px-4 py-6 backdrop-blur-sm sm:px-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/30 px-4 py-6 backdrop-blur-[1px] sm:px-6">
       <section className="relative w-full max-w-3xl overflow-hidden rounded-xl border bg-background shadow-2xl">
         <button
           type="button"
@@ -1255,7 +1255,7 @@ function CourierDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-40 overflow-y-auto bg-foreground/60 px-4 py-6 backdrop-blur-sm sm:px-6">
+    <div className="fixed inset-0 z-40 overflow-y-auto bg-foreground/30 px-4 py-6 backdrop-blur-[1px] sm:px-6">
       <section className="relative mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col justify-center">
         <div className="relative overflow-hidden rounded-xl border bg-background shadow-2xl">
           <button
@@ -1597,7 +1597,7 @@ function SendOrderDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-foreground/60 px-4 py-6 backdrop-blur-sm sm:px-6">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-foreground/30 px-4 py-6 backdrop-blur-[1px] sm:px-6">
       <section className="relative w-full max-w-md rounded-xl border bg-background p-5 shadow-2xl">
         <button
           type="button"

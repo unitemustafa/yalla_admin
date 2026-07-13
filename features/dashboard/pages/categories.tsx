@@ -192,7 +192,7 @@ function CategoryDetailDialog({
   useBodyScrollLock(true);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-foreground/35 p-4 backdrop-blur-[1px]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-foreground/30 p-4 backdrop-blur-[1px]">
       <div
         aria-labelledby="category-detail-title"
         aria-modal="true"
@@ -326,7 +326,7 @@ function CategoryFormDialog({
   }));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-foreground/35 p-4 backdrop-blur-[1px]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-foreground/30 p-4 backdrop-blur-[1px]">
       <form
         aria-labelledby="category-form-title"
         aria-modal="true"

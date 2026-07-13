@@ -557,7 +557,7 @@ export function ProductLivePreview({
         </div>
       </div>
       {additionSheetOpen ? (
-        <div className="fixed inset-0 z-[90] flex items-end bg-black/55">
+        <div className="fixed inset-0 z-[90] flex items-end bg-foreground/30 backdrop-blur-[1px]">
           <div className="w-full rounded-t-2xl border border-white/10 bg-[#1A1A1A] p-4 text-white shadow-2xl">
             <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-white/35" />
             <div className="flex items-center justify-between gap-3">

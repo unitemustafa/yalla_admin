@@ -53,6 +53,8 @@ const classificationTypeOptions: Array<{
 type ClassificationDialogMode = "create" | "edit";
 type ClassificationFormPayload = {
   name: string;
+  description: string;
+  imageFile: File | null;
   classification_type: MarketClassificationType;
 };
 
@@ -74,6 +76,9 @@ function classificationTypeLabel(value: MarketClassificationType) {
 function translateMarketClassificationError(message: string) {
   if (/cannot delete market classification while markets are using it/i.test(message)) {
     return "لا يمكن حذف الفئة لأنها مستخدمة في محلات حالية.";
+  }
+  if (/only four active featured market classifications are allowed/i.test(message)) {
+    return "اكتملت المقاعد الأربعة للفئات المميزة. عطّل فئة مميزة أولًا لاختيار فئة أخرى.";
   }
   return message;
 }
@@ -108,29 +113,36 @@ function ClassificationActionButton({
 function TypeSelector({
   value,
   onChange,
+  featuredDisabled,
 }: {
   value: MarketClassificationType;
   onChange: (value: MarketClassificationType) => void;
+  featuredDisabled: boolean;
 }) {
   return (
     <div className="grid gap-2 sm:grid-cols-3">
       {classificationTypeOptions.map((option) => {
         const selected = option.value === value;
+        const disabled =
+          option.value === "featured" && featuredDisabled && !selected;
 
         return (
           <button
             key={option.value}
             type="button"
             aria-pressed={selected}
+            disabled={disabled}
             onClick={() => onChange(option.value)}
             className={cn(
               "min-h-11 rounded-md border px-3 py-2 text-sm font-bold transition",
               selected
                 ? "border-primary bg-primary/10 text-primary shadow-sm"
                 : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-accent hover:text-foreground",
+              disabled &&
+                "cursor-not-allowed border-border bg-muted/40 text-muted-foreground opacity-55 hover:border-border hover:bg-muted/40 hover:text-muted-foreground",
             )}
           >
-            فئة {option.label}
+            فئة {option.label}{disabled ? " (4/4)" : ""}
           </button>
         );
       })}
@@ -159,17 +171,19 @@ function ClassificationDialog({
   classification,
   onClose,
   onSubmit,
+  featuredOptionDisabled,
 }: {
   classification?: MarketClassification;
   onClose: () => void;
   onSubmit: (payload: ClassificationFormPayload) => Promise<void>;
+  featuredOptionDisabled: boolean;
 }) {
   const mode: ClassificationDialogMode = classification ? "edit" : "create";
   const [form, setForm] = useState<ClassificationFormState>({
     name: classification?.name ?? "",
     classificationType: classification?.classification_type ?? "normal",
-    description: "",
-    imagePreview: null,
+    description: classification?.description ?? "",
+    imagePreview: classification?.image ?? null,
     imageFile: null,
   });
   const [error, setError] = useState("");
@@ -225,6 +239,8 @@ function ClassificationDialog({
     try {
       await onSubmit({
         name: trimmedName,
+        description: form.description.trim(),
+        imageFile: form.imageFile,
         classification_type: form.classificationType,
       });
     } catch {
@@ -233,7 +249,7 @@ function ClassificationDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-foreground/35 p-4 backdrop-blur-[1px]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-foreground/30 p-4 backdrop-blur-[1px]">
       <form
         dir="rtl"
         aria-labelledby="market-classification-dialog-title"
@@ -349,6 +365,7 @@ function ClassificationDialog({
               نوع الفئة
               <TypeSelector
                 value={form.classificationType}
+                featuredDisabled={featuredOptionDisabled}
                 onChange={(classificationType) =>
                   setForm((current) => ({
                     ...current,
@@ -405,7 +422,7 @@ function DeleteClassificationDialog({
   useLockedPageScroll(true);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/60 px-4 py-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/30 px-4 py-6 backdrop-blur-[1px]">
       <section
         dir="rtl"
         role="dialog"
@@ -476,6 +493,12 @@ export function MarketClassificationsPage() {
   >();
   const [deleteClassification, setDeleteClassification] =
     useState<MarketClassification | null>(null);
+  const featuredOptionDisabled =
+    classifications.filter(
+      (classification) =>
+        classification.is_active &&
+        classification.classification_type === "featured",
+    ).length >= 4;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -533,6 +556,7 @@ export function MarketClassificationsPage() {
           apiFetch,
           dialogClassification.id,
           payload,
+          payload.imageFile,
         );
         setClassifications((current) =>
           current.map((item) => (item.id === updated.id ? updated : item)),
@@ -542,7 +566,11 @@ export function MarketClassificationsPage() {
           tone: "success",
         });
       } else {
-        const created = await createMarketClassification(apiFetch, payload);
+        const created = await createMarketClassification(
+          apiFetch,
+          payload,
+          payload.imageFile,
+        );
         setClassifications((current) => [created, ...current]);
         setCurrentPage(1);
         showSnackbar({
@@ -553,9 +581,10 @@ export function MarketClassificationsPage() {
 
       setDialogClassification(undefined);
     } catch (reason) {
+      const message =
+        reason instanceof Error ? reason.message : "تعذر حفظ فئة المحل.";
       showSnackbar({
-        message:
-          reason instanceof Error ? reason.message : "تعذر حفظ فئة المحل.",
+        message: translateMarketClassificationError(message),
         tone: "danger",
       });
       throw new Error("تعذر حفظ فئة المحل.");
@@ -589,8 +618,10 @@ export function MarketClassificationsPage() {
       setClassifications((current) =>
         current.map((item) => (item.id === classification.id ? classification : item)),
       );
+      const message =
+        reason instanceof Error ? reason.message : "تعذر تحديث حالة الفئة.";
       showSnackbar({
-        message: reason instanceof Error ? reason.message : "تعذر تحديث حالة الفئة.",
+        message: translateMarketClassificationError(message),
         tone: "danger",
       });
     }
@@ -747,7 +778,7 @@ export function MarketClassificationsPage() {
                 </span>,
                 <div key="name" className="flex min-w-0 items-center gap-2.5 py-1">
                   <DashboardImage
-                    src="/default-user-avatar.svg"
+                    src={classification.image || "/default-user-avatar.svg"}
                     alt=""
                     width={52}
                     height={52}
@@ -811,6 +842,7 @@ export function MarketClassificationsPage() {
       {dialogClassification !== undefined ? (
         <ClassificationDialog
           classification={dialogClassification ?? undefined}
+          featuredOptionDisabled={featuredOptionDisabled}
           onClose={() => setDialogClassification(undefined)}
           onSubmit={saveClassification}
         />
