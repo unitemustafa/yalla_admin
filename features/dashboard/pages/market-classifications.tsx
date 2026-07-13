@@ -74,6 +74,9 @@ function classificationTypeLabel(value: MarketClassificationType) {
 }
 
 function translateMarketClassificationError(message: string) {
+  if (/a market classification with this name already exists/i.test(message)) {
+    return "توجد فئة محلات بهذا الاسم بالفعل.";
+  }
   if (/cannot delete market classification while markets are using it/i.test(message)) {
     return "لا يمكن حذف الفئة لأنها مستخدمة في محلات حالية.";
   }
@@ -333,10 +336,10 @@ function ClassificationDialog({
                   <button
                     type="button"
                     onClick={clearLocalPreview}
-                    className="inline-flex shrink-0 items-center gap-1 font-semibold text-destructive transition hover:text-destructive/80"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-md border border-destructive/50 px-3 py-1.5 font-semibold text-destructive transition hover:bg-destructive/10"
                   >
                     <X className="size-3.5" />
-                    إزالة المعاينة
+                    حذف الصورة
                   </button>
                 ) : null}
               </div>

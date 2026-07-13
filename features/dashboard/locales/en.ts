@@ -193,7 +193,7 @@ export const en = {
   "notifications.filter.read": "Read",
   "notifications.state.read": "Read",
   "notifications.state.unread": "Unread",
-  "notifications.state.resolved": "Resolved",
+  "notifications.state.resolved": "Followed up",
   "notifications.state.requiresAction": "Requires action",
   "notifications.empty.title": "No notifications yet",
   "notifications.empty.all": "No notifications.",

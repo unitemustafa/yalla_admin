@@ -8,11 +8,11 @@ import {
   useMemo,
   useState,
 } from "react";
-import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
+import { AlertTriangle, BellRing, CheckCircle2, Info } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-type SnackbarTone = "success" | "danger" | "info";
+type SnackbarTone = "success" | "danger" | "info" | "notification";
 
 type Snackbar = {
   id: number;
@@ -98,6 +98,8 @@ function SnackbarItem({
   const Icon =
     snackbar.tone === "danger"
       ? AlertTriangle
+      : snackbar.tone === "notification"
+        ? BellRing
       : snackbar.tone === "info"
         ? Info
         : CheckCircle2;
@@ -114,6 +116,8 @@ function SnackbarItem({
           "border-red-300 bg-red-50 text-red-900 dark:border-red-400/30 dark:bg-red-500/15 dark:text-red-100",
         snackbar.tone === "info" &&
           "border-primary/30 bg-primary/10 text-primary",
+        snackbar.tone === "notification" &&
+          "border-emerald-500/70 bg-emerald-950 text-emerald-50 shadow-emerald-950/30",
       )}
     >
       <Icon className="mt-0.5 size-4 shrink-0" />

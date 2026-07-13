@@ -195,7 +195,7 @@ export const ar = {
   "notifications.filter.read": "مقروء",
   "notifications.state.read": "مقروء",
   "notifications.state.unread": "غير مقروء",
-  "notifications.state.resolved": "تم الحل",
+  "notifications.state.resolved": "تمت المتابعة",
   "notifications.state.requiresAction": "يتطلب إجراء",
   "notifications.empty.title": "لا توجد إشعارات حتى الآن",
   "notifications.empty.all": "لا توجد إشعارات.",

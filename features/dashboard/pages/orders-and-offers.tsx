@@ -2941,10 +2941,10 @@ export function AddonsPage() {
                         <button
                           type="button"
                           onClick={resetAddonImage}
-                          className="inline-flex shrink-0 items-center gap-1 font-semibold text-destructive transition hover:text-destructive/80"
+                          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-destructive/50 px-3 py-1.5 font-semibold text-destructive transition hover:bg-destructive/10"
                         >
                           <X className="size-3.5" />
-                          حذف
+                          حذف الصورة
                         </button>
                       ) : null}
                     </div>
@@ -3972,6 +3972,7 @@ const OfferProductsContext = createContext<OfferProductsContextValue>({
 type BundleLine = {
   id: string;
   itemId: string;
+  variantId?: string;
   quantity: number;
 };
 
@@ -3990,6 +3991,55 @@ function itemPriceLabel(item: ItemRow) {
   return item.displayPriceLabel ?? item.price;
 }
 
+function variantFromItem(item: ItemRow | null, variantId: string) {
+  if (!item || !variantId) return null;
+  return item.variants?.find((variant) => String(variant.id) === variantId) ?? null;
+}
+
+function defaultVariantId(item: ItemRow | null) {
+  return item?.variants?.length === 1 ? String(item.variants[0].id) : "";
+}
+
+function variantPriceValue(item: ItemRow | null, variantId: string) {
+  const value = variantFromItem(item, variantId)?.price;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function variantAttributeText(value: unknown) {
+  if (!value || typeof value !== "object") return "";
+  const record = value as BackendRecord;
+  const attribute = record.attribute && typeof record.attribute === "object"
+    ? record.attribute as BackendRecord
+    : null;
+  const option = record.option && typeof record.option === "object"
+    ? record.option as BackendRecord
+    : null;
+  const attributeName = String(
+    record.attribute_name ?? attribute?.name ?? "",
+  ).trim();
+  const optionValue = String(
+    record.option_value ?? option?.value ?? "",
+  ).trim();
+  if (!attributeName || !optionValue) return optionValue;
+  return `${attributeName}: ${optionValue}`;
+}
+
+function variantLabel(item: ItemRow, variantId: string) {
+  const variant = variantFromItem(item, variantId);
+  if (!variant) return "اختر التركيبة";
+  const attributes = (variant.attribute_values ?? [])
+    .map(variantAttributeText)
+    .filter(Boolean)
+    .join(" / ");
+  const fallback = variant.sku?.trim() || `تركيبة #${variant.id}`;
+  return `${attributes || fallback} — ${formatReferenceCurrency(Number(variant.price) || 0)}`;
+}
+
+function lineUnitPrice(item: ItemRow | null, line: BundleLine) {
+  return variantPriceValue(item, line.variantId ?? "");
+}
+
 function selectedItemFrom(rows: ItemRow[], itemId: string): ItemRow | null {
   return rows.find((item) => item.id === itemId) ?? null;
 }
@@ -3997,10 +4047,6 @@ function selectedItemFrom(rows: ItemRow[], itemId: string): ItemRow | null {
 function clampDiscountPercent(value: number) {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(100, value));
-}
-
-function discountedItemPrice(item: ItemRow, discountPercent: number) {
-  return itemDisplayPrice(item) * (1 - clampDiscountPercent(discountPercent) / 100);
 }
 
 function normalizeProductSearch(value: string) {
@@ -4286,6 +4332,10 @@ function SingleOfferProductPanel({
   description,
   selectedItemId,
   onSelectItem,
+  selectedVariantId,
+  onSelectVariant,
+  quantity,
+  onChangeQuantity,
   badgeTone,
   discountPercent,
   contextLabel = "العرض",
@@ -4294,6 +4344,10 @@ function SingleOfferProductPanel({
   description: string;
   selectedItemId: string;
   onSelectItem: (itemId: string) => void;
+  selectedVariantId: string;
+  onSelectVariant: (variantId: string) => void;
+  quantity: number;
+  onChangeQuantity: (quantity: number) => void;
   badgeTone: "green" | "yellow" | "blue" | "red" | "purple" | "orange" | "gray";
   discountPercent?: number;
   contextLabel?: string;
@@ -4302,26 +4356,32 @@ function SingleOfferProductPanel({
   const { showSnackbar } = useSnackbar();
   const [productsOpen, setProductsOpen] = useState(false);
   const [productSearchOpen, setProductSearchOpen] = useState(false);
-  const [quantity, setQuantity] = useState(1);
   const selectedItem = selectedItemId
     ? products.find((item) => item.id === selectedItemId) ?? null
     : null;
   const hasSelectedProduct = Boolean(selectedItem);
+  const selectedVariantText = selectedItem && selectedVariantId
+    ? variantLabel(selectedItem, selectedVariantId)
+    : "";
   const productTotal =
     selectedItem && typeof discountPercent === "number"
-      ? discountedItemPrice(selectedItem, discountPercent) * quantity
+      ? variantPriceValue(selectedItem, selectedVariantId) * (1 - clampDiscountPercent(discountPercent) / 100) * quantity
       : selectedItem
-        ? itemDisplayPrice(selectedItem) * quantity
+        ? variantPriceValue(selectedItem, selectedVariantId) * quantity
         : 0;
   const singleLine: BundleLine = {
     id: `single-${selectedItemId || "empty"}`,
     itemId: selectedItemId,
+    variantId: selectedVariantId,
     quantity,
   };
 
   function selectSingleProduct(itemId: string) {
     onSelectItem(itemId);
+    onSelectVariant(defaultVariantId(products.find((item) => item.id === itemId) ?? null));
+    onChangeQuantity(1);
     setProductSearchOpen(false);
+    setProductsOpen(true);
   }
 
   function removeSingleProduct() {
@@ -4329,17 +4389,21 @@ function SingleOfferProductPanel({
       showSnackbar({ message: `تم حذف ${selectedItem.name} من ${contextLabel}.`, tone: "danger" });
     }
     onSelectItem("");
+    onSelectVariant("");
     setProductsOpen(false);
-    setQuantity(1);
+    onChangeQuantity(1);
   }
 
   function updateSingleLine(patch: Partial<BundleLine>) {
     if (patch.itemId) {
       onSelectItem(patch.itemId);
+      onSelectVariant(defaultVariantId(products.find((item) => item.id === patch.itemId) ?? null));
     }
 
+    if (patch.variantId !== undefined) onSelectVariant(patch.variantId);
+
     if (typeof patch.quantity === "number") {
-      setQuantity(Math.max(1, Math.min(99, patch.quantity)));
+      onChangeQuantity(Math.max(1, Math.min(99, patch.quantity)));
     }
   }
 
@@ -4367,7 +4431,9 @@ function SingleOfferProductPanel({
               ) : null}
             </div>
             <p className="mt-1 truncate text-xs text-muted-foreground">
-              {selectedItem?.name ?? "لم يتم اختيار منتج بعد."}
+              {selectedItem
+                ? `${selectedItem.name}${selectedVariantText ? ` · ${selectedVariantText}` : " · اختر التركيبة"}`
+                : "لم يتم اختيار منتج بعد."}
             </p>
           </button>
           <div className="flex flex-wrap items-center gap-2">
@@ -4447,10 +4513,10 @@ function PackageProductCard({
   onChange: (patch: Partial<BundleLine>) => void;
   onRemove: () => void;
 }) {
-  const unitPrice = itemDisplayPrice(item);
+  const unitPrice = lineUnitPrice(item, line);
   const hasDiscount = typeof discountPercent === "number";
   const discountedPrice = hasDiscount
-    ? discountedItemPrice(item, discountPercent)
+    ? unitPrice * (1 - clampDiscountPercent(discountPercent) / 100)
     : unitPrice;
 
   return (
@@ -4494,6 +4560,26 @@ function PackageProductCard({
             value={line.itemId}
             onChange={(itemId) => onChange({ itemId })}
           />
+
+          <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+            التركيبة داخل {contextLabel}
+            <AppSelect
+              ariaLabel={`التركيبة داخل ${contextLabel}`}
+              className="h-10"
+              onValueChange={(variantId) => onChange({ variantId })}
+              options={(item.variants ?? []).map((variant) => ({
+                value: String(variant.id),
+                label: variantLabel(item, String(variant.id)),
+              }))}
+              placeholder="اختر التركيبة"
+              value={line.variantId ?? ""}
+            />
+            {!line.variantId && (item.variants?.length ?? 0) > 1 ? (
+              <span className="text-[11px] font-semibold text-amber-600">
+                المنتج له أكثر من تركيبة؛ اختر واحدة لتحديد السعر الصحيح.
+              </span>
+            ) : null}
+          </label>
 
           <div className="grid grid-cols-[86px_minmax(0,1fr)_40px] items-end gap-2">
             <label className="grid gap-1 text-xs font-medium text-muted-foreground">
@@ -5002,10 +5088,16 @@ export function CreateOfferPage() {
   const [offerImageFile, setOfferImageFile] = useState<File | null>(null);
   const [selectedType, setSelectedType] = useState<ArabicOfferType>(editingOffer?.type ?? "خصم");
   const [discountProductId, setDiscountProductId] = useState("");
+  const [discountVariantId, setDiscountVariantId] = useState("");
+  const [discountQuantity, setDiscountQuantity] = useState(1);
   const [discountPercent, setDiscountPercent] = useState("20");
   const [flashProductIds, setFlashProductIds] = useState<string[]>([]);
+  const [flashVariantId, setFlashVariantId] = useState("");
+  const [flashQuantity, setFlashQuantity] = useState(1);
   const [flashDiscountPercent, setFlashDiscountPercent] = useState("30");
   const [deliveryProductId, setDeliveryProductId] = useState("");
+  const [deliveryVariantId, setDeliveryVariantId] = useState("");
+  const [deliveryQuantity, setDeliveryQuantity] = useState(1);
   const [announcementUrl, setAnnouncementUrl] = useState("");
   const [announcementCtaLabel, setAnnouncementCtaLabel] = useState("تسوق الآن");
   const [announcementPriority, setAnnouncementPriority] = useState("0");
@@ -5044,7 +5136,7 @@ export function CreateOfferPage() {
   const packageDiscountRate = clampDiscountPercent(Number(packageDiscountPercent) || 0);
   const packageSubtotal = bundleItems.reduce((total, line) => {
     const item = selectedItemFrom(offerProducts, line.itemId);
-    return total + (item ? itemDisplayPrice(item) : 0) * line.quantity;
+    return total + lineUnitPrice(item, line) * line.quantity;
   }, 0);
   const packageFinalPrice = packageSubtotal * (1 - packageDiscountRate / 100);
   const packageSaving = Math.max(packageSubtotal - packageFinalPrice, 0);
@@ -5129,8 +5221,14 @@ export function CreateOfferPage() {
 
   function clearOfferProductSelection() {
     setDiscountProductId("");
+    setDiscountVariantId("");
+    setDiscountQuantity(1);
     setFlashProductIds([]);
+    setFlashVariantId("");
+    setFlashQuantity(1);
     setDeliveryProductId("");
+    setDeliveryVariantId("");
+    setDeliveryQuantity(1);
     setBundleItems([]);
     setPackageProductsOpen(false);
     setPackageProductSearchOpen(false);
@@ -5232,6 +5330,7 @@ export function CreateOfferPage() {
         {
           id: `bundle-${itemId}-${Date.now()}`,
           itemId,
+          variantId: defaultVariantId(selectedItem),
           quantity: 1,
         },
       ];
@@ -5248,6 +5347,12 @@ export function CreateOfferPage() {
           ? {
               ...line,
               ...patch,
+              variantId:
+                patch.itemId && patch.itemId !== line.itemId
+                  ? defaultVariantId(
+                      offerProducts.find((item) => item.id === patch.itemId) ?? null,
+                    )
+                  : (patch.variantId ?? line.variantId),
               quantity: Math.max(1, Math.min(99, patch.quantity ?? line.quantity)),
             }
           : line,
@@ -5266,26 +5371,24 @@ export function CreateOfferPage() {
     }
   }
 
+  function selectedOfferLines(): BundleLine[] {
+    if (selectedType === "باكج") return bundleItems;
+    if (selectedType === "فلاش" && flashProductIds[0]) {
+      return [{ id: "flash", itemId: flashProductIds[0], variantId: flashVariantId, quantity: flashQuantity }];
+    }
+    if (selectedType === "توصيل" && deliveryProductId) {
+      return [{ id: "delivery", itemId: deliveryProductId, variantId: deliveryVariantId, quantity: deliveryQuantity }];
+    }
+    if (selectedType !== "إعلان" && discountProductId) {
+      return [{ id: "discount", itemId: discountProductId, variantId: discountVariantId, quantity: discountQuantity }];
+    }
+    return [];
+  }
+
   function selectedOfferItems() {
-    if (selectedType === "باكج") {
-      return bundleItems
-        .map((line) => selectedItemFrom(offerProducts, line.itemId))
-        .filter((item): item is ItemRow => Boolean(item));
-    }
-    if (selectedType === "فلاش") {
-      return flashProductIds
-        .map((itemId) => offerProducts.find((item) => item.id === itemId))
-        .filter((item): item is ItemRow => Boolean(item));
-    }
-    if (selectedType === "توصيل") {
-      const item = offerProducts.find((currentItem) => currentItem.id === deliveryProductId);
-      return item ? [item] : [];
-    }
-    if (selectedType === "إعلان") {
-      return [];
-    }
-    const item = offerProducts.find((currentItem) => currentItem.id === discountProductId);
-    return item ? [item] : [];
+    return selectedOfferLines()
+      .map((line) => selectedItemFrom(offerProducts, line.itemId))
+      .filter((item): item is ItemRow => Boolean(item));
   }
 
   async function saveOffer() {
@@ -5335,12 +5438,21 @@ export function CreateOfferPage() {
         return;
       }
     }
+    const selectedLines = selectedOfferLines();
     const selectedItems = selectedOfferItems();
     const productIds = Array.from(
       new Set(selectedItems.map((item) => Number(item.id)).filter(Number.isFinite)),
     );
     if (selectedType !== "إعلان" && !productIds.length) {
       showSnackbar({ message: "اختر منتجًا واحدًا على الأقل", tone: "danger" });
+      return;
+    }
+    const invalidVariantLine = selectedLines.find((line) => {
+      const product = selectedItemFrom(offerProducts, line.itemId);
+      return !product || !variantFromItem(product, line.variantId ?? "");
+    });
+    if (selectedType !== "إعلان" && invalidVariantLine) {
+      showSnackbar({ message: "اختر تركيبة محددة لكل منتج داخل العرض.", tone: "danger" });
       return;
     }
     const selectedMarketIds = Array.from(
@@ -5411,6 +5523,10 @@ export function CreateOfferPage() {
         ? selectedOfferCityIds.map((cityId) => Number(cityId))
         : [],
       product_ids: productIds,
+      items: selectedLines.map((line) => ({
+        variant_id: Number(line.variantId),
+        quantity: line.quantity,
+      })),
       title: offerTitle.trim(),
       description: offerDescription.trim(),
       type: offerTypeValues[selectedType],
@@ -5465,6 +5581,7 @@ export function CreateOfferPage() {
               formData.append("show_in_general", String(payload.show_in_general));
               formData.append("service_city_ids", JSON.stringify(payload.service_city_ids));
               formData.append("product_ids", JSON.stringify(payload.product_ids));
+              formData.append("items", JSON.stringify(payload.items));
               formData.append("title", payload.title);
               formData.append("description", payload.description);
               formData.append("type", payload.type);
@@ -5598,6 +5715,15 @@ export function CreateOfferPage() {
           const productIds = Array.isArray(record.product_ids)
             ? record.product_ids.map(String)
             : products.map((product) => String(product.id));
+          const rawItems = Array.isArray(record.items)
+            ? record.items.filter((item): item is BackendRecord => Boolean(item && typeof item === "object"))
+            : [];
+          const offerLines: BundleLine[] = rawItems.map((item, index) => ({
+            id: `offer-item-${String(item.id ?? index)}`,
+            itemId: String(item.product_id ?? ""),
+            variantId: String(item.variant_id ?? ""),
+            quantity: Math.max(1, Math.min(99, Number(item.quantity) || 1)),
+          })).filter((line) => line.itemId);
           const start = new Date(String(record.start_time));
           const end = new Date(String(record.end_time));
           setEditingOffer(card);
@@ -5623,15 +5749,28 @@ export function CreateOfferPage() {
           setAnnouncementPriority(String(record.announcement_priority ?? 0));
           setAnnouncementDisplaySeconds(String(record.announcement_display_seconds ?? 15));
           if (card.type === "فلاش") {
-            setFlashProductIds(productIds);
+            const line = offerLines[0];
+            setFlashProductIds(line ? [line.itemId] : productIds.slice(0, 1));
+            setFlashVariantId(line?.variantId ?? "");
+            setFlashQuantity(line?.quantity ?? 1);
             setFlashDiscountPercent(String(record.discount ?? "0"));
           } else if (card.type === "باكج") {
-            setBundleItems(productIds.map((itemId) => ({ id: `bundle-${itemId}`, itemId, quantity: 1 })));
+            setBundleItems(
+              offerLines.length
+                ? offerLines
+                : productIds.map((itemId) => ({ id: `bundle-${itemId}`, itemId, variantId: "", quantity: 1 })),
+            );
             setPackageDiscountPercent(String(record.discount ?? "0"));
           } else if (card.type === "توصيل") {
-            setDeliveryProductId(productIds[0] ?? "");
+            const line = offerLines[0];
+            setDeliveryProductId(line?.itemId ?? productIds[0] ?? "");
+            setDeliveryVariantId(line?.variantId ?? "");
+            setDeliveryQuantity(line?.quantity ?? 1);
           } else if (card.type !== "إعلان") {
-            setDiscountProductId(productIds[0] ?? "");
+            const line = offerLines[0];
+            setDiscountProductId(line?.itemId ?? productIds[0] ?? "");
+            setDiscountVariantId(line?.variantId ?? "");
+            setDiscountQuantity(line?.quantity ?? 1);
             setDiscountPercent(String(record.discount ?? "0"));
           }
         })
@@ -5975,7 +6114,7 @@ export function CreateOfferPage() {
                       {bundleItems.map((line) => {
                         const item = selectedItemFrom(offerProducts, line.itemId);
                         if (!item) return null;
-                        const lineTotal = (item ? itemDisplayPrice(item) : 0) * line.quantity;
+                        const lineTotal = lineUnitPrice(item, line) * line.quantity;
 
                         return (
                           <PackageProductCard
@@ -6022,6 +6161,10 @@ export function CreateOfferPage() {
                   description="اختار المنتج اللي هينطبق عليه خصم الفلاش، والمدة بتتحدد من الجدولة."
                   selectedItemId={flashProductIds[0] ?? ""}
                   onSelectItem={(itemId) => setFlashProductIds(itemId ? [itemId] : [])}
+                  selectedVariantId={flashVariantId}
+                  onSelectVariant={setFlashVariantId}
+                  quantity={flashQuantity}
+                  onChangeQuantity={setFlashQuantity}
                   badgeTone="yellow"
                   discountPercent={flashDiscountRate}
                   contextLabel="الفلاش"
@@ -6039,6 +6182,10 @@ export function CreateOfferPage() {
                   description="اختار المنتج اللي هيظهر عليه التوصيل المجاني، ويمكن اختيار منتج واحد فقط."
                   selectedItemId={deliveryProductId}
                   onSelectItem={setDeliveryProductId}
+                  selectedVariantId={deliveryVariantId}
+                  onSelectVariant={setDeliveryVariantId}
+                  quantity={deliveryQuantity}
+                  onChangeQuantity={setDeliveryQuantity}
                   badgeTone="green"
                   contextLabel="عرض التوصيل"
                 />
@@ -6082,6 +6229,10 @@ export function CreateOfferPage() {
                   description="اختار المنتج اللي هينطبق عليه الخصم، ويمكن اختيار منتج واحد فقط."
                   selectedItemId={discountProductId}
                   onSelectItem={setDiscountProductId}
+                  selectedVariantId={discountVariantId}
+                  onSelectVariant={setDiscountVariantId}
+                  quantity={discountQuantity}
+                  onChangeQuantity={setDiscountQuantity}
                   badgeTone="red"
                   discountPercent={discountRate}
                   contextLabel="الخصم"

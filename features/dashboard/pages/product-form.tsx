@@ -387,9 +387,32 @@ function productMarketChoice(product: NormalizedProduct): CatalogMarket | null {
 }
 
 function selectionKey(variant: VariantDraft, attributes: AttributeDraft[]) {
+  return selectionKeyFromSelections(variant.selections, attributes);
+}
+
+function selectionKeyFromSelections(
+  selections: Record<string, string>,
+  attributes: AttributeDraft[],
+) {
   return attributes
-    .map((attribute) => `${attribute.clientId}:${variant.selections[attribute.clientId] ?? ""}`)
+    .map((attribute) => `${attribute.clientId}:${selections[attribute.clientId] ?? ""}`)
     .join("|");
+}
+
+function variantCombinations(attributes: AttributeDraft[]) {
+  if (!attributes.length) return [];
+
+  return attributes.reduce<Record<string, string>[]>((combinations, attribute) => {
+    const optionIds = attribute.options.filter(optionIsActive).map((option) => option.clientId);
+    if (!optionIds.length) return [];
+
+    return combinations.flatMap((combination) =>
+      optionIds.map((optionId) => ({
+        ...combination,
+        [attribute.clientId]: optionId,
+      })),
+    );
+  }, [{}]);
 }
 
 function Section({
@@ -507,6 +530,35 @@ export function ProductFormPage() {
       ),
     [attributes, variantRows],
   );
+
+  const availableVariantCombinations = useMemo(
+    () => variantCombinations(attributes),
+    [attributes],
+  );
+  const usedVariantCombinationKeys = useMemo(
+    () =>
+      new Set(
+        variantRows
+          .filter((variant) =>
+            attributes.every((attribute) => Boolean(variant.selections[attribute.clientId])),
+          )
+          .map((variant) => selectionKey(variant, attributes)),
+      ),
+    [attributes, variantRows],
+  );
+  const nextVariantCombination = useMemo(
+    () =>
+      availableVariantCombinations.find(
+        (selections) =>
+          !usedVariantCombinationKeys.has(
+            selectionKeyFromSelections(selections, attributes),
+          ),
+      ) ?? null,
+    [attributes, availableVariantCombinations, usedVariantCombinationKeys],
+  );
+  const variantLimitReached =
+    availableVariantCombinations.length > 0 &&
+    variantRows.length >= availableVariantCombinations.length;
 
   const filteredMarkets = useMemo(() => {
     const query = marketQuery.trim().toLowerCase();
@@ -678,11 +730,6 @@ export function ProductFormPage() {
         })),
       ];
     });
-  }
-
-  function changeAvailability(nextAvailable: boolean) {
-    setIsAvailable(nextAvailable);
-    if (!nextAvailable) setSendPushNotification(false);
   }
 
   function selectImages(event: ChangeEvent<HTMLInputElement>) {
@@ -1050,9 +1097,39 @@ export function ProductFormPage() {
     );
   }
 
+  function variantOptionWouldDuplicate(
+    tempId: string,
+    attributeClientId: string,
+    optionClientId: string,
+  ) {
+    const currentVariant = variantRows.find((variant) => variant.tempId === tempId);
+    if (!currentVariant) return false;
+    const nextSelections = {
+      ...currentVariant.selections,
+      [attributeClientId]: optionClientId,
+    };
+    if (attributes.some((attribute) => !nextSelections[attribute.clientId])) return false;
+
+    return variantRows.some(
+      (variant) =>
+        variant.tempId !== tempId &&
+        attributes.every(
+          (attribute) =>
+            variant.selections[attribute.clientId] === nextSelections[attribute.clientId],
+        ),
+    );
+  }
+
   function addVariant() {
+    if (variantLimitReached || !nextVariantCombination) return;
     setVariantsDirty(true);
-    setVariantRows((currentRows) => [...currentRows, emptyVariant()]);
+    setVariantRows((currentRows) => [
+      ...currentRows,
+      {
+        ...emptyVariant(),
+        selections: { ...nextVariantCombination },
+      },
+    ]);
   }
 
   function removeVariant(tempId: string) {
@@ -1212,7 +1289,11 @@ export function ProductFormPage() {
             );
             showSnackbar({
               message:
-                dispatch.notificationCount > 0
+                dispatch.suppressedByMarketNotification
+                  ? dispatch.notificationCount > 0
+                    ? `تم إنشاء المنتج وإرسال إشعار المحل${dispatch.marketName ? ` «${dispatch.marketName}»` : ""} لـ ${dispatch.notificationCount} عميل بدل إشعار المنتج.`
+                    : "تم إنشاء المنتج، وتم اعتماد إشعار المحل بدل إشعار المنتج، ومفيش عملاء مؤهلين حاليًا."
+                  : dispatch.notificationCount > 0
                   ? `تم إنشاء المنتج وإرسال الإشعار لـ ${dispatch.notificationCount} عميل.`
                   : "تم إنشاء المنتج، ومفيش عملاء مؤهلين للإشعار حاليًا.",
               tone: "success",
@@ -1354,7 +1435,7 @@ export function ProductFormPage() {
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="grid gap-5">
           <Section title="البيانات الأساسية">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4">
               <LabelText label="اسم المنتج">
                 <Input
                   className="h-10"
@@ -1363,14 +1444,6 @@ export function ProductFormPage() {
                   placeholder="اسم المنتج مطلوب"
                   value={name}
                 />
-              </LabelText>
-              <LabelText label="الحالة">
-                <div className="flex h-10 items-center justify-between rounded-md border bg-input px-3">
-                  <span className="text-sm font-semibold">
-                    {isAvailable ? "متاح للبيع" : "غير متاح"}
-                  </span>
-                  <Switch checked={isAvailable} onCheckedChange={changeAvailability} />
-                </div>
               </LabelText>
             </div>
             <LabelText label="وصف المنتج">
@@ -1432,7 +1505,14 @@ export function ProductFormPage() {
                     تحب تبعت إشعار للعملاء عن المنتج ده؟
                   </span>
                   <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                    الإشعار هيوصل للعملاء اللي المنتج متاح في منطقتهم، ولما يضغطوا عليه هيفتح تفاصيل المنتج.
+                    {!selectedMarket
+                      ? "اختار المحل الأول علشان نحدد العملاء اللي الإشعار هيوصل لهم."
+                      : selectedMarket.scope === "general"
+                        ? "الإشعار هيوصل لعملاء السوق العام فقط، ولما يضغطوا عليه هيفتح تفاصيل المنتج."
+                        : `الإشعار هيوصل لعملاء ${selectedMarket.serviceCities.join("، ") || "مدينة المحل"} فقط، ولما يضغطوا عليه هيفتح تفاصيل المنتج.`}
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                    لو إعلان المحل نفسه لسه منتظر أول منتج، هنبعت إعلان المحل وحده بدل إشعارين متتاليين.
                   </span>
                   {!isAvailable ? (
                     <span className="mt-2 block text-xs font-semibold text-amber-700 dark:text-amber-300">
@@ -1444,7 +1524,7 @@ export function ProductFormPage() {
                   aria-label="إرسال إشعار للعملاء عن المنتج"
                   checked={sendPushNotification}
                   data-testid="product-notification-switch"
-                  disabled={!isAvailable || saving}
+                  disabled={!selectedMarket || !isAvailable || saving}
                   onCheckedChange={setSendPushNotification}
                 />
               </div>
@@ -1697,6 +1777,11 @@ export function ProductFormPage() {
                               options={attribute.options.filter(optionIsActive).map((option) => ({
                                 value: option.clientId,
                                 label: option.value,
+                                disabled: variantOptionWouldDuplicate(
+                                  variant.tempId,
+                                  attribute.clientId,
+                                  option.clientId,
+                                ),
                               }))}
                               placeholder={attribute.options.length ? "اختر" : "لا توجد اختيارات"}
                               value={variant.selections[attribute.clientId] ?? ""}
@@ -1721,10 +1806,18 @@ export function ProductFormPage() {
             </div>
             {attributes.length ? (
               <div className="flex flex-wrap gap-2">
-                <Button onClick={addVariant} type="button" variant="outline">
+                <Button
+                  disabled={variantLimitReached || !nextVariantCombination}
+                  onClick={addVariant}
+                  type="button"
+                  variant="outline"
+                >
                   <Plus className="size-4" />
-                  إضافة متغير
+                  {variantLimitReached ? "تم إنشاء كل التركيبات" : "إضافة تركيبة"}
                 </Button>
+                <span className="self-center text-xs font-semibold text-muted-foreground">
+                  {variantRows.length} من {availableVariantCombinations.length} تركيبة
+                </span>
               </div>
             ) : null}
           </Section>

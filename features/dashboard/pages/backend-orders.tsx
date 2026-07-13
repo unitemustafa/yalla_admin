@@ -2860,6 +2860,15 @@ function orderItemVariantLabel(item: BackendOrderItem) {
   return cleanText(item.variant_name) || cleanText(item.variant?.sku) || "-";
 }
 
+function orderOfferBenefitLabel(offer: BackendOrderOffer, order: BackendOrder) {
+  if (cleanText(offer.offer?.type).toLowerCase() === "delivery") {
+    return numberValue(order.delivery_price) === 0
+      ? "توصيل مجاني"
+      : "لم يُطبّق على هذا الطلب";
+  }
+  return money(offer.discount_amount);
+}
+
 function sectionMarketDisplayName(section: OrderMarketSectionLike) {
   return objectName(section.market) || (section.market_id ? `محل #${section.market_id}` : "محل غير محدد");
 }
@@ -2953,7 +2962,7 @@ function MarketSectionsCard({ order }: { order: BackendOrder }) {
                         <div key={`${offer.id ?? offer.offer_id ?? index}`} className="flex items-center justify-between gap-3 rounded-md border bg-muted/10 px-3 py-2 text-sm">
                           <span className="font-medium">{orderOfferTitle(offer)}</span>
                           <span className="text-muted-foreground">
-                            {money(offer.discount_amount)}
+                            {orderOfferBenefitLabel(offer, order)}
                           </span>
                         </div>
                       ))}

@@ -162,6 +162,7 @@ function typeLabel(type: string, t: (key: string) => string) {
   const labels: Record<string, string> = {
     order_review: t("notifications.category.orderReview"),
     new_order_review: t("notifications.category.ordersReview"),
+    order_status_changed: t("notifications.category.deliveryGeneric"),
     stock_alert: t("notifications.category.stock"),
     delivery: t("notifications.category.deliveryGeneric"),
     system: t("notifications.category.systemGeneric"),
@@ -174,6 +175,7 @@ function typeLabel(type: string, t: (key: string) => string) {
 
 function typeTone(type: string): "default" | "blue" | "green" | "red" | "secondary" {
   if (type === "order_review" || type === "new_order_review") return "blue";
+  if (type === "order_status_changed") return "green";
   if (type === "stock_alert" || type === "security") return "red";
   if (type === "delivery") return "green";
   if (type === "reports") return "default";
@@ -184,6 +186,7 @@ function iconForType(type: string) {
   const icons = {
     order_review: ShoppingCart,
     new_order_review: ShoppingCart,
+    order_status_changed: Truck,
     stock_alert: CircleAlert,
     delivery: Truck,
     system: Bell,
@@ -501,7 +504,10 @@ export function NotificationsPage() {
         setUnreadCount((count) => Math.max(0, count - 1));
       }
       setDeleteDialogTarget(null);
-      showSnackbar({ message: t("notifications.success.delete") });
+      showSnackbar({
+        message: t("notifications.success.delete"),
+        tone: "danger",
+      });
       await refreshUnreadCount();
     } catch (reason) {
       showSnackbar({
@@ -551,6 +557,7 @@ export function NotificationsPage() {
         message: formatMessage(t("notifications.success.clearRead"), {
           count: textValue((data as NotificationRecord).deleted_count, "0"),
         }),
+        tone: "danger",
       });
       await refreshUnreadCount();
     } catch (reason) {

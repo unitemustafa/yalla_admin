@@ -121,6 +121,8 @@ export type ProductNotificationDispatchResult = {
   recipientCount: number;
   notificationCount: number;
   sentAt: string;
+  suppressedByMarketNotification: boolean;
+  marketName: string;
 };
 
 export type NormalizedProductCategory = {
@@ -957,6 +959,8 @@ export async function sendProductNotification(
     recipientCount: safeNumber(record.recipient_count),
     notificationCount: safeNumber(record.notification_count),
     sentAt: typeof record.sent_at === "string" ? record.sent_at : "",
+    suppressedByMarketNotification: record.suppressed_by_market_notification === true,
+    marketName: typeof record.market_name === "string" ? record.market_name : "",
   };
 }
 

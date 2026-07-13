@@ -200,7 +200,7 @@ function MarketDialog({
   serviceCitiesError: string;
   classifications: Classification[];
   onClose: () => void;
-  onSaved: (market: Market) => void;
+  onSaved: (market: Market, notificationRequested: boolean) => void;
   onReloadServiceCities: () => void;
 }) {
   const { apiFetch } = useAuth();
@@ -208,6 +208,7 @@ function MarketDialog({
   const [name, setName] = useState(market?.name ?? "");
   const [description, setDescription] = useState(market?.description ?? "");
   const [isPopular, setIsPopular] = useState(market?.is_popular ?? false);
+  const [sendStoreNotification, setSendStoreNotification] = useState(false);
   const [classificationId, setClassificationId] = useState(String(market?.classification?.id ?? classifications[0]?.id ?? ""));
   const [showInGeneral, setShowInGeneral] = useState(initialScope === "general");
   const [showInServiceCities, setShowInServiceCities] = useState(initialScope === "service_city");
@@ -322,6 +323,7 @@ function MarketDialog({
       scope: showInGeneral ? "general" as const : "service_city" as const,
       delivery_area_ids: [],
       service_city_ids: [] as number[],
+      send_notification: !market && sendStoreNotification,
     };
 
     async function saveMarket(payload: typeof basePayload) {
@@ -337,6 +339,7 @@ function MarketDialog({
               formData.set("description", payload.description);
               formData.set("is_popular", String(payload.is_popular));
               formData.set("scope", payload.scope);
+              formData.set("send_notification", String(payload.send_notification));
               payload.service_city_ids.forEach((serviceCityId) => {
                 formData.append("service_city_ids", String(serviceCityId));
               });
@@ -353,7 +356,7 @@ function MarketDialog({
       if (!response.ok || !data || typeof data !== "object") {
         throw new Error(errorMessage(data, "تعذر حفظ المحل."));
       }
-      onSaved(data as Market);
+      onSaved(data as Market, payload.send_notification);
     }
 
     if (!showInServiceCities) {
@@ -396,20 +399,20 @@ function MarketDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-foreground/30 px-4 py-6 backdrop-blur-[1px]">
-      <section role="dialog" aria-modal="true" className="mx-auto w-full max-w-4xl rounded-xl border bg-background shadow-2xl">
-        <div className="flex items-start justify-between border-b bg-muted/20 px-6 py-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-foreground/30 p-4 backdrop-blur-[1px]">
+      <section role="dialog" aria-modal="true" className="flex h-[min(820px,calc(100dvh-2rem))] w-full max-w-4xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl">
+        <div className="shrink-0 flex items-start justify-between border-b bg-muted/20 px-6 py-4">
           <div><h2 className="text-xl font-bold">{market ? "تعديل المحل" : "إضافة محل"}</h2><p className="mt-1 text-sm text-muted-foreground">حدد نطاق ظهور المحل، عام أو مرتبط بمدن خدمة.</p></div>
           <button type="button" onClick={onClose} className="rounded-full border p-2 hover:bg-accent"><X className="size-4" /></button>
         </div>
-        <form onSubmit={submit}>
-          <div className="grid gap-4 p-6 sm:grid-cols-2">
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-6 sm:grid-cols-2">
             <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/15 p-3 sm:col-span-2 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-center">
               <label className="group relative flex aspect-[16/9] min-h-[138px] cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-background text-center transition hover:border-primary/50 hover:bg-accent/40">
                 <input accept="image/*" className="sr-only" type="file" onChange={handleImageChange} />
                 {imagePreview ? <DashboardImage src={imagePreview} placeholderType="store" alt="معاينة صورة المحل" width={640} height={360} sizes="260px" className="absolute inset-0 size-full" imageClassName="object-cover" /> : <span className="flex flex-col items-center gap-2 px-5 text-sm text-muted-foreground"><span className="flex size-10 items-center justify-center rounded-md bg-muted/50"><ImagePlus className="size-5 text-primary" /></span><span className="font-semibold text-foreground">اختيار صورة المحل</span></span>}
               </label>
-              <div className="flex min-w-0 flex-col gap-3"><div><div className="text-sm font-semibold">صورة المحل</div><p className="mt-1 text-xs leading-5 text-muted-foreground">استخدم صورة أفقية واضحة للمحل. الصيغ المدعومة PNG, JPG, WEBP.</p></div><div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground"><span className="min-w-0 truncate">{imageName || "لم يتم اختيار صورة"}</span>{imagePreview ? <button type="button" onClick={removeSelectedImage} className="inline-flex shrink-0 items-center gap-1 font-semibold text-destructive transition hover:text-destructive/80"><X className="size-3.5" />حذف</button> : null}</div></div>
+              <div className="flex min-w-0 flex-col gap-3"><div><div className="text-sm font-semibold">صورة المحل</div><p className="mt-1 text-xs leading-5 text-muted-foreground">استخدم صورة أفقية واضحة للمحل. الصيغ المدعومة PNG, JPG, WEBP.</p></div><div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground"><span className="min-w-0 truncate">{imageName || "لم يتم اختيار صورة"}</span>{imagePreview ? <button type="button" onClick={removeSelectedImage} className="inline-flex shrink-0 items-center gap-1 rounded-md border border-destructive/50 px-3 py-1.5 font-semibold text-destructive transition hover:bg-destructive/10"><X className="size-3.5" />حذف الصورة</button> : null}</div></div>
             </div>
             <label className="grid gap-2 text-sm font-semibold">اسم المحل *<Input value={name} onChange={(event) => setName(event.target.value)} /></label>
             <label className="grid gap-2 text-sm font-semibold">فئة المحل *<AppSelect value={classificationId} onValueChange={setClassificationId} options={classifications.map((item) => ({ value: String(item.id), label: `${item.name} - ${classificationTypeLabel(item.classification_type)}` }))} /></label>
@@ -479,9 +482,31 @@ function MarketDialog({
                 )}
             </div>
             ) : null}
+            {!market ? (
+              <label className="flex min-h-20 cursor-pointer items-center justify-between gap-4 rounded-md border border-primary/25 bg-primary/5 px-4 py-3 shadow-sm transition hover:border-primary/45 sm:col-span-2">
+                <span>
+                  <span className="block text-sm font-semibold">إرسال إشعار عن المحل</span>
+                  <span className="mt-1 block text-xs font-normal leading-5 text-muted-foreground">
+                    مش هيتبعت فورًا؛ هنستنى أول منتج متاح، وبعدها نبعت إعلان المحل
+                    {showInGeneral
+                      ? " لعملاء السوق العام فقط."
+                      : selectedServiceCityIds.length
+                        ? ` لعملاء ${availableServiceCities.find((city) => city.id === selectedServiceCityIds[0])?.name ?? "المدينة المحددة"} فقط.`
+                        : " لعملاء المدينة اللي هتحددها فقط."}
+                    ولو اخترت إشعار المنتج كمان، هنبعت إشعار المحل وحده.
+                  </span>
+                </span>
+                <Switch
+                  checked={sendStoreNotification}
+                  disabled={saving}
+                  onCheckedChange={setSendStoreNotification}
+                  aria-label="إرسال إشعار عن المحل بعد إضافة أول منتج متاح"
+                />
+              </label>
+            ) : null}
             {error ? <p className="flex gap-2 text-sm text-destructive sm:col-span-2"><AlertCircle className="size-4" />{error}</p> : null}
           </div>
-          <div className="flex justify-end gap-2 border-t px-6 py-4"><Button type="button" variant="outline" onClick={onClose}>إلغاء</Button><Button type="submit" disabled={!validBase || saving}>{saving ? <LoaderCircle className="size-4 animate-spin" /> : <Plus className="size-4" />}{saving ? "جاري الحفظ..." : "حفظ المحل"}</Button></div>
+          <div className="flex shrink-0 justify-end gap-2 border-t bg-background px-6 py-3"><Button type="button" variant="outline" onClick={onClose}>إلغاء</Button><Button type="submit" disabled={!validBase || saving}>{saving ? <LoaderCircle className="size-4 animate-spin" /> : <Plus className="size-4" />}{saving ? "جاري الحفظ..." : "حفظ المحل"}</Button></div>
         </form>
       </section>
     </div>
@@ -706,7 +731,7 @@ export function ShopsPage() {
       {deleteMarket ? <ConfirmDeleteDialog title="حذف المحل" description={`هل تريد حذف المحل ${deleteMarket.name}؟`} busy={false} onCancel={() => setDeleteMarket(null)} onConfirm={() => remove(deleteMarket)} /> : null}
       {dialogMarket !== undefined ? (
         classifications.length ? (
-          <MarketDialog market={dialogMarket ?? undefined} serviceCities={serviceCities} serviceCitiesLoading={serviceCitiesLoading} serviceCitiesError={serviceCitiesError} classifications={classifications} onReloadServiceCities={() => void loadServiceCityOptions()} onClose={() => setDialogMarket(undefined)} onSaved={(saved) => { setMarkets((current) => current.some((item) => item.id === saved.id) ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current]); setDialogMarket(undefined); showSnackbar({ message: "تم حفظ المحل وربطه بمدن الظهور." }); }} />
+          <MarketDialog market={dialogMarket ?? undefined} serviceCities={serviceCities} serviceCitiesLoading={serviceCitiesLoading} serviceCitiesError={serviceCitiesError} classifications={classifications} onReloadServiceCities={() => void loadServiceCityOptions()} onClose={() => setDialogMarket(undefined)} onSaved={(saved, notificationRequested) => { setMarkets((current) => current.some((item) => item.id === saved.id) ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current]); setDialogMarket(undefined); showSnackbar({ message: notificationRequested ? "تم إنشاء المحل، والإشعار هيتبعت بعد إضافة أول منتج متاح." : "تم حفظ المحل وربطه بنطاق الظهور." }); }} />
         ) : (
           <MissingClassificationsDialog onClose={() => setDialogMarket(undefined)} />
         )

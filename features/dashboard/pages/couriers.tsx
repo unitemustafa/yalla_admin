@@ -95,6 +95,12 @@ type Draft = {
 
 const couriersPageSize = 10;
 const courierStatusPollMs = 10_000;
+const maxCourierAvatarSize = 5 * 1024 * 1024;
+const allowedCourierAvatarTypes = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
 
 const emptyDraft: Draft = {
   firstName: "",
@@ -113,6 +119,24 @@ const emptyDraft: Draft = {
 
 function errorMessage(value: unknown, fallback: string) {
   return firstApiError(value) ?? fallback;
+}
+
+function courierPayloadFormData(
+  payload: Record<string, unknown>,
+  avatarFile: File,
+) {
+  const formData = new FormData();
+  Object.entries(payload).forEach(([key, value]) => {
+    if (key === "courier_profile" && value && typeof value === "object") {
+      Object.entries(value).forEach(([profileKey, profileValue]) => {
+        formData.set(`courier_profile.${profileKey}`, String(profileValue));
+      });
+      return;
+    }
+    formData.set(key, String(value));
+  });
+  formData.set("avatar_image", avatarFile);
+  return formData;
 }
 
 function orderCustomerName(order: AdminOrder) {
@@ -388,6 +412,18 @@ function CourierForm({
   };
   function uploadAvatar(file: File | undefined) {
     if (!file) return;
+    if (!allowedCourierAvatarTypes.has(file.type)) {
+      setAvatarFile(null);
+      setAvatarPreviewUrl(draft.avatarUrl);
+      setAvatarError("ارفع صورة صالحة بصيغة JPG أو JPEG أو PNG أو WEBP.");
+      return;
+    }
+    if (file.size > maxCourierAvatarSize) {
+      setAvatarFile(null);
+      setAvatarPreviewUrl(draft.avatarUrl);
+      setAvatarError("يجب ألا يتجاوز حجم صورة المندوب 5 ميجابايت.");
+      return;
+    }
     setAvatarError(null);
     setAvatarFile(file);
     setAvatarPreviewUrl(URL.createObjectURL(file));
@@ -430,10 +466,12 @@ function CourierForm({
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitted(true);
-    if (Object.keys(errors).length > 0 || availabilityBlocksSubmit) {
+    if (Object.keys(errors).length > 0 || availabilityBlocksSubmit || avatarError) {
       if (deliveryHasErrors) {
         setDeliveryOpen(true);
         setError("بيانات التوصيل مطلوبة.");
+      } else if (avatarError) {
+        setError("راجع صورة المندوب ثم حاول مرة أخرى.");
       } else {
         setError("راجع البيانات المطلوبة ثم حاول مرة أخرى.");
       }
@@ -464,39 +502,23 @@ function CourierForm({
     if (!isEditing && draft.password) body.password = draft.password;
 
     try {
+      const requestBody = avatarFile
+        ? courierPayloadFormData(body, avatarFile)
+        : JSON.stringify(body);
       const response = await apiFetch(
         isEditing ? `auth/users/${courier!.id}/` : "auth/users/",
         {
           method: isEditing ? "PATCH" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          ...(avatarFile
+            ? {}
+            : { headers: { "Content-Type": "application/json" } }),
+          body: requestBody,
         },
       );
       const data = await apiResponseData(response);
       if (!response.ok) throw new Error(errorMessage(data, "Could not save courier."));
       if (!isBackendDashboardUser(data)) throw new Error("Incomplete backend response.");
-      let savedUser: BackendDashboardUser = data;
-
-      if (avatarFile) {
-        const avatarBody = new FormData();
-        avatarBody.append("avatar_image", avatarFile);
-        const avatarResponse = await apiFetch(`auth/users/${data.id}/`, {
-          method: "PATCH",
-          body: avatarBody,
-        });
-        const avatarData = await apiResponseData(avatarResponse);
-        if (!avatarResponse.ok) {
-          setAvatarError(errorMessage(avatarData, "تعذر رفع صورة المندوب."));
-          return;
-        }
-        if (!isBackendDashboardUser(avatarData)) {
-          setAvatarError("استجابة رفع صورة المندوب غير مكتملة.");
-          return;
-        }
-        savedUser = avatarData;
-      }
-
-      onSaved(savedUser);
+      onSaved(data);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر حفظ بيانات المندوب.");
     } finally {

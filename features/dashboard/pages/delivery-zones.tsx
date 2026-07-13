@@ -825,7 +825,7 @@ export function DeliveryZonesPage() {
     }
   }
 
-  async function confirmDeleteZone() {
+  function confirmDeleteZone() {
     if (!deleteZone || deletingZoneId) {
       return;
     }
@@ -833,16 +833,6 @@ export function DeliveryZonesPage() {
     const zone = deleteZone;
     const zoneIndex = zones.findIndex((currentZone) => currentZone.id === zone.id);
     setDeletingZoneId(zone.id);
-    try {
-      await deleteDeliveryZone(apiFetch, zone.id);
-    } catch (error) {
-      showSnackbar({
-        message: error instanceof Error ? error.message : "تعذر حذف منطقة التوصيل.",
-        tone: "danger",
-      });
-      setDeletingZoneId(null);
-      return;
-    }
 
     queueUndoableDelete({
       message: `تم حذف ${zone.name}.`,
@@ -853,30 +843,19 @@ export function DeliveryZonesPage() {
         setDeleteZone(null);
         setDeletingZoneId(null);
       },
-      onUndo: async () => {
-        try {
-          const restoredZone = await saveDeliveryZone(apiFetch, {
-            ...zone,
-            id: `restore-${zone.id}`,
-          });
-          setZones((currentZones) => {
-            if (currentZones.some((currentZone) => currentZone.id === restoredZone.id)) {
-              return currentZones;
-            }
+      onUndo: () => {
+        setZones((currentZones) => {
+          if (currentZones.some((currentZone) => currentZone.id === zone.id)) {
+            return currentZones;
+          }
 
-            const nextZones = [...currentZones];
-            nextZones.splice(Math.max(0, zoneIndex), 0, restoredZone);
-            return nextZones;
-          });
-          showSnackbar({ message: `تمت استعادة منطقة ${restoredZone.name}.`, tone: "success" });
-        } catch (error) {
-          showSnackbar({
-            message: error instanceof Error ? error.message : "تعذر التراجع عن حذف منطقة التوصيل.",
-            tone: "danger",
-          });
-        }
+          const nextZones = [...currentZones];
+          nextZones.splice(Math.max(0, zoneIndex), 0, zone);
+          return nextZones;
+        });
+        showSnackbar({ message: `تمت استعادة منطقة ${zone.name}.`, tone: "success" });
       },
-      onCommit: async () => undefined,
+      onCommit: () => deleteDeliveryZone(apiFetch, zone.id),
       onCommitError: (error) => {
         showSnackbar({
           message: error instanceof Error ? error.message : "تعذر حذف منطقة التوصيل.",
