@@ -114,6 +114,15 @@ export type ProductWritePayload = {
   variants?: ProductVariantPayload[];
 };
 
+export type ProductNotificationDispatchResult = {
+  dispatchId: number | null;
+  requestId: string;
+  status: string;
+  recipientCount: number;
+  notificationCount: number;
+  sentAt: string;
+};
+
 export type NormalizedProductCategory = {
   id: number;
   classificationId: number | null;
@@ -923,6 +932,32 @@ export async function updateProduct(
     assertReadableProduct(normalizeProduct(data), "تعذر قراءة بيانات المنتج"),
     payload,
   );
+}
+
+export async function sendProductNotification(
+  apiFetch: ApiFetch,
+  productId: string | number,
+  requestId: string,
+): Promise<ProductNotificationDispatchResult> {
+  const response = await apiFetch(
+    `${adminApiPaths.products}${encodeURIComponent(String(productId))}/send-notification/`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ request_id: requestId }),
+    },
+  );
+  const data = await parseAdminResponse(response, "تعذر إرسال إشعار المنتج");
+  const record = backendRecord(data) ?? {};
+
+  return {
+    dispatchId: nullableNumber(record.dispatch_id),
+    requestId: typeof record.request_id === "string" ? record.request_id : requestId,
+    status: typeof record.status === "string" ? record.status : "",
+    recipientCount: safeNumber(record.recipient_count),
+    notificationCount: safeNumber(record.notification_count),
+    sentAt: typeof record.sent_at === "string" ? record.sent_at : "",
+  };
 }
 
 export async function uploadProductImages(

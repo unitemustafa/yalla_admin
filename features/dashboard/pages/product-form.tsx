@@ -35,6 +35,7 @@ import {
   primaryProductImageUrl,
   readApiData,
   reorderProductImages,
+  sendProductNotification,
   setPrimaryProductImage,
   uploadProductImages,
   updateProduct,
@@ -441,6 +442,7 @@ export function ProductFormPage() {
   const [attributes, setAttributes] = useState<AttributeDraft[]>(() => cloneTemplate("other"));
   const [isAvailable, setIsAvailable] = useState(true);
   const [isPopular, setIsPopular] = useState(false);
+  const [sendPushNotification, setSendPushNotification] = useState(false);
   const [discount, setDiscount] = useState("0.00");
   const [productImages, setProductImages] = useState<ProductImageDraft[]>([]);
   const [imageActionBusy, setImageActionBusy] = useState(false);
@@ -582,6 +584,7 @@ export function ProductFormPage() {
     setDiscount(String(product.discount ?? "0.00"));
     setIsAvailable(product.isAvailable);
     setIsPopular(product.isPopular);
+    setSendPushNotification(false);
     setSelectedAdditionIds(normalizeIds(product.additions));
     setProductImages(
       options.clone
@@ -659,6 +662,11 @@ export function ProductFormPage() {
         })),
       ];
     });
+  }
+
+  function changeAvailability(nextAvailable: boolean) {
+    setIsAvailable(nextAvailable);
+    if (!nextAvailable) setSendPushNotification(false);
   }
 
   function selectImages(event: ChangeEvent<HTMLInputElement>) {
@@ -1173,13 +1181,35 @@ export function ProductFormPage() {
         );
         showSnackbar({ message: "تم تحديث المنتج بنجاح.", tone: "success" });
       } else {
-        await createProduct(
+        const savedProduct = await createProduct(
           apiFetch,
           payload,
           files,
           primaryImageIndex >= 0 ? primaryImageIndex : undefined,
         );
-        showSnackbar({ message: "تم إنشاء المنتج بنجاح.", tone: "success" });
+        if (sendPushNotification) {
+          try {
+            const dispatch = await sendProductNotification(
+              apiFetch,
+              savedProduct.id,
+              crypto.randomUUID(),
+            );
+            showSnackbar({
+              message:
+                dispatch.notificationCount > 0
+                  ? `تم إنشاء المنتج وإرسال الإشعار لـ ${dispatch.notificationCount} عميل.`
+                  : "تم إنشاء المنتج، ومفيش عملاء مؤهلين للإشعار حاليًا.",
+              tone: "success",
+            });
+          } catch {
+            showSnackbar({
+              message: "تم إنشاء المنتج، بس حصلت مشكلة ومقدرناش نبعت الإشعار.",
+              tone: "danger",
+            });
+          }
+        } else {
+          showSnackbar({ message: "تم إنشاء المنتج بنجاح.", tone: "success" });
+        }
       }
       router.push("/items");
     } catch (error) {
@@ -1323,7 +1353,7 @@ export function ProductFormPage() {
                   <span className="text-sm font-semibold">
                     {isAvailable ? "متاح للبيع" : "غير متاح"}
                   </span>
-                  <Switch checked={isAvailable} onCheckedChange={setIsAvailable} />
+                  <Switch checked={isAvailable} onCheckedChange={changeAvailability} />
                 </div>
               </LabelText>
             </div>
@@ -1377,6 +1407,33 @@ export function ProductFormPage() {
               <Switch checked={isPopular} onCheckedChange={setIsPopular} />
             </div>
           </Section>
+
+          {!isEditing ? (
+            <Section title="إشعار المنتج">
+              <div className="flex min-h-24 items-center justify-between gap-5 rounded-lg border bg-background px-4 py-3">
+                <div className="min-w-0">
+                  <span className="block text-sm font-semibold">
+                    تحب تبعت إشعار للعملاء عن المنتج ده؟
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                    الإشعار هيوصل للعملاء اللي المنتج متاح في منطقتهم، ولما يضغطوا عليه هيفتح تفاصيل المنتج.
+                  </span>
+                  {!isAvailable ? (
+                    <span className="mt-2 block text-xs font-semibold text-amber-700 dark:text-amber-300">
+                      خلّي المنتج متاح للبيع علشان تقدر تبعت الإشعار.
+                    </span>
+                  ) : null}
+                </div>
+                <Switch
+                  aria-label="إرسال إشعار للعملاء عن المنتج"
+                  checked={sendPushNotification}
+                  data-testid="product-notification-switch"
+                  disabled={!isAvailable || saving}
+                  onCheckedChange={setSendPushNotification}
+                />
+              </div>
+            </Section>
+          ) : null}
 
           <Section title="الإضافات">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
