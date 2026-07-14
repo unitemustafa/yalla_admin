@@ -77,6 +77,37 @@ export function isCloudinaryUrl(src: unknown) {
   );
 }
 
+export function cloudinaryImageLoader({
+  src,
+  width,
+  quality,
+}: {
+  src: string;
+  width: number;
+  quality?: number;
+}) {
+  if (!isCloudinaryUrl(src)) return src;
+
+  try {
+    const url = new URL(src);
+    const marker = "/image/upload/";
+    const markerIndex = url.pathname.indexOf(marker);
+    if (markerIndex < 0) return src;
+
+    const transformation = [
+      "f_auto",
+      `q_${quality ?? "auto"}`,
+      "c_limit",
+      `w_${Math.max(1, Math.round(width))}`,
+    ].join(",");
+    const insertionIndex = markerIndex + marker.length;
+    url.pathname = `${url.pathname.slice(0, insertionIndex)}${transformation}/${url.pathname.slice(insertionIndex)}`;
+    return url.toString();
+  } catch {
+    return src;
+  }
+}
+
 export function shouldUnoptimizeImageSrc(src: unknown) {
   if (typeof src !== "string") return false;
 
@@ -85,10 +116,9 @@ export function shouldUnoptimizeImageSrc(src: unknown) {
   return (
     value.startsWith("data:") ||
     value.startsWith("blob:") ||
-    isCloudinaryUrl(value) ||
     isExternalUrl(value) ||
     shouldUnoptimizeMediaUrl(value)
-  );
+  ) && !isCloudinaryUrl(value);
 }
 
 function isLocalBackendHostname(hostname: string) {

@@ -23,6 +23,7 @@ import {
   isNetworkError,
   jwtExpiresAt,
 } from "@/lib/auth";
+import { optimizeImageRequestInit } from "@/lib/image-upload";
 
 const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1"
@@ -488,13 +489,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const apiFetch = useCallback(
     async (path: string, init: RequestInit = {}) => {
+      const optimizedInit = await optimizeImageRequestInit(init);
+
       async function request(accessToken: string) {
-        const headers = new Headers(init.headers);
+        const headers = new Headers(optimizedInit.headers);
         headers.set("Authorization", `Bearer ${accessToken}`);
         try {
           return await fetch(
             path.startsWith("http") ? path : `${API_BASE_URL}/${path.replace(/^\/+/, "")}`,
-            { ...init, headers },
+            { ...optimizedInit, headers },
           );
         } catch (error) {
           if (isNetworkError(error)) throw new Error(NETWORK_ERROR_MESSAGE);

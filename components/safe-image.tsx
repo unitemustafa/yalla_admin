@@ -1,7 +1,9 @@
 import Image, { type ImageProps } from "next/image";
 
 import {
+  cloudinaryImageLoader,
   defaultImageFallback,
+  isCloudinaryUrl,
   normalizeImageSrc,
   shouldUnoptimizeImageSrc,
 } from "@/lib/media-url";
@@ -25,6 +27,7 @@ export function SafeImage({
     <Image
       {...props}
       alt={alt}
+      loader={isCloudinaryUrl(normalizedSrc) ? cloudinaryImageLoader : undefined}
       src={normalizedSrc}
       unoptimized={Boolean(unoptimized || shouldUnoptimizeImageSrc(normalizedSrc))}
     />
