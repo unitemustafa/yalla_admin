@@ -222,6 +222,10 @@ function TopCategoriesCard({
     return parts.join(" · ");
   };
   const maxValue = Math.max(...displayItems.map((item) => item.revenue), 0);
+  const zoneLabel = (zone: string) =>
+    zone.trim().toLowerCase() === "general market"
+      ? t("overview.topItems.generalMarket")
+      : zone;
 
   return (
     <Card className="mt-6 border-border bg-card text-card-foreground shadow-sm">
@@ -283,7 +287,7 @@ function TopCategoriesCard({
                           {item.name}
                         </span>
                         {item.zone ? (
-                          <span className={zoneBadgeClass}>{item.zone}</span>
+                          <span className={zoneBadgeClass}>{zoneLabel(item.zone)}</span>
                         ) : null}
                       </div>
                       <div className="mt-0.5 truncate text-xs leading-4 text-muted-foreground">
@@ -413,7 +417,7 @@ function OrdersKpiCard({
       <CardHeader
         title={t("overview.ordersSummary.title")}
         description={
-          <UpdateCadenceLabel cadence={t("overview.period.daily")}>
+          <UpdateCadenceLabel cadence={t("overview.period.monthly")}>
             {t("overview.ordersSummary.subtitle")}
           </UpdateCadenceLabel>
         }

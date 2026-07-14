@@ -1,109 +1,61 @@
 # Yalla Admin
 
-لوحة تحكم تجريبية مبنية بـ Next.js App Router لإدارة منتجات وطلبات Yalla Market. المشروع يحتوي على تسجيل دخول تجريبي، API محمية، تخزين SQLite عبر Prisma، وتجارب موبايل محسنة للجداول.
+لوحة إدارة Yalla Market مبنية بـ Next.js App Router، وتتصل مباشرة بواجهة Django API لإدارة الطلبات والمنتجات والعروض والعملاء والمندوبين ومناطق التوصيل.
 
 ## المتطلبات
 
-- Node.js 20+
-- npm 10+
+- Node.js 20 أو أحدث
+- npm 10 أو أحدث
+- نسخة عاملة من `yalla_backend`
 
-## التشغيل
+## التشغيل المحلي
 
-```bash
+ثبّت الحزم، ثم أنشئ ملف البيئة المحلي من المثال:
+
+```powershell
 npm install
-cp .env.example .env.local
+Copy-Item .env.example .env.local
 npm run dev
 ```
 
-افتح:
+بعد ضبط عنوان الباك إند في `.env.local` افتح `http://localhost:3000` وسجّل الدخول بحساب Admin حقيقي من الباك إند.
 
-```text
-http://localhost:3000
-```
+## متغيرات البيئة
 
-بيانات الدخول التجريبية:
+| المتغير | الاستخدام |
+| --- | --- |
+| `NEXT_PUBLIC_API_BASE_URL` | رابط Django API كاملًا، وينتهي عادةً بـ `/api/v1` |
+| `NEXT_PUBLIC_BACKEND_URL` | أصل رابط الباك إند المستخدم لتحويل مسارات `/media/` النسبية إلى روابط كاملة |
+| `NEXT_PUBLIC_MEDIA_BASE_URL` | أصل وسائط اختياري إذا كانت الصور تُخدّم من نطاق مستقل |
 
-```text
-Email: dashboard@admin.com
-Password: 01266666610
-```
+كل هذه القيم عامة وتُضمّن في ملفات المتصفح وقت `next build`؛ لا تضع فيها كلمات مرور أو مفاتيح سرية. ملفات `.env*` المحلية متجاهلة من Git، و`.env.example` فقط هو الملف المتتبع.
 
-Demo auth is only for this dashboard preview. There is no real backend user
-database, hashed password storage, or roles system yet. Configure the demo
-password and session signing secret with environment variables:
+## فحوص ما قبل النشر
 
-```bash
-DASHBOARD_DEMO_PASSWORD=01266666610
-SESSION_SECRET=replace-with-a-strong-random-secret
-```
-
-`SESSION_SECRET` is required and the app will throw a clear error in production
-when it is missing.
-
-## قاعدة البيانات
-
-يستخدم المشروع Prisma مع SQLite. ملف قاعدة البيانات المحلي ينشأ تلقائيا عند أول طلب API:
-
-```text
-prisma/dev.db
-```
-
-أوامر مفيدة:
-
-```bash
-npm run db:generate
-npm run db:studio
-```
-
-## الصور والأداء
-
-الصور الخارجية مسموحة من `bucket.ammenu.com` داخل `next.config.ts`، ويتم استخدام `next/image` بدون `unoptimized` حتى يستفيد التطبيق من:
-
-- اختيار أحجام مناسبة حسب الجهاز.
-- صيغ حديثة مثل WebP وAVIF.
-- تقليل layout shift عبر أبعاد ثابتة للصور.
-
-## الاختبارات
-
-تشغيل الفحص:
-
-```bash
+```powershell
+npm ci
 npm run lint
+npx tsc --noEmit
+npm run build
 ```
 
-تشغيل smoke test للـ API:
+لتشغيل نسخة الإنتاج محليًا بعد نجاح البناء:
 
-```bash
-npm run smoke
+```powershell
+npm run start
 ```
 
-الـ smoke test يشغل dev server تلقائيا لو لم يكن يعمل، ثم يتحقق من:
+اضبط متغيرات الإنتاج في منصة الاستضافة **قبل** تنفيذ البناء؛ لأن قيم `NEXT_PUBLIC_*` تُثبّت داخل الـ bundle وقت البناء.
 
-- حماية API بدون جلسة.
-- تسجيل الدخول الصحيح والخاطئ.
-- جلب المنتجات والطلبات.
-- تعديل منتج وإرجاعه لحالته.
-- نسخ منتج ثم حذف النسخة.
-- تعديل حالة طلب وإرجاعها.
+## الأوامر المتاحة
 
-تشغيل اختبارات e2e:
-
-```bash
-npm run e2e
-```
-
-اختبارات e2e تستخدم Playwright وتغطي:
-
-- إعادة توجيه الروتات المحمية إلى صفحة الدخول.
-- تحميل صفحات المنتجات والطلبات بعد تسجيل الدخول عبر API.
-- ظهور الجداول الكاملة على الديسكتوب.
-- ظهور cards مختصرة على الموبايل بدون overflow أفقي.
-
-للتشغيل بواجهة مرئية:
-
-```bash
-npm run e2e:headed
-```
+- `npm run dev`: تشغيل التطوير باستخدام Webpack.
+- `npm run dev:turbo`: تشغيل التطوير باستخدام Turbopack.
+- `npm run lint`: فحص ESLint.
+- `npm run build`: إنشاء production build.
+- `npm run start`: تشغيل الـ production build.
+- `npm run e2e`: تشغيل اختبارات Playwright عند توفر بيئة الاختبار والباك إند.
+- `npm run e2e:headed`: تشغيل Playwright بواجهة مرئية.
 
 ## أهم المسارات
 
@@ -111,6 +63,7 @@ npm run e2e:headed
 - `/dashboard`
 - `/items`
 - `/orders`
-- `/api/auth/login`
-- `/api/dashboard/items`
-- `/api/dashboard/orders`
+- `/offers`
+- `/customers`
+- `/delivery/couriers`
+- `/settings`

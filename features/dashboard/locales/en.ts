@@ -131,6 +131,7 @@ export const en = {
   "overview.topItems.saleCount": "orders",
   "overview.topItems.average": "average:",
   "overview.topItems.averageItems": "Average items",
+  "overview.topItems.generalMarket": "General market",
   "overview.product.beefRound": "Beef Round",
   "overview.product.tomatoes": "Tomatoes",
   "overview.product.whiteChicken": "White Broiler Chicken",

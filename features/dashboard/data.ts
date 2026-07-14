@@ -230,6 +230,7 @@ export type ItemRow = {
   price: string;
   displayPrice?: number;
   displayPriceLabel?: string;
+  discountPercent?: number;
   variants?: ProductVariant[];
   variantDetails?: string;
   visibilityMode?: "general" | "regions";

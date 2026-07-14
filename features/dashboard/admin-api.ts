@@ -788,6 +788,7 @@ export function productRowFromApi(value: unknown, index: number): ItemRow {
     price: displayPriceLabel,
     displayPrice,
     displayPriceLabel,
+    discountPercent: Number(product.discount) || 0,
     variants,
     featured: product.isPopular || bool(record, ["is_featured", "featured"], false) ? "نعم" : "لا",
     active: product.isAvailable,

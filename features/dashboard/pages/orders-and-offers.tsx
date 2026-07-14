@@ -3974,6 +3974,7 @@ type BundleLine = {
   itemId: string;
   variantId?: string;
   quantity: number;
+  applyProductDiscount?: boolean;
 };
 
 function parseItemPrice(price: string) {
@@ -4037,7 +4038,10 @@ function variantLabel(item: ItemRow, variantId: string) {
 }
 
 function lineUnitPrice(item: ItemRow | null, line: BundleLine) {
-  return variantPriceValue(item, line.variantId ?? "");
+  const price = variantPriceValue(item, line.variantId ?? "");
+  if (line.applyProductDiscount === false) return price;
+  const productDiscount = clampDiscountPercent(item?.discountPercent ?? 0);
+  return price * (1 - productDiscount / 100);
 }
 
 function selectedItemFrom(rows: ItemRow[], itemId: string): ItemRow | null {
@@ -4374,6 +4378,7 @@ function SingleOfferProductPanel({
     itemId: selectedItemId,
     variantId: selectedVariantId,
     quantity,
+    applyProductDiscount: true,
   };
 
   function selectSingleProduct(itemId: string) {
@@ -4501,6 +4506,7 @@ function PackageProductCard({
   canRemove,
   contextLabel = "الباكج",
   discountPercent,
+  showProductDiscountControl = false,
   onChange,
   onRemove,
 }: {
@@ -4510,12 +4516,15 @@ function PackageProductCard({
   canRemove: boolean;
   contextLabel?: string;
   discountPercent?: number;
+  showProductDiscountControl?: boolean;
   onChange: (patch: Partial<BundleLine>) => void;
   onRemove: () => void;
 }) {
+  const originalUnitPrice = variantPriceValue(item, line.variantId ?? "");
   const unitPrice = lineUnitPrice(item, line);
-  const hasDiscount = typeof discountPercent === "number";
-  const discountedPrice = hasDiscount
+  const productDiscountPercent = clampDiscountPercent(item.discountPercent ?? 0);
+  const hasOfferDiscount = typeof discountPercent === "number";
+  const discountedPrice = hasOfferDiscount
     ? unitPrice * (1 - clampDiscountPercent(discountPercent) / 100)
     : unitPrice;
 
@@ -4549,8 +4558,13 @@ function PackageProductCard({
             <span className="rounded-md bg-muted/40 px-2 py-1">{item.category}</span>
             <span className="rounded-md bg-muted/40 px-2 py-1">{item.subcategory}</span>
             <span className="rounded-md bg-muted/40 px-2 py-1">
-              السعر الأصلي: {formatReferenceCurrency(unitPrice)}
+              السعر الأصلي: {formatReferenceCurrency(originalUnitPrice)}
             </span>
+            {productDiscountPercent > 0 && line.applyProductDiscount !== false ? (
+              <span className="rounded-md bg-emerald-500/10 px-2 py-1 font-semibold text-emerald-600">
+                بعد خصم المنتج: {formatReferenceCurrency(unitPrice)}
+              </span>
+            ) : null}
           </div>
         </div>
 
@@ -4580,6 +4594,24 @@ function PackageProductCard({
               </span>
             ) : null}
           </label>
+
+          {showProductDiscountControl && productDiscountPercent > 0 ? (
+            <label className="flex min-h-14 cursor-pointer items-center justify-between gap-3 rounded-md border bg-muted/10 px-3 py-2">
+              <span>
+                <span className="block text-xs font-semibold text-foreground">
+                  تطبيق خصم المنتج ({productDiscountPercent}%)
+                </span>
+                <span className="mt-1 block text-[11px] text-muted-foreground">
+                  يطبق أولًا، ثم يحسب خصم الباكدج على الإجمالي الناتج.
+                </span>
+              </span>
+              <Switch
+                checked={line.applyProductDiscount !== false}
+                onCheckedChange={(checked) => onChange({ applyProductDiscount: checked })}
+                aria-label={`تطبيق خصم المنتج على ${item.name}`}
+              />
+            </label>
+          ) : null}
 
           <div className="grid grid-cols-[86px_minmax(0,1fr)_40px] items-end gap-2">
             <label className="grid gap-1 text-xs font-medium text-muted-foreground">
@@ -5332,6 +5364,7 @@ export function CreateOfferPage() {
           itemId,
           variantId: defaultVariantId(selectedItem),
           quantity: 1,
+          applyProductDiscount: true,
         },
       ];
     });
@@ -5374,13 +5407,13 @@ export function CreateOfferPage() {
   function selectedOfferLines(): BundleLine[] {
     if (selectedType === "باكج") return bundleItems;
     if (selectedType === "فلاش" && flashProductIds[0]) {
-      return [{ id: "flash", itemId: flashProductIds[0], variantId: flashVariantId, quantity: flashQuantity }];
+      return [{ id: "flash", itemId: flashProductIds[0], variantId: flashVariantId, quantity: flashQuantity, applyProductDiscount: true }];
     }
     if (selectedType === "توصيل" && deliveryProductId) {
-      return [{ id: "delivery", itemId: deliveryProductId, variantId: deliveryVariantId, quantity: deliveryQuantity }];
+      return [{ id: "delivery", itemId: deliveryProductId, variantId: deliveryVariantId, quantity: deliveryQuantity, applyProductDiscount: true }];
     }
     if (selectedType !== "إعلان" && discountProductId) {
-      return [{ id: "discount", itemId: discountProductId, variantId: discountVariantId, quantity: discountQuantity }];
+      return [{ id: "discount", itemId: discountProductId, variantId: discountVariantId, quantity: discountQuantity, applyProductDiscount: true }];
     }
     return [];
   }
@@ -5526,6 +5559,7 @@ export function CreateOfferPage() {
       items: selectedLines.map((line) => ({
         variant_id: Number(line.variantId),
         quantity: line.quantity,
+        apply_product_discount: line.applyProductDiscount !== false,
       })),
       title: offerTitle.trim(),
       description: offerDescription.trim(),
@@ -5723,6 +5757,7 @@ export function CreateOfferPage() {
             itemId: String(item.product_id ?? ""),
             variantId: String(item.variant_id ?? ""),
             quantity: Math.max(1, Math.min(99, Number(item.quantity) || 1)),
+            applyProductDiscount: item.apply_product_discount !== false,
           })).filter((line) => line.itemId);
           const start = new Date(String(record.start_time));
           const end = new Date(String(record.end_time));
@@ -5758,7 +5793,7 @@ export function CreateOfferPage() {
             setBundleItems(
               offerLines.length
                 ? offerLines
-                : productIds.map((itemId) => ({ id: `bundle-${itemId}`, itemId, variantId: "", quantity: 1 })),
+                : productIds.map((itemId) => ({ id: `bundle-${itemId}`, itemId, variantId: "", quantity: 1, applyProductDiscount: true })),
             );
             setPackageDiscountPercent(String(record.discount ?? "0"));
           } else if (card.type === "توصيل") {
@@ -6123,6 +6158,7 @@ export function CreateOfferPage() {
                             item={item}
                             lineTotal={lineTotal}
                             canRemove
+                            showProductDiscountControl
                             onChange={(patch) => updateBundleLine(line.id, patch)}
                             onRemove={() => removeBundleLine(line.id)}
                           />

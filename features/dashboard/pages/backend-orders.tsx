@@ -2866,7 +2866,43 @@ function orderOfferBenefitLabel(offer: BackendOrderOffer, order: BackendOrder) {
       ? "توصيل مجاني"
       : "لم يُطبّق على هذا الطلب";
   }
-  return money(offer.discount_amount);
+  const percentage = numberValue(offer.offer?.discount);
+  return percentage !== null
+    ? `${percentage}% = ${money(offer.discount_amount)}`
+    : money(offer.discount_amount);
+}
+
+function orderOfferBenefitTitle(offer: BackendOrderOffer) {
+  return cleanText(offer.offer?.type).toLowerCase() === "delivery"
+    ? "ميزة العرض"
+    : "إجمالي خصم العرض";
+}
+
+function aggregatedOrderOffers(order: BackendOrder) {
+  const directOffers = (order.offers ?? []) as BackendOrderOffer[];
+  if (directOffers.length > 0) return directOffers;
+
+  const grouped = new Map<string, BackendOrderOffer>();
+  for (const section of getMarketSections(order)) {
+    for (const offer of (section.offers ?? []) as BackendOrderOffer[]) {
+      const offerId = cleanText(offer.offer_id ?? offer.offer?.id ?? offer.id);
+      if (!offerId) continue;
+      const existing = grouped.get(offerId);
+      if (!existing) {
+        grouped.set(offerId, {
+          ...offer,
+          section_id: null,
+          discount_amount: String(numberValue(offer.discount_amount) ?? 0),
+        });
+        continue;
+      }
+      existing.discount_amount = String(
+        (numberValue(existing.discount_amount) ?? 0) +
+          (numberValue(offer.discount_amount) ?? 0),
+      );
+    }
+  }
+  return [...grouped.values()];
 }
 
 function sectionMarketDisplayName(section: OrderMarketSectionLike) {
@@ -2875,6 +2911,7 @@ function sectionMarketDisplayName(section: OrderMarketSectionLike) {
 
 function MarketSectionsCard({ order }: { order: BackendOrder }) {
   const sections = getMarketSections(order);
+  const appliedOffers = aggregatedOrderOffers(order);
 
   return (
     <Card className="overflow-hidden">
@@ -2889,6 +2926,30 @@ function MarketSectionsCard({ order }: { order: BackendOrder }) {
           {isMultiMarket(order) ? "متعدد المحلات" : "محل واحد"}
         </Badge>
       </div>
+
+      {appliedOffers.length > 0 ? (
+        <div className="border-b bg-primary/5 px-5 py-4">
+          <div className="mb-3 font-semibold">العروض المطبقة على الطلب</div>
+          <div className="grid gap-2">
+            {appliedOffers.map((offer, index) => (
+              <div
+                key={`${offer.id ?? offer.offer_id ?? index}`}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-3 py-2 text-sm"
+              >
+                <span className="font-medium">{orderOfferTitle(offer)}</span>
+                <span className="text-muted-foreground">
+                  {orderOfferBenefitTitle(offer)}: {orderOfferBenefitLabel(offer, order)}
+                </span>
+              </div>
+            ))}
+          </div>
+          {isMultiMarket(order) ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              يظهر خصم العرض هنا مجمعًا مرة واحدة؛ رقم الخصم داخل كل محل بالأسفل هو نصيب هذا المحل من نفس الخصم.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {sections.length === 0 ? (
         <div className="p-6 text-center text-sm text-muted-foreground">
@@ -2913,7 +2974,10 @@ function MarketSectionsCard({ order }: { order: BackendOrder }) {
                     </div>
                     <div className="grid gap-2 text-xs sm:grid-cols-3">
                       <SummaryPill label="إجمالي المنتجات" value={money(section.subtotal_price)} />
-                      <SummaryPill label="الخصم" value={money(section.discount)} />
+                      <SummaryPill
+                        label={offers.length > 0 ? "نصيب المحل من الخصم" : "الخصم"}
+                        value={money(section.discount)}
+                      />
                       <SummaryPill label="الإجمالي النهائي" value={sectionTotal(section)} />
                     </div>
                   </div>
@@ -2954,21 +3018,6 @@ function MarketSectionsCard({ order }: { order: BackendOrder }) {
                   </table>
                 </div>
 
-                {offers.length > 0 ? (
-                  <div className="border-t p-4">
-                    <div className="mb-3 font-semibold">عروض المحل</div>
-                    <div className="grid gap-2">
-                      {offers.map((offer, index) => (
-                        <div key={`${offer.id ?? offer.offer_id ?? index}`} className="flex items-center justify-between gap-3 rounded-md border bg-muted/10 px-3 py-2 text-sm">
-                          <span className="font-medium">{orderOfferTitle(offer)}</span>
-                          <span className="text-muted-foreground">
-                            {orderOfferBenefitLabel(offer, order)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
               </section>
             );
           })}
@@ -2987,7 +3036,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
   const [savingAssignment, setSavingAssignment] = useState(false);
   const [deliveryPriceDraft, setDeliveryPriceDraft] = useState("");
   const [savingDeliveryPrice, setSavingDeliveryPrice] = useState(false);
-  const [orderDetailsOpen, setOrderDetailsOpen] = useState(true);
+  const [orderDetailsOpen, setOrderDetailsOpen] = useState(false);
   const [representativeOpen, setRepresentativeOpen] = useState(false);
   const [representativeUser, setRepresentativeUser] = useState<BackendDashboardUser | null>(null);
   const [representativeOptions, setRepresentativeOptions] = useState<RepresentativeOption[]>([]);
