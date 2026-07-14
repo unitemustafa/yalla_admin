@@ -5615,53 +5615,83 @@ export function CreateOfferPage() {
       if (!response.ok) {
         throw new Error(apiErrorMessage(data, "تعذر حفظ العرض."));
       }
-      let savedOffer = offerCardFromApi(data as BackendRecord);
-      let imageUploadFailed = false;
-
-      if (offerImageFile) {
+      const savedOffer = offerCardFromApi(data as BackendRecord);
+      const savedOfferId = savedOffer.id;
+      const imageUploadPromise = (async () => {
+        if (!offerImageFile) return null;
         const imageFormData = new FormData();
         imageFormData.append("image", offerImageFile);
-        try {
-          const imageResponse = await apiFetch(
-            `${adminApiPaths.offers}${encodeURIComponent(savedOffer.id)}/`,
-            { method: "PATCH", body: imageFormData },
+        const imageResponse = await apiFetch(
+          `${adminApiPaths.offers}${encodeURIComponent(savedOfferId)}/image/`,
+          { method: "POST", body: imageFormData },
+        );
+        const imageData = await readApiData(imageResponse);
+        if (!imageResponse.ok) {
+          const imageErrorRecord =
+            imageData && typeof imageData === "object" && !Array.isArray(imageData)
+              ? imageData as BackendRecord
+              : null;
+          const imageRequestId =
+            typeof imageErrorRecord?.request_id === "string"
+              ? imageErrorRecord.request_id
+              : "";
+          const imageErrorMessage = apiErrorMessage(imageData, "تعذر رفع صورة العرض.");
+          throw new Error(
+            imageRequestId
+              ? `${imageErrorMessage} رقم التتبع: ${imageRequestId}`
+              : imageErrorMessage,
           );
-          const imageData = await readApiData(imageResponse);
-          if (!imageResponse.ok) {
-            throw new Error(apiErrorMessage(imageData, "تعذر رفع صورة العرض."));
-          }
-          savedOffer = offerCardFromApi(imageData as BackendRecord);
-        } catch {
-          imageUploadFailed = true;
         }
-      }
+        return offerCardFromApi(imageData as BackendRecord);
+      })();
+      const notificationPromise = (async () => {
+        if (!sendPushNotification) return null;
+        return await sendAdminJson(
+          apiFetch,
+          `${adminApiPaths.offers}${encodeURIComponent(savedOfferId)}/send-notification/`,
+          { method: "POST", body: JSON.stringify({ request_id: crypto.randomUUID() }) },
+        ) as BackendRecord;
+      })();
+      const [imageUploadResult, notificationResult] = await Promise.allSettled([
+        imageUploadPromise,
+        notificationPromise,
+      ]);
+      const imageUploadFailed = imageUploadResult.status === "rejected";
+      const imageUploadError =
+        imageUploadResult.status === "rejected" && imageUploadResult.reason instanceof Error
+          ? imageUploadResult.reason.message
+          : "تعذر رفع صورة العرض.";
 
       showSnackbar({
         message:
           imageUploadFailed
             ? formMode === "edit"
-              ? "تم حفظ تعديل العرض، لكن تعذر رفع الصورة."
-              : "تم إنشاء العرض، لكن تعذر رفع الصورة."
+              ? `تم حفظ تعديل العرض، لكن ${imageUploadError}`
+              : `تم إنشاء العرض، لكن ${imageUploadError}`
             : formMode === "edit"
             ? "تم حفظ تعديل العرض بنجاح."
             : "تم إنشاء العرض بنجاح.",
         tone: imageUploadFailed ? "danger" : "success",
       });
       if (sendPushNotification) {
-        if (!savedOffer.canSendNotification) {
-          showSnackbar({ message: "تم حفظ العرض، لكن لا يمكن إرسال الإشعار قبل أن يصبح العرض نشطًا.", tone: "danger" });
+        if (notificationResult.status === "fulfilled" && notificationResult.value) {
+          const notificationCount = Number(notificationResult.value.notification_count ?? 0);
+          showSnackbar({
+            message:
+              notificationCount > 0
+                ? `تم إرسال الإشعار إلى ${notificationCount} عميل.`
+                : "تم حفظ العرض، ولا يوجد عملاء مؤهلون للإشعار حاليًا.",
+            tone: "success",
+          });
         } else {
-          const requestId = crypto.randomUUID();
-          try {
-            const dispatch = await sendAdminJson(
-              apiFetch,
-              `${adminApiPaths.offers}${encodeURIComponent(savedOffer.id)}/send-notification/`,
-              { method: "POST", body: JSON.stringify({ request_id: requestId }) },
-            ) as BackendRecord;
-            showSnackbar({ message: `تم إرسال الإشعار إلى ${Number(dispatch.notification_count ?? 0)} عميل.`, tone: "success" });
-          } catch {
-            showSnackbar({ message: "تم حفظ العرض، لكن تعذر إرسال الإشعار.", tone: "danger" });
-          }
+          const notificationError =
+            notificationResult.status === "rejected" && notificationResult.reason instanceof Error
+              ? notificationResult.reason.message
+              : "تعذر إرسال الإشعار.";
+          showSnackbar({
+            message: `تم حفظ العرض، لكن ${notificationError}`,
+            tone: "danger",
+          });
         }
       }
       router.push("/offers");
