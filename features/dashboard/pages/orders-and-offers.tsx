@@ -5606,50 +5606,46 @@ export function CreateOfferPage() {
           ? `${adminApiPaths.offers}${encodeURIComponent(editingOfferId)}/`
           : adminApiPaths.offers;
       const method = formMode === "edit" ? "PATCH" : "POST";
-      const response = offerImageFile
-        ? await apiFetch(offerPath, {
-            method,
-            body: (() => {
-              const formData = new FormData();
-              if (selectedType !== "إعلان") formData.append("market_id", String(inferredMarketId));
-              formData.append("show_in_general", String(payload.show_in_general));
-              formData.append("service_city_ids", JSON.stringify(payload.service_city_ids));
-              formData.append("product_ids", JSON.stringify(payload.product_ids));
-              formData.append("items", JSON.stringify(payload.items));
-              formData.append("title", payload.title);
-              formData.append("description", payload.description);
-              formData.append("type", payload.type);
-              formData.append("discount", payload.discount);
-              formData.append("start_time", payload.start_time);
-              formData.append("end_time", payload.end_time);
-              formData.append("active_days", JSON.stringify(payload.active_days));
-              formData.append("announcement_url", payload.announcement_url);
-              formData.append("announcement_cta_label", payload.announcement_cta_label);
-              formData.append("announcement_priority", String(payload.announcement_priority));
-              formData.append("announcement_display_seconds", String(payload.announcement_display_seconds));
-              formData.append("send_push_notification", String(payload.send_push_notification));
-              if (payload.use_limits !== null) formData.append("use_limits", String(payload.use_limits));
-              if (payload.user_limit !== null) formData.append("user_limit", String(payload.user_limit));
-              formData.append("image", offerImageFile);
-              return formData;
-            })(),
-          })
-        : await apiFetch(offerPath, {
-            method,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
+      const response = await apiFetch(offerPath, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
       const data = await readApiData(response);
       if (!response.ok) {
         throw new Error(apiErrorMessage(data, "تعذر حفظ العرض."));
       }
-      const savedOffer = offerCardFromApi(data as BackendRecord);
+      let savedOffer = offerCardFromApi(data as BackendRecord);
+      let imageUploadFailed = false;
+
+      if (offerImageFile) {
+        const imageFormData = new FormData();
+        imageFormData.append("image", offerImageFile);
+        try {
+          const imageResponse = await apiFetch(
+            `${adminApiPaths.offers}${encodeURIComponent(savedOffer.id)}/`,
+            { method: "PATCH", body: imageFormData },
+          );
+          const imageData = await readApiData(imageResponse);
+          if (!imageResponse.ok) {
+            throw new Error(apiErrorMessage(imageData, "تعذر رفع صورة العرض."));
+          }
+          savedOffer = offerCardFromApi(imageData as BackendRecord);
+        } catch {
+          imageUploadFailed = true;
+        }
+      }
+
       showSnackbar({
         message:
-          formMode === "edit"
+          imageUploadFailed
+            ? formMode === "edit"
+              ? "تم حفظ تعديل العرض، لكن تعذر رفع الصورة."
+              : "تم إنشاء العرض، لكن تعذر رفع الصورة."
+            : formMode === "edit"
             ? "تم حفظ تعديل العرض بنجاح."
             : "تم إنشاء العرض بنجاح.",
-        tone: "success",
+        tone: imageUploadFailed ? "danger" : "success",
       });
       if (sendPushNotification) {
         if (!savedOffer.canSendNotification) {
