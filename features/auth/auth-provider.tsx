@@ -52,6 +52,20 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 let refreshPromise: Promise<AuthTokens> | null = null;
 
+export class RateLimitError extends Error {
+  readonly retryAfterSeconds: number;
+
+  constructor(retryAfterSeconds: number) {
+    super(
+      retryAfterSeconds > 0
+        ? `طلبات كتير في وقت قصير. حاول تاني بعد ${retryAfterSeconds} ثانية.`
+        : "طلبات كتير في وقت قصير. استنى شوية وحاول تاني.",
+    );
+    this.name = "RateLimitError";
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
 function cookieOptions() {
   return {
     path: "/",
@@ -172,6 +186,31 @@ async function responseData(response: Response) {
   return (await response.json().catch(() => null)) as unknown;
 }
 
+function positiveInteger(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.ceil(parsed) : 0;
+}
+
+function rateLimitError(response: Response, data: unknown) {
+  const payload = data && typeof data === "object" ? data as Record<string, unknown> : null;
+  const bodyWait = positiveInteger(payload?.retry_after_seconds);
+  const headerWait = positiveInteger(response.headers.get("Retry-After"));
+  return new RateLimitError(bodyWait || headerWait);
+}
+
+async function throwIfRateLimited(response: Response, data?: unknown) {
+  if (response.status !== 429) return;
+  const payload = data === undefined ? await responseData(response.clone()) : data;
+  throw rateLimitError(response, payload);
+}
+
+function waitForRateLimit(seconds: number) {
+  const safeSeconds = Math.min(60, Math.max(1, seconds));
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, safeSeconds * 1000);
+  });
+}
+
 function firstApiError(value: unknown): string | null {
   if (typeof value === "string" && value.trim()) return value;
   if (Array.isArray(value)) {
@@ -207,7 +246,7 @@ function localizedAuthError(value: unknown, fallback: string) {
 }
 
 function shouldKeepLocalSession(error: unknown) {
-  return isNetworkError(error) || isAbortError(error);
+  return error instanceof RateLimitError || isNetworkError(error) || isAbortError(error);
 }
 
 async function refreshTokens() {
@@ -223,18 +262,38 @@ async function refreshTokens() {
   }
 
   refreshPromise = (async () => {
-    let response: Response;
-    try {
-      response = await fetch(`${API_BASE_URL}/auth/refresh/`, {
+    async function sendRefresh() {
+      return fetch(`${API_BASE_URL}/auth/refresh/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refreshToken }),
       });
+    }
+
+    let response: Response;
+    try {
+      response = await sendRefresh();
     } catch (error) {
       if (isNetworkError(error)) throw new Error(NETWORK_ERROR_MESSAGE);
       throw error;
     }
-    const data = (await responseData(response)) as Partial<AuthTokens> | null;
+    let data = (await responseData(response)) as Partial<AuthTokens> | null;
+    if (response.status === 429) {
+      const error = rateLimitError(response, data);
+      await waitForRateLimit(error.retryAfterSeconds);
+      const currentExpiry = sessionExpiresAt();
+      if (!currentExpiry || currentExpiry <= Date.now()) {
+        throw new Error("انتهت الجلسة. سجّل الدخول من جديد.");
+      }
+      try {
+        response = await sendRefresh();
+      } catch (retryError) {
+        if (isNetworkError(retryError)) throw new Error(NETWORK_ERROR_MESSAGE);
+        throw retryError;
+      }
+      data = (await responseData(response)) as Partial<AuthTokens> | null;
+    }
+    await throwIfRateLimited(response, data);
 
     if (
       (response.status === 401 || response.status === 403) ||
@@ -273,6 +332,7 @@ async function fetchCurrentAdminUser(accessToken: string) {
     throw error;
   }
   const data = await responseData(response);
+  await throwIfRateLimited(response, data);
 
   if (!response.ok || !data || typeof data !== "object") {
     throw new Error(
@@ -433,6 +493,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
       const data = (await responseData(response)) as Partial<AuthSession> | null;
+      await throwIfRateLimited(response, data);
 
       if (!response.ok) {
         throw new Error(
@@ -520,12 +581,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       let response = await request(accessToken!);
+      await throwIfRateLimited(response);
       if (response.status !== 401) return response;
 
       try {
         accessToken = (await refreshTokens()).accessToken;
         scheduleRefresh(accessToken);
         response = await request(accessToken);
+        await throwIfRateLimited(response);
         return response;
       } catch (error) {
         if (!shouldKeepLocalSession(error)) clearSession(true);
