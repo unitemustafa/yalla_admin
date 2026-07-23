@@ -4,12 +4,24 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useAuth } from "@/features/auth/auth-provider";
 
+export type PolygonGeoJson = {
+  type: "Polygon";
+  coordinates: number[][][];
+};
+
+export type CityBoundaryGeoJson = PolygonGeoJson | {
+  type: "MultiPolygon";
+  coordinates: number[][][][];
+};
+
 export type ServiceCity = {
   id: number;
   name: string;
   center_latitude: string | null;
   center_longitude: string | null;
   radius_km: string | null;
+  boundary_geojson: CityBoundaryGeoJson | null;
+  boundary_bbox: number[] | null;
   delivery_price: string;
   is_active: boolean;
   delivery_area_count: number;
@@ -19,9 +31,10 @@ export type ServiceCity = {
 
 export type ServiceCityPayload = {
   name: string;
-  center_latitude: string;
-  center_longitude: string;
-  radius_km: string;
+  center_latitude?: string;
+  center_longitude?: string;
+  radius_km?: string;
+  boundary_geojson?: CityBoundaryGeoJson | null;
   is_active: boolean;
 };
 
@@ -32,7 +45,11 @@ export type DeliveryArea = {
   center_latitude: string | null;
   center_longitude: string | null;
   radius_km: string | null;
+  boundary_geojson: PolygonGeoJson | null;
+  boundary_bbox: number[] | null;
   delivery_price: string;
+  eta_min_minutes: number | null;
+  eta_max_minutes: number | null;
   is_active: boolean;
 };
 
@@ -42,7 +59,10 @@ export type DeliveryAreaPayload = {
   center_latitude: string | null;
   center_longitude: string | null;
   radius_km: string | null;
+  boundary_geojson?: PolygonGeoJson | null;
   delivery_price: string;
+  eta_min_minutes?: number | null;
+  eta_max_minutes?: number | null;
   is_active: boolean;
 };
 
@@ -73,6 +93,8 @@ type ServiceCityResponse = {
   center_latitude?: string | number | null;
   center_longitude?: string | number | null;
   radius_km?: string | number | null;
+  boundary_geojson?: CityBoundaryGeoJson | null;
+  boundary_bbox?: number[] | null;
   delivery_price?: string | number | null;
   is_active?: boolean | null;
   delivery_area_count?: number | null;
@@ -88,7 +110,11 @@ type DeliveryAreaResponse = {
   center_latitude?: string | number | null;
   center_longitude?: string | number | null;
   radius_km?: string | number | null;
+  boundary_geojson?: PolygonGeoJson | null;
+  boundary_bbox?: number[] | null;
   delivery_price?: string | number | null;
+  eta_min_minutes?: number | null;
+  eta_max_minutes?: number | null;
   is_active?: boolean | null;
 };
 
@@ -142,6 +168,8 @@ function cityFromResponse(value: unknown): ServiceCity | null {
     center_latitude: nullableNumberText(city.center_latitude),
     center_longitude: nullableNumberText(city.center_longitude),
     radius_km: nullableNumberText(city.radius_km),
+    boundary_geojson: city.boundary_geojson ?? null,
+    boundary_bbox: Array.isArray(city.boundary_bbox) ? city.boundary_bbox : null,
     delivery_price: normalizeNumberText(city.delivery_price, "0.00"),
     is_active: active,
     delivery_area_count: normalizeCount(city.delivery_area_count),
@@ -172,7 +200,13 @@ function deliveryAreaFromResponse(value: unknown): DeliveryArea | null {
     center_latitude: nullableNumberText(area.center_latitude),
     center_longitude: nullableNumberText(area.center_longitude),
     radius_km: nullableNumberText(area.radius_km),
+    boundary_geojson: area.boundary_geojson ?? null,
+    boundary_bbox: Array.isArray(area.boundary_bbox) ? area.boundary_bbox : null,
     delivery_price: deliveryPrice,
+    eta_min_minutes:
+      typeof area.eta_min_minutes === "number" ? area.eta_min_minutes : null,
+    eta_max_minutes:
+      typeof area.eta_max_minutes === "number" ? area.eta_max_minutes : null,
     is_active: area.is_active !== false,
   };
 }

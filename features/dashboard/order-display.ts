@@ -17,6 +17,14 @@ export type OrderAddressLike = {
   details?: string | null;
   line1?: string | null;
   street?: string | null;
+  formatted_address?: string | null;
+  building_name?: string | null;
+  apartment_number?: string | null;
+  floor?: string | null;
+  company_name?: string | null;
+  recipient_name?: string | null;
+  recipient_phone?: string | null;
+  additional_instructions?: string | null;
   manual_city?: string | null;
   manual_area?: string | null;
   service_city?: OrderNamedObject | null;
@@ -285,12 +293,19 @@ export function getDeliveryAreaName(order: DashboardOrderLike) {
 
 export function getAddressDetails(order: DashboardOrderLike) {
   const address = order.delivery_address;
-  return (
-    cleanText(address?.details) ||
-    cleanText(address?.line1) ||
+  const formatted = cleanText(address?.formatted_address);
+  if (formatted) return formatted;
+  return [
     cleanText(address?.street) ||
-    cleanText(address?.name)
-  );
+      cleanText(address?.details) ||
+      cleanText(address?.line1),
+    cleanText(address?.building_name),
+    cleanText(address?.floor) ? `الدور ${cleanText(address?.floor)}` : "",
+    cleanText(address?.apartment_number)
+      ? `شقة ${cleanText(address?.apartment_number)}`
+      : "",
+    cleanText(address?.company_name),
+  ].filter(Boolean).join(" - ") || cleanText(address?.name);
 }
 
 function unknownList(value: unknown) {
@@ -431,16 +446,8 @@ export function getPickupStatusLabel(value: unknown) {
 export function getDeliveryDestination(order: DashboardOrderLike) {
   const address = order.delivery_address;
   const details = getAddressDetails(order);
-
-  if (isGeneralOrder(order)) {
-    return [
-      cleanText(address?.manual_city),
-      cleanText(address?.manual_area),
-      details,
-    ].filter(Boolean).join(" - ") || unknownLabel;
-  }
-
-  const city = getServiceCityName(order);
+  const city =
+    getServiceCityName(order) || cleanText(address?.manual_city);
   const area = getDeliveryAreaName(order) || cleanText(address?.manual_area);
   return [city, area, details].filter(Boolean).join(" - ") || unknownLabel;
 }

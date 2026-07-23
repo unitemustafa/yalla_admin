@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowUpDown,
@@ -48,6 +49,10 @@ import {
 } from "../delivery-pricing";
 import { cn } from "@/lib/utils";
 
+const DeliveryAreaMap = dynamic(() => import("../delivery-area-map"), {
+  ssr: false,
+});
+
 const deliveryListPageSize = 5;
 const allCitiesFilterValue = "all";
 
@@ -57,6 +62,9 @@ type ZoneDraft = {
   cityId: string;
   name: string;
   fixedDeliveryPrice: string;
+  etaMinMinutes: string;
+  etaMaxMinutes: string;
+  boundaryGeojson: import("../cities-api").PolygonGeoJson | null;
 };
 
 type ZoneDraftErrors = Partial<Record<keyof ZoneDraft, string>>;
@@ -136,12 +144,18 @@ function createZoneDraft(zone?: DeliveryZone): ZoneDraft {
     cityId: zone?.cityId ?? "",
     name: zone?.name ?? "",
     fixedDeliveryPrice: numberToDraftValue(zone?.fixedDeliveryPrice ?? 0),
+    etaMinMinutes: zone?.etaMinMinutes == null ? "" : String(zone.etaMinMinutes),
+    etaMaxMinutes: zone?.etaMaxMinutes == null ? "" : String(zone.etaMaxMinutes),
+    boundaryGeojson: zone?.boundaryGeojson ?? null,
   };
 }
 
 function validateZoneDraft(draft: ZoneDraft) {
   const errors: ZoneDraftErrors = {};
   const fixedDeliveryPrice = parseNumber(draft.fixedDeliveryPrice);
+  const etaMin = Number(draft.etaMinMinutes);
+  const etaMax = Number(draft.etaMaxMinutes);
+  const boundaryPoints = draft.boundaryGeojson?.coordinates[0]?.length ?? 0;
 
   if (!draft.cityId) {
     errors.cityId = "مدينة التوصيل مطلوبة.";
@@ -153,6 +167,15 @@ function validateZoneDraft(draft: ZoneDraft) {
 
   if (fixedDeliveryPrice < 0) {
     errors.fixedDeliveryPrice = "السعر لا يكون أقل من صفر.";
+  }
+  if (!Number.isInteger(etaMin) || etaMin <= 0) {
+    errors.etaMinMinutes = "أدخل أقل مدة توصيل صحيحة بالدقائق.";
+  }
+  if (!Number.isInteger(etaMax) || etaMax < etaMin) {
+    errors.etaMaxMinutes = "أقصى مدة يجب أن تساوي أو تتجاوز أقل مدة.";
+  }
+  if (boundaryPoints < 4) {
+    errors.boundaryGeojson = "ارسم حدود منطقة التوصيل بثلاث نقاط على الأقل.";
   }
 
   return errors;
@@ -167,6 +190,9 @@ function zoneFromDraft(draft: ZoneDraft, currentZone?: DeliveryZone): DeliveryZo
     cityName: currentZone?.cityName ?? "",
     name: draft.name.trim(),
     fixedDeliveryPrice: parseNumber(draft.fixedDeliveryPrice),
+    etaMinMinutes: Number(draft.etaMinMinutes),
+    etaMaxMinutes: Number(draft.etaMaxMinutes),
+    boundaryGeojson: draft.boundaryGeojson,
     status: currentZone?.status ?? "active",
     createdAt: currentZone?.createdAt ?? today,
     updatedAt: today,
@@ -276,6 +302,7 @@ function ZoneFormDialog({
     }
     return activeOptions;
   }, [cities, draft.cityId, isEditing]);
+  const selectedCity = cities.find((city) => String(city.id) === draft.cityId);
 
   function updateDraft<K extends keyof ZoneDraft>(field: K, value: ZoneDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -366,6 +393,20 @@ function ZoneFormDialog({
                   error={errors.fixedDeliveryPrice}
                   placeholder="45"
                 />
+                <NumberField
+                  label="أقل مدة توصيل (دقيقة) *"
+                  value={draft.etaMinMinutes}
+                  onChange={(value) => updateDraft("etaMinMinutes", value)}
+                  error={errors.etaMinMinutes}
+                  placeholder="30"
+                />
+                <NumberField
+                  label="أقصى مدة توصيل (دقيقة) *"
+                  value={draft.etaMaxMinutes}
+                  onChange={(value) => updateDraft("etaMaxMinutes", value)}
+                  error={errors.etaMaxMinutes}
+                  placeholder="45"
+                />
               </div>
             </div>
 
@@ -386,6 +427,37 @@ function ZoneFormDialog({
                   label="سعر التوصيل"
                   value={formatCurrency(parseNumber(draft.fixedDeliveryPrice))}
                 />
+                <PreviewRow
+                  label="مدة التوصيل"
+                  value={
+                    draft.etaMinMinutes && draft.etaMaxMinutes
+                      ? `${draft.etaMinMinutes}–${draft.etaMaxMinutes} دقيقة`
+                      : "-"
+                  }
+                />
+              </div>
+            </div>
+            <div className="rounded-lg border bg-card lg:col-span-2">
+              <div className="border-b px-4 py-3 text-sm font-bold">
+                حدود منطقة التوصيل
+              </div>
+              <div className="p-3">
+                {selectedCity?.boundary_geojson ? (
+                  <DeliveryAreaMap
+                    latitude={Number(selectedCity.center_latitude ?? 30.0444)}
+                    longitude={Number(selectedCity.center_longitude ?? 31.2357)}
+                    cityBoundary={selectedCity.boundary_geojson}
+                    areaBoundary={draft.boundaryGeojson}
+                    onAreaBoundaryChange={(value) =>
+                      updateDraft("boundaryGeojson", value)
+                    }
+                  />
+                ) : (
+                  <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                    ارسم حدود المدينة أولًا من صفحة المدن قبل إضافة منطقة توصيل.
+                  </div>
+                )}
+                <FieldError>{errors.boundaryGeojson}</FieldError>
               </div>
             </div>
           </div>

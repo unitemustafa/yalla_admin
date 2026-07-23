@@ -1,4 +1,5 @@
 import type { DeliveryZone } from "./delivery-pricing";
+import type { PolygonGeoJson } from "./cities-api";
 import { apiResponseData, firstApiError } from "./users/api-users";
 
 type ApiFetch = (path: string, init?: RequestInit) => Promise<Response>;
@@ -10,6 +11,9 @@ type DeliveryAreaResponse = {
   service_city_name?: string | null;
   name: string;
   delivery_price: string | number;
+  eta_min_minutes?: number | null;
+  eta_max_minutes?: number | null;
+  boundary_geojson?: PolygonGeoJson | null;
   is_active?: boolean | null;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -39,6 +43,11 @@ function deliveryZoneFromResponse(area: DeliveryAreaResponse): DeliveryZone {
     cityName: area.service_city_name ?? cityObject?.name_ar ?? cityObject?.name ?? "",
     name: area.name,
     fixedDeliveryPrice: numberValue(area.delivery_price),
+    etaMinMinutes:
+      typeof area.eta_min_minutes === "number" ? area.eta_min_minutes : null,
+    etaMaxMinutes:
+      typeof area.eta_max_minutes === "number" ? area.eta_max_minutes : null,
+    boundaryGeojson: area.boundary_geojson ?? null,
     status: area.is_active === false ? "inactive" : "active",
     createdAt: area.createdAt ?? area.created_at ?? null,
     updatedAt: area.updatedAt ?? area.updated_at ?? null,
@@ -50,6 +59,9 @@ function payloadFromDeliveryZone(zone: DeliveryZone) {
     service_city_id: Number(zone.cityId),
     name: zone.name,
     delivery_price: zone.fixedDeliveryPrice,
+    eta_min_minutes: zone.etaMinMinutes,
+    eta_max_minutes: zone.etaMaxMinutes,
+    boundary_geojson: zone.boundaryGeojson,
     is_active: zone.status === "active",
   };
 }

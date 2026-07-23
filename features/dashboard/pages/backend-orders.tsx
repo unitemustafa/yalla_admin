@@ -93,6 +93,16 @@ type BackendAddress = {
   delivery_area?: { id: number; name?: string | null; delivery_price?: string | null } | null;
   delivery_area_id?: number | string | null;
   delivery_type?: BackendDeliveryType | null;
+  fulfillment_type?: "direct" | "external_shipping" | string | null;
+  address_type?: "apartment" | "house" | "office" | string | null;
+  recipient_name?: string | null;
+  recipient_phone?: string | null;
+  building_name?: string | null;
+  apartment_number?: string | null;
+  floor?: string | null;
+  company_name?: string | null;
+  additional_instructions?: string | null;
+  formatted_address?: string | null;
   delivery_price_preview?: string | null;
   latitude?: string | null;
   longitude?: string | null;
@@ -133,6 +143,10 @@ type BackendOrder = {
   allowed_statuses?: BackendOrderStatus[];
   payment_method?: string | null;
   delivery_type?: BackendDeliveryType | null;
+  fulfillment_type?: "direct" | "external_shipping" | string | null;
+  external_shipping_status?: "not_required" | "pending_quote" | "quoted" | string | null;
+  eta_min_minutes?: number | null;
+  eta_max_minutes?: number | null;
   delivery_price_status?: "fixed" | "pending_quote" | string | null;
   service_city?: { id: number; name?: string | null; name_ar?: string | null } | null;
   service_city_id?: number | string | null;
@@ -394,7 +408,11 @@ function deliveryTypeLabel(order: BackendOrder) {
 }
 
 function isDeliveryOrder(order: BackendOrder) {
-  return order.delivery_type === "delivery" || order.delivery_type === "manual_quote";
+  return (
+    order.fulfillment_type === "external_shipping" ||
+    order.delivery_type === "delivery" ||
+    order.delivery_type === "manual_quote"
+  );
 }
 
 function deliveryTypeTone(order: BackendOrder): "blue" | "green" | "red" | "secondary" {
@@ -407,6 +425,13 @@ function deliveryTypeTone(order: BackendOrder): "blue" | "green" | "red" | "seco
 function deliveryFeeLabel(order: BackendOrder) {
   if (order.delivery_label?.trim()) return order.delivery_label;
   return getDeliveryPriceLabel(order);
+}
+
+function fulfillmentLabel(order: BackendOrder) {
+  if (order.fulfillment_type === "direct") return "توصيل مباشر";
+  if (order.external_shipping_status === "quoted") return "شحن خارجي - تم التسعير";
+  if (order.fulfillment_type === "external_shipping") return "شحن خارجي - بانتظار التسعير";
+  return deliveryTypeLabel(order);
 }
 
 function paymentMethodLabel(value: string) {
@@ -3419,7 +3444,14 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                     <SummaryRow label="المنطقة اليدوية" value={getManualArea(order)} />
                   </>
                 ) : null}
+                <SummaryRow label="مسار التنفيذ" value={fulfillmentLabel(order)} />
                 <SummaryRow label="نوع التوصيل" value={deliveryTypeLabel(order)} />
+                {order.eta_min_minutes != null ? (
+                  <SummaryRow
+                    label="الوقت المتوقع"
+                    value={`${order.eta_min_minutes}-${order.eta_max_minutes ?? order.eta_min_minutes} دقيقة`}
+                  />
+                ) : null}
                 <SummaryRow label="إجمالي المنتجات" value={money(order.subtotal_price)} />
                 <SummaryRow label="سعر التوصيل" value={deliveryFeeLabel(order)} />
                 <SummaryRow label="الخصم" value={money(order.discount)} />
