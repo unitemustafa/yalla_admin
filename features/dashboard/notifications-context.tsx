@@ -87,6 +87,9 @@ function dashboardNotificationMessage(notification: DashboardOrderNotification) 
   if (notification.type === "new_order_review") {
     return `تم استلام طلب جديد${orderLabel} ويحتاج إلى مراجعة.`;
   }
+  if (notification.type === "new_partner_application") {
+    return notification.message || "تم استلام طلب تسجيل شريك جديد.";
+  }
   if (notification.event === "courier_order_picked_up") {
     return notification.message || `المندوب استلم الطلب${orderLabel}.`;
   }

@@ -11,6 +11,7 @@ import {
   ExternalLink,
   Inbox,
   Info,
+  Handshake,
   Loader2,
   RefreshCw,
   ShieldCheck,
@@ -168,6 +169,7 @@ function typeLabel(type: string, t: (key: string) => string) {
     system: t("notifications.category.systemGeneric"),
     security: t("notifications.category.securityGeneric"),
     reports: t("notifications.category.reportsGeneric"),
+    new_partner_application: "طلبات الشركاء",
   };
 
   return labels[type] ?? (type || t("notifications.category.systemGeneric"));
@@ -192,6 +194,7 @@ function iconForType(type: string) {
     system: Bell,
     security: ShieldCheck,
     reports: BarChart3,
+    new_partner_application: Handshake,
   } as const;
 
   return icons[type as keyof typeof icons] ?? Info;
@@ -423,6 +426,10 @@ export function NotificationsPage() {
       void markAsRead(notification);
     }
     const orderId = numericOrderId(notification);
+    if (notification.type === "new_partner_application") {
+      router.push("/partners");
+      return;
+    }
     if (orderId) {
       router.push(`/orders/view/${orderId}`);
     }

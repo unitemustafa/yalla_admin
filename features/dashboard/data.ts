@@ -1,5 +1,6 @@
 import {
   BadgeCheck,
+  Handshake,
   LayoutDashboard,
   MessageCircle,
   MapPinned,
@@ -88,6 +89,12 @@ export const navGroups: NavGroup[] = [
       },
       { label: "العملاء", icon: Users, href: "/customers", page: "customers" },
       {
+        label: "الشركاء",
+        icon: Handshake,
+        href: "/partners",
+        page: "partners",
+      },
+      {
         label: "العضويات",
         icon: BadgeCheck,
         page: "memberships",
@@ -157,6 +164,7 @@ export const breadcrumbByPage: Record<PageKey, BreadcrumbItem[]> = {
     { label: "إضافة مندوب" },
   ],
   customers: [dashboardCrumb, { label: "العملاء" }],
+  partners: [dashboardCrumb, { label: "الشركاء" }],
   memberships: [dashboardCrumb, { label: "العضويات" }],
   account: [dashboardCrumb, { label: "Account" }],
   settings: [dashboardCrumb, { label: "الإعدادات" }],
@@ -200,6 +208,8 @@ export function pageFromPathname(pathname: string): PageKey {
   }
   if (pathname === "/customers" || pathname.startsWith("/customers/"))
     return "customers";
+  if (pathname === "/partners" || pathname.startsWith("/partners/"))
+    return "partners";
   if (pathname === "/account") return "account";
   if (pathname === "/settings" || pathname.startsWith("/settings/"))
     return "settings";

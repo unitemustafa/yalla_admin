@@ -34,6 +34,7 @@ const pageKeys: Record<PageKey, TranslationKey> = {
   couriers: "page.couriers",
   "create-courier": "page.createCourier",
   customers: "page.customers",
+  partners: "page.partners",
   memberships: "page.memberships",
   account: "page.account",
   settings: "page.settings",

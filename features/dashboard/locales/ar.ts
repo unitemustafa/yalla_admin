@@ -85,6 +85,7 @@ export const ar = {
   "page.couriers": "المندوبين",
   "page.createCourier": "إضافة مندوب",
   "page.customers": "العملاء",
+  "page.partners": "الشركاء",
   "page.memberships": "العضويات",
   "page.account": "الحساب",
   "page.settings": "الإعدادات",

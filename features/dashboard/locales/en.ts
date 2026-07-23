@@ -78,6 +78,7 @@ export const en = {
   "page.couriers": "Couriers",
   "page.createCourier": "Add courier",
   "page.customers": "Users",
+  "page.partners": "Partners",
   "page.memberships": "Memberships",
   "page.account": "Account",
   "page.settings": "Settings",

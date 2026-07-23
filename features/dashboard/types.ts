@@ -17,6 +17,7 @@ export type PageKey =
   | "couriers"
   | "create-courier"
   | "customers"
+  | "partners"
   | "memberships"
   | "account"
   | "settings"
