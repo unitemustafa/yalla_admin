@@ -14,6 +14,8 @@ export type CityBoundaryGeoJson = PolygonGeoJson | {
   coordinates: number[][][][];
 };
 
+export type AreaBoundaryGeoJson = CityBoundaryGeoJson;
+
 export type ServiceCity = {
   id: number;
   name: string;
@@ -45,7 +47,7 @@ export type DeliveryArea = {
   center_latitude: string | null;
   center_longitude: string | null;
   radius_km: string | null;
-  boundary_geojson: PolygonGeoJson | null;
+  boundary_geojson: AreaBoundaryGeoJson | null;
   boundary_bbox: number[] | null;
   delivery_price: string;
   eta_min_minutes: number | null;
@@ -59,7 +61,7 @@ export type DeliveryAreaPayload = {
   center_latitude: string | null;
   center_longitude: string | null;
   radius_km: string | null;
-  boundary_geojson?: PolygonGeoJson | null;
+  boundary_geojson?: AreaBoundaryGeoJson | null;
   delivery_price: string;
   eta_min_minutes?: number | null;
   eta_max_minutes?: number | null;
@@ -110,7 +112,7 @@ type DeliveryAreaResponse = {
   center_latitude?: string | number | null;
   center_longitude?: string | number | null;
   radius_km?: string | number | null;
-  boundary_geojson?: PolygonGeoJson | null;
+  boundary_geojson?: AreaBoundaryGeoJson | null;
   boundary_bbox?: number[] | null;
   delivery_price?: string | number | null;
   eta_min_minutes?: number | null;

@@ -64,7 +64,11 @@ type ZoneDraft = {
   fixedDeliveryPrice: string;
   etaMinMinutes: string;
   etaMaxMinutes: string;
-  boundaryGeojson: import("../cities-api").PolygonGeoJson | null;
+  boundaryGeojson: import("../cities-api").AreaBoundaryGeoJson | null;
+  boundarySource: "osm" | "h3" | "manual";
+  sourceReference: string;
+  h3Resolution: number | null;
+  h3Cells: string[];
 };
 
 type ZoneDraftErrors = Partial<Record<keyof ZoneDraft, string>>;
@@ -147,6 +151,10 @@ function createZoneDraft(zone?: DeliveryZone): ZoneDraft {
     etaMinMinutes: zone?.etaMinMinutes == null ? "" : String(zone.etaMinMinutes),
     etaMaxMinutes: zone?.etaMaxMinutes == null ? "" : String(zone.etaMaxMinutes),
     boundaryGeojson: zone?.boundaryGeojson ?? null,
+    boundarySource: zone?.boundarySource ?? "manual",
+    sourceReference: zone?.sourceReference ?? "",
+    h3Resolution: zone?.h3Resolution ?? null,
+    h3Cells: zone?.h3Cells ?? [],
   };
 }
 
@@ -155,7 +163,6 @@ function validateZoneDraft(draft: ZoneDraft) {
   const fixedDeliveryPrice = parseNumber(draft.fixedDeliveryPrice);
   const etaMin = Number(draft.etaMinMinutes);
   const etaMax = Number(draft.etaMaxMinutes);
-  const boundaryPoints = draft.boundaryGeojson?.coordinates[0]?.length ?? 0;
 
   if (!draft.cityId) {
     errors.cityId = "مدينة التوصيل مطلوبة.";
@@ -174,8 +181,8 @@ function validateZoneDraft(draft: ZoneDraft) {
   if (!Number.isInteger(etaMax) || etaMax < etaMin) {
     errors.etaMaxMinutes = "أقصى مدة يجب أن تساوي أو تتجاوز أقل مدة.";
   }
-  if (boundaryPoints < 4) {
-    errors.boundaryGeojson = "ارسم حدود منطقة التوصيل بثلاث نقاط على الأقل.";
+  if (!draft.boundaryGeojson) {
+    errors.boundaryGeojson = "ابحث عن المنطقة وحدد حدود التوصيل.";
   }
 
   return errors;
@@ -193,6 +200,10 @@ function zoneFromDraft(draft: ZoneDraft, currentZone?: DeliveryZone): DeliveryZo
     etaMinMinutes: Number(draft.etaMinMinutes),
     etaMaxMinutes: Number(draft.etaMaxMinutes),
     boundaryGeojson: draft.boundaryGeojson,
+    boundarySource: draft.boundarySource,
+    sourceReference: draft.sourceReference,
+    h3Resolution: draft.h3Resolution,
+    h3Cells: draft.h3Cells,
     status: currentZone?.status ?? "active",
     createdAt: currentZone?.createdAt ?? today,
     updatedAt: today,
@@ -376,7 +387,22 @@ function ZoneFormDialog({
                 <Field label="مدينة التوصيل *">
                   <AppSelect
                     value={draft.cityId}
-                    onValueChange={(value) => updateDraft("cityId", value)}
+                    onValueChange={(value) => {
+                      setDraft((current) => ({
+                        ...current,
+                        cityId: value,
+                        boundaryGeojson: null,
+                        boundarySource: "manual",
+                        sourceReference: "",
+                        h3Resolution: null,
+                        h3Cells: [],
+                      }));
+                      setErrors((current) => ({
+                        ...current,
+                        cityId: undefined,
+                        boundaryGeojson: undefined,
+                      }));
+                    }}
                     options={cityOptions}
                     placeholder="اختر مدينة التوصيل"
                     ariaLabel="مدينة التوصيل"
@@ -442,19 +468,36 @@ function ZoneFormDialog({
                 حدود منطقة التوصيل
               </div>
               <div className="p-3">
-                {selectedCity?.boundary_geojson ? (
+                {selectedCity?.center_latitude &&
+                selectedCity.center_longitude &&
+                selectedCity.radius_km ? (
                   <DeliveryAreaMap
-                    latitude={Number(selectedCity.center_latitude ?? 30.0444)}
-                    longitude={Number(selectedCity.center_longitude ?? 31.2357)}
-                    cityBoundary={selectedCity.boundary_geojson}
+                    cityCenter={[
+                      Number(selectedCity.center_latitude),
+                      Number(selectedCity.center_longitude),
+                    ]}
+                    cityRadiusKm={Number(selectedCity.radius_km)}
                     areaBoundary={draft.boundaryGeojson}
-                    onAreaBoundaryChange={(value) =>
-                      updateDraft("boundaryGeojson", value)
-                    }
+                    boundarySource={draft.boundarySource}
+                    h3Cells={draft.h3Cells}
+                    onBoundaryChange={(value, meta) => {
+                      setDraft((current) => ({
+                        ...current,
+                        boundaryGeojson: value,
+                        boundarySource: meta.source,
+                        sourceReference: meta.sourceReference,
+                        h3Resolution: meta.h3Resolution,
+                        h3Cells: meta.h3Cells,
+                      }));
+                      setErrors((current) => ({
+                        ...current,
+                        boundaryGeojson: undefined,
+                      }));
+                    }}
                   />
                 ) : (
                   <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                    ارسم حدود المدينة أولًا من صفحة المدن قبل إضافة منطقة توصيل.
+                    حدّد مركز المدينة وقطرها أولًا من صفحة المدن.
                   </div>
                 )}
                 <FieldError>{errors.boundaryGeojson}</FieldError>

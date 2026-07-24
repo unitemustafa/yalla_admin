@@ -1,5 +1,5 @@
 import type { DeliveryZone } from "./delivery-pricing";
-import type { PolygonGeoJson } from "./cities-api";
+import type { AreaBoundaryGeoJson } from "./cities-api";
 import { apiResponseData, firstApiError } from "./users/api-users";
 
 type ApiFetch = (path: string, init?: RequestInit) => Promise<Response>;
@@ -13,7 +13,11 @@ type DeliveryAreaResponse = {
   delivery_price: string | number;
   eta_min_minutes?: number | null;
   eta_max_minutes?: number | null;
-  boundary_geojson?: PolygonGeoJson | null;
+  boundary_geojson?: AreaBoundaryGeoJson | null;
+  boundary_source?: "osm" | "h3" | "manual" | null;
+  source_reference?: string | null;
+  h3_resolution?: number | null;
+  h3_cells?: string[] | null;
   is_active?: boolean | null;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -48,6 +52,11 @@ function deliveryZoneFromResponse(area: DeliveryAreaResponse): DeliveryZone {
     etaMaxMinutes:
       typeof area.eta_max_minutes === "number" ? area.eta_max_minutes : null,
     boundaryGeojson: area.boundary_geojson ?? null,
+    boundarySource: area.boundary_source ?? "manual",
+    sourceReference: area.source_reference ?? "",
+    h3Resolution:
+      typeof area.h3_resolution === "number" ? area.h3_resolution : null,
+    h3Cells: Array.isArray(area.h3_cells) ? area.h3_cells : [],
     status: area.is_active === false ? "inactive" : "active",
     createdAt: area.createdAt ?? area.created_at ?? null,
     updatedAt: area.updatedAt ?? area.updated_at ?? null,
@@ -62,8 +71,65 @@ function payloadFromDeliveryZone(zone: DeliveryZone) {
     eta_min_minutes: zone.etaMinMinutes,
     eta_max_minutes: zone.etaMaxMinutes,
     boundary_geojson: zone.boundaryGeojson,
+    boundary_source: zone.boundarySource,
+    source_reference: zone.sourceReference,
+    h3_resolution: zone.h3Resolution,
+    h3_cells: zone.h3Cells,
     is_active: zone.status === "active",
   };
+}
+
+export type PlaceSearchResult = {
+  displayName: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  boundaryGeojson: AreaBoundaryGeoJson | null;
+  boundaryBbox: number[] | null;
+  sourceReference: string;
+};
+
+type PlaceSearchResponse = {
+  display_name?: unknown;
+  name?: unknown;
+  latitude?: unknown;
+  longitude?: unknown;
+  boundary_geojson?: AreaBoundaryGeoJson | null;
+  boundary_bbox?: unknown;
+  source_reference?: unknown;
+};
+
+export async function searchDeliveryPlaces(apiFetch: ApiFetch, query: string) {
+  const data = await checkedData(
+    await apiFetch(`locations/place-search/?q=${encodeURIComponent(query.trim())}`),
+    "تعذر البحث عن المكان الآن.",
+  );
+  if (!Array.isArray(data)) {
+    throw new Error("استجابة البحث عن المكان غير مكتملة.");
+  }
+  return data.flatMap((value): PlaceSearchResult[] => {
+    if (!value || typeof value !== "object") return [];
+    const item = value as PlaceSearchResponse;
+    const latitude = Number(item.latitude);
+    const longitude = Number(item.longitude);
+    const displayName =
+      typeof item.display_name === "string" ? item.display_name.trim() : "";
+    if (!displayName || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return [];
+    }
+    return [{
+      displayName,
+      name: typeof item.name === "string" ? item.name.trim() : "",
+      latitude,
+      longitude,
+      boundaryGeojson: item.boundary_geojson ?? null,
+      boundaryBbox: Array.isArray(item.boundary_bbox)
+        ? item.boundary_bbox.map(Number)
+        : null,
+      sourceReference:
+        typeof item.source_reference === "string" ? item.source_reference : "",
+    }];
+  });
 }
 
 async function checkedData(response: Response, fallback: string) {
