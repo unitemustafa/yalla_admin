@@ -479,6 +479,7 @@ function ZoneFormDialog({
                     cityRadiusKm={Number(selectedCity.radius_km)}
                     areaBoundary={draft.boundaryGeojson}
                     boundarySource={draft.boundarySource}
+                    sourceReference={draft.sourceReference}
                     h3Cells={draft.h3Cells}
                     onBoundaryChange={(value, meta) => {
                       setDraft((current) => ({

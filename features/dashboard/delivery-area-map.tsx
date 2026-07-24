@@ -40,6 +40,7 @@ type DeliveryAreaMapProps = {
   cityRadiusKm: number;
   areaBoundary: AreaBoundaryGeoJson | null;
   boundarySource: "osm" | "h3" | "manual";
+  sourceReference: string;
   h3Cells: string[];
   onBoundaryChange: (
     boundary: AreaBoundaryGeoJson | null,
@@ -111,6 +112,7 @@ export default function DeliveryAreaMap({
   cityRadiusKm,
   areaBoundary,
   boundarySource,
+  sourceReference,
   h3Cells,
   onBoundaryChange,
 }: DeliveryAreaMapProps) {
@@ -216,7 +218,7 @@ export default function DeliveryAreaMap({
     const next = new Set(selectedCells);
     if (next.has(cell)) next.delete(cell);
     else next.add(cell);
-    updateH3Boundary(Array.from(next), "");
+    updateH3Boundary(Array.from(next), sourceReference);
   }
 
   function clearBoundary() {
