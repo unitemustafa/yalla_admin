@@ -8,7 +8,7 @@ import {
   gridDisk,
   latLngToCell,
 } from "h3-js";
-import { circle } from "leaflet";
+import { latLng } from "leaflet";
 import {
   Circle,
   MapContainer,
@@ -97,12 +97,11 @@ function ViewSync({
       map.setView(focus, 14);
       return;
     }
-    map.fitBounds(
-      circle(cityCenter, {
-        radius: Math.max(cityRadiusKm, 0.2) * 1000,
-      }).getBounds(),
-      { padding: [24, 24], maxZoom: 13 },
-    );
+    const radiusMeters = Math.max(cityRadiusKm, 0.2) * 1000;
+    map.fitBounds(latLng(cityCenter).toBounds(radiusMeters * 2), {
+      padding: [24, 24],
+      maxZoom: 13,
+    });
   }, [cityCenter, cityRadiusKm, focus, map]);
   return null;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { circle } from "leaflet";
+import { latLng } from "leaflet";
 import {
   Circle,
   CircleMarker,
@@ -28,10 +28,10 @@ function CoverageSync({
   useEffect(() => {
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
     const radiusMeters = Math.max(radiusKm, 0.2) * 1000;
-    map.fitBounds(
-      circle([latitude, longitude], { radius: radiusMeters }).getBounds(),
-      { padding: [28, 28], maxZoom: 14 },
-    );
+    map.fitBounds(latLng(latitude, longitude).toBounds(radiusMeters * 2), {
+      padding: [28, 28],
+      maxZoom: 14,
+    });
   }, [latitude, longitude, map, radiusKm]);
   return null;
 }
