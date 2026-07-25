@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
+import { compressImageUpload } from "@/lib/image-upload";
 import { cn } from "@/lib/utils";
 import {
   AdminApiError,
@@ -732,10 +733,10 @@ export function ProductFormPage() {
     });
   }
 
-  function selectImages(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
+  async function selectImages(event: ChangeEvent<HTMLInputElement>) {
+    const selectedFiles = Array.from(event.target.files ?? []);
     event.target.value = "";
-    if (!files.length) return;
+    if (!selectedFiles.length) return;
 
     const localKeys = new Set(
       productImages
@@ -746,23 +747,31 @@ export function ProductFormPage() {
     const accepted: File[] = [];
     let validationMessage = "";
 
-    for (const file of files) {
-      if (!ALLOWED_PRODUCT_IMAGE_TYPES.has(file.type)) {
-        validationMessage ||= "نوع الملف غير مدعوم. استخدم JPG أو PNG أو WEBP.";
-        continue;
+    setImageActionBusy(true);
+    try {
+      for (const selectedFile of selectedFiles) {
+        if (!ALLOWED_PRODUCT_IMAGE_TYPES.has(selectedFile.type)) {
+          validationMessage ||= "نوع الملف غير مدعوم. استخدم JPG أو PNG أو WEBP.";
+          continue;
+        }
+        if (accepted.length >= availableSlots) {
+          validationMessage ||= "وصلت إلى الحد الأقصى للصور (10 صور).";
+          continue;
+        }
+
+        const file = await compressImageUpload(selectedFile);
+        if (file.size > MAX_PRODUCT_IMAGE_SIZE) {
+          validationMessage ||=
+            "تعذر ضغط الصورة إلى الحد المسموح (5 ميجابايت). اختر صورة أصغر.";
+          continue;
+        }
+        const key = `${file.name}:${file.size}:${file.type}:${file.lastModified}`;
+        if (localKeys.has(key)) continue;
+        localKeys.add(key);
+        accepted.push(file);
       }
-      if (file.size > MAX_PRODUCT_IMAGE_SIZE) {
-        validationMessage ||= "حجم الصورة أكبر من الحد المسموح (5 ميجابايت).";
-        continue;
-      }
-      const key = `${file.name}:${file.size}:${file.type}:${file.lastModified}`;
-      if (localKeys.has(key)) continue;
-      if (accepted.length >= availableSlots) {
-        validationMessage ||= "وصلت إلى الحد الأقصى للصور (10 صور).";
-        continue;
-      }
-      localKeys.add(key);
-      accepted.push(file);
+    } finally {
+      setImageActionBusy(false);
     }
 
     if (validationMessage) {
@@ -1854,7 +1863,7 @@ export function ProductFormPage() {
                 data-testid="product-images-input"
                 disabled={saving || imageActionBusy || productImages.length >= MAX_PRODUCT_IMAGES}
                 multiple
-                onChange={selectImages}
+                onChange={(event) => void selectImages(event)}
                 type="file"
               />
               <DashboardImage
@@ -1872,7 +1881,9 @@ export function ProductFormPage() {
               <span className="text-sm font-semibold">
                 {productImages.length ? "إضافة صور أخرى" : "اختر صور المنتج"}
               </span>
-              <span className="text-xs text-muted-foreground">JPG أو PNG أو WEBP، بحد أقصى 5 ميجابايت للصورة</span>
+              <span className="text-xs text-muted-foreground">
+                JPG أو PNG أو WEBP؛ الصور الكبيرة تُضغط تلقائيًا (5 ميجابايت بعد الضغط)
+              </span>
             </label>
             {isEditing && productImages.some((image) => image.kind === "local") ? (
               <Button

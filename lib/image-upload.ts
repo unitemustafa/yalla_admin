@@ -2,6 +2,7 @@ const PROCESS_IMAGE_OVER_BYTES = 256 * 1024;
 const MAX_IMAGE_DIMENSION = 1600;
 const OUTPUT_QUALITY = 0.82;
 const MAX_PARALLEL_COMPRESSIONS = 2;
+const optimizedImageFiles = new WeakSet<File>();
 
 const compressibleImageTypes = new Set([
   "image/jpeg",
@@ -57,6 +58,7 @@ async function loadDrawable(file: File): Promise<DrawableImage> {
 
 export async function compressImageUpload(file: File): Promise<File> {
   if (
+    optimizedImageFiles.has(file) ||
     file.size <= PROCESS_IMAGE_OVER_BYTES ||
     !compressibleImageTypes.has(file.type.toLowerCase())
   ) {
@@ -82,10 +84,12 @@ export async function compressImageUpload(file: File): Promise<File> {
     const blob = await canvasBlob(canvas, "image/webp", OUTPUT_QUALITY);
     if (!blob || blob.size >= file.size * 0.95) return file;
 
-    return new File([blob], webpFilename(file.name), {
+    const optimizedFile = new File([blob], webpFilename(file.name), {
       lastModified: file.lastModified,
       type: "image/webp",
     });
+    optimizedImageFiles.add(optimizedFile);
+    return optimizedFile;
   } catch {
     // Uploading the original is safer than blocking the form on browser codec
     // support or a malformed image that the backend can validate itself.
