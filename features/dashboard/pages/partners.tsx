@@ -283,10 +283,15 @@ export function PartnersPage() {
         },
       );
       const data = await apiResponseData(response);
-      if (!response.ok || !isRecord(data)) {
+      if (!response.ok) {
         throw new Error(firstApiError(data) ?? "تعذر تحديث حالة الطلب.");
       }
-      const updated = applicationFromApi(data);
+      if (!isRecord(data) && response.status !== 204) {
+        throw new Error("تم استلام رد غير مكتمل من الخادم. حاول مرة أخرى.");
+      }
+      const updated = isRecord(data)
+        ? applicationFromApi(data)
+        : { ...application, status: nextStatus };
       setApplications((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
       );
@@ -297,6 +302,9 @@ export function PartnersPage() {
         message: `تم تحديث طلب ${updated.businessName} إلى «${statusLabel(updated.status)}».`,
         tone: updated.status === "rejected" ? "danger" : "success",
       });
+      if (response.status === 204) {
+        void loadApplications({ quiet: true });
+      }
     } catch (reason) {
       showSnackbar({
         message:
