@@ -462,7 +462,11 @@ export function PartnersPage() {
                 {filteredApplications.map((application) => (
                   <tr
                     key={application.id}
-                    className="transition-colors hover:bg-muted/25"
+                    className={
+                      application.status === "rejected"
+                        ? "bg-red-500/5 outline outline-1 -outline-offset-1 outline-red-500/70 transition-colors hover:bg-red-500/10"
+                        : "transition-colors hover:bg-muted/25"
+                    }
                   >
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
