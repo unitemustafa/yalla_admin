@@ -165,16 +165,6 @@ function decisionValue(status: PartnerStatus) {
   return status === "approved" || status === "rejected" ? status : undefined;
 }
 
-function decisionClassName(status: PartnerStatus) {
-  if (status === "rejected") {
-    return "border-red-500/60 bg-red-500/15 text-red-700 hover:border-red-500 hover:bg-red-500/20 hover:text-red-800 dark:text-red-300";
-  }
-  if (status === "approved") {
-    return "border-emerald-500/60 bg-emerald-500/15 text-emerald-700 hover:border-emerald-500 hover:bg-emerald-500/20 hover:text-emerald-800 dark:text-emerald-300";
-  }
-  return "";
-}
-
 function businessTypeLabel(value: string) {
   const labels: Record<string, string> = {
     shop: "متجر",
@@ -523,14 +513,14 @@ export function PartnersPage() {
                           }
                           options={decisionOptions}
                           ariaLabel={`حالة طلب ${application.businessName}`}
-                          className={`h-9 w-40 ${decisionClassName(application.status)}`}
+                          className="h-9 w-40"
                         />
                       )}
                     </td>
                     <td className="px-5 py-4 text-center">
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="outline"
                         size="icon"
                         aria-label={`عرض طلب ${application.businessName}`}
                         onClick={() => setSelectedApplication(application)}
@@ -718,7 +708,7 @@ function PartnerDetailsDialog({
               onValueChange={(value) => onStatusChange(value as PartnerStatus)}
               options={decisionOptions}
               ariaLabel="تحديث حالة طلب الشريك"
-              className={`h-10 sm:w-48 ${decisionClassName(application.status)}`}
+              className="h-10 sm:w-48"
             />
           )}
         </div>
