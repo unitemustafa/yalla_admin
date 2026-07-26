@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   CheckCircle,
@@ -14,7 +14,9 @@ import {
   RotateCcw,
   Search,
   SlidersHorizontal,
+  Store,
   Trash2,
+  X,
   XCircle,
 } from "lucide-react";
 
@@ -26,18 +28,20 @@ import {
   addonRowFromApi,
   apiList,
   deleteProduct,
+  fetchAdminRows,
   getProduct,
   primaryProductImageUrl,
   listProducts,
   productRowFromApi,
   readApiData,
+  shopRowFromApi,
   toggleProductAvailability,
   type BackendRecord,
   type NormalizedProduct,
+  type ShopRow,
 } from "../admin-api";
 import { DashboardImage } from "../dashboard-image";
 import {
-  AppSelect,
   Button,
   Card,
   CurrencyText,
@@ -46,22 +50,32 @@ import {
   Pagination,
   Switch,
 } from "../primitives";
-import { deliveryZones } from "../reference-data";
 import { useSnackbar } from "../snackbar";
 import { cn } from "@/lib/utils";
 
-type ItemFilters = {
-  search: string;
-  shop: string;
-  region: string;
+type ItemScopeFilter = "all" | "general" | "cities";
+
+type ItemAdvancedFilters = {
+  scope: ItemScopeFilter;
+  cityIds: string[];
+  shopIds: string[];
   status: "all" | "active" | "inactive";
+};
+
+type ItemFilters = ItemAdvancedFilters & {
+  search: string;
+};
+
+const defaultAdvancedFilters: ItemAdvancedFilters = {
+  scope: "all",
+  cityIds: [],
+  shopIds: [],
+  status: "all",
 };
 
 const defaultFilters: ItemFilters = {
   search: "",
-  shop: "all",
-  region: "all",
-  status: "all",
+  ...defaultAdvancedFilters,
 };
 
 const itemsPageSize = 10;
@@ -104,16 +118,6 @@ const itemSortCollator = new Intl.Collator("ar", {
   sensitivity: "base",
 });
 
-function uniqueValues(rows: ItemRow[], key: "shopName") {
-  return Array.from(
-    new Set(
-      rows
-        .map((row) => (row[key] ?? "").trim())
-        .filter(Boolean),
-    ),
-  );
-}
-
 function compareText(firstValue: string, secondValue: string) {
   return itemSortCollator.compare(firstValue.trim(), secondValue.trim());
 }
@@ -132,18 +136,31 @@ function formatItemPrice(price: string) {
   return price.replace(/\s*\u062c\u0646\u064a\u0647/g, " EGP");
 }
 
-function normalizeItemRow(row: ItemRow): ItemRow {
+function normalizeItemRow(row: ItemRow, market?: ShopRow): ItemRow {
   const priceLabel = formatItemPrice(row.displayPriceLabel ?? row.price);
+  const isCityMarket = market?.scope === "service_city";
+  const marketCityNames = market?.serviceCityNames ?? [];
 
   return {
     ...row,
     code: row.code ?? row.id,
-    shopName: row.shopName ?? "",
+    shopName: market?.name ?? row.shopName ?? "",
     price: priceLabel,
     displayPriceLabel: priceLabel,
-    visibilityMode: row.visibilityMode ?? "general",
-    regionSlugs: row.regionSlugs ?? [],
-    regionNames: row.regionNames ?? [],
+    visibilityMode: market
+      ? isCityMarket
+        ? "regions"
+        : "general"
+      : row.visibilityMode ?? "general",
+    regionSlugs: market?.serviceCityIds ?? row.regionSlugs ?? [],
+    regionNames: marketCityNames.length
+      ? marketCityNames
+      : row.regionNames ?? [],
+    scopeLabel: market
+      ? isCityMarket
+        ? marketCityNames.join("، ") || "مدينة خدمة"
+        : "عام"
+      : row.scopeLabel,
   };
 }
 
@@ -174,12 +191,6 @@ function splitItemPrice(price: string) {
   return { amount, currency };
 }
 
-function matchesRegion(row: ItemRow, selectedRegion: string) {
-  if (selectedRegion === "all") return true;
-  if (selectedRegion === "general") return row.visibilityMode !== "regions";
-  return row.visibilityMode !== "regions" || (row.regionSlugs ?? []).includes(selectedRegion);
-}
-
 function matchesFilters(row: ItemRow, filters: ItemFilters) {
   const search = filters.search.trim().toLowerCase();
   const matchesSearch =
@@ -197,20 +208,19 @@ function matchesFilters(row: ItemRow, filters: ItemFilters) {
       .toLowerCase()
       .includes(search);
   const matchesShop =
-    filters.shop === "all" ||
-    (filters.shop === "none"
-      ? !row.shopName?.trim()
-      : row.shopName === filters.shop);
+    filters.shopIds.length === 0 ||
+    (row.marketId ? filters.shopIds.includes(row.marketId) : false);
   const matchesStatus =
     filters.status === "all" ||
     (filters.status === "active" ? row.active : !row.active);
+  const matchesScope =
+    filters.scope === "all" ||
+    (filters.scope === "general"
+      ? row.visibilityMode !== "regions"
+      : row.visibilityMode === "regions" &&
+        filters.cityIds.some((cityId) => (row.regionSlugs ?? []).includes(cityId)));
 
-  return (
-    matchesSearch &&
-    matchesShop &&
-    matchesStatus &&
-    matchesRegion(row, filters.region)
-  );
+  return matchesSearch && matchesShop && matchesStatus && matchesScope;
 }
 
 function MetricCards({ rows }: { rows: ItemRow[] }) {
@@ -276,101 +286,464 @@ function MetricCards({ rows }: { rows: ItemRow[] }) {
 
 function ItemsFilters({
   filters,
-  hasFilters,
-  onChange,
-  onReset,
-  shops,
+  markets,
+  onSearchChange,
+  onApply,
+  onClear,
 }: {
   filters: ItemFilters;
-  hasFilters: boolean;
-  onChange: (filters: ItemFilters) => void;
-  onReset: () => void;
-  shops: string[];
+  markets: ShopRow[];
+  onSearchChange: (search: string) => void;
+  onApply: (filters: ItemAdvancedFilters) => void;
+  onClear: () => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [draftFilters, setDraftFilters] = useState<ItemAdvancedFilters>(() => ({
+    scope: filters.scope,
+    cityIds: [...filters.cityIds],
+    shopIds: [...filters.shopIds],
+    status: filters.status,
+  }));
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const cityOptions = useMemo(() => {
+    const cities = new Map<string, string>();
+
+    for (const market of markets) {
+      if (market.scope !== "service_city") continue;
+      const cityIds = market.serviceCityIds ?? [];
+      const cityNames = market.serviceCityNames ?? [];
+      cityIds.forEach((cityId, index) => {
+        cities.set(cityId, cityNames[index] || `مدينة رقم ${cityId}`);
+      });
+    }
+
+    return Array.from(cities, ([id, name]) => ({ id, name })).sort((first, second) =>
+      compareText(first.name, second.name),
+    );
+  }, [markets]);
+
+  const eligibleMarkets = useMemo(() => {
+    if (draftFilters.scope === "general") {
+      return markets.filter((market) => market.scope !== "service_city");
+    }
+    if (draftFilters.scope === "cities" && draftFilters.cityIds.length > 0) {
+      return markets.filter(
+        (market) =>
+          market.scope === "service_city" &&
+          (market.serviceCityIds ?? []).some((cityId) =>
+            draftFilters.cityIds.includes(cityId),
+          ),
+      );
+    }
+    return [];
+  }, [draftFilters.cityIds, draftFilters.scope, markets]);
+
+  const activeFilterCount =
+    (filters.scope !== "all" ? 1 : 0) +
+    filters.cityIds.length +
+    filters.shopIds.length +
+    (filters.status !== "all" ? 1 : 0);
+  const hasAdvancedFilters = activeFilterCount > 0;
+  const hasDraftAdvancedFilters =
+    draftFilters.scope !== "all" ||
+    draftFilters.cityIds.length > 0 ||
+    draftFilters.shopIds.length > 0 ||
+    draftFilters.status !== "all";
+  const citySelectionRequired =
+    draftFilters.scope === "cities" && draftFilters.cityIds.length === 0;
+
+  function closePanel() {
+    setOpen(false);
+    window.requestAnimationFrame(() => triggerRef.current?.querySelector("button")?.focus());
+  }
+
+  function openPanel() {
+    setDraftFilters({
+      scope: filters.scope,
+      cityIds: [...filters.cityIds],
+      shopIds: [...filters.shopIds],
+      status: filters.status,
+    });
+    setOpen(true);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+
+    const frame = window.requestAnimationFrame(() => panelRef.current?.focus());
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (panelRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closePanel();
+        return;
+      }
+
+      if (event.key !== "Tab" || !panelRef.current) return;
+      const focusableElements = Array.from(
+        panelRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements.at(-1);
+      if (!firstElement || !lastElement) return;
+
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  function changeScope(scope: Exclude<ItemScopeFilter, "all">) {
+    setDraftFilters((current) => ({
+      ...current,
+      scope: current.scope === scope ? "all" : scope,
+      cityIds: [],
+      shopIds: [],
+    }));
+  }
+
+  function toggleCity(cityId: string) {
+    setDraftFilters((current) => {
+      const cityIds = current.cityIds.includes(cityId)
+        ? current.cityIds.filter((id) => id !== cityId)
+        : [...current.cityIds, cityId];
+      const allowedMarketIds = new Set(
+        markets
+          .filter(
+            (market) =>
+              market.scope === "service_city" &&
+              (market.serviceCityIds ?? []).some((id) => cityIds.includes(id)),
+          )
+          .map((market) => market.id),
+      );
+
+      return {
+        ...current,
+        cityIds,
+        shopIds: current.shopIds.filter((shopId) => allowedMarketIds.has(shopId)),
+      };
+    });
+  }
+
+  function toggleShop(shopId: string) {
+    setDraftFilters((current) => ({
+      ...current,
+      shopIds: current.shopIds.includes(shopId)
+        ? current.shopIds.filter((id) => id !== shopId)
+        : [...current.shopIds, shopId],
+    }));
+  }
+
   return (
     <div className="rounded-lg border bg-card p-4 shadow-sm">
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 text-sm font-black">
-          <span className="flex size-8 items-center justify-center rounded-md bg-primary/10 text-primary">
-            <SlidersHorizontal className="size-4" />
-          </span>
-          بحث وتصفية
-        </div>
-        <Button
-          className="h-8 self-start px-3 text-xs sm:self-auto"
-          disabled={!hasFilters}
-          onClick={onReset}
-          type="button"
-          variant="outline"
-        >
-          <RotateCcw className="size-3.5" />
-          إعادة ضبط
-        </Button>
+      <div className="mb-3 flex items-center gap-2 text-sm font-black">
+        <span className="flex size-8 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <SlidersHorizontal className="size-4" />
+        </span>
+        بحث وتصفية
       </div>
-      <div className="grid gap-3 md:grid-cols-2 md:items-end xl:grid-cols-[minmax(280px,1fr)_170px_190px_160px]">
-        <label className="grid gap-2 text-sm font-medium">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <label className="grid min-w-0 flex-1 gap-2 text-sm font-medium">
           بحث
           <span className="relative">
             <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={filters.search}
-              onChange={(event) => onChange({ ...filters, search: event.target.value })}
+              onChange={(event) => onSearchChange(event.target.value)}
               placeholder="ابحث بالاسم أو الوصف..."
-              className="h-10 w-full rounded-md border border-border bg-input px-3 ps-9 text-sm shadow-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+              className="h-10 w-full rounded-md border border-border bg-input px-10 text-sm shadow-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
             />
+            {filters.search ? (
+              <button
+                type="button"
+                onClick={() => onSearchChange("")}
+                className="absolute end-2 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                aria-label="مسح البحث"
+              >
+                <X className="size-4" />
+              </button>
+            ) : null}
           </span>
         </label>
-        <label className="grid gap-2 text-sm font-medium">
-          المحل
-          <AppSelect
-            value={filters.shop}
-            onValueChange={(shop) => onChange({ ...filters, shop })}
-            options={[
-              { value: "all", label: "الكل" },
-              { value: "none", label: "بدون محل" },
-              ...shops.map((shop) => ({
-                value: shop,
-                label: shop,
-              })),
-            ]}
-            ariaLabel="المحل"
-            className="h-10 rounded-md border border-border bg-background px-3 text-sm shadow-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
-          />
-        </label>
-        <label className="grid gap-2 text-sm font-medium">
-          المنطقة
-          <AppSelect
-            value={filters.region}
-            onValueChange={(region) => onChange({ ...filters, region })}
-            options={[
-              { value: "all", label: "كل المناطق" },
-              { value: "general", label: "عام" },
-              ...deliveryZones.map((region) => ({
-                value: region.id,
-                label: region.name,
-              })),
-            ]}
-            ariaLabel="المنطقة"
-            icon={<MapPin className="size-4" />}
-            className="h-10 rounded-md border border-border bg-background px-3 text-sm shadow-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
-          />
-        </label>
-        <label className="grid gap-2 text-sm font-medium">
-          الحالة
-          <AppSelect
-            value={filters.status}
-            onValueChange={(status) =>
-              onChange({ ...filters, status: status as ItemFilters["status"] })
-            }
-            options={[
-              { value: "all", label: "الكل" },
-              { value: "active", label: "نشط" },
-              { value: "inactive", label: "غير نشط" },
-            ]}
-            ariaLabel="الحالة"
-            className="h-10 rounded-md border border-border bg-background px-3 text-sm shadow-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
-          />
-        </label>
+        <div ref={triggerRef} className="relative sm:self-end">
+          <Button
+            type="button"
+            variant={hasAdvancedFilters ? "secondary" : "outline"}
+            onClick={() => (open ? closePanel() : openPanel())}
+            aria-expanded={open}
+            aria-haspopup="dialog"
+            aria-controls="items-filter-panel"
+            className="h-10 w-full min-w-32 px-4 sm:w-auto"
+          >
+            <SlidersHorizontal className="size-4" />
+            تصفية
+            {activeFilterCount > 0 ? (
+              <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[11px] font-black leading-none text-primary-foreground">
+                {activeFilterCount}
+              </span>
+            ) : null}
+          </Button>
+
+          {open ? (
+            <>
+              <button
+                type="button"
+                aria-label="إغلاق لوحة التصفية"
+                onClick={closePanel}
+                className="fixed inset-0 z-40 bg-foreground/25 backdrop-blur-[1px] sm:hidden"
+              />
+              <div
+                ref={panelRef}
+                id="items-filter-panel"
+                role="dialog"
+                aria-labelledby="items-filter-title"
+                tabIndex={-1}
+                className="fixed inset-x-3 bottom-3 z-50 flex max-h-[calc(100dvh-1.5rem)] flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-2xl outline-none sm:absolute sm:inset-x-auto sm:bottom-auto sm:end-0 sm:top-[calc(100%+0.5rem)] sm:w-[440px]"
+              >
+                <div className="flex items-center justify-between gap-3 border-b bg-muted/20 px-4 py-3">
+                  <div>
+                    <h2 id="items-filter-title" className="font-black">
+                      تصفية المنتجات
+                    </h2>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      اختر النطاق ثم المدن والمحلات المناسبة.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closePanel}
+                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border bg-background text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                    aria-label="إغلاق"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+
+                <div className="min-h-0 space-y-5 overflow-y-auto p-4">
+                  <fieldset>
+                    <legend className="mb-2 text-sm font-bold">نطاق الظهور</legend>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        ["general", "عام", Store],
+                        ["cities", "مدن", MapPin],
+                      ] as const).map(([value, label, Icon]) => {
+                        const selected = draftFilters.scope === value;
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() => changeScope(value)}
+                            className={cn(
+                              "flex h-12 items-center justify-center gap-2 rounded-md border text-sm font-bold transition",
+                              selected
+                                ? "border-primary bg-primary/10 text-primary shadow-sm"
+                                : "bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                            )}
+                          >
+                            <Icon className="size-4" />
+                            {label}
+                            {selected ? <Check className="size-4" /> : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      عدم اختيار نطاق يعني عرض كل المنتجات.
+                    </p>
+                  </fieldset>
+
+                  {draftFilters.scope === "cities" ? (
+                    <fieldset>
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <legend className="text-sm font-bold">المدن</legend>
+                        <span className="text-xs text-muted-foreground">
+                          {draftFilters.cityIds.length} محددة
+                        </span>
+                      </div>
+                      {cityOptions.length ? (
+                        <div className="grid max-h-40 gap-2 overflow-y-auto rounded-md border bg-background p-2 sm:grid-cols-2">
+                          {cityOptions.map((city) => {
+                            const selected = draftFilters.cityIds.includes(city.id);
+                            return (
+                              <label
+                                key={city.id}
+                                className={cn(
+                                  "flex min-h-10 cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold transition",
+                                  selected
+                                    ? "border-primary/50 bg-primary/10 text-foreground"
+                                    : "border-transparent hover:bg-accent",
+                                )}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selected}
+                                  onChange={() => toggleCity(city.id)}
+                                  className="size-4 accent-primary"
+                                />
+                                <span className="truncate">{city.name}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="rounded-md border border-dashed bg-muted/20 px-3 py-4 text-center text-xs text-muted-foreground">
+                          لا توجد مدن مرتبطة بالمحلات حاليًا.
+                        </div>
+                      )}
+                      {citySelectionRequired ? (
+                        <p className="mt-2 text-xs font-semibold text-amber-600 dark:text-amber-300">
+                          اختر مدينة واحدة على الأقل لعرض النتائج.
+                        </p>
+                      ) : null}
+                    </fieldset>
+                  ) : null}
+
+                  {draftFilters.scope !== "all" ? (
+                    <fieldset>
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <legend className="text-sm font-bold">المحلات</legend>
+                        <span className="text-xs text-muted-foreground">
+                          {draftFilters.shopIds.length
+                            ? `${draftFilters.shopIds.length} محددة`
+                            : "الكل"}
+                        </span>
+                      </div>
+                      {eligibleMarkets.length ? (
+                        <div className="grid max-h-44 gap-2 overflow-y-auto rounded-md border bg-background p-2 sm:grid-cols-2">
+                          {eligibleMarkets.map((market) => {
+                            const selected = draftFilters.shopIds.includes(market.id);
+                            return (
+                              <label
+                                key={market.id}
+                                className={cn(
+                                  "flex min-h-10 cursor-pointer items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm font-semibold transition",
+                                  selected
+                                    ? "border-primary/50 bg-primary/10 text-foreground"
+                                    : "border-transparent hover:bg-accent",
+                                )}
+                              >
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={selected}
+                                    onChange={() => toggleShop(market.id)}
+                                    className="size-4 shrink-0 accent-primary"
+                                  />
+                                  <span className="truncate">{market.name}</span>
+                                </span>
+                                {!market.active ? (
+                                  <span className="shrink-0 text-[10px] text-destructive">
+                                    معطل
+                                  </span>
+                                ) : null}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="rounded-md border border-dashed bg-muted/20 px-3 py-4 text-center text-xs text-muted-foreground">
+                          {draftFilters.scope === "cities" && draftFilters.cityIds.length === 0
+                            ? "اختر المدن أولًا لعرض المحلات."
+                            : "لا توجد محلات مطابقة لهذا الاختيار."}
+                        </div>
+                      )}
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        ترك المحلات بدون تحديد يعني كل المحلات المطابقة.
+                      </p>
+                    </fieldset>
+                  ) : null}
+
+                  <fieldset>
+                    <legend className="mb-2 text-sm font-bold">حالة المنتج</legend>
+                    <div className="grid grid-cols-3 gap-2">
+                      {([
+                        ["all", "الكل"],
+                        ["active", "نشط"],
+                        ["inactive", "غير نشط"],
+                      ] as const).map(([value, label]) => {
+                        const selected = draftFilters.status === value;
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() =>
+                              setDraftFilters((current) => ({
+                                ...current,
+                                status: value,
+                              }))
+                            }
+                            className={cn(
+                              "h-10 rounded-md border text-xs font-bold transition",
+                              selected
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                            )}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 border-t bg-muted/10 p-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10"
+                    disabled={!hasAdvancedFilters && !hasDraftAdvancedFilters}
+                    onClick={() => {
+                      setDraftFilters(defaultAdvancedFilters);
+                      onClear();
+                      closePanel();
+                    }}
+                  >
+                    <RotateCcw className="size-4" />
+                    مسح الفلاتر
+                  </Button>
+                  <Button
+                    type="button"
+                    className="h-10"
+                    disabled={citySelectionRequired}
+                    onClick={() => {
+                      onApply(draftFilters);
+                      closePanel();
+                    }}
+                  >
+                    عرض النتائج
+                  </Button>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -806,6 +1179,7 @@ export function ItemsPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const [rows, setRows] = useState<ItemRow[]>([]);
+  const [markets, setMarkets] = useState<ShopRow[]>([]);
   const [additionRows, setAdditionRows] = useState(() => new Map<string, string>());
   const [filters, setFilters] = useState<ItemFilters>(defaultFilters);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -828,15 +1202,6 @@ export function ItemsPage() {
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStartIndex = (safeCurrentPage - 1) * itemsPageSize;
   const pagedRows = visibleRows.slice(pageStartIndex, pageStartIndex + itemsPageSize);
-  const shops = useMemo(
-    () => uniqueValues(rows, "shopName").sort(compareText),
-    [rows],
-  );
-  const hasFilters =
-    filters.search.trim().length > 0 ||
-    filters.shop !== defaultFilters.shop ||
-    filters.region !== defaultFilters.region ||
-    filters.status !== defaultFilters.status;
   const deleteRow = rows.find((row) => row.id === deleteId);
   const detailDialogOpen = detailLoading || Boolean(detailError) || Boolean(detailProduct);
   const showEmptyState = !loading && !error && rows.length === 0;
@@ -849,14 +1214,27 @@ export function ItemsPage() {
       setError("");
 
       try {
-        const [products, additionsResponse] = await Promise.all([
+        const [products, additionsResponse, loadedMarkets] = await Promise.all([
           listProducts(apiFetch),
           apiFetch(adminApiPaths.productAdditions),
+          fetchAdminRows(apiFetch, adminApiPaths.markets, shopRowFromApi),
         ]);
         const additionsData = await readApiData(additionsResponse);
+        const marketsById = new Map(
+          loadedMarkets.map((market) => [market.id, market]),
+        );
 
         if (!active) return;
-        setRows(products.map((product, index) => normalizeItemRow(productRowFromApi(product, index))));
+        setMarkets(loadedMarkets);
+        setRows(
+          products.map((product, index) => {
+            const row = productRowFromApi(product, index);
+            return normalizeItemRow(
+              row,
+              row.marketId ? marketsById.get(row.marketId) : undefined,
+            );
+          }),
+        );
         if (additionsResponse.ok) {
           setAdditionRows(
             new Map(
@@ -1049,14 +1427,26 @@ export function ItemsPage() {
             ) : null}
             <ItemsFilters
               filters={filters}
-              hasFilters={hasFilters}
-              shops={shops}
-              onChange={(nextFilters) => {
-                setFilters(nextFilters);
+              markets={markets}
+              onSearchChange={(search) => {
+                setFilters((current) => ({ ...current, search }));
                 setCurrentPage(1);
               }}
-              onReset={() => {
-                setFilters(defaultFilters);
+              onApply={(advancedFilters) => {
+                setFilters((current) => ({
+                  search: current.search,
+                  scope: advancedFilters.scope,
+                  cityIds: [...advancedFilters.cityIds],
+                  shopIds: [...advancedFilters.shopIds],
+                  status: advancedFilters.status,
+                }));
+                setCurrentPage(1);
+              }}
+              onClear={() => {
+                setFilters((current) => ({
+                  search: current.search,
+                  ...defaultAdvancedFilters,
+                }));
                 setCurrentPage(1);
               }}
             />
