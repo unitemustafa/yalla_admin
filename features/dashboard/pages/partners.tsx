@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BadgeCheck,
   Building2,
-  CircleAlert,
   Clock3,
   Eye,
   Handshake,
@@ -61,13 +60,17 @@ type ApiRecord = Record<string, unknown>;
 const statusOptions = [
   { value: "pending", label: "قيد الانتظار" },
   { value: "in_review", label: "قيد المراجعة" },
-  { value: "approved", label: "مقبول" },
+  { value: "approved", label: "موافق" },
   { value: "rejected", label: "مرفوض" },
 ];
 
+const decisionOptions = statusOptions.filter(
+  (option) => option.value === "approved" || option.value === "rejected",
+);
+
 const filterOptions = [
   { value: "all", label: "كل الحالات" },
-  ...statusOptions,
+  ...statusOptions.filter((option) => option.value !== "in_review"),
 ];
 
 function isRecord(value: unknown): value is ApiRecord {
@@ -156,6 +159,20 @@ function statusTone(
   if (status === "rejected") return "red";
   if (status === "pending") return "blue";
   return "secondary";
+}
+
+function decisionValue(status: PartnerStatus) {
+  return status === "approved" || status === "rejected" ? status : undefined;
+}
+
+function decisionClassName(status: PartnerStatus) {
+  if (status === "rejected") {
+    return "border-red-500/60 bg-red-500/15 text-red-700 hover:border-red-500 hover:bg-red-500/20 hover:text-red-800 dark:text-red-300";
+  }
+  if (status === "approved") {
+    return "border-emerald-500/60 bg-emerald-500/15 text-emerald-700 hover:border-emerald-500 hover:bg-emerald-500/20 hover:text-emerald-800 dark:text-emerald-300";
+  }
+  return "";
 }
 
 function businessTypeLabel(value: string) {
@@ -259,9 +276,9 @@ export function PartnersPage() {
     () => ({
       total: applications.length,
       pending: applications.filter((item) => item.status === "pending").length,
-      inReview: applications.filter((item) => item.status === "in_review")
-        .length,
       approved: applications.filter((item) => item.status === "approved")
+        .length,
+      rejected: applications.filter((item) => item.status === "rejected")
         .length,
     }),
     [applications],
@@ -357,16 +374,16 @@ export function PartnersPage() {
           tone="blue"
         />
         <SummaryCard
-          label="قيد المراجعة"
-          value={counts.inReview}
-          icon={CircleAlert}
-          tone="amber"
-        />
-        <SummaryCard
           label="طلبات مقبولة"
           value={counts.approved}
           icon={BadgeCheck}
           tone="green"
+        />
+        <SummaryCard
+          label="طلبات مرفوضة"
+          value={counts.rejected}
+          icon={XCircle}
+          tone="red"
         />
       </div>
 
@@ -492,16 +509,17 @@ export function PartnersPage() {
                         <Loader2 className="size-5 animate-spin text-primary" />
                       ) : (
                         <AppSelect
-                          value={application.status}
+                          value={decisionValue(application.status)}
+                          placeholder={statusLabel(application.status)}
                           onValueChange={(value) =>
                             void updateStatus(
                               application,
                               value as PartnerStatus,
                             )
                           }
-                          options={statusOptions}
+                          options={decisionOptions}
                           ariaLabel={`حالة طلب ${application.businessName}`}
-                          className="h-9 w-40"
+                          className={`h-9 w-40 ${decisionClassName(application.status)}`}
                         />
                       )}
                     </td>
@@ -547,13 +565,14 @@ function SummaryCard({
   label: string;
   value: number;
   icon: typeof Handshake;
-  tone: "primary" | "blue" | "amber" | "green";
+  tone: "primary" | "blue" | "amber" | "green" | "red";
 }) {
   const tones = {
     primary: "bg-primary/10 text-primary",
     blue: "bg-blue-500/10 text-blue-600 dark:text-blue-300",
     amber: "bg-amber-500/10 text-amber-600 dark:text-amber-300",
     green: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
+    red: "bg-red-500/10 text-red-600 dark:text-red-300",
   };
   return (
     <Card className="flex items-center gap-4 p-4 shadow-none">
@@ -690,11 +709,12 @@ function PartnerDetailsDialog({
             <Loader2 className="size-6 animate-spin text-primary" />
           ) : (
             <AppSelect
-              value={application.status}
+              value={decisionValue(application.status)}
+              placeholder={statusLabel(application.status)}
               onValueChange={(value) => onStatusChange(value as PartnerStatus)}
-              options={statusOptions}
+              options={decisionOptions}
               ariaLabel="تحديث حالة طلب الشريك"
-              className="h-10 sm:w-48"
+              className={`h-10 sm:w-48 ${decisionClassName(application.status)}`}
             />
           )}
         </div>
