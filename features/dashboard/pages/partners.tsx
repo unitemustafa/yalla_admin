@@ -284,7 +284,10 @@ export function PartnersPage() {
       );
       const data = await apiResponseData(response);
       if (!response.ok) {
-        throw new Error(firstApiError(data) ?? "تعذر تحديث حالة الطلب.");
+        throw new Error(
+          firstApiError(data) ??
+            `تعذر تحديث حالة الطلب (رمز الخادم ${response.status}).`,
+        );
       }
       if (!isRecord(data) && response.status !== 204) {
         throw new Error("تم استلام رد غير مكتمل من الخادم. حاول مرة أخرى.");
