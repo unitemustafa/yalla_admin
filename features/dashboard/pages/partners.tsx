@@ -283,6 +283,10 @@ export function PartnersPage() {
         },
       );
       const data = await apiResponseData(response);
+      console.info("partner-status-response", {
+        httpStatus: response.status,
+        returnedStatus: isRecord(data) ? textValue(data.status) : null,
+      });
       if (!response.ok) {
         throw new Error(
           firstApiError(data) ??
