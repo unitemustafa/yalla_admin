@@ -1014,7 +1014,7 @@ function ProductDetailDialog({
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     <DetailRow label="السوق" value={nestedDetailName(product.market)} />
                     <DetailRow label="فرع السوق" value={detailText(product.market?.branch)} />
-                    <DetailRow label="الفئة" value={nestedDetailName(product.category)} />
+                    <DetailRow label="الفئة الداخلية" value={nestedDetailName(product.subcategory)} />
                     <DetailRow label="الحالة" value={product.isAvailable ? "متاح" : "غير متاح"} />
                     <DetailRow label="الخصم" value={`${detailText(product.discount, "0.00")}%`} />
                     <DetailRow label="رقم المنتج" value={`#${product.id}`} />
@@ -1141,7 +1141,7 @@ function ItemsMobileCards({
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
                 <div className="rounded-md bg-muted/40 p-2">
-                  <div className="text-muted-foreground">الفئة</div>
+                  <div className="text-muted-foreground">الفئة الداخلية</div>
                   <div className="mt-1 truncate font-medium">{row.category}</div>
                 </div>
                 <div className="rounded-md bg-muted/40 p-2">
