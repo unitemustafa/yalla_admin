@@ -51,6 +51,10 @@ import { DashboardImage } from "../dashboard-image";
 import { imageOrPlaceholder } from "../placeholders";
 import { AppSelect, Button, CurrencyText, Input, Switch } from "../primitives";
 import { useSnackbar } from "../snackbar";
+import {
+  normalizeStoreSubcategory,
+  type StoreSubcategory,
+} from "../store-subcategories-api";
 
 type ProductTheme = "clothing" | "consumer" | "other";
 
@@ -61,6 +65,7 @@ type CatalogMarket = {
   status: string;
   scope: string;
   serviceCities: string[];
+  subcategories: StoreSubcategory[];
 };
 
 type ProductAdditionChoice = {
@@ -304,6 +309,12 @@ function normalizeMarket(record: BackendRecord): CatalogMarket {
         .map((city) => textValue(asRecord(city)?.name))
         .filter(Boolean)
     : [];
+  const subcategories = Array.isArray(record.subcategories)
+    ? record.subcategories
+        .map(normalizeStoreSubcategory)
+        .filter((item): item is StoreSubcategory => item !== null)
+        .sort((first, second) => (first.sort_order ?? 0) - (second.sort_order ?? 0))
+    : [];
 
   return {
     id: textValue(record.id),
@@ -312,6 +323,7 @@ function normalizeMarket(record: BackendRecord): CatalogMarket {
     status: textValue(record.status, "active"),
     scope: textValue(record.scope, "service_city"),
     serviceCities,
+    subcategories,
   };
 }
 
@@ -383,6 +395,7 @@ function productMarketChoice(product: NormalizedProduct): CatalogMarket | null {
     status: textValue(product.market?.status, "inactive"),
     scope: textValue(product.market?.scope, "service_city"),
     serviceCities: [],
+    subcategories: [],
   };
 }
 
@@ -474,6 +487,7 @@ export function ProductFormPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [selectedMarketId, setSelectedMarketId] = useState("");
+  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState("");
   const [selectedAdditionIds, setSelectedAdditionIds] = useState<number[]>([]);
   const [theme, setTheme] = useState<ProductTheme>("other");
   const [attributes, setAttributes] = useState<AttributeDraft[]>(() => cloneTemplate("other"));
@@ -492,6 +506,25 @@ export function ProductFormPage() {
   useLockedPageScroll(marketModalOpen);
 
   const selectedMarket = markets.find((market) => market.id === selectedMarketId) ?? null;
+  const currentProductSubcategory = useMemo<StoreSubcategory | null>(() => {
+    if (!selectedSubcategoryId) return null;
+    for (const market of markets) {
+      const item = market.subcategories.find((candidate) => String(candidate.id) === selectedSubcategoryId);
+      if (item) return item;
+    }
+    return null;
+  }, [markets, selectedSubcategoryId]);
+  const availableSubcategories = useMemo(() => {
+    const items = (selectedMarket?.subcategories ?? []).filter((item) => item.is_active);
+    if (
+      currentProductSubcategory &&
+      !currentProductSubcategory.is_active &&
+      !items.some((item) => item.id === currentProductSubcategory.id)
+    ) {
+      return [...items, currentProductSubcategory];
+    }
+    return items;
+  }, [currentProductSubcategory, selectedMarket]);
   const primaryImage =
     productImages.find((image) => image.isPrimary) ?? productImages[0] ?? null;
   const imagePreview = primaryImage
@@ -644,6 +677,9 @@ export function ProductFormPage() {
       );
       setSelectedMarketId(marketChoice.id);
     }
+    setSelectedSubcategoryId(
+      product.subcategoryId === null ? "" : String(product.subcategoryId),
+    );
 
     setTheme(product.theme);
     setAttributes(nextAttributes);
@@ -1155,6 +1191,7 @@ export function ProductFormPage() {
   function validateForm() {
     if (!name.trim()) return "اسم المنتج مطلوب";
     if (!selectedMarketId) return "اختر المحل";
+    if (!selectedSubcategoryId) return "اختر الفئة الداخلية";
     if (!theme) return "اختر الثيم";
     const discountValue = Number(discount);
     if (!Number.isFinite(discountValue) || discountValue < 0 || discountValue >= 100) {
@@ -1242,6 +1279,7 @@ export function ProductFormPage() {
     const additionIds = selectedAdditionIds.filter((id) => Number.isFinite(id));
     const payload: ProductWritePayload = {
       market_id: marketId,
+      subcategory_id: Number(selectedSubcategoryId),
       theme,
       is_popular: isPopular,
       is_available: isAvailable,
@@ -1455,7 +1493,7 @@ export function ProductFormPage() {
                 value={description}
               />
             </LabelText>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-3">
               <LabelText label="المحل">
                 <button
                   className="flex h-10 w-full items-center justify-between gap-3 rounded-md border bg-input px-3 text-sm shadow-sm transition hover:border-primary/50"
@@ -1471,6 +1509,21 @@ export function ProductFormPage() {
                   </span>
                   <Store className="size-4 text-muted-foreground" />
                 </button>
+              </LabelText>
+              <LabelText label="الفئة الداخلية">
+                <AppSelect
+                  value={selectedSubcategoryId}
+                  onValueChange={setSelectedSubcategoryId}
+                  placeholder={selectedMarket ? "اختر الفئة" : "اختر المحل أولًا"}
+                  disabled={!selectedMarket || availableSubcategories.length === 0}
+                  options={availableSubcategories.map((item) => ({
+                    value: String(item.id),
+                    label: `${item.name_ar}${item.is_active ? "" : " (معطلة حاليًا)"}`,
+                  }))}
+                />
+                {selectedMarket && availableSubcategories.length === 0 ? (
+                  <p className="mt-1 text-xs text-destructive">لا توجد فئات نشطة لهذا المحل.</p>
+                ) : null}
               </LabelText>
               <LabelText label="الخصم">
                 <div className="relative" dir="ltr">
@@ -2157,6 +2210,9 @@ export function ProductFormPage() {
                         selectedMarketId === market.id && "border-primary bg-primary/10",
                       )}
                       onClick={() => {
+                        if (market.id !== selectedMarketId) {
+                          setSelectedSubcategoryId("");
+                        }
                         setSelectedMarketId(market.id);
                         setMarketModalOpen(false);
                       }}

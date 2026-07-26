@@ -7,6 +7,7 @@ export const adminApiPaths = {
   productAdditions: "catalog/product-additions/",
   additionClassifications: "catalog/addition-classifications/",
   productCategories: "catalog/product-categories/",
+  storeSubcategories: "catalog/store-subcategories/",
   categoryAttributes: "catalog/category-attributes/",
   categoryOptions: "catalog/category-options/",
   categoryClassifications: "catalog/category-classifications/",
@@ -64,6 +65,8 @@ export type NormalizedProduct = {
   market: BackendRecord | null;
   categoryId: number | null;
   category: BackendRecord | null;
+  subcategoryId: number | null;
+  subcategory: BackendRecord | null;
   theme: "clothing" | "consumer" | "other";
   isPopular: boolean;
   image: string | null;
@@ -102,6 +105,7 @@ export type ProductVariantPayload = {
 
 export type ProductWritePayload = {
   market_id?: number;
+  subcategory_id?: number;
   theme?: "clothing" | "consumer" | "other";
   is_popular?: boolean;
   is_available?: boolean;
@@ -378,6 +382,7 @@ export function normalizeProduct(raw: unknown): NormalizedProduct {
   const record = backendRecord(raw) ?? {};
   const market = backendRecord(record.market);
   const category = backendRecord(record.category);
+  const subcategory = backendRecord(record.subcategory);
   const variants = Array.isArray(record.variants)
     ? record.variants
         .map((variant) => backendRecord(variant))
@@ -404,6 +409,8 @@ export function normalizeProduct(raw: unknown): NormalizedProduct {
     market,
     categoryId: nullableNumber(record.category_id ?? record.categoryId ?? category?.id),
     category,
+    subcategoryId: nullableNumber(record.subcategory_id ?? record.subcategoryId ?? subcategory?.id),
+    subcategory,
     theme: productTheme(record.theme),
     isPopular:
       typeof record.is_popular === "boolean"
@@ -724,6 +731,7 @@ export function productRowFromApi(value: unknown, index: number): ItemRow {
         ? "استهلاكي"
         : "أخرى";
   const category =
+    nestedName(product.subcategory) ||
     nestedName(product.category) ||
     themeLabel ||
     nestedName(record.product_category) ||
@@ -778,7 +786,7 @@ export function productRowFromApi(value: unknown, index: number): ItemRow {
     name: product.name || text(record, ["name", "name_ar", "name_en", "title"], `منتج #${index + 1}`),
     description: product.description || text(record, ["description", "details"], ""),
     category,
-    subcategory: text(record, ["subcategory", "subcategory_name"], category),
+    subcategory: nestedName(product.subcategory) || text(record, ["subcategory_name"], category),
     marketId,
     shopName,
     scopeLabel,

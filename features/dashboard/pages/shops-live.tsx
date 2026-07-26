@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, Edit3, ImagePlus, LoaderCircle, MapPin, Plus, RefreshCw, Search, Store, Trash2, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowUp, CheckCircle2, Edit3, ImagePlus, Layers3, LoaderCircle, MapPin, Plus, RefreshCw, Search, Store, Trash2, X } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { PageLoadError, PageLoadingState } from "../load-error-card";
@@ -15,6 +15,11 @@ import {
 import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
 import { cn } from "@/lib/utils";
+import { StoreSubcategoriesManager } from "../components/store-subcategories-manager";
+import {
+  loadStoreSubcategories,
+  type StoreSubcategory,
+} from "../store-subcategories-api";
 
 type Classification = { id: number; name: string; classification_type?: string };
 type MarketScope = "general" | "service_city";
@@ -33,6 +38,7 @@ type Market = {
   classification?: Classification;
   service_city_ids?: Array<number | string>;
   service_cities?: MarketServiceCity[];
+  subcategories?: StoreSubcategory[];
 };
 
 async function json(response: Response) {
@@ -190,6 +196,7 @@ function MarketDialog({
   serviceCitiesLoading,
   serviceCitiesError,
   classifications,
+  subcategories,
   onClose,
   onSaved,
   onReloadServiceCities,
@@ -199,6 +206,7 @@ function MarketDialog({
   serviceCitiesLoading: boolean;
   serviceCitiesError: string;
   classifications: Classification[];
+  subcategories: StoreSubcategory[];
   onClose: () => void;
   onSaved: (market: Market, notificationRequested: boolean) => void;
   onReloadServiceCities: () => void;
@@ -218,9 +226,38 @@ function MarketDialog({
   const [imagePreview, setImagePreview] = useState(market?.image ?? "");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageName, setImageName] = useState(market?.image ? "صورة المحل الحالية" : "");
+  const [selectedSubcategoryIds, setSelectedSubcategoryIds] = useState<number[]>(
+    () => (market?.subcategories ?? [])
+      .slice()
+      .sort((first, second) => (first.sort_order ?? 0) - (second.sort_order ?? 0))
+      .map((item) => item.id),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const validBase = Boolean(name.trim() && classificationId && (showInGeneral || showInServiceCities));
+  const validBase = Boolean(name.trim() && classificationId && selectedSubcategoryIds.length && (showInGeneral || showInServiceCities));
+
+  const availableSubcategories = useMemo(() => {
+    const selected = new Set(selectedSubcategoryIds);
+    return subcategories.filter((item) => item.is_active || selected.has(item.id));
+  }, [selectedSubcategoryIds, subcategories]);
+
+  function toggleSubcategory(id: number) {
+    setError("");
+    setSelectedSubcategoryIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
+  }
+
+  function moveSubcategory(id: number, direction: -1 | 1) {
+    setSelectedSubcategoryIds((current) => {
+      const index = current.indexOf(id);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) return current;
+      const next = [...current];
+      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+      return next;
+    });
+  }
 
   const availableServiceCities = useMemo(() => {
     const cities = new Map<number, ServiceCity>();
@@ -306,6 +343,10 @@ function MarketDialog({
       setError("التصنيف مطلوب");
       return;
     }
+    if (!selectedSubcategoryIds.length) {
+      setError("اختر فئة داخلية واحدة على الأقل للمحل.");
+      return;
+    }
     if (!showInGeneral && !showInServiceCities) {
       setError("اختر نطاق ظهور المحل");
       return;
@@ -323,6 +364,7 @@ function MarketDialog({
       scope: showInGeneral ? "general" as const : "service_city" as const,
       delivery_area_ids: [],
       service_city_ids: [] as number[],
+      subcategory_ids: selectedSubcategoryIds,
       send_notification: !market && sendStoreNotification,
     };
 
@@ -342,6 +384,9 @@ function MarketDialog({
               formData.set("send_notification", String(payload.send_notification));
               payload.service_city_ids.forEach((serviceCityId) => {
                 formData.append("service_city_ids", String(serviceCityId));
+              });
+              payload.subcategory_ids.forEach((subcategoryId) => {
+                formData.append("subcategory_ids", String(subcategoryId));
               });
               formData.set("image", imageFile);
               return formData;
@@ -417,6 +462,48 @@ function MarketDialog({
             <label className="grid gap-2 text-sm font-semibold">اسم المحل *<Input value={name} onChange={(event) => setName(event.target.value)} /></label>
             <label className="grid gap-2 text-sm font-semibold">فئة المحل *<AppSelect value={classificationId} onValueChange={setClassificationId} options={classifications.map((item) => ({ value: String(item.id), label: `${item.name} - ${classificationTypeLabel(item.classification_type)}` }))} /></label>
             <label className="grid gap-2 text-sm font-semibold sm:col-span-2">وصف المحل<textarea value={description} onChange={(event) => setDescription(event.target.value)} className="min-h-24 resize-none rounded-md border border-border bg-input px-3 py-2 text-sm shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/40 focus:ring-2 focus:ring-primary/15" placeholder="اكتب وصفًا مختصرًا للمحل" /></label>
+            <div className="grid gap-3 rounded-lg border p-4 sm:col-span-2">
+              <div>
+                <h3 className="text-sm font-bold">الفئات الداخلية *</h3>
+                <p className="mt-1 text-xs text-muted-foreground">اختر فئات المحل ثم رتّب ظهورها داخل التطبيق.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {availableSubcategories.map((item) => {
+                  const selected = selectedSubcategoryIds.includes(item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => toggleSubcategory(item.id)}
+                      className={cn(
+                        "rounded-full border px-3 py-2 text-xs font-bold transition",
+                        selected ? "border-primary bg-primary/10 text-primary" : "hover:bg-accent",
+                        !item.is_active && "border-dashed text-muted-foreground",
+                      )}
+                    >
+                      {item.name_ar}{!item.is_active ? " (معطلة)" : ""}
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedSubcategoryIds.length ? (
+                <div className="grid gap-2">
+                  {selectedSubcategoryIds.map((id, index) => {
+                    const item = subcategories.find((candidate) => candidate.id === id);
+                    if (!item) return null;
+                    return (
+                      <div key={id} className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2 text-sm">
+                        <span><span className="font-bold">{index + 1}. {item.name_ar}</span><span className="ms-2 text-xs text-muted-foreground">{item.name_en}</span></span>
+                        <span className="flex gap-1">
+                          <Button type="button" size="icon" variant="outline" disabled={index === 0} onClick={() => moveSubcategory(id, -1)} aria-label="تحريك لأعلى"><ArrowUp className="size-3.5" /></Button>
+                          <Button type="button" size="icon" variant="outline" disabled={index === selectedSubcategoryIds.length - 1} onClick={() => moveSubcategory(id, 1)} aria-label="تحريك لأسفل"><ArrowDown className="size-3.5" /></Button>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : <p className="text-xs text-destructive">يجب اختيار فئة واحدة على الأقل.</p>}
+            </div>
             <label className="flex min-h-16 cursor-pointer items-center justify-between gap-4 rounded-md border bg-background px-4 py-3 shadow-sm transition hover:border-primary/40 sm:col-span-2">
               <span>
                 <span className="block text-sm font-semibold">محل شائع</span>
@@ -573,6 +660,7 @@ export function ShopsPage() {
   const queueUndoableDelete = useUndoableDelete();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [classifications, setClassifications] = useState<Classification[]>([]);
+  const [subcategories, setSubcategories] = useState<StoreSubcategory[]>([]);
   const [serviceCities, setServiceCities] = useState<ServiceCity[]>([]);
   const [serviceCitiesLoading, setServiceCitiesLoading] = useState(true);
   const [serviceCitiesError, setServiceCitiesError] = useState("");
@@ -581,6 +669,7 @@ export function ShopsPage() {
   const [query, setQuery] = useState("");
   const [dialogMarket, setDialogMarket] = useState<Market | null | undefined>();
   const [deleteMarket, setDeleteMarket] = useState<Market | null>(null);
+  const [showSubcategoryManager, setShowSubcategoryManager] = useState(false);
 
   const loadServiceCityOptions = useCallback(async () => {
     setServiceCitiesLoading(true);
@@ -598,9 +687,10 @@ export function ShopsPage() {
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      const [marketsResponse, classificationsResponse] = await Promise.all([
+      const [marketsResponse, classificationsResponse, loadedSubcategories] = await Promise.all([
         apiFetch("home/markets/"),
         apiFetch("home/market-classifications/"),
+        loadStoreSubcategories(apiFetch),
       ]);
       const [marketsData, classificationsData] = await Promise.all([json(marketsResponse), json(classificationsResponse)]);
       if (!marketsResponse.ok) throw new Error(errorMessage(marketsData, "تعذر تحميل المحلات."));
@@ -611,6 +701,7 @@ export function ShopsPage() {
           .map(normalizeClassification)
           .filter((item): item is Classification => item !== null),
       );
+      setSubcategories(loadedSubcategories);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "تعذر تحميل المحلات."); }
     finally { setLoading(false); }
   }, [apiFetch]);
@@ -691,7 +782,7 @@ export function ShopsPage() {
 
   return (
     <div className="px-6 py-6">
-      <PageTitle title="المحلات" description="إدارة المحلات وربط ظهور منتجاتها بالمدن." actions={<div className="flex flex-wrap items-center gap-2"><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => void load()} disabled={loading}><RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />تحديث</Button><Button className="h-9 px-4 text-sm" onClick={() => setDialogMarket(null)}><Plus className="size-4" />إضافة محل</Button></div>} />
+      <PageTitle title="المحلات" description="إدارة المحلات وربط ظهور منتجاتها بالمدن." actions={<div className="flex flex-wrap items-center gap-2"><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => void load()} disabled={loading}><RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />تحديث</Button><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => setShowSubcategoryManager(true)}><Layers3 className="size-4" />إنشاء/إدارة الفئات الداخلية</Button><Button className="h-9 px-4 text-sm" onClick={() => setDialogMarket(null)} disabled={!subcategories.some((item) => item.is_active)}><Plus className="size-4" />إضافة محل</Button></div>} />
       <div className="mt-6 grid gap-3 md:grid-cols-3">
         {[["إجمالي المحلات", markets.length, Store], ["المحلات النشطة", markets.filter((item) => item.status === "active").length, Store], ["مدن الظهور", new Set(markets.flatMap((item) => marketServiceCityIds(item))).size, MapPin]].map(([label, value, Icon]) => { const MetricIcon = Icon as typeof Store; return <Card key={label as string} className="h-[80px]"><div className="flex h-full items-center gap-3 px-5"><span className="rounded-full bg-primary/10 p-3 text-primary"><MetricIcon className="size-5" /></span><div><p className="text-xs text-muted-foreground">{label as string}</p><p className="text-xl font-bold">{value as number}</p></div></div></Card>; })}
       </div>
@@ -706,9 +797,9 @@ export function ShopsPage() {
               سيظهر هنا أول محل تنشئه وتربطه بمدن الظهور.
             </p>
             <div className="mt-6 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row">
-              <Button type="button" className="h-10 px-4" onClick={() => setDialogMarket(null)}>
-                <Plus className="size-4" />
-                إنشاء أول محل
+              <Button type="button" className="h-10 px-4" onClick={() => subcategories.some((item) => item.is_active) ? setDialogMarket(null) : setShowSubcategoryManager(true)}>
+                {subcategories.some((item) => item.is_active) ? <Plus className="size-4" /> : <Layers3 className="size-4" />}
+                {subcategories.some((item) => item.is_active) ? "إنشاء أول محل" : "إنشاء فئة داخلية أولًا"}
               </Button>
             </div>
           </div>
@@ -731,11 +822,12 @@ export function ShopsPage() {
       {deleteMarket ? <ConfirmDeleteDialog title="حذف المحل" description={`هل تريد حذف المحل ${deleteMarket.name}؟`} busy={false} onCancel={() => setDeleteMarket(null)} onConfirm={() => remove(deleteMarket)} /> : null}
       {dialogMarket !== undefined ? (
         classifications.length ? (
-          <MarketDialog market={dialogMarket ?? undefined} serviceCities={serviceCities} serviceCitiesLoading={serviceCitiesLoading} serviceCitiesError={serviceCitiesError} classifications={classifications} onReloadServiceCities={() => void loadServiceCityOptions()} onClose={() => setDialogMarket(undefined)} onSaved={(saved, notificationRequested) => { setMarkets((current) => current.some((item) => item.id === saved.id) ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current]); setDialogMarket(undefined); showSnackbar({ message: notificationRequested ? "تم إنشاء المحل، والإشعار هيتبعت بعد إضافة أول منتج متاح." : "تم حفظ المحل وربطه بنطاق الظهور." }); }} />
+          <MarketDialog market={dialogMarket ?? undefined} serviceCities={serviceCities} serviceCitiesLoading={serviceCitiesLoading} serviceCitiesError={serviceCitiesError} classifications={classifications} subcategories={subcategories} onReloadServiceCities={() => void loadServiceCityOptions()} onClose={() => setDialogMarket(undefined)} onSaved={(saved, notificationRequested) => { setMarkets((current) => current.some((item) => item.id === saved.id) ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current]); setDialogMarket(undefined); showSnackbar({ message: notificationRequested ? "تم إنشاء المحل، والإشعار هيتبعت بعد إضافة أول منتج متاح." : "تم حفظ المحل وربطه بنطاق الظهور." }); }} />
         ) : (
           <MissingClassificationsDialog onClose={() => setDialogMarket(undefined)} />
         )
       ) : null}
+      {showSubcategoryManager ? <StoreSubcategoriesManager items={subcategories} onChange={(next) => { setSubcategories(next); void load(); }} onClose={() => setShowSubcategoryManager(false)} /> : null}
     </div>
   );
 }
