@@ -25,6 +25,8 @@ export type ServiceCity = {
   boundary_bbox: number[] | null;
   delivery_price: string;
   is_active: boolean;
+  archivedAt: string | null;
+  deletionMode: "delete" | "archive";
   delivery_area_count: number;
   market_count: number;
   offer_count: number;
@@ -98,6 +100,8 @@ type ServiceCityResponse = {
   boundary_bbox?: number[] | null;
   delivery_price?: string | number | null;
   is_active?: boolean | null;
+  archived_at?: string | null;
+  deletion_mode?: "delete" | "archive" | null;
   delivery_area_count?: number | null;
   market_count?: number | null;
   offer_count?: number | null;
@@ -173,6 +177,8 @@ function cityFromResponse(value: unknown): ServiceCity | null {
     boundary_bbox: Array.isArray(city.boundary_bbox) ? city.boundary_bbox : null,
     delivery_price: normalizeNumberText(city.delivery_price, "0.00"),
     is_active: active,
+    archivedAt: typeof city.archived_at === "string" ? city.archived_at : null,
+    deletionMode: city.deletion_mode === "archive" ? "archive" : "delete",
     delivery_area_count: normalizeCount(city.delivery_area_count),
     market_count: normalizeCount(city.market_count),
     offer_count: normalizeCount(city.offer_count),
@@ -212,7 +218,7 @@ function deliveryAreaFromResponse(value: unknown): DeliveryArea | null {
   };
 }
 
-export function useServiceCities({ activeOnly = false } = {}) {
+export function useServiceCities({ activeOnly = false, archived = false } = {}) {
   const { apiFetch } = useAuth();
   const [cities, setCities] = useState<ServiceCity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -222,7 +228,9 @@ export function useServiceCities({ activeOnly = false } = {}) {
     setLoading(true);
     setError(null);
     try {
-      const response = await apiFetch("locations/service-cities/");
+      const response = await apiFetch(
+        `locations/service-cities/${archived ? "?archived=true" : ""}`,
+      );
       const data = await responseJson(response);
       if (!response.ok || !Array.isArray(data)) {
         throw new Error(firstError(data) ?? "تعذر تحميل المدن من الخادم.");
@@ -236,7 +244,7 @@ export function useServiceCities({ activeOnly = false } = {}) {
     } finally {
       setLoading(false);
     }
-  }, [activeOnly, apiFetch]);
+  }, [activeOnly, apiFetch, archived]);
 
   useEffect(() => {
     void Promise.resolve().then(reload);
@@ -306,6 +314,26 @@ export async function deleteServiceCity(
     }
   }
   throw new Error(firstError(data) ?? "تعذر حذف المدينة.");
+}
+
+export async function restoreServiceCity(
+  apiFetch: (path: string, init?: RequestInit) => Promise<Response>,
+  cityId: number,
+) {
+  const response = await apiFetch(`locations/service-cities/${cityId}/`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ restore: true }),
+  });
+  const data = await responseJson(response);
+  if (!response.ok) {
+    throw new Error(firstError(data) ?? "تعذر استعادة المدينة.");
+  }
+  const city = cityFromResponse(data);
+  if (!city) {
+    throw new Error("تمت الاستعادة لكن استجابة المدينة غير مكتملة.");
+  }
+  return city;
 }
 
 export async function loadDeliveryAreas(

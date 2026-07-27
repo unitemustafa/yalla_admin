@@ -4,6 +4,8 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
+  Archive,
+  ArchiveRestore,
   Building2,
   Globe2,
   Edit3,
@@ -30,6 +32,7 @@ import {
 import {
   deleteServiceCity,
   loadDeliveryAreas,
+  restoreServiceCity,
   type DeliveryArea,
   saveServiceCity,
   type ServiceCity,
@@ -463,7 +466,10 @@ function DeliveryAreasDialog({
 export function CitiesPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
-  const { cities, setCities, loading, error, reload } = useServiceCities();
+  const [showArchived, setShowArchived] = useState(false);
+  const { cities, setCities, loading, error, reload } = useServiceCities({
+    archived: showArchived,
+  });
   const [query, setQuery] = useState("");
   const [editingCity, setEditingCity] = useState<ServiceCity | null | undefined>();
   const [deleteCity, setDeleteCity] = useState<ServiceCity | null>(null);
@@ -564,11 +570,7 @@ export function CitiesPage() {
     try {
       const result = await deleteServiceCity(apiFetch, city.id);
       if (result.action === "archived") {
-        setCities((current) =>
-          current.map((item) =>
-            item.id === city.id ? { ...item, is_active: false } : item,
-          ),
-        );
+        setCities((current) => current.filter((item) => item.id !== city.id));
         setDeleteCity(null);
         showSnackbar({
           message: result.detail ?? `تمت أرشفة ${city.name} وتعطيلها.`,
@@ -587,6 +589,26 @@ export function CitiesPage() {
     } catch (reason) {
       showSnackbar({
         message: reason instanceof Error ? reason.message : "تعذر حذف المدينة.",
+        tone: "danger",
+      });
+    } finally {
+      setBusyCityId(null);
+    }
+  }
+
+  async function restoreArchivedCity(city: ServiceCity) {
+    if (busyCityId === city.id) return;
+    setBusyCityId(city.id);
+    try {
+      await restoreServiceCity(apiFetch, city.id);
+      setCities((current) => current.filter((item) => item.id !== city.id));
+      showSnackbar({
+        message: `تمت استعادة ${city.name} إلى قائمة المدن الحالية.`,
+        tone: "success",
+      });
+    } catch (reason) {
+      showSnackbar({
+        message: reason instanceof Error ? reason.message : "تعذر استعادة المدينة.",
         tone: "danger",
       });
     } finally {
@@ -617,14 +639,39 @@ export function CitiesPage() {
         description="إدارة المدن التي تحدد ظهور المحلات والمنتجات والعروض داخل تطبيق العميل."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant={!showArchived ? "default" : "outline"}
+              onClick={() => {
+                setShowArchived(false);
+                setCurrentPage(1);
+              }}
+              className="h-9 px-4 text-sm"
+            >
+              المدن الحالية
+            </Button>
+            <Button
+              type="button"
+              variant={showArchived ? "default" : "outline"}
+              onClick={() => {
+                setShowArchived(true);
+                setCurrentPage(1);
+              }}
+              className="h-9 px-4 text-sm"
+            >
+              <Archive className="size-4" />
+              المؤرشف
+            </Button>
             <Button type="button" variant="outline" onClick={() => void reload()} disabled={loading} className="h-9 px-4 text-sm">
               <RefreshCw className="size-4" />
               تحديث
             </Button>
-          <Button onClick={() => setEditingCity(null)} className="h-9 px-4 text-sm">
-            <Plus className="size-4" />
-            إضافة مدينة
-          </Button>
+            {!showArchived ? (
+              <Button onClick={() => setEditingCity(null)} className="h-9 px-4 text-sm">
+                <Plus className="size-4" />
+                إضافة مدينة
+              </Button>
+            ) : null}
           </div>
         }
       />
@@ -651,8 +698,12 @@ export function CitiesPage() {
       <Card className="mt-6 overflow-hidden">
         <div className="grid gap-4 border-b px-5 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(420px,560px)] lg:items-end">
           <div>
-            <h2 className="font-semibold">كل المدن</h2>
-            <p className="text-xs text-muted-foreground">راجع النطاق الجغرافي والارتباطات وحالة كل مدينة.</p>
+            <h2 className="font-semibold">{showArchived ? "المدن المؤرشفة" : "كل المدن"}</h2>
+            <p className="text-xs text-muted-foreground">
+              {showArchived
+                ? "المدن المحفوظة بسبب ارتباطها ببيانات سابقة ويمكن استعادتها."
+                : "راجع النطاق الجغرافي والارتباطات وحالة كل مدينة."}
+            </p>
           </div>
           <div className="relative w-full">
             <Search className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -675,11 +726,21 @@ export function CitiesPage() {
         ) : filteredCities.length === 0 ? (
           <div className="flex min-h-56 flex-col items-center justify-center gap-2 text-center">
             <MapPinned className="size-9 text-muted-foreground" />
-            <p className="font-semibold">{cities.length ? "لا توجد مدن مطابقة" : "لا توجد مدن حتى الآن"}</p>
-            <p className="text-sm text-muted-foreground">
-              {cities.length ? "غيّر عبارة البحث وحاول مرة أخرى." : "أضف أول مدينة لتحديد نطاقات الخدمة والتوصيل."}
+            <p className="font-semibold">
+              {cities.length
+                ? "لا توجد مدن مطابقة"
+                : showArchived
+                  ? "لا توجد مدن مؤرشفة"
+                  : "لا توجد مدن حتى الآن"}
             </p>
-            {!cities.length ? (
+            <p className="text-sm text-muted-foreground">
+              {cities.length
+                ? "غيّر عبارة البحث وحاول مرة أخرى."
+                : showArchived
+                  ? "المدن التي تتم أرشفتها ستظهر هنا ويمكن استعادتها."
+                  : "أضف أول مدينة لتحديد نطاقات الخدمة والتوصيل."}
+            </p>
+            {!cities.length && !showArchived ? (
               <Button type="button" onClick={() => setEditingCity(null)} className="mt-1">
                 <Plus className="size-4" />
                 أضف أول مدينة
@@ -727,26 +788,51 @@ export function CitiesPage() {
                   </div>
 
                   <div className="flex items-center justify-start gap-2 whitespace-nowrap xl:justify-end">
-                    <div className="flex h-9 items-center gap-2 rounded-md border bg-background px-3">
-                      <Switch checked={city.is_active} disabled={busyCityId === city.id} onCheckedChange={(checked) => void toggleCity(city, checked)} />
-                      <span className="text-xs font-semibold">{city.is_active ? "مفعّلة" : "معطلة"}</span>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-9 px-2.5"
-                      onClick={() => openDeliveryAreas(city)}
-                    >
-                      <MapPin className="size-4" />
-                      مناطق التوصيل
-                    </Button>
-                    <Button size="icon" variant="outline" title="تعديل" onClick={() => setEditingCity(city)} aria-label={`تعديل ${city.name}`}>
-                      <Edit3 className="size-4" />
-                    </Button>
-                    <Button size="icon" variant="outline" title="حذف" disabled={busyCityId === city.id} onClick={() => setDeleteCity(city)} aria-label={`حذف ${city.name}`} className="text-destructive hover:bg-destructive/10 hover:text-destructive">
-                      <Trash2 className="size-4" />
-                    </Button>
+                    {showArchived ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        title="استعادة"
+                        disabled={busyCityId === city.id}
+                        onClick={() => void restoreArchivedCity(city)}
+                        aria-label={`استعادة ${city.name}`}
+                        className="text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-600"
+                      >
+                        <ArchiveRestore className="size-4" />
+                        استعادة
+                      </Button>
+                    ) : (
+                      <>
+                        <div className="flex h-9 items-center gap-2 rounded-md border bg-background px-3">
+                          <Switch checked={city.is_active} disabled={busyCityId === city.id} onCheckedChange={(checked) => void toggleCity(city, checked)} />
+                          <span className="text-xs font-semibold">{city.is_active ? "مفعّلة" : "معطلة"}</span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-9 px-2.5"
+                          onClick={() => openDeliveryAreas(city)}
+                        >
+                          <MapPin className="size-4" />
+                          مناطق التوصيل
+                        </Button>
+                        <Button size="icon" variant="outline" title="تعديل" onClick={() => setEditingCity(city)} aria-label={`تعديل ${city.name}`}>
+                          <Edit3 className="size-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          title={city.deletionMode === "archive" ? "أرشفة" : "حذف نهائي"}
+                          disabled={busyCityId === city.id}
+                          onClick={() => setDeleteCity(city)}
+                          aria-label={city.deletionMode === "archive" ? `أرشفة ${city.name}` : `حذف ${city.name} نهائيًا`}
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          {city.deletionMode === "archive" ? <Archive className="size-4" /> : <Trash2 className="size-4" />}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </Card>
               );
@@ -789,9 +875,14 @@ export function CitiesPage() {
       ) : null}
       {deleteCity ? (
         <ConfirmDeleteDialog
-          title="حذف المدينة"
-          description={`هل تريد حذف المدينة ${deleteCity.name}؟ إذا كانت مرتبطة ببيانات مستخدمة فسيتم أرشفتها وتعطيلها بدل الحذف النهائي.`}
+          title={deleteCity.deletionMode === "archive" ? "أرشفة المدينة" : "حذف المدينة نهائيًا"}
+          description={
+            deleteCity.deletionMode === "archive"
+              ? `المدينة ${deleteCity.name} مرتبطة ببيانات مستخدمة؛ سيتم إخفاؤها وأرشفتها وتعطيلها مع إمكانية استعادتها.`
+              : `هل تريد حذف المدينة ${deleteCity.name} نهائيًا؟ لا يمكن التراجع بعد تنفيذ الحذف.`
+          }
           busy={busyCityId === deleteCity.id}
+          action={deleteCity.deletionMode === "archive" ? "archive" : "delete"}
           onCancel={() => setDeleteCity(null)}
           onConfirm={() => void removeCity(deleteCity)}
         />
