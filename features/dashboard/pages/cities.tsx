@@ -343,7 +343,7 @@ function CityDialog({
                     className="h-11 text-right"
                     inputMode="decimal"
                     min="0.1"
-                    step="0.1"
+                    step="0.01"
                     type="number"
                     value={draft.radiusKm}
                     onChange={(event) => update("radiusKm", event.target.value)}
