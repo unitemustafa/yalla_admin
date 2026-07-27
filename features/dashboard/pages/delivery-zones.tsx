@@ -1194,6 +1194,7 @@ export function DeliveryZonesPage() {
           title={deleteZone.deletionMode === "archive" ? "أرشفة منطقة التوصيل" : "حذف منطقة التوصيل نهائيًا"}
           description={deleteZone.deletionMode === "archive" ? `منطقة ${deleteZone.name} مرتبطة بسجلات سابقة؛ سيتم إخفاؤها وأرشفتها وتعطيلها مع إمكانية استعادتها.` : `هل تريد حذف منطقة التوصيل ${deleteZone.name} نهائيًا؟ لا يمكن التراجع بعد تنفيذ الحذف.`}
           busy={deletingZoneId === deleteZone.id}
+          action={deleteZone.deletionMode === "archive" ? "archive" : "delete"}
           onCancel={() => setDeleteZone(null)}
           onConfirm={confirmDeleteZone}
         />
