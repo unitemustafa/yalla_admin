@@ -309,13 +309,6 @@ function CityDialog({
                       latitude={latitude}
                       longitude={longitude}
                       boundary={draft.boundaryGeojson}
-                      onCenterChange={(nextLatitude, nextLongitude) => {
-                        setDraft((current) => ({
-                          ...current,
-                          latitude: nextLatitude.toFixed(7),
-                          longitude: nextLongitude.toFixed(7),
-                          }));
-                      }}
                       onBoundaryChange={(boundaryGeojson) =>
                         update("boundaryGeojson", boundaryGeojson)
                       }

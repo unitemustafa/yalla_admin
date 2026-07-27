@@ -7,6 +7,12 @@ import "leaflet/dist/leaflet.css";
 export const metadata: Metadata = {
   title: "يلا أدمن",
   description: "Yalla Admin dashboard",
+  robots: {
+    index: false,
+    follow: false,
+    noarchive: true,
+    nosnippet: true,
+  },
 };
 
 const themeScript = `

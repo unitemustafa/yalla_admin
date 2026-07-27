@@ -9,7 +9,6 @@ type CityCoverageMapProps = {
   latitude: number;
   longitude: number;
   boundary: CityBoundaryGeoJson | null;
-  onCenterChange: (latitude: number, longitude: number) => void;
   onBoundaryChange: (boundary: PolygonGeoJson | null) => void;
 };
 
@@ -61,7 +60,6 @@ export default function CityCoverageMap({
   latitude,
   longitude,
   boundary,
-  onCenterChange,
   onBoundaryChange,
 }: CityCoverageMapProps) {
   const points = polygonPoints(boundary);
