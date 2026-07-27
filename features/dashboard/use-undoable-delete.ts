@@ -8,7 +8,8 @@ type UndoableDeleteOptions = {
   message: string;
   onDelete: () => void;
   onUndo: () => Promise<void> | void;
-  onCommit?: () => Promise<void> | void;
+  onCommit?: () => Promise<unknown> | unknown;
+  onCommitSuccess?: (result: unknown) => void;
   onCommitError?: (error: unknown) => void;
   durationMs?: number;
 };
@@ -31,6 +32,7 @@ export function useUndoableDelete() {
       onDelete,
       onUndo,
       onCommit,
+      onCommitSuccess,
       onCommitError,
       durationMs = 6500,
     }: UndoableDeleteOptions) => {
@@ -52,7 +54,8 @@ export function useUndoableDelete() {
         if (undone || !onCommit) return;
 
         try {
-          await onCommit();
+          const result = await onCommit();
+          onCommitSuccess?.(result);
         } catch (error) {
           if (!undone) {
             undone = true;

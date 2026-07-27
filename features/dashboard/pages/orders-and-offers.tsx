@@ -41,6 +41,7 @@ import {
   adminApiPaths,
   apiErrorMessage,
   apiList,
+  deletionResult,
   fetchAdminRows,
   productRowFromApi,
   readApiData,
@@ -3613,7 +3614,7 @@ export function OffersPage() {
     const offerIndex = offers.findIndex((currentOffer) => currentOffer.id === offer.id);
     setOfferDeleteTarget(null);
     queueUndoableDelete({
-      message: `تم حذف العرض ${offer.title}.`,
+      message: `تمت إزالة العرض ${offer.title} من القائمة مؤقتًا.`,
       onDelete: () => {
         pendingOfferDeletionIdsRef.current.add(offer.id);
         setOffers((currentOffers) =>
@@ -3632,11 +3633,39 @@ export function OffersPage() {
         });
       },
       onCommit: async () => {
-        await sendAdminJson(
+        const data = await sendAdminJson(
           apiFetch,
           `${adminApiPaths.offers}${encodeURIComponent(offer.id)}/`,
           { method: "DELETE" },
         );
+        return deletionResult(data);
+      },
+      onCommitSuccess: (value) => {
+        const result = deletionResult(value);
+        if (result.action === "archived") {
+          pendingOfferDeletionIdsRef.current.delete(offer.id);
+          setOffers((currentOffers) => {
+            if (currentOffers.some((currentOffer) => currentOffer.id === offer.id)) {
+              return currentOffers;
+            }
+            const nextOffers = [...currentOffers];
+            nextOffers.splice(Math.max(0, offerIndex), 0, {
+              ...offer,
+              status: "متوقف",
+              backendStatus: "inactive",
+              effectiveStatus: "inactive",
+              canSendNotification: false,
+            });
+            return nextOffers;
+          });
+        }
+        showSnackbar({
+          message:
+            result.action === "archived"
+              ? result.detail ?? `تمت أرشفة العرض ${offer.title}.`
+              : `تم حذف العرض ${offer.title} نهائيًا.`,
+          tone: result.action === "archived" ? "success" : "danger",
+        });
       },
       onCommitError: (error) => {
         showSnackbar({
@@ -3944,6 +3973,9 @@ function OfferDeleteModal({
             حذف العرض
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">{offer.title}</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            إذا كان العرض مستخدمًا في طلبات سابقة فسيتم أرشفته وتعطيله بدل حذفه نهائيًا.
+          </p>
         </div>
         <div className="flex justify-end gap-2 p-5">
           <Button type="button" variant="outline" disabled={deleting} onClick={onClose}>

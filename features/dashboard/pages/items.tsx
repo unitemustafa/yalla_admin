@@ -866,7 +866,7 @@ function DeleteDialog({
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
           متأكد إنك عايز تحذف <span className="font-semibold">{itemName}</span>؟
-          الإجراء ده هيشيله من الجدول الحالي.
+          لو المنتج مستخدم في طلبات سابقة هيتم أرشفته وتعطيله بدل الحذف النهائي.
         </p>
         <div className="mt-4 flex justify-end gap-4">
           <Button variant="outline" onClick={onClose}>
@@ -1351,10 +1351,20 @@ export function ItemsPage() {
     setError("");
 
     try {
-      await deleteProduct(apiFetch, deleteRow.id);
+      const result = await deleteProduct(apiFetch, deleteRow.id);
+      if (result.action === "archived") {
+        setRows(
+          previousRows.map((row) =>
+            row.id === deleteRow.id ? { ...row, active: false } : row,
+          ),
+        );
+      }
       showSnackbar({
-        message: `تم حذف ${deletedItemName} من الباك.`,
-        tone: "danger",
+        message:
+          result.action === "archived"
+            ? result.detail ?? `تمت أرشفة ${deletedItemName} وتعطيله.`
+            : `تم حذف ${deletedItemName} نهائيًا.`,
+        tone: result.action === "archived" ? "success" : "danger",
       });
     } catch (deleteError) {
       setRows(previousRows);

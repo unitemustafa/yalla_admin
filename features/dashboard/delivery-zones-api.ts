@@ -1,6 +1,7 @@
 import type { DeliveryZone } from "./delivery-pricing";
 import type { PolygonGeoJson } from "./cities-api";
 import { apiResponseData, firstApiError } from "./users/api-users";
+import { deletionResult } from "./admin-api";
 
 type ApiFetch = (path: string, init?: RequestInit) => Promise<Response>;
 
@@ -114,6 +115,7 @@ export async function deleteDeliveryZone(apiFetch: ApiFetch, zoneId: string) {
     `locations/delivery-areas/${encodeURIComponent(zoneId)}/`,
     { method: "DELETE" },
   );
-  if (response.status === 204) return;
-  await checkedData(response, "تعذر حذف منطقة التوصيل.");
+  if (response.status === 204) return deletionResult(null);
+  const data = await checkedData(response, "تعذر حذف منطقة التوصيل.");
+  return deletionResult(data);
 }

@@ -1,4 +1,4 @@
-import type { ApiFetch } from "./admin-api";
+import { deletionResult, type ApiFetch } from "./admin-api";
 
 export type StoreSubcategory = {
   id: number;
@@ -119,8 +119,9 @@ export async function saveStoreSubcategory(
 }
 
 export async function deleteStoreSubcategory(apiFetch: ApiFetch, id: number) {
-  await parse(
+  const data = await parse(
     await apiFetch(`catalog/store-subcategories/${id}/`, { method: "DELETE" }),
     "تعذر حذف الفئة الداخلية.",
   );
+  return deletionResult(data);
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, ArrowDown, ArrowUp, CheckCircle2, Edit3, ImagePlus, Layers3, LoaderCircle, MapPin, Plus, RefreshCw, Search, Store, Trash2, X } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
+import { deletionResult } from "../admin-api";
 import { PageLoadError, PageLoadingState } from "../load-error-card";
 import { AppSelect, Badge, Button, Card, DataTable, Input, PageTitle, Switch } from "../primitives";
 import { DashboardImage } from "../dashboard-image";
@@ -728,14 +729,29 @@ export function ShopsPage() {
     setDeleteMarket(null);
 
     queueUndoableDelete({
-      message: `تم حذف ${market.name}.`,
+      message: `تمت إزالة ${market.name} من القائمة مؤقتًا.`,
       onDelete: () => setMarkets((current) => current.filter((item) => item.id !== market.id)),
       onUndo: () => restoreMarket(market, marketIndex),
       onCommit: async () => {
         const response = await apiFetch(`home/markets/${market.id}/`, { method: "DELETE" });
+        const data = await json(response);
         if (!response.ok) {
-          throw new Error(errorMessage(await json(response), "تعذر حذف المحل."));
+          throw new Error(errorMessage(data, "تعذر حذف المحل."));
         }
+        return deletionResult(data);
+      },
+      onCommitSuccess: (value) => {
+        const result = deletionResult(value);
+        if (result.action === "archived") {
+          restoreMarket({ ...market, status: "inactive" }, marketIndex);
+        }
+        showSnackbar({
+          message:
+            result.action === "archived"
+              ? result.detail ?? `تمت أرشفة المحل ${market.name}.`
+              : `تم حذف المحل ${market.name} نهائيًا.`,
+          tone: result.action === "archived" ? "success" : "danger",
+        });
       },
       onCommitError: (reason) => {
         showSnackbar({
@@ -819,7 +835,7 @@ export function ShopsPage() {
         ])} />}
       </Card>
       )}
-      {deleteMarket ? <ConfirmDeleteDialog title="حذف المحل" description={`هل تريد حذف المحل ${deleteMarket.name}؟`} busy={false} onCancel={() => setDeleteMarket(null)} onConfirm={() => remove(deleteMarket)} /> : null}
+      {deleteMarket ? <ConfirmDeleteDialog title="حذف المحل" description={`هل تريد حذف المحل ${deleteMarket.name}؟ إذا كان مرتبطًا بطلبات سابقة فسيتم أرشفته وتعطيله بدل الحذف النهائي.`} busy={false} onCancel={() => setDeleteMarket(null)} onConfirm={() => remove(deleteMarket)} /> : null}
       {dialogMarket !== undefined ? (
         classifications.length ? (
           <MarketDialog market={dialogMarket ?? undefined} serviceCities={serviceCities} serviceCitiesLoading={serviceCitiesLoading} serviceCitiesError={serviceCitiesError} classifications={classifications} subcategories={subcategories} onReloadServiceCities={() => void loadServiceCityOptions()} onClose={() => setDialogMarket(undefined)} onSaved={(saved, notificationRequested) => { setMarkets((current) => current.some((item) => item.id === saved.id) ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current]); setDialogMarket(undefined); showSnackbar({ message: notificationRequested ? "تم إنشاء المحل، والإشعار هيتبعت بعد إضافة أول منتج متاح." : "تم حفظ المحل وربطه بنطاق الظهور." }); }} />

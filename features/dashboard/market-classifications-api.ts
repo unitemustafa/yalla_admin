@@ -1,4 +1,5 @@
 import { apiResponseData, firstApiError } from "./users/api-users";
+import { deletionResult } from "./admin-api";
 
 type ApiFetch = (path: string, init?: RequestInit) => Promise<Response>;
 
@@ -175,8 +176,7 @@ export async function deleteMarketClassification(
     method: "DELETE",
   });
 
-  if (response.ok || response.status === 204) return;
-
   const data = await apiResponseData(response);
+  if (response.ok || response.status === 204) return deletionResult(data);
   throw new Error(errorMessage(data, "تعذر حذف التصنيف."));
 }

@@ -907,7 +907,7 @@ export function DeliveryZonesPage() {
     setDeletingZoneId(zone.id);
 
     queueUndoableDelete({
-      message: `تم حذف ${zone.name}.`,
+      message: `تمت إزالة ${zone.name} من القائمة مؤقتًا.`,
       onDelete: () => {
         setZones((currentZones) =>
           currentZones.filter((currentZone) => currentZone.id !== zone.id),
@@ -928,6 +928,33 @@ export function DeliveryZonesPage() {
         showSnackbar({ message: `تمت استعادة منطقة ${zone.name}.`, tone: "success" });
       },
       onCommit: () => deleteDeliveryZone(apiFetch, zone.id),
+      onCommitSuccess: (value) => {
+        const result =
+          value && typeof value === "object" && "action" in value
+            ? value as { action: "deleted" | "archived"; detail?: string }
+            : { action: "deleted" as const };
+        if (result.action === "archived") {
+          setZones((currentZones) => {
+            if (currentZones.some((currentZone) => currentZone.id === zone.id)) {
+              return currentZones;
+            }
+            const nextZones = [...currentZones];
+            nextZones.splice(
+              Math.max(0, zoneIndex),
+              0,
+              { ...zone, status: "inactive" },
+            );
+            return nextZones;
+          });
+        }
+        showSnackbar({
+          message:
+            result.action === "archived"
+              ? result.detail ?? `تمت أرشفة منطقة ${zone.name}.`
+              : `تم حذف منطقة ${zone.name} نهائيًا.`,
+          tone: result.action === "archived" ? "success" : "danger",
+        });
+      },
       onCommitError: (error) => {
         showSnackbar({
           message: error instanceof Error ? error.message : "تعذر حذف منطقة التوصيل.",
@@ -1130,7 +1157,7 @@ export function DeliveryZonesPage() {
       {deleteZone ? (
         <ConfirmDeleteDialog
           title="حذف منطقة التوصيل"
-          description={`هل تريد حذف منطقة التوصيل ${deleteZone.name}؟`}
+          description={`هل تريد حذف منطقة التوصيل ${deleteZone.name}؟ إذا كانت مرتبطة بطلبات أو عناوين أو مندوبين فسيتم أرشفتها وتعطيلها بدل الحذف النهائي.`}
           busy={deletingZoneId === deleteZone.id}
           onCancel={() => setDeleteZone(null)}
           onConfirm={confirmDeleteZone}

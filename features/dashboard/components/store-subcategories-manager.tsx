@@ -96,13 +96,25 @@ export function StoreSubcategoriesManager({
   }
 
   async function remove(item: StoreSubcategory) {
-    if (!window.confirm(`هل تريد حذف فئة «${item.name_ar}»؟`)) return;
+    if (!window.confirm(
+      `هل تريد حذف فئة «${item.name_ar}»؟ إذا كانت مستخدمة فسيتم أرشفتها وتعطيلها بدل الحذف النهائي.`,
+    )) return;
     setBusy(true);
     setError("");
     try {
-      await deleteStoreSubcategory(apiFetch, item.id);
-      onChange(items.filter((candidate) => candidate.id !== item.id));
-      if (draft.id === item.id) reset();
+      const result = await deleteStoreSubcategory(apiFetch, item.id);
+      if (result.action === "archived") {
+        onChange(
+          items.map((candidate) =>
+            candidate.id === item.id
+              ? { ...candidate, is_active: false }
+              : candidate,
+          ),
+        );
+      } else {
+        onChange(items.filter((candidate) => candidate.id !== item.id));
+        if (draft.id === item.id) reset();
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر حذف الفئة.");
     } finally {

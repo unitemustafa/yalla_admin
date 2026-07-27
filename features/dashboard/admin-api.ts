@@ -22,6 +22,24 @@ export type ApiFetch = (path: string, init?: RequestInit) => Promise<Response>;
 
 export type BackendRecord = Record<string, unknown>;
 
+export type DeletionResult = {
+  action: "deleted" | "archived";
+  detail?: string;
+};
+
+export function deletionResult(value: unknown): DeletionResult {
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (record.action === "archived") {
+      return {
+        action: "archived",
+        detail: typeof record.detail === "string" ? record.detail : undefined,
+      };
+    }
+  }
+  return { action: "deleted" };
+}
+
 export type ProductLike = {
   variants?: unknown;
 };
@@ -1046,7 +1064,8 @@ export async function deleteProduct(
     `${adminApiPaths.products}${encodeURIComponent(String(productId))}/`,
     { method: "DELETE" },
   );
-  await parseAdminResponse(response, "تعذر حذف المنتج");
+  const data = await parseAdminResponse(response, "تعذر حذف المنتج");
+  return deletionResult(data);
 }
 
 export async function toggleProductAvailability(

@@ -442,7 +442,7 @@ function DeleteClassificationDialog({
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             هل تريد حذف فئة &quot;{classification.name}&quot;؟ إذا كانت مستخدمة
-            في محلات سيعرض الخادم خطأ الحماية ولن يتم حذف المحلات.
+            في محلات فسيتم أرشفتها وتعطيلها بدل حذفها نهائيًا.
           </p>
         </div>
         <div className="flex justify-end gap-2 px-6 py-4">
@@ -637,7 +637,7 @@ export function MarketClassificationsPage() {
     setDeleteClassification(null);
 
     queueUndoableDelete({
-      message: `تم حذف الفئة ${classification.name}.`,
+      message: `تمت إزالة الفئة ${classification.name} من القائمة مؤقتًا.`,
       onDelete: () => {
         setClassifications((current) => current.filter((item) => item.id !== classification.id));
       },
@@ -650,7 +650,33 @@ export function MarketClassificationsPage() {
         });
       },
       onCommit: async () => {
-        await deleteMarketClassification(apiFetch, classification.id);
+        return deleteMarketClassification(apiFetch, classification.id);
+      },
+      onCommitSuccess: (value) => {
+        if (
+          value &&
+          typeof value === "object" &&
+          "action" in value &&
+          value.action === "archived"
+        ) {
+          setClassifications((current) => {
+            if (current.some((item) => item.id === classification.id)) return current;
+            const nextClassifications = [...current];
+            nextClassifications.splice(
+              Math.max(0, classificationIndex),
+              0,
+              { ...classification, is_active: false },
+            );
+            return nextClassifications;
+          });
+          showSnackbar({
+            message:
+              "detail" in value && typeof value.detail === "string"
+                ? value.detail
+                : `تمت أرشفة الفئة ${classification.name}.`,
+            tone: "success",
+          });
+        }
       },
       onCommitError: (reason) => {
         const message = reason instanceof Error ? reason.message : "تعذر حذف فئة المحل.";

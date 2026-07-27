@@ -562,7 +562,20 @@ export function CitiesPage() {
     const cityIndex = cities.findIndex((item) => item.id === city.id);
     setBusyCityId(city.id);
     try {
-      await deleteServiceCity(apiFetch, city.id);
+      const result = await deleteServiceCity(apiFetch, city.id);
+      if (result.action === "archived") {
+        setCities((current) =>
+          current.map((item) =>
+            item.id === city.id ? { ...item, is_active: false } : item,
+          ),
+        );
+        setDeleteCity(null);
+        showSnackbar({
+          message: result.detail ?? `تمت أرشفة ${city.name} وتعطيلها.`,
+          tone: "success",
+        });
+        return;
+      }
       setCities((current) => current.filter((item) => item.id !== city.id));
       setDeleteCity(null);
       showSnackbar({
@@ -777,7 +790,7 @@ export function CitiesPage() {
       {deleteCity ? (
         <ConfirmDeleteDialog
           title="حذف المدينة"
-          description={`هل تريد حذف المدينة ${deleteCity.name}؟`}
+          description={`هل تريد حذف المدينة ${deleteCity.name}؟ إذا كانت مرتبطة ببيانات مستخدمة فسيتم أرشفتها وتعطيلها بدل الحذف النهائي.`}
           busy={busyCityId === deleteCity.id}
           onCancel={() => setDeleteCity(null)}
           onConfirm={() => void removeCity(deleteCity)}

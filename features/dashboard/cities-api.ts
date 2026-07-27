@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useAuth } from "@/features/auth/auth-provider";
+import { deletionResult } from "./admin-api";
 
 export type PolygonGeoJson = {
   type: "Polygon";
@@ -277,8 +278,8 @@ export async function deleteServiceCity(
   const response = await apiFetch(`locations/service-cities/${cityId}/`, {
     method: "DELETE",
   });
-  if (response.ok) return;
   const data = await responseJson(response);
+  if (response.ok) return deletionResult(data);
   if (
     data &&
     typeof data === "object" &&
