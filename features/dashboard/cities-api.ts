@@ -41,6 +41,14 @@ export type ServiceCityPayload = {
   is_active: boolean;
 };
 
+export type ServiceCityCoverage = {
+  name: string | null;
+  formattedAddress: string | null;
+  latitude: number;
+  longitude: number;
+  radiusKm: number;
+};
+
 export type DeliveryArea = {
   id: number;
   service_city_id: number;
@@ -334,6 +342,45 @@ export async function restoreServiceCity(
     throw new Error("تمت الاستعادة لكن استجابة المدينة غير مكتملة.");
   }
   return city;
+}
+
+export async function lookupServiceCityCoverage(
+  apiFetch: (path: string, init?: RequestInit) => Promise<Response>,
+  cityName: string,
+) {
+  const response = await apiFetch(
+    `locations/service-cities/coverage-lookup/?q=${encodeURIComponent(cityName)}&lang=ar`,
+  );
+  const data = await responseJson(response);
+  if (!response.ok || !data || typeof data !== "object") {
+    throw new Error(firstError(data) ?? "تعذر تحديد نطاق المدينة تلقائيًا.");
+  }
+  const coverage = (data as { coverage?: unknown }).coverage;
+  if (!coverage || typeof coverage !== "object") {
+    throw new Error("استجابة تحديد نطاق المدينة غير مكتملة.");
+  }
+  const record = coverage as Record<string, unknown>;
+  const latitude = Number(record.latitude);
+  const longitude = Number(record.longitude);
+  const radiusKm = Number(record.radius_km);
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    !Number.isFinite(radiusKm) ||
+    radiusKm <= 0
+  ) {
+    throw new Error("تعذر حساب مركز المدينة ونصف قطرها.");
+  }
+  return {
+    name: typeof record.name === "string" ? record.name : null,
+    formattedAddress:
+      typeof record.formatted_address === "string"
+        ? record.formatted_address
+        : null,
+    latitude,
+    longitude,
+    radiusKm,
+  } satisfies ServiceCityCoverage;
 }
 
 export async function loadDeliveryAreas(

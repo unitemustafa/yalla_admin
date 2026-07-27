@@ -32,6 +32,7 @@ import {
 import {
   deleteServiceCity,
   loadDeliveryAreas,
+  lookupServiceCityCoverage,
   restoreServiceCity,
   type DeliveryArea,
   saveServiceCity,
@@ -68,7 +69,7 @@ const defaultDraft: CityDraft = {
   nameAr: "",
   latitude: "30.0444000",
   longitude: "31.2357000",
-  radiusKm: "25",
+  radiusKm: "",
   active: true,
 };
 
@@ -98,7 +99,7 @@ function payloadFromCity(city: ServiceCity): ServiceCityPayload {
     name: city.name,
     center_latitude: city.center_latitude ?? defaultDraft.latitude,
     center_longitude: city.center_longitude ?? defaultDraft.longitude,
-    radius_km: city.radius_km ?? defaultDraft.radiusKm,
+    radius_km: city.radius_km ?? undefined,
     boundary_geojson: null,
     is_active: city.is_active,
   };
@@ -152,6 +153,8 @@ function CityDialog({
   const [draft, setDraft] = useState(() => cityDraft(city));
   const [saving, setSaving] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [detectingCoverage, setDetectingCoverage] = useState(false);
+  const [coverageNote, setCoverageNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const latitude = Number(draft.latitude);
   const longitude = Number(draft.longitude);
@@ -169,7 +172,40 @@ function CityDialog({
 
   function update<K extends keyof CityDraft>(key: K, value: CityDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
+    setCoverageNote(null);
     setError(null);
+  }
+
+  async function detectCoverage() {
+    const cityName = draft.nameAr.trim();
+    if (cityName.length < 2 || detectingCoverage) return;
+
+    setDetectingCoverage(true);
+    setCoverageNote(null);
+    setError(null);
+    try {
+      const coverage = await lookupServiceCityCoverage(apiFetch, cityName);
+      setDraft((current) => ({
+        ...current,
+        latitude: coverage.latitude.toFixed(7),
+        longitude: coverage.longitude.toFixed(7),
+        radiusKm: coverage.radiusKm.toFixed(2),
+      }));
+      const radiusLabel = coverage.radiusKm.toLocaleString("ar-EG-u-nu-latn");
+      setCoverageNote(
+        `تم تحديد مركز المدينة ونصف قطر ${radiusLabel} كم تلقائيًا${
+          coverage.formattedAddress ? ` — ${coverage.formattedAddress}` : ""
+        }.`,
+      );
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "تعذر تحديد نطاق المدينة تلقائيًا.",
+      );
+    } finally {
+      setDetectingCoverage(false);
+    }
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -262,6 +298,22 @@ function CityDialog({
                     placeholder="مثال: القاهرة"
                   />
                 </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={detectCoverage}
+                  disabled={draft.nameAr.trim().length < 2 || detectingCoverage}
+                  className="h-11"
+                >
+                  {detectingCoverage ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : (
+                    <MapPinned className="size-4" />
+                  )}
+                  {detectingCoverage
+                    ? "جاري حساب النطاق..."
+                    : "تحديد المركز والنطاق تلقائيًا"}
+                </Button>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="grid gap-2 text-sm font-semibold">
                     خط العرض
@@ -301,6 +353,11 @@ function CityDialog({
                   {locating ? <LoaderCircle className="size-4 animate-spin" /> : <MapPin className="size-4" />}
                   {locating ? "جاري تحديد الموقع..." : "استخدام موقعي الحالي"}
                 </Button>
+                {coverageNote ? (
+                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300">
+                    {coverageNote}
+                  </div>
+                ) : null}
                 {error ? (
                   <div className="flex gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
                     <AlertCircle className="mt-0.5 size-4 shrink-0" />
