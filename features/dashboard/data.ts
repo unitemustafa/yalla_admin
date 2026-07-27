@@ -248,6 +248,8 @@ export type ItemRow = {
   regionNames?: string[];
   featured: string;
   active: boolean;
+  archived?: boolean;
+  deletionMode?: "delete" | "archive";
 };
 
 export type AddonRow = {

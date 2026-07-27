@@ -10,6 +10,8 @@ export type DeliveryZone = {
   etaMaxMinutes: number | null;
   boundaryGeojson: import("./cities-api").PolygonGeoJson | null;
   status: DeliveryZoneStatus;
+  archivedAt?: string | null;
+  deletionMode?: "delete" | "archive";
   createdAt: string | null;
   updatedAt: string | null;
 };

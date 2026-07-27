@@ -91,6 +91,8 @@ export type NormalizedProduct = {
   images: NormalizedProductImage[];
   discount: string | number;
   isAvailable: boolean;
+  archivedAt: string | null;
+  deletionMode: "delete" | "archive";
   additions: number[];
   attributes: NormalizedProductAttribute[];
   variants: NormalizedProductVariant[];
@@ -453,6 +455,13 @@ export function normalizeProduct(raw: unknown): NormalizedProduct {
         : typeof record.isAvailable === "boolean"
           ? record.isAvailable
           : Boolean(record.is_available),
+    archivedAt:
+      typeof record.archived_at === "string"
+        ? record.archived_at
+        : typeof record.archivedAt === "string"
+          ? record.archivedAt
+          : null,
+    deletionMode: record.deletion_mode === "archive" ? "archive" : "delete",
     additions: Array.isArray(record.additions)
       ? record.additions
           .map(normalizeAdditionId)
@@ -818,6 +827,8 @@ export function productRowFromApi(value: unknown, index: number): ItemRow {
     variants,
     featured: product.isPopular || bool(record, ["is_featured", "featured"], false) ? "نعم" : "لا",
     active: product.isAvailable,
+    archived: product.archivedAt !== null,
+    deletionMode: product.deletionMode,
     visibilityMode: marketScope === "service_city" ? "regions" : "general",
   };
 }
@@ -907,8 +918,10 @@ export async function fetchAdminRows<T>(
   return apiList(data).map(mapper);
 }
 
-export async function listProducts(apiFetch: ApiFetch) {
-  const response = await apiFetch(adminApiPaths.products);
+export async function listProducts(apiFetch: ApiFetch, archived = false) {
+  const response = await apiFetch(
+    `${adminApiPaths.products}${archived ? "?archived=true" : ""}`,
+  );
   const data = await parseAdminResponse(response, "تعذر تحميل المنتجات");
 
   return apiList(data).map((record) => normalizeProduct(record));
@@ -1066,6 +1079,22 @@ export async function deleteProduct(
   );
   const data = await parseAdminResponse(response, "تعذر حذف المنتج");
   return deletionResult(data);
+}
+
+export async function restoreProduct(
+  apiFetch: ApiFetch,
+  productId: string | number,
+) {
+  const response = await apiFetch(
+    `${adminApiPaths.products}${encodeURIComponent(String(productId))}/`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ restore: true }),
+    },
+  );
+  const data = await parseAdminResponse(response, "تعذر استعادة المنتج");
+  return assertReadableProduct(normalizeProduct(data), "تعذر قراءة بيانات المنتج");
 }
 
 export async function toggleProductAvailability(

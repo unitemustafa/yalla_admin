@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Archive,
+  ArchiveRestore,
   ArrowUpDown,
   BadgeCheck,
   CheckCircle2,
@@ -40,6 +42,7 @@ import { PageLoadError } from "../load-error-card";
 import {
   deleteDeliveryZone,
   loadDeliveryZones,
+  restoreDeliveryZone,
   saveDeliveryZone,
 } from "../delivery-zones-api";
 import { useServiceCities, type ServiceCity } from "../cities-api";
@@ -493,7 +496,9 @@ function ZonesTable({
   onToggleMenu,
   onEdit,
   onDelete,
+  onRestore,
   onCreate,
+  archived,
 }: {
   zones: DeliveryZone[];
   startIndex: number;
@@ -501,22 +506,24 @@ function ZonesTable({
   onToggleMenu: (zoneId: string) => void;
   onEdit: (zone: DeliveryZone) => void;
   onDelete: (zone: DeliveryZone) => void;
+  onRestore: (zone: DeliveryZone) => void;
   onCreate: () => void;
+  archived: boolean;
 }) {
   if (!zones.length) {
     return (
       <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-md border bg-card px-4 py-10 text-center">
         <div className="rounded-full bg-muted p-3 text-primary">
-          <MapPin className="size-6" />
+          {archived ? <Archive className="size-6" /> : <MapPin className="size-6" />}
         </div>
-        <div className="text-base font-semibold">لا توجد مناطق توصيل</div>
+        <div className="text-base font-semibold">{archived ? "لا توجد مناطق مؤرشفة" : "لا توجد مناطق توصيل"}</div>
         <p className="max-w-md text-sm leading-6 text-muted-foreground">
-          أضف أول منطقة لتحديد نطاقات التوصيل وأسعارها.
+          {archived ? "المناطق التي تتم أرشفتها ستظهر هنا ويمكن استعادتها." : "أضف أول منطقة لتحديد نطاقات التوصيل وأسعارها."}
         </p>
-        <Button type="button" onClick={onCreate} className="mt-1">
+        {!archived ? <Button type="button" onClick={onCreate} className="mt-1">
           <Plus className="size-4" />
           أضف أول منطقة توصيل
-        </Button>
+        </Button> : null}
       </div>
     );
   }
@@ -590,15 +597,21 @@ function ZonesTable({
                     label={`إجراءات ${zone.name}`}
                     triggerClassName="h-8 w-10"
                     menuClassName="w-36"
-                    items={[
+                    items={zone.archivedAt ? [
+                      {
+                        label: "استعادة",
+                        icon: ArchiveRestore,
+                        onClick: () => onRestore(zone),
+                      },
+                    ] : [
                       {
                         label: "تعديل",
                         icon: Edit3,
                         onClick: () => onEdit(zone),
                       },
                       {
-                        label: "حذف",
-                        icon: Trash2,
+                        label: zone.deletionMode === "archive" ? "أرشفة" : "حذف نهائي",
+                        icon: zone.deletionMode === "archive" ? Archive : Trash2,
                         onClick: () => onDelete(zone),
                         tone: "danger",
                       },
@@ -620,6 +633,7 @@ function ZonesMobileList({
   startIndex,
   onEdit,
   onDelete,
+  onRestore,
   onStatusChange,
   changingStatusId,
 }: {
@@ -628,6 +642,7 @@ function ZonesMobileList({
   startIndex: number;
   onEdit: (zone: DeliveryZone) => void;
   onDelete: (zone: DeliveryZone) => void;
+  onRestore: (zone: DeliveryZone) => void;
   onStatusChange: (zone: DeliveryZone, checked: boolean) => void;
   changingStatusId: string | null;
 }) {
@@ -675,7 +690,7 @@ function ZonesMobileList({
           </div>
 
           <div className="flex flex-nowrap justify-start gap-2 xl:justify-end">
-            <div className="flex shrink-0 items-center gap-2 rounded-md border px-2 py-1">
+            {!zone.archivedAt ? <div className="flex shrink-0 items-center gap-2 rounded-md border px-2 py-1">
               <Switch
                 checked={zone.status === "active"}
                 disabled={changingStatusId === zone.id}
@@ -684,13 +699,21 @@ function ZonesMobileList({
               <span className="text-xs font-semibold">
                 {zone.status === "active" ? "مفعّلة" : "معطّلة"}
               </span>
-            </div>
+            </div> : null}
+            {zone.archivedAt ? (
+              <Button type="button" variant="outline" size="icon" onClick={() => onRestore(zone)} aria-label={`استعادة ${zone.name}`} title="استعادة" className="text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-600">
+                <ArchiveRestore className="size-4" />
+              </Button>
+            ) : (
+            <>
             <Button type="button" variant="outline" size="icon" onClick={() => onEdit(zone)} aria-label={`تعديل ${zone.name}`} title="تعديل">
               <Edit3 className="size-4" />
             </Button>
-            <Button type="button" variant="outline" size="icon" onClick={() => onDelete(zone)} aria-label={`حذف ${zone.name}`} title="حذف" className="text-destructive hover:bg-destructive/10 hover:text-destructive">
-              <Trash2 className="size-4" />
+            <Button type="button" variant="outline" size="icon" onClick={() => onDelete(zone)} aria-label={zone.deletionMode === "archive" ? `أرشفة ${zone.name}` : `حذف ${zone.name} نهائيًا`} title={zone.deletionMode === "archive" ? "أرشفة" : "حذف نهائي"} className="text-destructive hover:bg-destructive/10 hover:text-destructive">
+              {zone.deletionMode === "archive" ? <Archive className="size-4" /> : <Trash2 className="size-4" />}
             </Button>
+            </>
+            )}
           </div>
         </Card>
       ))}
@@ -764,6 +787,7 @@ export function DeliveryZonesPage() {
   const [deleteZone, setDeleteZone] = useState<DeliveryZone | null>(null);
   const [deletingZoneId, setDeletingZoneId] = useState<string | null>(null);
   const [changingStatusId, setChangingStatusId] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const { cities, loading: citiesLoading, error: citiesError } = useServiceCities();
   const cityFilterOptions = useMemo(
     () => [
@@ -791,7 +815,7 @@ export function DeliveryZonesPage() {
     try {
       const serviceCityId =
         selectedCityId === allCitiesFilterValue ? undefined : selectedCityId;
-      setZones(await loadDeliveryZones(apiFetch, serviceCityId));
+      setZones(await loadDeliveryZones(apiFetch, serviceCityId, showArchived));
     } catch (error) {
       setZones([]);
       setLoadError(
@@ -800,7 +824,7 @@ export function DeliveryZonesPage() {
     } finally {
       setLoading(false);
     }
-  }, [apiFetch, selectedCityId]);
+  }, [apiFetch, selectedCityId, showArchived]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadZones(), 0);
@@ -933,20 +957,6 @@ export function DeliveryZonesPage() {
           value && typeof value === "object" && "action" in value
             ? value as { action: "deleted" | "archived"; detail?: string }
             : { action: "deleted" as const };
-        if (result.action === "archived") {
-          setZones((currentZones) => {
-            if (currentZones.some((currentZone) => currentZone.id === zone.id)) {
-              return currentZones;
-            }
-            const nextZones = [...currentZones];
-            nextZones.splice(
-              Math.max(0, zoneIndex),
-              0,
-              { ...zone, status: "inactive" },
-            );
-            return nextZones;
-          });
-        }
         showSnackbar({
           message:
             result.action === "archived"
@@ -964,6 +974,21 @@ export function DeliveryZonesPage() {
     });
   }
 
+  async function restoreArchivedZone(zone: DeliveryZone) {
+    const previousZones = zones;
+    setZones((current) => current.filter((item) => item.id !== zone.id));
+    try {
+      await restoreDeliveryZone(apiFetch, zone.id);
+      showSnackbar({ message: `تمت استعادة منطقة ${zone.name}.`, tone: "success" });
+    } catch (error) {
+      setZones(previousZones);
+      showSnackbar({
+        message: error instanceof Error ? error.message : "تعذر استعادة منطقة التوصيل.",
+        tone: "danger",
+      });
+    }
+  }
+
   return (
     <div dir="rtl" className="px-6 py-8">
       <PageTitle
@@ -972,14 +997,21 @@ export function DeliveryZonesPage() {
         size="compact"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Button variant={!showArchived ? "default" : "outline"} onClick={() => { setShowArchived(false); setCurrentPage(1); }}>
+              المناطق الحالية
+            </Button>
+            <Button variant={showArchived ? "default" : "outline"} onClick={() => { setShowArchived(true); setCurrentPage(1); }}>
+              <Archive className="size-4" />
+              المؤرشف
+            </Button>
             <Button variant="outline" onClick={() => void loadZones()} disabled={loading}>
               <RefreshCw className={cn("size-4", loading && "animate-spin")} />
               تحديث
             </Button>
-            <Button onClick={startCreatingZone} disabled={citiesLoading || Boolean(citiesError)}>
+            {!showArchived ? <Button onClick={startCreatingZone} disabled={citiesLoading || Boolean(citiesError)}>
               <Plus className="size-4" />
               منطقة جديدة
-            </Button>
+            </Button> : null}
           </div>
         }
       />
@@ -1101,6 +1133,7 @@ export function DeliveryZonesPage() {
                   startIndex={pageStartIndex}
                   onEdit={setEditingZone}
                   onDelete={setDeleteZone}
+                  onRestore={(zone) => void restoreArchivedZone(zone)}
                   onStatusChange={handleZoneStatusChange}
                   changingStatusId={changingStatusId}
                 />
@@ -1112,7 +1145,9 @@ export function DeliveryZonesPage() {
                     onToggleMenu={() => undefined}
                     onEdit={setEditingZone}
                     onDelete={setDeleteZone}
+                    onRestore={(zone) => void restoreArchivedZone(zone)}
                     onCreate={startCreatingZone}
+                    archived={showArchived}
                   />
                 ) : null}
               </div>
@@ -1156,8 +1191,8 @@ export function DeliveryZonesPage() {
       ) : null}
       {deleteZone ? (
         <ConfirmDeleteDialog
-          title="حذف منطقة التوصيل"
-          description={`هل تريد حذف منطقة التوصيل ${deleteZone.name}؟ إذا كانت مرتبطة بطلبات أو عناوين أو مندوبين فسيتم أرشفتها وتعطيلها بدل الحذف النهائي.`}
+          title={deleteZone.deletionMode === "archive" ? "أرشفة منطقة التوصيل" : "حذف منطقة التوصيل نهائيًا"}
+          description={deleteZone.deletionMode === "archive" ? `منطقة ${deleteZone.name} مرتبطة بسجلات سابقة؛ سيتم إخفاؤها وأرشفتها وتعطيلها مع إمكانية استعادتها.` : `هل تريد حذف منطقة التوصيل ${deleteZone.name} نهائيًا؟ لا يمكن التراجع بعد تنفيذ الحذف.`}
           busy={deletingZoneId === deleteZone.id}
           onCancel={() => setDeleteZone(null)}
           onConfirm={confirmDeleteZone}

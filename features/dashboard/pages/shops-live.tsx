@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, ArrowDown, ArrowUp, CheckCircle2, Edit3, ImagePlus, Layers3, LoaderCircle, MapPin, Plus, RefreshCw, Search, Store, Trash2, X } from "lucide-react";
+import { AlertCircle, Archive, ArchiveRestore, ArrowDown, ArrowUp, CheckCircle2, Edit3, ImagePlus, Layers3, LoaderCircle, MapPin, Plus, RefreshCw, Search, Store, Trash2, X } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { deletionResult } from "../admin-api";
@@ -40,6 +40,8 @@ type Market = {
   service_city_ids?: Array<number | string>;
   service_cities?: MarketServiceCity[];
   subcategories?: StoreSubcategory[];
+  archived_at?: string | null;
+  deletion_mode?: "delete" | "archive";
 };
 
 async function json(response: Response) {
@@ -671,6 +673,7 @@ export function ShopsPage() {
   const [dialogMarket, setDialogMarket] = useState<Market | null | undefined>();
   const [deleteMarket, setDeleteMarket] = useState<Market | null>(null);
   const [showSubcategoryManager, setShowSubcategoryManager] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const loadServiceCityOptions = useCallback(async () => {
     setServiceCitiesLoading(true);
@@ -689,7 +692,7 @@ export function ShopsPage() {
     setLoading(true); setError("");
     try {
       const [marketsResponse, classificationsResponse, loadedSubcategories] = await Promise.all([
-        apiFetch("home/markets/"),
+        apiFetch(`home/markets/${showArchived ? "?archived=true" : ""}`),
         apiFetch("home/market-classifications/"),
         loadStoreSubcategories(apiFetch),
       ]);
@@ -705,7 +708,7 @@ export function ShopsPage() {
       setSubcategories(loadedSubcategories);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "تعذر تحميل المحلات."); }
     finally { setLoading(false); }
-  }, [apiFetch]);
+  }, [apiFetch, showArchived]);
 
   useEffect(() => { void Promise.resolve().then(load); }, [load]);
   useEffect(() => { void Promise.resolve().then(loadServiceCityOptions); }, [loadServiceCityOptions]);
@@ -742,9 +745,6 @@ export function ShopsPage() {
       },
       onCommitSuccess: (value) => {
         const result = deletionResult(value);
-        if (result.action === "archived") {
-          restoreMarket({ ...market, status: "inactive" }, marketIndex);
-        }
         showSnackbar({
           message:
             result.action === "archived"
@@ -760,6 +760,27 @@ export function ShopsPage() {
         });
       },
     });
+  }
+
+  async function restoreArchivedMarket(market: Market) {
+    const previousMarkets = markets;
+    setMarkets((current) => current.filter((item) => item.id !== market.id));
+    try {
+      const response = await apiFetch(`home/markets/${market.id}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ restore: true }),
+      });
+      const data = await json(response);
+      if (!response.ok) throw new Error(errorMessage(data, "تعذر استعادة المحل."));
+      showSnackbar({ message: `تمت استعادة المحل ${market.name}.` });
+    } catch (reason) {
+      setMarkets(previousMarkets);
+      showSnackbar({
+        message: reason instanceof Error ? reason.message : "تعذر استعادة المحل.",
+        tone: "danger",
+      });
+    }
   }
 
   async function toggleMarketActive(market: Market, nextActive: boolean) {
@@ -798,7 +819,7 @@ export function ShopsPage() {
 
   return (
     <div className="px-6 py-6">
-      <PageTitle title="المحلات" description="إدارة المحلات وربط ظهور منتجاتها بالمدن." actions={<div className="flex flex-wrap items-center gap-2"><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => void load()} disabled={loading}><RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />تحديث</Button><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => setShowSubcategoryManager(true)}><Layers3 className="size-4" />إنشاء/إدارة الفئات الداخلية</Button><Button className="h-9 px-4 text-sm" onClick={() => setDialogMarket(null)} disabled={!subcategories.some((item) => item.is_active)}><Plus className="size-4" />إضافة محل</Button></div>} />
+      <PageTitle title="المحلات" description="إدارة المحلات وربط ظهور منتجاتها بالمدن." actions={<div className="flex flex-wrap items-center gap-2"><Button type="button" variant={!showArchived ? "default" : "outline"} className="h-9 px-4 text-sm" onClick={() => setShowArchived(false)}>المحلات الحالية</Button><Button type="button" variant={showArchived ? "default" : "outline"} className="h-9 px-4 text-sm" onClick={() => setShowArchived(true)}><Archive className="size-4" />المؤرشف</Button><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => void load()} disabled={loading}><RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />تحديث</Button>{!showArchived ? <><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => setShowSubcategoryManager(true)}><Layers3 className="size-4" />إنشاء/إدارة الفئات الداخلية</Button><Button className="h-9 px-4 text-sm" onClick={() => setDialogMarket(null)} disabled={!subcategories.some((item) => item.is_active)}><Plus className="size-4" />إضافة محل</Button></> : null}</div>} />
       <div className="mt-6 grid gap-3 md:grid-cols-3">
         {[["إجمالي المحلات", markets.length, Store], ["المحلات النشطة", markets.filter((item) => item.status === "active").length, Store], ["مدن الظهور", new Set(markets.flatMap((item) => marketServiceCityIds(item))).size, MapPin]].map(([label, value, Icon]) => { const MetricIcon = Icon as typeof Store; return <Card key={label as string} className="h-[80px]"><div className="flex h-full items-center gap-3 px-5"><span className="rounded-full bg-primary/10 p-3 text-primary"><MetricIcon className="size-5" /></span><div><p className="text-xs text-muted-foreground">{label as string}</p><p className="text-xl font-bold">{value as number}</p></div></div></Card>; })}
       </div>
@@ -808,16 +829,16 @@ export function ShopsPage() {
             <div className="flex size-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
               <Store className="size-8" />
             </div>
-            <h2 className="mt-6 text-xl font-semibold leading-7">لا توجد محلات حتى الآن</h2>
+            <h2 className="mt-6 text-xl font-semibold leading-7">{showArchived ? "لا توجد محلات مؤرشفة" : "لا توجد محلات حتى الآن"}</h2>
             <p className="mt-2 max-w-[430px] text-sm leading-6 text-muted-foreground">
-              سيظهر هنا أول محل تنشئه وتربطه بمدن الظهور.
+              {showArchived ? "المحلات التي تتم أرشفتها ستظهر هنا ويمكن استعادتها." : "سيظهر هنا أول محل تنشئه وتربطه بمدن الظهور."}
             </p>
-            <div className="mt-6 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row">
+            {!showArchived ? <div className="mt-6 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row">
               <Button type="button" className="h-10 px-4" onClick={() => subcategories.some((item) => item.is_active) ? setDialogMarket(null) : setShowSubcategoryManager(true)}>
                 {subcategories.some((item) => item.is_active) ? <Plus className="size-4" /> : <Layers3 className="size-4" />}
                 {subcategories.some((item) => item.is_active) ? "إنشاء أول محل" : "إنشاء فئة داخلية أولًا"}
               </Button>
-            </div>
+            </div> : null}
           </div>
         </Card>
       ) : (
@@ -831,11 +852,11 @@ export function ShopsPage() {
           <div key="name" className="flex min-w-0 items-center gap-2.5 py-1"><DashboardImage src={market.image} placeholderType="store" alt="صورة المتجر" width={52} height={52} sizes="52px" className="size-[52px] shrink-0 rounded-md border bg-muted/35 shadow-sm" imageClassName="object-cover" /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-semibold">{market.name}</p><span className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-bold ${market.status === "active" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600" : "border-destructive/40 bg-destructive/10 text-destructive"}`}>{market.status === "active" ? "مفعلة" : "معطلة"}</span>{market.is_popular ? <span className="inline-flex rounded-md border border-primary/35 bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">شائع</span> : null}</div><p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{market.description || "لا يوجد وصف للمحل."}</p></div></div>,
           <Badge key="classification">{classificationLabel(market)}</Badge>,
           <MarketLocationsCell key="locations" market={market} serviceCities={serviceCities} />,
-          <div key="actions" className="flex min-w-[225px] items-center justify-end gap-2"><div className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-2 text-xs font-semibold"><span>{market.status === "active" ? "مفعلة" : "معطلة"}</span><Switch checked={market.status === "active"} onCheckedChange={(checked) => void toggleMarketActive(market, checked)} aria-label={`تفعيل المحل ${market.name}`} /></div><MarketActionButton label={`تعديل ${market.name}`} onClick={() => setDialogMarket(market)}><Edit3 className="size-4" /></MarketActionButton><MarketActionButton tone="danger" label={`حذف ${market.name}`} onClick={() => setDeleteMarket(market)}><Trash2 className="size-4" /></MarketActionButton></div>,
+          <div key="actions" className="flex min-w-[225px] items-center justify-end gap-2">{showArchived ? <MarketActionButton label={`استعادة ${market.name}`} onClick={() => void restoreArchivedMarket(market)}><ArchiveRestore className="size-4" /></MarketActionButton> : <><div className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-2 text-xs font-semibold"><span>{market.status === "active" ? "مفعلة" : "معطلة"}</span><Switch checked={market.status === "active"} onCheckedChange={(checked) => void toggleMarketActive(market, checked)} aria-label={`تفعيل المحل ${market.name}`} /></div><MarketActionButton label={`تعديل ${market.name}`} onClick={() => setDialogMarket(market)}><Edit3 className="size-4" /></MarketActionButton><MarketActionButton tone="danger" label={market.deletion_mode === "archive" ? `أرشفة ${market.name}` : `حذف ${market.name} نهائيًا`} onClick={() => setDeleteMarket(market)}>{market.deletion_mode === "archive" ? <Archive className="size-4" /> : <Trash2 className="size-4" />}</MarketActionButton></>}</div>,
         ])} />}
       </Card>
       )}
-      {deleteMarket ? <ConfirmDeleteDialog title="حذف المحل" description={`هل تريد حذف المحل ${deleteMarket.name}؟ إذا كان مرتبطًا بطلبات سابقة فسيتم أرشفته وتعطيله بدل الحذف النهائي.`} busy={false} onCancel={() => setDeleteMarket(null)} onConfirm={() => remove(deleteMarket)} /> : null}
+      {deleteMarket ? <ConfirmDeleteDialog title={deleteMarket.deletion_mode === "archive" ? "أرشفة المحل" : "حذف المحل نهائيًا"} description={deleteMarket.deletion_mode === "archive" ? `المحل ${deleteMarket.name} مرتبط بسجلات سابقة؛ سيتم إخفاؤه وأرشفته وتعطيله مع إمكانية استعادته.` : `هل تريد حذف المحل ${deleteMarket.name} نهائيًا؟ لا يمكن التراجع بعد تنفيذ الحذف.`} busy={false} onCancel={() => setDeleteMarket(null)} onConfirm={() => remove(deleteMarket)} /> : null}
       {dialogMarket !== undefined ? (
         classifications.length ? (
           <MarketDialog market={dialogMarket ?? undefined} serviceCities={serviceCities} serviceCitiesLoading={serviceCitiesLoading} serviceCitiesError={serviceCitiesError} classifications={classifications} subcategories={subcategories} onReloadServiceCities={() => void loadServiceCityOptions()} onClose={() => setDialogMarket(undefined)} onSaved={(saved, notificationRequested) => { setMarkets((current) => current.some((item) => item.id === saved.id) ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current]); setDialogMarket(undefined); showSnackbar({ message: notificationRequested ? "تم إنشاء المحل، والإشعار هيتبعت بعد إضافة أول منتج متاح." : "تم حفظ المحل وربطه بنطاق الظهور." }); }} />

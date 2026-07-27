@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
+  Archive,
+  ArchiveRestore,
   ArrowUpDown,
   Banknote,
   Calendar,
@@ -3067,6 +3069,8 @@ type OfferCard = {
   icon: React.ComponentType<{ className?: string }>;
   accent: string;
   iconBg: string;
+  archivedAt: string | null;
+  deletionMode: "delete" | "archive";
 };
 
 type OfferMarket = {
@@ -3262,6 +3266,8 @@ function offerCardFromApi(record: BackendRecord): OfferCard {
     icon: meta.icon,
     accent: meta.accent,
     iconBg: meta.bg,
+    archivedAt: typeof record.archived_at === "string" ? record.archived_at : null,
+    deletionMode: record.deletion_mode === "archive" ? "archive" : "delete",
   };
 }
 
@@ -3448,6 +3454,7 @@ export function OffersPage() {
   const [offerTypeFilter, setOfferTypeFilter] = useState(allOffersFilterValue);
   const [offerCityFilter, setOfferCityFilter] = useState(allOffersFilterValue);
   const [expandedOfferIds, setExpandedOfferIds] = useState<Record<string, boolean>>({});
+  const [showArchived, setShowArchived] = useState(false);
   const activeOffers = offers.filter(
     (offer) => offer.backendStatus === "active" && offerDateLifecycle(offer.startsAt, offer.endsAt) === "current",
   ).length;
@@ -3514,7 +3521,9 @@ export function OffersPage() {
     setOffersError(null);
 
     try {
-      const response = await apiFetch(adminApiPaths.offers);
+      const response = await apiFetch(
+        `${adminApiPaths.offers}${showArchived ? "?archived=true" : ""}`,
+      );
       const data = await readApiData(response);
       if (!response.ok) throw new Error(apiErrorMessage(data, "تعذر تحميل العروض من الباك."));
       setOffers(
@@ -3532,7 +3541,7 @@ export function OffersPage() {
     } finally {
       setOffersLoading(false);
     }
-  }, [apiFetch, showSnackbar]);
+  }, [apiFetch, showArchived, showSnackbar]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -3642,23 +3651,7 @@ export function OffersPage() {
       },
       onCommitSuccess: (value) => {
         const result = deletionResult(value);
-        if (result.action === "archived") {
-          pendingOfferDeletionIdsRef.current.delete(offer.id);
-          setOffers((currentOffers) => {
-            if (currentOffers.some((currentOffer) => currentOffer.id === offer.id)) {
-              return currentOffers;
-            }
-            const nextOffers = [...currentOffers];
-            nextOffers.splice(Math.max(0, offerIndex), 0, {
-              ...offer,
-              status: "متوقف",
-              backendStatus: "inactive",
-              effectiveStatus: "inactive",
-              canSendNotification: false,
-            });
-            return nextOffers;
-          });
-        }
+        pendingOfferDeletionIdsRef.current.delete(offer.id);
         showSnackbar({
           message:
             result.action === "archived"
@@ -3679,6 +3672,25 @@ export function OffersPage() {
     });
   }
 
+  async function restoreArchivedOffer(offer: OfferCard) {
+    const previousOffers = offers;
+    setOffers((current) => current.filter((item) => item.id !== offer.id));
+    try {
+      await sendAdminJson(
+        apiFetch,
+        `${adminApiPaths.offers}${encodeURIComponent(offer.id)}/`,
+        { method: "PATCH", body: JSON.stringify({ restore: true }) },
+      );
+      showSnackbar({ message: `تمت استعادة العرض ${offer.title}.`, tone: "success" });
+    } catch (error) {
+      setOffers(previousOffers);
+      showSnackbar({
+        message: error instanceof Error ? error.message : "تعذر استعادة العرض.",
+        tone: "danger",
+      });
+    }
+  }
+
   return (
     <div className="px-6 py-8">
       <PageTitle
@@ -3687,17 +3699,24 @@ export function OffersPage() {
         size="compact"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant={!showArchived ? "default" : "outline"} className="h-9" onClick={() => setShowArchived(false)}>
+              العروض الحالية
+            </Button>
+            <Button type="button" variant={showArchived ? "default" : "outline"} className="h-9" onClick={() => setShowArchived(true)}>
+              <Archive className="size-4" />
+              المؤرشف
+            </Button>
             <Button type="button" variant="outline" className="h-9" onClick={() => void reloadOffers()} disabled={offersLoading}>
               <RefreshCw className={cn("size-4", offersLoading && "animate-spin")} />
               تحديث
             </Button>
-            <Link
+            {!showArchived ? <Link
               href="/offers/create"
               className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90"
             >
               <CheckCircle2 className="size-4" />
               إنشاء عرض
-            </Link>
+            </Link> : null}
           </div>
         }
       />
@@ -3773,14 +3792,14 @@ export function OffersPage() {
             <div className="flex size-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
               <Tag className="size-8" />
             </div>
-            <h2 className="mt-4 text-xl font-semibold leading-7">لا توجد عروض حتى الآن</h2>
-            <p className="mt-2 max-w-[430px] text-sm leading-6 text-muted-foreground">سيظهر هنا أول عرض تنشئه للعملاء في تطبيق يلا ماركت.</p>
-            <div className="mt-4 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row">
+            <h2 className="mt-4 text-xl font-semibold leading-7">{showArchived ? "لا توجد عروض مؤرشفة" : "لا توجد عروض حتى الآن"}</h2>
+            <p className="mt-2 max-w-[430px] text-sm leading-6 text-muted-foreground">{showArchived ? "العروض التي تتم أرشفتها ستظهر هنا ويمكن استعادتها." : "سيظهر هنا أول عرض تنشئه للعملاء في تطبيق يلا ماركت."}</p>
+            {!showArchived ? <div className="mt-4 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row">
               <Link href="/offers/create" className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90">
                 <Plus className="size-4" />
                 إنشاء أول عرض
               </Link>
-            </div>
+            </div> : null}
           </div>
         </Card>
       ) : filteredOffers.length === 0 ? (
@@ -3877,6 +3896,12 @@ export function OffersPage() {
                 <div className={cn("flex items-center justify-between border-t pt-4", isCollapsed ? "mt-4" : "mt-auto")}>
                   <span className="text-xs text-muted-foreground">إجراءات العرض</span>
                   <div className="flex items-center gap-1">
+                    {showArchived ? (
+                      <MiniIconButton tone="green" ariaLabel={`استعادة العرض ${offer.title}`} onClick={() => void restoreArchivedOffer(offer)}>
+                        <ArchiveRestore className="size-4" />
+                      </MiniIconButton>
+                    ) : (
+                    <>
                     <MiniIconButton
                       tone="green"
                       ariaLabel={offer.effectiveStatus === "scheduled" ? "يمكن إرسال الإشعار بعد بداية العرض." : offer.effectiveStatus === "expired" ? "عدّل توقيت العرض أولًا." : offer.effectiveStatus === "inactive" ? "فعّل العرض أولًا." : "إرسال إشعار"}
@@ -3905,9 +3930,11 @@ export function OffersPage() {
                     <MiniIconButton ariaLabel="تعديل العرض" onClick={() => editOffer(offer)}>
                       <Edit className="size-4" />
                     </MiniIconButton>
-                    <MiniIconButton tone="red" ariaLabel="حذف العرض" onClick={() => setOfferDeleteTarget(offer)}>
-                      <Trash2 className="size-4" />
+                    <MiniIconButton tone="red" ariaLabel={offer.deletionMode === "archive" ? "أرشفة العرض" : "حذف العرض نهائيًا"} onClick={() => setOfferDeleteTarget(offer)}>
+                      {offer.deletionMode === "archive" ? <Archive className="size-4" /> : <Trash2 className="size-4" />}
                     </MiniIconButton>
+                    </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -3970,11 +3997,13 @@ function OfferDeleteModal({
       >
         <div className="border-b px-5 py-4">
           <h2 id="delete-offer-title" className="text-base font-bold">
-            حذف العرض
+            {offer.deletionMode === "archive" ? "أرشفة العرض" : "حذف العرض نهائيًا"}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">{offer.title}</p>
           <p className="mt-2 text-xs text-muted-foreground">
-            إذا كان العرض مستخدمًا في طلبات سابقة فسيتم أرشفته وتعطيله بدل حذفه نهائيًا.
+            {offer.deletionMode === "archive"
+              ? "العرض مرتبط بسجلات سابقة، لذلك سيتم إخفاؤه وأرشفته وتعطيله مع إمكانية استعادته."
+              : "سيتم حذف العرض نهائيًا ولا يمكن التراجع بعد تنفيذ الحذف."}
           </p>
         </div>
         <div className="flex justify-end gap-2 p-5">
@@ -3982,7 +4011,7 @@ function OfferDeleteModal({
             إلغاء
           </Button>
           <Button type="button" variant="danger" disabled={deleting} onClick={onConfirm}>
-            {deleting ? "جار الحذف..." : "حذف"}
+            {deleting ? "جار التنفيذ..." : offer.deletionMode === "archive" ? "أرشفة" : "حذف نهائي"}
           </Button>
         </div>
       </div>

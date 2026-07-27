@@ -4,6 +4,8 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Archive,
+  ArchiveRestore,
   Check,
   CheckCircle,
   Edit,
@@ -34,6 +36,7 @@ import {
   listProducts,
   productRowFromApi,
   readApiData,
+  restoreProduct,
   shopRowFromApi,
   toggleProductAvailability,
   type BackendRecord,
@@ -753,16 +756,26 @@ function RowActions({
   row,
   onView,
   onDelete,
+  onRestore,
 }: {
   row: ItemRow;
   onView: () => void;
   onDelete: () => void;
+  onRestore: () => void;
 }) {
+  const deletionMode = row.deletionMode === "archive" ? "archive" : "delete";
+  const DeleteIcon = deletionMode === "archive" ? Archive : Trash2;
+  const deleteLabel = deletionMode === "archive" ? `أرشفة ${row.name}` : `حذف ${row.name} نهائيًا`;
+
   return (
     <div className="flex min-w-[150px] items-center justify-end gap-2">
       <button type="button" aria-label={`بيانات ${row.name}`} title={`بيانات ${row.name}`} onClick={onView} className="inline-flex size-10 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:bg-accent hover:text-foreground"><Eye className="size-4" /></button>
       <Link href={`/items/edit/${row.id}?returnTo=%2Fitems%3F`} aria-label={`تعديل ${row.name}`} title={`تعديل ${row.name}`} className="inline-flex size-10 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:bg-accent hover:text-foreground"><Edit className="size-4" /></Link>
-      <button type="button" aria-label={`حذف ${row.name}`} title={`حذف ${row.name}`} onClick={onDelete} className="inline-flex size-10 items-center justify-center rounded-md border border-destructive/35 text-destructive transition hover:bg-destructive/10"><Trash2 className="size-4" /></button>
+      {row.archived ? (
+        <button type="button" aria-label={`استعادة ${row.name}`} title={`استعادة ${row.name}`} onClick={onRestore} className="inline-flex size-10 items-center justify-center rounded-md border border-emerald-500/35 text-emerald-600 transition hover:bg-emerald-500/10"><ArchiveRestore className="size-4" /></button>
+      ) : (
+        <button type="button" aria-label={deleteLabel} title={deleteLabel} onClick={onDelete} className="inline-flex size-10 items-center justify-center rounded-md border border-destructive/35 text-destructive transition hover:bg-destructive/10"><DeleteIcon className="size-4" /></button>
+      )}
     </div>
   );
 }
@@ -844,10 +857,12 @@ function ActiveToggleButton({
 
 function DeleteDialog({
   itemName,
+  deletionMode,
   onClose,
   onConfirm,
 }: {
   itemName: string;
+  deletionMode: "delete" | "archive";
   onClose: () => void;
   onConfirm: () => void;
 }) {
@@ -862,18 +877,21 @@ function DeleteDialog({
         className="w-full max-w-[512px] rounded-lg border bg-background p-6 shadow-lg"
       >
         <h2 id="delete-item-title" className="text-lg font-semibold">
-          حذف المنتج
+          {deletionMode === "archive" ? "أرشفة المنتج" : "حذف المنتج نهائيًا"}
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          متأكد إنك عايز تحذف <span className="font-semibold">{itemName}</span>؟
-          لو المنتج مستخدم في طلبات سابقة هيتم أرشفته وتعطيله بدل الحذف النهائي.
+          {deletionMode === "archive" ? (
+            <>المنتج <span className="font-semibold">{itemName}</span> مستخدم في سجلات سابقة، لذلك سيتم إخفاؤه من القائمة وأرشفته وتعطيله مع إمكانية استعادته لاحقًا.</>
+          ) : (
+            <>متأكد إنك عايز تحذف <span className="font-semibold">{itemName}</span> نهائيًا؟ لا يمكن التراجع بعد تنفيذ الحذف.</>
+          )}
         </p>
         <div className="mt-4 flex justify-end gap-4">
           <Button variant="outline" onClick={onClose}>
             إلغاء
           </Button>
           <Button variant="danger" onClick={onConfirm}>
-            تأكيد الحذف
+            {deletionMode === "archive" ? "تأكيد الأرشفة" : "تأكيد الحذف"}
           </Button>
         </div>
       </div>
@@ -1097,6 +1115,7 @@ function ItemsMobileCards({
   onToggleActive,
   onView,
   onDelete,
+  onRestore,
 }: {
   rows: ItemRow[];
   selectedRows: Set<string>;
@@ -1104,6 +1123,7 @@ function ItemsMobileCards({
   onToggleActive: (row: ItemRow, active: boolean) => void;
   onView: (row: ItemRow) => void;
   onDelete: (rowId: string) => void;
+  onRestore: (row: ItemRow) => void;
 }) {
   return (
     <div className="mt-4 grid min-w-0 gap-3 lg:hidden">
@@ -1137,6 +1157,7 @@ function ItemsMobileCards({
                   row={row}
                   onView={() => onView(row)}
                   onDelete={() => onDelete(row.id)}
+                  onRestore={() => onRestore(row)}
                 />
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
@@ -1183,6 +1204,7 @@ export function ItemsPage() {
   const [additionRows, setAdditionRows] = useState(() => new Map<string, string>());
   const [filters, setFilters] = useState<ItemFilters>(defaultFilters);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(false);
@@ -1215,7 +1237,7 @@ export function ItemsPage() {
 
       try {
         const [products, additionsResponse, loadedMarkets] = await Promise.all([
-          listProducts(apiFetch),
+          listProducts(apiFetch, showArchived),
           apiFetch(adminApiPaths.productAdditions),
           fetchAdminRows(apiFetch, adminApiPaths.markets, shopRowFromApi),
         ]);
@@ -1261,7 +1283,7 @@ export function ItemsPage() {
     return () => {
       active = false;
     };
-  }, [apiFetch, reloadKey]);
+  }, [apiFetch, reloadKey, showArchived]);
 
   function toggleSelectedRow(rowIndex: string) {
     setSelectedRows((currentRows) => {
@@ -1352,13 +1374,6 @@ export function ItemsPage() {
 
     try {
       const result = await deleteProduct(apiFetch, deleteRow.id);
-      if (result.action === "archived") {
-        setRows(
-          previousRows.map((row) =>
-            row.id === deleteRow.id ? { ...row, active: false } : row,
-          ),
-        );
-      }
       showSnackbar({
         message:
           result.action === "archived"
@@ -1378,6 +1393,21 @@ export function ItemsPage() {
     }
   }
 
+  async function restoreArchivedProduct(row: ItemRow) {
+    const previousRows = rows;
+    setRows((currentRows) => currentRows.filter((item) => item.id !== row.id));
+    try {
+      await restoreProduct(apiFetch, row.id);
+      showSnackbar({ message: `تمت استعادة ${row.name} إلى قائمة المنتجات.` });
+    } catch (restoreError) {
+      setRows(previousRows);
+      showSnackbar({
+        message: restoreError instanceof Error ? restoreError.message : "تعذر استعادة المنتج.",
+        tone: "danger",
+      });
+    }
+  }
+
   return (
     <div className="min-h-screen bg-muted/20 px-4 py-6 sm:px-6 lg:px-8">
       <PageTitle
@@ -1387,17 +1417,24 @@ export function ItemsPage() {
         className="rounded-lg border bg-card p-4 shadow-sm"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant={!showArchived ? "default" : "outline"} className="h-9 px-4 text-sm" onClick={() => { setShowArchived(false); setCurrentPage(1); }}>
+              المنتجات الحالية
+            </Button>
+            <Button type="button" variant={showArchived ? "default" : "outline"} className="h-9 px-4 text-sm" onClick={() => { setShowArchived(true); setCurrentPage(1); }}>
+              <Archive className="size-4" />
+              المؤرشف
+            </Button>
             <Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => setReloadKey((current) => current + 1)} disabled={loading}>
               <RotateCcw className={cn("size-4", loading && "animate-spin")} />
               تحديث
             </Button>
-            <Link
+            {!showArchived ? <Link
               href="/items/create"
               className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition hover:bg-primary/90 sm:w-[132px]"
             >
               <Plus className="size-4" />
               منتج جديد
-            </Link>
+            </Link> : null}
           </div>
         }
       />
@@ -1409,15 +1446,17 @@ export function ItemsPage() {
           <Card className="flex min-h-[280px] items-center justify-center bg-card shadow">
             <div className="mx-auto flex w-full max-w-[520px] flex-col items-center px-6 py-8 text-center">
               <div className="flex size-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
-                <Package className="size-8" />
+                {showArchived ? <Archive className="size-8" /> : <Package className="size-8" />}
               </div>
               <h2 className="mt-4 text-xl font-semibold leading-7">
-                لا توجد منتجات حتى الآن
+                {showArchived ? "لا توجد منتجات مؤرشفة" : "لا توجد منتجات حتى الآن"}
               </h2>
               <p className="mt-2 max-w-[430px] text-sm leading-6 text-muted-foreground">
-                سيظهر هنا أول منتج تضيفه للعملاء في تطبيق يلا ماركت.
+                {showArchived
+                  ? "المنتجات التي تتم أرشفتها ستظهر هنا ويمكن استعادتها."
+                  : "سيظهر هنا أول منتج تضيفه للعملاء في تطبيق يلا ماركت."}
               </p>
-              <div className="mt-4 flex w-full justify-center sm:w-auto">
+              {!showArchived ? <div className="mt-4 flex w-full justify-center sm:w-auto">
                 <Link
                   href="/items/create"
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow transition hover:bg-primary/90"
@@ -1425,7 +1464,7 @@ export function ItemsPage() {
                   <Plus className="size-4" />
                   إضافة أول منتج
                 </Link>
-              </div>
+              </div> : null}
             </div>
           </Card>
         ) : (
@@ -1472,6 +1511,7 @@ export function ItemsPage() {
                 onToggleActive={toggleActive}
                 onView={openProductDetail}
                 onDelete={setDeleteId}
+                onRestore={(row) => void restoreArchivedProduct(row)}
               />
             ) : (
               <div className="mt-4 flex h-16 items-center justify-center rounded-md border text-sm text-muted-foreground lg:hidden">
@@ -1528,6 +1568,7 @@ export function ItemsPage() {
                       row={row}
                       onView={() => openProductDetail(row)}
                       onDelete={() => setDeleteId(row.id)}
+                      onRestore={() => void restoreArchivedProduct(row)}
                     />
                   </div>,
                 ])}
@@ -1573,6 +1614,7 @@ export function ItemsPage() {
       {deleteRow ? (
         <DeleteDialog
           itemName={deleteRow.name}
+          deletionMode={deleteRow.deletionMode === "archive" ? "archive" : "delete"}
           onClose={() => setDeleteId(null)}
           onConfirm={confirmDelete}
         />
