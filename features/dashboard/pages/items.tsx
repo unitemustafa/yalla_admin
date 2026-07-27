@@ -45,6 +45,7 @@ import {
 } from "../admin-api";
 import { DashboardImage } from "../dashboard-image";
 import {
+  Badge,
   Button,
   Card,
   CurrencyText,
@@ -1148,18 +1149,20 @@ function ItemsMobileCards({
           className="min-w-0 overflow-hidden rounded-md border bg-card p-3 text-card-foreground shadow-sm"
         >
           <div className="flex items-start gap-3">
-            <button
-              type="button"
-              role="checkbox"
-              aria-checked={selectedRows.has(row.index)}
-              data-state={selectedRows.has(row.index) ? "checked" : "unchecked"}
-              value="on"
-              aria-label="تحديد الصف"
-              className={cn(checkboxClass, "mt-3")}
-              onClick={() => onToggleSelected(row.index)}
-            >
-              {selectedRows.has(row.index) ? <Check className="size-3" /> : null}
-            </button>
+            {!row.archived ? (
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={selectedRows.has(row.index)}
+                data-state={selectedRows.has(row.index) ? "checked" : "unchecked"}
+                value="on"
+                aria-label="تحديد الصف"
+                className={cn(checkboxClass, "mt-3")}
+                onClick={() => onToggleSelected(row.index)}
+              >
+                {selectedRows.has(row.index) ? <Check className="size-3" /> : null}
+              </button>
+            ) : null}
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -1197,12 +1200,12 @@ function ItemsMobileCards({
                   </div>
                 </div>
               </div>
-              <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3">
+              {!row.archived ? <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3">
                 <ActiveToggleButton
                   active={row.active}
                   onToggle={(active) => onToggleActive(row, active)}
                 />
-              </div>
+              </div> : null}
             </div>
           </div>
         </article>
@@ -1545,7 +1548,7 @@ export function ItemsPage() {
                   "المحل",
                   "الظهور",
                   "السعر",
-                  "نشط",
+                  showArchived ? "الحالة" : "نشط",
                   "",
                 ]}
                 rows={(loading ? [] : pagedRows).map((row, rowPosition) => [
@@ -1573,10 +1576,14 @@ export function ItemsPage() {
                     <PriceCell price={row.price} />
                   </div>,
                   <div key={`active-wrap-${row.index}`} className="flex items-center gap-3">
-                    <ActiveToggleButton
-                      active={row.active}
-                      onToggle={(active) => toggleActive(row, active)}
-                    />
+                    {showArchived ? (
+                      <Badge tone="blue">مؤرشف</Badge>
+                    ) : (
+                      <ActiveToggleButton
+                        active={row.active}
+                        onToggle={(active) => toggleActive(row, active)}
+                      />
+                    )}
                   </div>,
                   <div key={`actions-${row.index}`} className="flex items-center justify-end">
                     <RowActions
