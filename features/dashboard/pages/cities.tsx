@@ -37,7 +37,6 @@ import {
   saveServiceCity,
   type ServiceCity,
   type ServiceCityPayload,
-  type CityBoundaryGeoJson,
   useServiceCities,
 } from "../cities-api";
 import { useSnackbar } from "../snackbar";
@@ -61,7 +60,7 @@ type CityDraft = {
   nameAr: string;
   latitude: string;
   longitude: string;
-  boundaryGeojson: CityBoundaryGeoJson | null;
+  radiusKm: string;
   active: boolean;
 };
 
@@ -69,7 +68,7 @@ const defaultDraft: CityDraft = {
   nameAr: "",
   latitude: "30.0444000",
   longitude: "31.2357000",
-  boundaryGeojson: null,
+  radiusKm: "25",
   active: true,
 };
 
@@ -78,7 +77,7 @@ function cityDraft(city?: ServiceCity): CityDraft {
     nameAr: city?.name || defaultDraft.nameAr,
     latitude: city?.center_latitude ?? defaultDraft.latitude,
     longitude: city?.center_longitude ?? defaultDraft.longitude,
-    boundaryGeojson: city?.boundary_geojson ?? null,
+    radiusKm: city?.radius_km ?? defaultDraft.radiusKm,
     active: city?.is_active ?? true,
   };
 }
@@ -88,7 +87,8 @@ function payloadFromDraft(draft: CityDraft): ServiceCityPayload {
     name: draft.nameAr.trim(),
     center_latitude: Number(draft.latitude).toFixed(7),
     center_longitude: Number(draft.longitude).toFixed(7),
-    boundary_geojson: draft.boundaryGeojson,
+    radius_km: Number(draft.radiusKm).toFixed(2),
+    boundary_geojson: null,
     is_active: draft.active,
   };
 }
@@ -98,9 +98,17 @@ function payloadFromCity(city: ServiceCity): ServiceCityPayload {
     name: city.name,
     center_latitude: city.center_latitude ?? defaultDraft.latitude,
     center_longitude: city.center_longitude ?? defaultDraft.longitude,
-    boundary_geojson: city.boundary_geojson,
+    radius_km: city.radius_km ?? defaultDraft.radiusKm,
+    boundary_geojson: null,
     is_active: city.is_active,
   };
+}
+
+function formatRadius(value: string | null | undefined) {
+  if (!value) return "-";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return value;
+  return `${number.toLocaleString("ar-EG-u-nu-latn")} كم`;
 }
 
 function formatMoney(value: string | number | null | undefined) {
@@ -147,10 +155,7 @@ function CityDialog({
   const [error, setError] = useState<string | null>(null);
   const latitude = Number(draft.latitude);
   const longitude = Number(draft.longitude);
-  const hasValidBoundary =
-    draft.boundaryGeojson?.type === "MultiPolygon"
-      ? (draft.boundaryGeojson.coordinates[0]?.[0]?.length ?? 0) >= 4
-      : (draft.boundaryGeojson?.coordinates[0]?.length ?? 0) >= 4;
+  const radiusKm = Number(draft.radiusKm);
   const valid =
     draft.nameAr.trim().length > 0 &&
     Number.isFinite(latitude) &&
@@ -159,7 +164,8 @@ function CityDialog({
     Number.isFinite(longitude) &&
     longitude >= -180 &&
     longitude <= 180 &&
-    hasValidBoundary;
+    Number.isFinite(radiusKm) &&
+    radiusKm > 0;
 
   function update<K extends keyof CityDraft>(key: K, value: CityDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -278,6 +284,19 @@ function CityDialog({
                     />
                   </label>
                 </div>
+                <label className="grid gap-2 text-sm font-semibold">
+                  نصف قطر التغطية (كم) *
+                  <Input
+                    dir="ltr"
+                    className="h-11 text-right"
+                    inputMode="decimal"
+                    min="0.1"
+                    step="0.1"
+                    type="number"
+                    value={draft.radiusKm}
+                    onChange={(event) => update("radiusKm", event.target.value)}
+                  />
+                </label>
                 <Button type="button" variant="outline" onClick={useCurrentLocation} disabled={locating} className="h-11">
                   {locating ? <LoaderCircle className="size-4 animate-spin" /> : <MapPin className="size-4" />}
                   {locating ? "جاري تحديد الموقع..." : "استخدام موقعي الحالي"}
@@ -300,7 +319,7 @@ function CityDialog({
                   <div>
                     <h3 className="font-bold">نطاق التغطية</h3>
                     <p className="text-xs text-muted-foreground">
-                      اضغط حول المدينة لرسم حدودها الفعلية، ثم أغلق الشكل بالعودة لأول نقطة.
+                      غيّر نصف القطر من البيانات، واضغط على الخريطة لتغيير مركز الدائرة.
                     </p>
                   </div>
                 </div>
@@ -311,10 +330,14 @@ function CityDialog({
                     <CityCoverageMap
                       latitude={latitude}
                       longitude={longitude}
-                      boundary={draft.boundaryGeojson}
-                      onBoundaryChange={(boundaryGeojson) =>
-                        update("boundaryGeojson", boundaryGeojson)
-                      }
+                      radiusKm={Number.isFinite(radiusKm) ? radiusKm : 0.1}
+                      onCenterChange={(nextLatitude, nextLongitude) => {
+                        setDraft((current) => ({
+                          ...current,
+                          latitude: nextLatitude.toFixed(7),
+                          longitude: nextLongitude.toFixed(7),
+                        }));
+                      }}
                     />
                   </div>
                 ) : (
@@ -767,7 +790,7 @@ export function CitiesPage() {
                         </Badge>
                       </div>
                       <p className="mt-1 truncate text-sm text-muted-foreground">
-                        حدود المدينة مرسومة من لوحة التحكم
+                        نصف قطر التغطية {formatRadius(city.radius_km)}
                       </p>
                     </div>
                   </div>
