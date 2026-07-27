@@ -762,8 +762,8 @@ export function CitiesPage() {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-bold">{city.name}</h3>
-                        <Badge tone={city.is_active ? "green" : "red"}>
-                          {city.is_active ? "مفعلة" : "معطلة"}
+                        <Badge tone={showArchived ? "blue" : city.is_active ? "green" : "red"}>
+                          {showArchived ? "مؤرشف" : city.is_active ? "مفعلة" : "معطلة"}
                         </Badge>
                       </div>
                       <p className="mt-1 truncate text-sm text-muted-foreground">
@@ -796,7 +796,7 @@ export function CitiesPage() {
                         disabled={busyCityId === city.id}
                         onClick={() => void restoreArchivedCity(city)}
                         aria-label={`استعادة ${city.name}`}
-                        className="text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-600"
+                        className="h-10 gap-2 border-emerald-500/35 px-3 text-sm font-semibold text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-600"
                       >
                         <ArchiveRestore className="size-4" />
                         استعادة

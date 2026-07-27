@@ -767,15 +767,28 @@ function RowActions({
   const DeleteIcon = deletionMode === "archive" ? Archive : Trash2;
   const deleteLabel = deletionMode === "archive" ? `أرشفة ${row.name}` : `حذف ${row.name} نهائيًا`;
 
+  if (row.archived) {
+    return (
+      <div className="flex min-w-[220px] items-center justify-end">
+        <button
+          type="button"
+          aria-label={`استعادة ${row.name}`}
+          title={`استعادة ${row.name}`}
+          onClick={onRestore}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-emerald-500/35 px-3 text-sm font-semibold text-emerald-600 transition hover:bg-emerald-500/10"
+        >
+          <ArchiveRestore className="size-4" />
+          استعادة
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-w-[150px] items-center justify-end gap-2">
+    <div className="flex min-w-[220px] items-center justify-end gap-2">
       <button type="button" aria-label={`بيانات ${row.name}`} title={`بيانات ${row.name}`} onClick={onView} className="inline-flex size-10 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:bg-accent hover:text-foreground"><Eye className="size-4" /></button>
       <Link href={`/items/edit/${row.id}?returnTo=%2Fitems%3F`} aria-label={`تعديل ${row.name}`} title={`تعديل ${row.name}`} className="inline-flex size-10 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:bg-accent hover:text-foreground"><Edit className="size-4" /></Link>
-      {row.archived ? (
-        <button type="button" aria-label={`استعادة ${row.name}`} title={`استعادة ${row.name}`} onClick={onRestore} className="inline-flex size-10 items-center justify-center rounded-md border border-emerald-500/35 text-emerald-600 transition hover:bg-emerald-500/10"><ArchiveRestore className="size-4" /></button>
-      ) : (
-        <button type="button" aria-label={deleteLabel} title={deleteLabel} onClick={onDelete} className="inline-flex size-10 items-center justify-center rounded-md border border-destructive/35 text-destructive transition hover:bg-destructive/10"><DeleteIcon className="size-4" /></button>
-      )}
+      <button type="button" aria-label={deleteLabel} title={deleteLabel} onClick={onDelete} className="inline-flex size-10 items-center justify-center rounded-md border border-destructive/35 text-destructive transition hover:bg-destructive/10"><DeleteIcon className="size-4" /></button>
     </div>
   );
 }
@@ -803,13 +816,15 @@ function ProductIdentity({ row, compact = false }: { row: ItemRow; compact?: boo
         <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
           <span
             className={cn(
-              "rounded-md px-2 py-0.5 text-[11px] font-bold",
-              row.active
+              "rounded-md border px-2 py-0.5 text-[11px] font-bold",
+              row.archived
+                ? "border-blue-400/30 bg-blue-500/15 text-blue-700 dark:text-blue-200"
+                : row.active
                 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                 : "bg-red-500/10 text-red-700 dark:text-red-300",
             )}
           >
-            {row.active ? "نشط" : "متوقف"}
+            {row.archived ? "مؤرشف" : row.active ? "نشط" : "متوقف"}
           </span>
         </div>
       </div>

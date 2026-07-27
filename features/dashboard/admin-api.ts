@@ -461,7 +461,7 @@ export function normalizeProduct(raw: unknown): NormalizedProduct {
         : typeof record.archivedAt === "string"
           ? record.archivedAt
           : null,
-    deletionMode: record.deletion_mode === "archive" ? "archive" : "delete",
+    deletionMode: "archive",
     additions: Array.isArray(record.additions)
       ? record.additions
           .map(normalizeAdditionId)
