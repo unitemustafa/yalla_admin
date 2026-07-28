@@ -17,10 +17,15 @@ import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
 import { cn } from "@/lib/utils";
 import { StoreSubcategoriesManager } from "../components/store-subcategories-manager";
+import { MarketTypesManager } from "../components/market-types-manager";
 import {
   loadStoreSubcategories,
   type StoreSubcategory,
 } from "../store-subcategories-api";
+import {
+  loadMarketTypes,
+  type MarketType,
+} from "../market-types-api";
 
 type Classification = { id: number; name: string; classification_type?: string };
 type MarketScope = "general" | "service_city";
@@ -33,6 +38,9 @@ type Market = {
   name: string;
   description?: string;
   image?: string | null;
+  cover_image?: string | null;
+  delivery_time_min_minutes?: number | null;
+  delivery_time_max_minutes?: number | null;
   scope?: MarketScope;
   status: "active" | "inactive";
   is_popular?: boolean;
@@ -40,6 +48,7 @@ type Market = {
   service_city_ids?: Array<number | string>;
   service_cities?: MarketServiceCity[];
   subcategories?: StoreSubcategory[];
+  market_types?: MarketType[];
   archived_at?: string | null;
   deletion_mode?: "delete" | "archive";
 };
@@ -200,6 +209,7 @@ function MarketDialog({
   serviceCitiesError,
   classifications,
   subcategories,
+  marketTypes,
   onClose,
   onSaved,
   onReloadServiceCities,
@@ -210,6 +220,7 @@ function MarketDialog({
   serviceCitiesError: string;
   classifications: Classification[];
   subcategories: StoreSubcategory[];
+  marketTypes: MarketType[];
   onClose: () => void;
   onSaved: (market: Market, notificationRequested: boolean) => void;
   onReloadServiceCities: () => void;
@@ -229,6 +240,15 @@ function MarketDialog({
   const [imagePreview, setImagePreview] = useState(market?.image ?? "");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageName, setImageName] = useState(market?.image ? "صورة المحل الحالية" : "");
+  const [coverPreview, setCoverPreview] = useState(market?.cover_image ?? "");
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverName, setCoverName] = useState(market?.cover_image ? "صورة الغلاف الحالية" : "");
+  const [deliveryTimeMin, setDeliveryTimeMin] = useState(
+    market?.delivery_time_min_minutes?.toString() ?? "",
+  );
+  const [deliveryTimeMax, setDeliveryTimeMax] = useState(
+    market?.delivery_time_max_minutes?.toString() ?? "",
+  );
   const [selectedSubcategoryIds, setSelectedSubcategoryIds] = useState<number[]>(
     () => (market?.subcategories ?? [])
       .slice()
@@ -237,12 +257,58 @@ function MarketDialog({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const validBase = Boolean(name.trim() && classificationId && selectedSubcategoryIds.length && (showInGeneral || showInServiceCities));
+  const validBase = Boolean(
+    name.trim()
+      && classificationId
+      && selectedSubcategoryIds.length
+      && (showInGeneral || showInServiceCities)
+      && (
+        market
+        || (
+          imagePreview
+          && coverPreview
+          && Number(deliveryTimeMin) > 0
+          && Number(deliveryTimeMax) >= Number(deliveryTimeMin)
+        )
+      ),
+  );
+  const [selectedMarketTypeIds, setSelectedMarketTypeIds] = useState<number[]>(
+    () => (market?.market_types ?? []).map((item) => item.id),
+  );
 
   const availableSubcategories = useMemo(() => {
     const selected = new Set(selectedSubcategoryIds);
     return subcategories.filter((item) => item.is_active || selected.has(item.id));
   }, [selectedSubcategoryIds, subcategories]);
+
+  const availableMarketTypes = useMemo(() => {
+    const selected = new Set(selectedMarketTypeIds);
+    return marketTypes.filter(
+      (item) =>
+        item.classification_id === Number(classificationId) &&
+        (item.is_active || selected.has(item.id)),
+    );
+  }, [classificationId, marketTypes, selectedMarketTypeIds]);
+
+  function changeClassification(value: string) {
+    setClassificationId(value);
+    setSelectedMarketTypeIds((current) =>
+      current.filter((id) =>
+        marketTypes.some(
+          (item) =>
+            item.id === id && item.classification_id === Number(value),
+        ),
+      ),
+    );
+  }
+
+  function toggleMarketType(id: number) {
+    setSelectedMarketTypeIds((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id],
+    );
+  }
 
   function toggleSubcategory(id: number) {
     setError("");
@@ -304,6 +370,7 @@ function MarketDialog({
   function handleImageChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (imagePreview.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
     setImagePreview(URL.createObjectURL(file));
     setImageFile(file);
     setImageName(file.name);
@@ -317,11 +384,29 @@ function MarketDialog({
     setImageName(market?.image ? "صورة المحل الحالية" : "");
   }
 
+  function handleCoverChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (coverPreview.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
+    setCoverPreview(URL.createObjectURL(file));
+    setCoverFile(file);
+    setCoverName(file.name);
+    event.target.value = "";
+  }
+
+  function removeSelectedCover() {
+    if (coverPreview.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
+    setCoverPreview(market?.cover_image ?? "");
+    setCoverFile(null);
+    setCoverName(market?.cover_image ? "صورة الغلاف الحالية" : "");
+  }
+
   useEffect(
     () => () => {
       if (imageFile && imagePreview.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
+      if (coverFile && coverPreview.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
     },
-    [imageFile, imagePreview],
+    [coverFile, coverPreview, imageFile, imagePreview],
   );
 
   function toggleServiceCity(cityId: number) {
@@ -346,6 +431,24 @@ function MarketDialog({
       setError("التصنيف مطلوب");
       return;
     }
+    const parsedDeliveryTimeMin = Number(deliveryTimeMin);
+    const parsedDeliveryTimeMax = Number(deliveryTimeMax);
+    if (!market && (!imagePreview || !coverPreview)) {
+      setError("صورة شعار المحل وصورة الغلاف مطلوبتان.");
+      return;
+    }
+    if (
+      !market
+      && (
+        !Number.isFinite(parsedDeliveryTimeMin)
+        || parsedDeliveryTimeMin <= 0
+        || !Number.isFinite(parsedDeliveryTimeMax)
+        || parsedDeliveryTimeMax < parsedDeliveryTimeMin
+      )
+    ) {
+      setError("أدخل وقت توصيل صحيحًا، والحد الأقصى لا يقل عن الحد الأدنى.");
+      return;
+    }
     if (!selectedSubcategoryIds.length) {
       setError("اختر فئة داخلية واحدة على الأقل للمحل.");
       return;
@@ -363,18 +466,21 @@ function MarketDialog({
       classification_id: Number(classificationId),
       name: name.trim(),
       description: description.trim(),
+      delivery_time_min_minutes: deliveryTimeMin ? parsedDeliveryTimeMin : null,
+      delivery_time_max_minutes: deliveryTimeMax ? parsedDeliveryTimeMax : null,
       is_popular: isPopular,
       scope: showInGeneral ? "general" as const : "service_city" as const,
       delivery_area_ids: [],
       service_city_ids: [] as number[],
       subcategory_ids: selectedSubcategoryIds,
+      market_type_ids: selectedMarketTypeIds,
       send_notification: !market && sendStoreNotification,
     };
 
     async function saveMarket(payload: typeof basePayload) {
       const path = market ? `home/markets/${market.id}/` : "home/markets/";
       const method = market ? "PATCH" : "POST";
-      const response = imageFile
+      const response = imageFile || coverFile
         ? await apiFetch(path, {
             method,
             body: (() => {
@@ -382,6 +488,12 @@ function MarketDialog({
               formData.set("classification_id", String(payload.classification_id));
               formData.set("name", payload.name);
               formData.set("description", payload.description);
+              if (payload.delivery_time_min_minutes !== null) {
+                formData.set("delivery_time_min_minutes", String(payload.delivery_time_min_minutes));
+              }
+              if (payload.delivery_time_max_minutes !== null) {
+                formData.set("delivery_time_max_minutes", String(payload.delivery_time_max_minutes));
+              }
               formData.set("is_popular", String(payload.is_popular));
               formData.set("scope", payload.scope);
               formData.set("send_notification", String(payload.send_notification));
@@ -391,7 +503,11 @@ function MarketDialog({
               payload.subcategory_ids.forEach((subcategoryId) => {
                 formData.append("subcategory_ids", String(subcategoryId));
               });
-              formData.set("image", imageFile);
+              payload.market_type_ids.forEach((marketTypeId) => {
+                formData.append("market_type_ids", String(marketTypeId));
+              });
+              if (imageFile) formData.set("image", imageFile);
+              if (coverFile) formData.set("cover_image", coverFile);
               return formData;
             })(),
           })
@@ -455,15 +571,64 @@ function MarketDialog({
         </div>
         <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-6 sm:grid-cols-2">
-            <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/15 p-3 sm:col-span-2 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-center">
-              <label className="group relative flex aspect-[16/9] min-h-[138px] cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-background text-center transition hover:border-primary/50 hover:bg-accent/40">
-                <input accept="image/*" className="sr-only" type="file" onChange={handleImageChange} />
-                {imagePreview ? <DashboardImage src={imagePreview} placeholderType="store" alt="معاينة صورة المحل" width={640} height={360} sizes="260px" className="absolute inset-0 size-full" imageClassName="object-cover" /> : <span className="flex flex-col items-center gap-2 px-5 text-sm text-muted-foreground"><span className="flex size-10 items-center justify-center rounded-md bg-muted/50"><ImagePlus className="size-5 text-primary" /></span><span className="font-semibold text-foreground">اختيار صورة المحل</span></span>}
-              </label>
-              <div className="flex min-w-0 flex-col gap-3"><div><div className="text-sm font-semibold">صورة المحل</div><p className="mt-1 text-xs leading-5 text-muted-foreground">استخدم صورة أفقية واضحة للمحل. الصيغ المدعومة PNG, JPG, WEBP.</p></div><div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground"><span className="min-w-0 truncate">{imageName || "لم يتم اختيار صورة"}</span>{imagePreview ? <button type="button" onClick={removeSelectedImage} className="inline-flex shrink-0 items-center gap-1 rounded-md border border-destructive/50 px-3 py-1.5 font-semibold text-destructive transition hover:bg-destructive/10"><X className="size-3.5" />حذف الصورة</button> : null}</div></div>
+            <div className="grid gap-4 rounded-lg border border-border/70 bg-muted/15 p-4 sm:col-span-2 lg:grid-cols-2">
+              <div className="grid gap-3">
+                <label className="group relative mx-auto flex aspect-square w-full max-w-52 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-dashed border-border bg-background text-center transition hover:border-primary/50 hover:bg-accent/40">
+                  <input accept="image/*" className="sr-only" type="file" onChange={handleImageChange} />
+                  {imagePreview ? <DashboardImage src={imagePreview} placeholderType="store" alt="معاينة شعار المحل" width={320} height={320} sizes="208px" className="absolute inset-0 size-full" imageClassName="object-cover" /> : <span className="flex flex-col items-center gap-2 px-5 text-sm text-muted-foreground"><ImagePlus className="size-6 text-primary" /><span className="font-semibold text-foreground">اختيار شعار المحل</span></span>}
+                </label>
+                <div className="text-sm font-semibold">شعار المحل *</div>
+                <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground"><span className="min-w-0 truncate">{imageName || "لم يتم اختيار شعار"}</span>{imagePreview ? <button type="button" onClick={removeSelectedImage} className="font-semibold text-destructive">إلغاء التغيير</button> : null}</div>
+              </div>
+              <div className="grid gap-3">
+                <label className="group relative flex aspect-[16/9] w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-dashed border-border bg-background text-center transition hover:border-primary/50 hover:bg-accent/40">
+                  <input accept="image/*" className="sr-only" type="file" onChange={handleCoverChange} />
+                  {coverPreview ? <DashboardImage src={coverPreview} placeholderType="store" alt="معاينة غلاف المحل" width={640} height={360} sizes="420px" className="absolute inset-0 size-full" imageClassName="object-cover" /> : <span className="flex flex-col items-center gap-2 px-5 text-sm text-muted-foreground"><ImagePlus className="size-6 text-primary" /><span className="font-semibold text-foreground">اختيار صورة الغلاف</span></span>}
+                </label>
+                <div><div className="text-sm font-semibold">صورة الغلاف *</div><p className="mt-1 text-xs text-muted-foreground">صورة أفقية بنسبة قريبة من 16:9.</p></div>
+                <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground"><span className="min-w-0 truncate">{coverName || "لم يتم اختيار غلاف"}</span>{coverPreview ? <button type="button" onClick={removeSelectedCover} className="font-semibold text-destructive">إلغاء التغيير</button> : null}</div>
+              </div>
             </div>
             <label className="grid gap-2 text-sm font-semibold">اسم المحل *<Input value={name} onChange={(event) => setName(event.target.value)} /></label>
-            <label className="grid gap-2 text-sm font-semibold">فئة المحل *<AppSelect value={classificationId} onValueChange={setClassificationId} options={classifications.map((item) => ({ value: String(item.id), label: `${item.name} - ${classificationTypeLabel(item.classification_type)}` }))} /></label>
+            <label className="grid gap-2 text-sm font-semibold">فئة المحل *<AppSelect value={classificationId} onValueChange={changeClassification} options={classifications.map((item) => ({ value: String(item.id), label: `${item.name} - ${classificationTypeLabel(item.classification_type)}` }))} /></label>
+            <div className="grid gap-3 rounded-lg border p-4 sm:col-span-2">
+              <div>
+                <h3 className="text-sm font-bold">أنواع المحل</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  مثل برجر وبيتزا ومشويات. يمكن اختيار أكثر من نوع، وهي مستقلة عن أقسام المنتجات.
+                </p>
+              </div>
+              {availableMarketTypes.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {availableMarketTypes.map((item) => {
+                    const selected = selectedMarketTypeIds.includes(item.id);
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => toggleMarketType(item.id)}
+                        className={cn(
+                          "rounded-full border px-3 py-2 text-xs font-bold transition",
+                          selected
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "hover:bg-accent",
+                          !item.is_active && "border-dashed text-muted-foreground",
+                        )}
+                      >
+                        {item.name_ar}
+                        {!item.is_active ? " (معطل)" : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  لا توجد أنواع مضافة لهذه الفئة؛ يمكن حفظ المحل بدونها.
+                </p>
+              )}
+            </div>
+            <label className="grid gap-2 text-sm font-semibold">وقت التوصيل من (دقيقة) *<Input type="number" min={1} inputMode="numeric" value={deliveryTimeMin} onChange={(event) => setDeliveryTimeMin(event.target.value)} /></label>
+            <label className="grid gap-2 text-sm font-semibold">وقت التوصيل إلى (دقيقة) *<Input type="number" min={1} inputMode="numeric" value={deliveryTimeMax} onChange={(event) => setDeliveryTimeMax(event.target.value)} /></label>
             <label className="grid gap-2 text-sm font-semibold sm:col-span-2">وصف المحل<textarea value={description} onChange={(event) => setDescription(event.target.value)} className="min-h-24 resize-none rounded-md border border-border bg-input px-3 py-2 text-sm shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/40 focus:ring-2 focus:ring-primary/15" placeholder="اكتب وصفًا مختصرًا للمحل" /></label>
             <div className="grid gap-3 rounded-lg border p-4 sm:col-span-2">
               <div>
@@ -664,6 +829,7 @@ export function ShopsPage() {
   const [markets, setMarkets] = useState<Market[]>([]);
   const [classifications, setClassifications] = useState<Classification[]>([]);
   const [subcategories, setSubcategories] = useState<StoreSubcategory[]>([]);
+  const [marketTypes, setMarketTypes] = useState<MarketType[]>([]);
   const [serviceCities, setServiceCities] = useState<ServiceCity[]>([]);
   const [serviceCitiesLoading, setServiceCitiesLoading] = useState(true);
   const [serviceCitiesError, setServiceCitiesError] = useState("");
@@ -673,6 +839,7 @@ export function ShopsPage() {
   const [dialogMarket, setDialogMarket] = useState<Market | null | undefined>();
   const [deleteMarket, setDeleteMarket] = useState<Market | null>(null);
   const [showSubcategoryManager, setShowSubcategoryManager] = useState(false);
+  const [showMarketTypesManager, setShowMarketTypesManager] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
 
   const loadServiceCityOptions = useCallback(async () => {
@@ -691,10 +858,11 @@ export function ShopsPage() {
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      const [marketsResponse, classificationsResponse, loadedSubcategories] = await Promise.all([
+      const [marketsResponse, classificationsResponse, loadedSubcategories, loadedMarketTypes] = await Promise.all([
         apiFetch(`home/markets/${showArchived ? "?archived=true" : ""}`),
         apiFetch("home/market-classifications/"),
         loadStoreSubcategories(apiFetch),
+        loadMarketTypes(apiFetch),
       ]);
       const [marketsData, classificationsData] = await Promise.all([json(marketsResponse), json(classificationsResponse)]);
       if (!marketsResponse.ok) throw new Error(errorMessage(marketsData, "تعذر تحميل المحلات."));
@@ -706,6 +874,7 @@ export function ShopsPage() {
           .filter((item): item is Classification => item !== null),
       );
       setSubcategories(loadedSubcategories);
+      setMarketTypes(loadedMarketTypes);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "تعذر تحميل المحلات."); }
     finally { setLoading(false); }
   }, [apiFetch, showArchived]);
@@ -819,7 +988,7 @@ export function ShopsPage() {
 
   return (
     <div className="px-6 py-6">
-      <PageTitle title="المحلات" description="إدارة المحلات وربط ظهور منتجاتها بالمدن." actions={<div className="flex flex-wrap items-center gap-2"><Button type="button" variant={!showArchived ? "default" : "outline"} className="h-9 px-4 text-sm" onClick={() => setShowArchived(false)}>المحلات الحالية</Button><Button type="button" variant={showArchived ? "default" : "outline"} className="h-9 px-4 text-sm" onClick={() => setShowArchived(true)}><Archive className="size-4" />المؤرشف</Button><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => void load()} disabled={loading}><RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />تحديث</Button>{!showArchived ? <><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => setShowSubcategoryManager(true)}><Layers3 className="size-4" />إنشاء/إدارة الفئات الداخلية</Button><Button className="h-9 px-4 text-sm" onClick={() => setDialogMarket(null)} disabled={!subcategories.some((item) => item.is_active)}><Plus className="size-4" />إضافة محل</Button></> : null}</div>} />
+      <PageTitle title="المحلات" description="إدارة المحلات وربط ظهور منتجاتها بالمدن." actions={<div className="flex flex-wrap items-center gap-2"><Button type="button" variant={!showArchived ? "default" : "outline"} className="h-9 px-4 text-sm" onClick={() => setShowArchived(false)}>المحلات الحالية</Button><Button type="button" variant={showArchived ? "default" : "outline"} className="h-9 px-4 text-sm" onClick={() => setShowArchived(true)}><Archive className="size-4" />المؤرشف</Button><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => void load()} disabled={loading}><RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />تحديث</Button>{!showArchived ? <><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => setShowMarketTypesManager(true)}><Layers3 className="size-4" />إدارة أنواع المحلات</Button><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => setShowSubcategoryManager(true)}><Layers3 className="size-4" />إدارة أقسام المنتجات</Button><Button className="h-9 px-4 text-sm" onClick={() => setDialogMarket(null)} disabled={!subcategories.some((item) => item.is_active)}><Plus className="size-4" />إضافة محل</Button></> : null}</div>} />
       <div className="mt-6 grid gap-3 md:grid-cols-3">
         {[["إجمالي المحلات", markets.length, Store], ["المحلات النشطة", markets.filter((item) => item.status === "active").length, Store], ["مدن الظهور", new Set(markets.flatMap((item) => marketServiceCityIds(item))).size, MapPin]].map(([label, value, Icon]) => { const MetricIcon = Icon as typeof Store; return <Card key={label as string} className="h-[80px]"><div className="flex h-full items-center gap-3 px-5"><span className="rounded-full bg-primary/10 p-3 text-primary"><MetricIcon className="size-5" /></span><div><p className="text-xs text-muted-foreground">{label as string}</p><p className="text-xl font-bold">{value as number}</p></div></div></Card>; })}
       </div>
@@ -859,12 +1028,13 @@ export function ShopsPage() {
       {deleteMarket ? <ConfirmDeleteDialog title={deleteMarket.deletion_mode === "archive" ? "أرشفة المحل" : "حذف المحل نهائيًا"} description={deleteMarket.deletion_mode === "archive" ? `المحل ${deleteMarket.name} مرتبط بسجلات سابقة؛ سيتم إخفاؤه وأرشفته وتعطيله مع إمكانية استعادته.` : `هل تريد حذف المحل ${deleteMarket.name} نهائيًا؟ لا يمكن التراجع بعد تنفيذ الحذف.`} busy={false} action={deleteMarket.deletion_mode === "archive" ? "archive" : "delete"} onCancel={() => setDeleteMarket(null)} onConfirm={() => remove(deleteMarket)} /> : null}
       {dialogMarket !== undefined ? (
         classifications.length ? (
-          <MarketDialog market={dialogMarket ?? undefined} serviceCities={serviceCities} serviceCitiesLoading={serviceCitiesLoading} serviceCitiesError={serviceCitiesError} classifications={classifications} subcategories={subcategories} onReloadServiceCities={() => void loadServiceCityOptions()} onClose={() => setDialogMarket(undefined)} onSaved={(saved, notificationRequested) => { setMarkets((current) => current.some((item) => item.id === saved.id) ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current]); setDialogMarket(undefined); showSnackbar({ message: notificationRequested ? "تم إنشاء المحل، والإشعار هيتبعت بعد إضافة أول منتج متاح." : "تم حفظ المحل وربطه بنطاق الظهور." }); }} />
+          <MarketDialog market={dialogMarket ?? undefined} serviceCities={serviceCities} serviceCitiesLoading={serviceCitiesLoading} serviceCitiesError={serviceCitiesError} classifications={classifications} subcategories={subcategories} marketTypes={marketTypes} onReloadServiceCities={() => void loadServiceCityOptions()} onClose={() => setDialogMarket(undefined)} onSaved={(saved, notificationRequested) => { setMarkets((current) => current.some((item) => item.id === saved.id) ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current]); setDialogMarket(undefined); showSnackbar({ message: notificationRequested ? "تم إنشاء المحل، والإشعار هيتبعت بعد إضافة أول منتج متاح." : "تم حفظ المحل وربطه بنطاق الظهور." }); }} />
         ) : (
           <MissingClassificationsDialog onClose={() => setDialogMarket(undefined)} />
         )
       ) : null}
       {showSubcategoryManager ? <StoreSubcategoriesManager items={subcategories} onChange={(next) => { setSubcategories(next); void load(); }} onClose={() => setShowSubcategoryManager(false)} /> : null}
+      {showMarketTypesManager ? <MarketTypesManager items={marketTypes} classifications={classifications} onChange={(next) => { setMarketTypes(next); void load(); }} onClose={() => setShowMarketTypesManager(false)} /> : null}
     </div>
   );
 }
