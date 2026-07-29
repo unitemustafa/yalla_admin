@@ -38,6 +38,7 @@ export type ServiceCityPayload = {
   center_longitude?: string;
   radius_km?: string;
   boundary_geojson?: CityBoundaryGeoJson | null;
+  boundary_bbox?: number[] | null;
   is_active: boolean;
 };
 
@@ -47,6 +48,7 @@ export type ServiceCityCoverage = {
   latitude: number;
   longitude: number;
   radiusKm: number;
+  boundingBox: number[] | null;
 };
 
 export type DeliveryArea = {
@@ -363,6 +365,16 @@ export async function lookupServiceCityCoverage(
   const latitude = Number(record.latitude);
   const longitude = Number(record.longitude);
   const radiusKm = Number(record.radius_km);
+  const rawBoundingBox = record.bounding_box;
+  const boundingBox =
+    rawBoundingBox && typeof rawBoundingBox === "object"
+      ? [
+          Number((rawBoundingBox as Record<string, unknown>).west),
+          Number((rawBoundingBox as Record<string, unknown>).south),
+          Number((rawBoundingBox as Record<string, unknown>).east),
+          Number((rawBoundingBox as Record<string, unknown>).north),
+        ]
+      : null;
   if (
     !Number.isFinite(latitude) ||
     !Number.isFinite(longitude) ||
@@ -380,6 +392,10 @@ export async function lookupServiceCityCoverage(
     latitude,
     longitude,
     radiusKm,
+    boundingBox:
+      boundingBox?.every((value) => Number.isFinite(value)) === true
+        ? boundingBox
+        : null,
   } satisfies ServiceCityCoverage;
 }
 

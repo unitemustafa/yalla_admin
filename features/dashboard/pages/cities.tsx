@@ -62,6 +62,8 @@ type CityDraft = {
   latitude: string;
   longitude: string;
   radiusKm: string;
+  boundaryGeojson: ServiceCity["boundary_geojson"];
+  boundaryBbox: number[] | null;
   active: boolean;
 };
 
@@ -70,6 +72,8 @@ const defaultDraft: CityDraft = {
   latitude: "30.0444000",
   longitude: "31.2357000",
   radiusKm: "",
+  boundaryGeojson: null,
+  boundaryBbox: null,
   active: true,
 };
 
@@ -79,6 +83,8 @@ function cityDraft(city?: ServiceCity): CityDraft {
     latitude: city?.center_latitude ?? defaultDraft.latitude,
     longitude: city?.center_longitude ?? defaultDraft.longitude,
     radiusKm: city?.radius_km ?? defaultDraft.radiusKm,
+    boundaryGeojson: city?.boundary_geojson ?? null,
+    boundaryBbox: city?.boundary_bbox ?? null,
     active: city?.is_active ?? true,
   };
 }
@@ -89,7 +95,8 @@ function payloadFromDraft(draft: CityDraft): ServiceCityPayload {
     center_latitude: Number(draft.latitude).toFixed(7),
     center_longitude: Number(draft.longitude).toFixed(7),
     radius_km: Number(draft.radiusKm).toFixed(2),
-    boundary_geojson: null,
+    boundary_geojson: draft.boundaryGeojson,
+    boundary_bbox: draft.boundaryBbox,
     is_active: draft.active,
   };
 }
@@ -100,7 +107,8 @@ function payloadFromCity(city: ServiceCity): ServiceCityPayload {
     center_latitude: city.center_latitude ?? defaultDraft.latitude,
     center_longitude: city.center_longitude ?? defaultDraft.longitude,
     radius_km: city.radius_km ?? undefined,
-    boundary_geojson: null,
+    boundary_geojson: city.boundary_geojson,
+    boundary_bbox: city.boundary_bbox,
     is_active: city.is_active,
   };
 }
@@ -171,7 +179,13 @@ function CityDialog({
     radiusKm > 0;
 
   function update<K extends keyof CityDraft>(key: K, value: CityDraft[K]) {
-    setDraft((current) => ({ ...current, [key]: value }));
+    setDraft((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === "latitude" || key === "longitude" || key === "radiusKm"
+        ? { boundaryGeojson: null, boundaryBbox: null }
+        : {}),
+    }));
     setCoverageNote(null);
     setError(null);
   }
@@ -190,6 +204,8 @@ function CityDialog({
         latitude: coverage.latitude.toFixed(7),
         longitude: coverage.longitude.toFixed(7),
         radiusKm: coverage.radiusKm.toFixed(2),
+        boundaryGeojson: null,
+        boundaryBbox: coverage.boundingBox,
       }));
       const radiusLabel = coverage.radiusKm.toLocaleString("ar-EG-u-nu-latn");
       setCoverageNote(
@@ -236,6 +252,8 @@ function CityDialog({
           ...current,
           latitude: position.coords.latitude.toFixed(7),
           longitude: position.coords.longitude.toFixed(7),
+          boundaryGeojson: null,
+          boundaryBbox: null,
         }));
         setLocating(false);
       },
@@ -393,6 +411,8 @@ function CityDialog({
                           ...current,
                           latitude: nextLatitude.toFixed(7),
                           longitude: nextLongitude.toFixed(7),
+                          boundaryGeojson: null,
+                          boundaryBbox: null,
                         }));
                       }}
                     />
