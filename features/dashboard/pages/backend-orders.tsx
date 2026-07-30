@@ -144,10 +144,21 @@ type BackendOrder = {
   payment_method?: string | null;
   delivery_type?: BackendDeliveryType | null;
   fulfillment_type?: "direct" | "external_shipping" | string | null;
-  external_shipping_status?: "not_required" | "pending_quote" | "quoted" | string | null;
+  external_shipping_status?:
+    | "not_required"
+    | "pending_quote"
+    | "awaiting_customer_approval"
+    | "quoted"
+    | string
+    | null;
   eta_min_minutes?: number | null;
   eta_max_minutes?: number | null;
-  delivery_price_status?: "fixed" | "pending_quote" | string | null;
+  delivery_price_status?:
+    | "fixed"
+    | "pending_quote"
+    | "awaiting_customer_approval"
+    | string
+    | null;
   service_city?: { id: number; name?: string | null; name_ar?: string | null } | null;
   service_city_id?: number | string | null;
   delivery_area?: { id: number; name?: string | null; delivery_price?: string | null } | null;
@@ -669,6 +680,10 @@ function orderEventLabel(event: BackendOrderEvent, order: BackendOrder) {
       return "تم إلغاء إسناد المندوب";
     case "delivery_price_changed":
       return "تم تحديث سعر التوصيل";
+    case "delivery_quote_sent":
+      return "تم إرسال سعر التوصيل للعميل";
+    case "delivery_quote_accepted":
+      return "وافق العميل على سعر التوصيل";
     case "cancelled":
       return "تم إلغاء الطلب";
     case "status_changed":
@@ -680,8 +695,13 @@ function orderEventLabel(event: BackendOrderEvent, order: BackendOrder) {
 
 function orderEventDetail(event: BackendOrderEvent) {
   if (event.note?.trim()) return event.note.trim();
-  if (event.event_type === "delivery_price_changed") {
-    const toPrice = event.metadata?.to_delivery_price;
+  if (
+    event.event_type === "delivery_price_changed" ||
+    event.event_type === "delivery_quote_sent" ||
+    event.event_type === "delivery_quote_accepted"
+  ) {
+    const toPrice =
+      event.metadata?.to_delivery_price ?? event.metadata?.delivery_price;
     if (typeof toPrice === "string" || typeof toPrice === "number") {
       return `سعر التوصيل: ${money(toPrice)}`;
     }
@@ -1071,11 +1091,58 @@ async function copyText(value: string) {
 }
 
 function orderCopyText(order: BackendOrder) {
+  const coordinates = orderLocationCoordinates(order);
   return [
     orderNumber(order),
     customerName(order),
     order.customer?.phone ?? `user_id: ${order.user_id ?? "-"}`,
+    getDeliveryDestination(order),
+    ...(coordinates
+      ? [
+          `${coordinates.latitude},${coordinates.longitude}`,
+          orderMapUrl(order) as string,
+        ]
+      : []),
   ].join("\n");
+}
+
+function orderLocationCoordinates(order: BackendOrder) {
+  const rawLatitude = order.delivery_address?.latitude;
+  const rawLongitude = order.delivery_address?.longitude;
+  if (
+    rawLatitude === null ||
+    rawLatitude === undefined ||
+    rawLatitude === "" ||
+    rawLongitude === null ||
+    rawLongitude === undefined ||
+    rawLongitude === ""
+  ) {
+    return null;
+  }
+  const latitude = Number(rawLatitude);
+  const longitude = Number(rawLongitude);
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    return null;
+  }
+  return {
+    latitude: latitude.toFixed(7),
+    longitude: longitude.toFixed(7),
+  };
+}
+
+function orderMapUrl(order: BackendOrder) {
+  const coordinates = orderLocationCoordinates(order);
+  if (!coordinates) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    `${coordinates.latitude},${coordinates.longitude}`,
+  )}`;
 }
 
 export function BackendOrdersPage() {
@@ -3218,7 +3285,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
     }
   }
 
-  async function updateDeliveryPrice() {
+  async function updateDeliveryPrice(action: "save" | "request_approval") {
     if (!order || savingDeliveryPrice) return;
     const parsedPrice = Number(deliveryPriceDraft);
     if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
@@ -3231,13 +3298,22 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
       const response = await apiFetch(`orders/${order.id}/delivery-price/`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ delivery_price: parsedPrice.toFixed(2) }),
+        body: JSON.stringify({
+          delivery_price: parsedPrice.toFixed(2),
+          action,
+        }),
       });
       const data = await apiResponseData(response);
       if (!response.ok) throw new Error(apiError(data, "تعذر حفظ سعر التوصيل."));
       await loadOrder();
       notifyDashboardOrdersChanged(order.id);
-      showSnackbar({ message: "تم حفظ سعر التوصيل وتحديث الإجمالي.", tone: "success" });
+      showSnackbar({
+        message:
+          action === "request_approval"
+            ? "تم إرسال سعر التوصيل للعميل للموافقة."
+            : "تم حفظ سعر التوصيل واعتماده وتحديث الإجمالي.",
+        tone: "success",
+      });
     } catch (reason) {
       showSnackbar({
         message: reason instanceof Error ? reason.message : "تعذر حفظ سعر التوصيل.",
@@ -3255,6 +3331,21 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
       showSnackbar({ message: `تم نسخ بيانات الطلب ${orderNumber(order)}.` });
     } catch {
       showSnackbar({ message: "تعذر نسخ بيانات الطلب.", tone: "danger" });
+    }
+  }
+
+  async function copyOrderLocation() {
+    if (!order) return;
+    const mapUrl = orderMapUrl(order);
+    if (!mapUrl) {
+      showSnackbar({ message: "لا توجد إحداثيات محفوظة لهذا الطلب.", tone: "danger" });
+      return;
+    }
+    try {
+      await copyText(mapUrl);
+      showSnackbar({ message: "تم نسخ رابط موقع الطلب." });
+    } catch {
+      showSnackbar({ message: "تعذر نسخ رابط الموقع.", tone: "danger" });
     }
   }
 
@@ -3307,6 +3398,10 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
   }
 
   const deliveryPriceLocked = order.delivery_price !== null && order.delivery_price !== undefined && order.delivery_price !== "";
+  const awaitingCustomerApproval =
+    order.external_shipping_status === "awaiting_customer_approval";
+  const orderCoordinates = orderLocationCoordinates(order);
+  const orderLocationMapUrl = orderMapUrl(order);
   const orderApprovedForAssignment = isAssignmentEligible(order);
   const canEditDeliveryPrice = isDeliveryOrder(order) || !deliveryPriceLocked;
 
@@ -3438,6 +3533,38 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                 <SummaryRow label="المدينة" value={isGeneralOrder(order) ? getManualCity(order) : serviceCityName(order)} />
                 <SummaryRow label="المنطقة" value={deliveryAreaName(order)} />
                 <SummaryRow label="عنوان التوصيل" value={getDeliveryDestination(order)} />
+                {orderCoordinates && orderLocationMapUrl ? (
+                  <SummaryRow
+                    label="موقع الخريطة"
+                    value={
+                      <div className="flex max-w-[15rem] flex-wrap items-center justify-end gap-2">
+                        <span dir="ltr" className="text-xs tabular-nums text-muted-foreground">
+                          {orderCoordinates.latitude}, {orderCoordinates.longitude}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-8 px-2"
+                          onClick={() => void copyOrderLocation()}
+                        >
+                          <Copy className="size-3.5" />
+                          نسخ
+                        </Button>
+                        <a
+                          href={orderLocationMapUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex h-8 items-center gap-1 rounded-md border bg-background px-2 text-xs font-semibold text-primary transition hover:bg-accent"
+                        >
+                          <ExternalLink className="size-3.5" />
+                          فتح الخريطة
+                        </a>
+                      </div>
+                    }
+                  />
+                ) : (
+                  <SummaryRow label="موقع الخريطة" value="لا توجد إحداثيات محفوظة" />
+                )}
                 {isGeneralOrder(order) ? (
                   <>
                     <SummaryRow label="المدينة اليدوية" value={getManualCity(order)} />
@@ -3594,7 +3721,14 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
 
           {canEditDeliveryPrice ? (
           <Card className="p-5 text-sm">
-            <div className="mb-3 font-semibold">سعر التوصيل</div>
+            <div className="mb-1 font-semibold">
+              {deliveryPriceLocked ? "سعر التوصيل" : "تسعير التوصيل غير المحدد"}
+            </div>
+            {!deliveryPriceLocked ? (
+              <p className="mb-3 text-xs text-muted-foreground">
+                احفظ السعر مباشرة أو أرسله للعميل ليوافق عليه من طلباته.
+              </p>
+            ) : null}
             <div className="flex items-stretch gap-2">
               <Input
                 min={0}
@@ -3614,23 +3748,40 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
                 EGP
               </span>
             </div>
-            <Button
-              type="button"
-              className="mt-3 w-full"
-              disabled={
-                savingDeliveryPrice ||
-                deliveryPriceLocked ||
-                isClosedOrderStatus(order.status) ||
-                deliveryPriceDraft.trim() === ""
-              }
-              onClick={() => void updateDeliveryPrice()}
-            >
-              {savingDeliveryPrice ? <Loader2 className="size-4 animate-spin" /> : <Truck className="size-4" />}
-              حفظ سعر التوصيل
-            </Button>
+            {!deliveryPriceLocked ? (
+              <div className="mt-3 grid gap-2">
+                <Button
+                  type="button"
+                  disabled={
+                    savingDeliveryPrice ||
+                    isClosedOrderStatus(order.status) ||
+                    deliveryPriceDraft.trim() === ""
+                  }
+                  onClick={() => void updateDeliveryPrice("request_approval")}
+                >
+                  {savingDeliveryPrice ? <Loader2 className="size-4 animate-spin" /> : <ExternalLink className="size-4" />}
+                  إرسال للعميل للموافقة
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={
+                    savingDeliveryPrice ||
+                    isClosedOrderStatus(order.status) ||
+                    deliveryPriceDraft.trim() === ""
+                  }
+                  onClick={() => void updateDeliveryPrice("save")}
+                >
+                  {savingDeliveryPrice ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                  حفظ واعتماد مباشرة
+                </Button>
+              </div>
+            ) : null}
             {deliveryPriceLocked ? (
               <p className="mt-2 text-xs text-muted-foreground">
-                سعر التوصيل محفوظ بالفعل ولا يمكن تعديله من هنا.
+                {awaitingCustomerApproval
+                  ? "تم إرسال السعر، وفي انتظار موافقة العميل."
+                  : "سعر التوصيل محفوظ ومعتمد بالفعل ولا يمكن تعديله من هنا."}
               </p>
             ) : null}
             {isClosedOrderStatus(order.status) ? (
