@@ -36,7 +36,7 @@ export function MarketTypesPage() {
       setLoadError(
         reason instanceof Error
           ? reason.message
-          : "تعذر تحميل تصنيفات المحلات.",
+          : "تعذر تحميل الفئات الثانوية للمحلات.",
       );
     } finally {
       setLoading(false);
@@ -51,8 +51,8 @@ export function MarketTypesPage() {
   return (
     <div dir="rtl" className="px-6 py-6">
       <PageTitle
-        title="تصنيفات المحلات داخل الفئات"
-        description="اختر فئة رئيسية مثل المطاعم، ثم أضف التصنيفات التابعة لها مثل برجر أو شاورما."
+        title="الفئات الثانوية للمحلات"
+        description="اختر الفئة الأساسية مثل مطاعم، ثم أضف تحتها فئات ثانوية مثل برجر أو شاورما لتصفية المحلات داخل التطبيق."
         actions={
           <Button
             type="button"
@@ -79,8 +79,8 @@ export function MarketTypesPage() {
         <Card className="mt-6 flex min-h-72 flex-col items-center justify-center gap-2 px-6 text-center">
           <p className="font-bold">أضف فئة محلات رئيسية أولًا</p>
           <p className="max-w-xl text-sm text-muted-foreground">
-            هذه التصنيفات يجب أن تتبع فئة رئيسية. افتح «فئات المحلات
-            الرئيسية» من قسم الفئات وأنشئ الفئة أولًا.
+            الفئة الثانوية يجب أن تتبع فئة أساسية. افتح «الفئات الأساسية
+            للمحلات» من قسم الفئات وأنشئها أولًا.
           </p>
         </Card>
       ) : (

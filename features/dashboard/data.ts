@@ -37,6 +37,11 @@ export const navGroups: NavGroup[] = [
           { label: "كل المنتجات", href: "/items", page: "items" },
           { label: "إضافة منتج", href: "/items/create", page: "create-item" },
           { label: "المحلات", href: "/items/shops", page: "shops" },
+          {
+            label: "أقسام منتجات المحلات",
+            href: "/items/store-subcategories",
+            page: "store-subcategories",
+          },
           { label: "الإضافات", href: "/items/addons", page: "addons" },
         ],
       },
@@ -45,19 +50,14 @@ export const navGroups: NavGroup[] = [
         icon: Layers3,
         children: [
           {
-            label: "فئات المحلات الرئيسية",
+            label: "الفئات الأساسية للمحلات",
             href: "/categories/markets",
             page: "categories",
           },
           {
-            label: "تصنيفات المحلات داخل الفئات",
+            label: "الفئات الثانوية للمحلات",
             href: "/categories/market-types",
             page: "market-types",
-          },
-          {
-            label: "أقسام المنتجات داخل المحلات",
-            href: "/categories/store-subcategories",
-            page: "store-subcategories",
           },
         ],
       },
@@ -179,17 +179,17 @@ export const breadcrumbByPage: Record<PageKey, BreadcrumbItem[]> = {
   categories: [
     dashboardCrumb,
     { label: "الفئات" },
-    { label: "فئات المحلات الرئيسية" },
+    { label: "الفئات الأساسية للمحلات" },
   ],
   "market-types": [
     dashboardCrumb,
     { label: "الفئات" },
-    { label: "تصنيفات المحلات داخل الفئات" },
+    { label: "الفئات الثانوية للمحلات" },
   ],
   "store-subcategories": [
     dashboardCrumb,
-    { label: "الفئات" },
-    { label: "أقسام المنتجات داخل المحلات" },
+    { label: "المنتجات", href: "/items" },
+    { label: "أقسام منتجات المحلات" },
   ],
   addons: [
     dashboardCrumb,
@@ -281,7 +281,10 @@ export function pageFromPathname(pathname: string): PageKey {
     return "categories";
   }
   if (pathname === "/categories/market-types") return "market-types";
-  if (pathname === "/categories/store-subcategories")
+  if (
+    pathname === "/items/store-subcategories" ||
+    pathname === "/categories/store-subcategories"
+  )
     return "store-subcategories";
   if (pathname === "/items/addons") return "addons";
   if (pathname.startsWith("/items/edit")) return "items";

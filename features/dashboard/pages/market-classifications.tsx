@@ -689,8 +689,8 @@ export function MarketClassificationsPage() {
   return (
     <div dir="rtl" className="px-6 py-6">
       <PageTitle
-        title="فئات المحلات الرئيسية"
-        description="إدارة الفئات الأساسية التي تتبعها المحلات، مثل المطاعم أو الأثاث."
+        title="الفئات الأساسية للمحلات"
+        description="الفئة الأساسية مثل مطاعم أو أثاث، ونوع ظهورها يحدد مكانها في التطبيق: شائعة أو مميزة أو عادية."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -745,9 +745,9 @@ export function MarketClassificationsPage() {
       <Card className="mt-6 overflow-hidden">
         <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-semibold">كل فئات المحلات</h2>
+            <h2 className="font-semibold">كل الفئات الأساسية</h2>
             <p className="text-xs text-muted-foreground">
-              الفئة نفسها هي التصنيف الذي يختاره المحل.
+              يختار المحل فئة أساسية واحدة، ثم يختار الفئات الثانوية التابعة لها.
             </p>
           </div>
           <div className="relative w-full sm:w-[700px]">

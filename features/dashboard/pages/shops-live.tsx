@@ -253,11 +253,15 @@ function MarketDialog({
       .sort((first, second) => (first.sort_order ?? 0) - (second.sort_order ?? 0))
       .map((item) => item.id),
   );
+  const [selectedMarketTypeIds, setSelectedMarketTypeIds] = useState<number[]>(
+    () => (market?.market_types ?? []).map((item) => item.id),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const validBase = Boolean(
     name.trim()
       && classificationId
+      && selectedMarketTypeIds.length
       && selectedSubcategoryIds.length
       && (showInGeneral || showInServiceCities)
       && (
@@ -270,10 +274,6 @@ function MarketDialog({
         )
       ),
   );
-  const [selectedMarketTypeIds, setSelectedMarketTypeIds] = useState<number[]>(
-    () => (market?.market_types ?? []).map((item) => item.id),
-  );
-
   const availableSubcategories = useMemo(() => {
     const selected = new Set(selectedSubcategoryIds);
     return subcategories.filter((item) => item.is_active || selected.has(item.id));
@@ -426,7 +426,11 @@ function MarketDialog({
       return;
     }
     if (!classificationId) {
-      setError("التصنيف مطلوب");
+      setError("الفئة الأساسية للمحل مطلوبة.");
+      return;
+    }
+    if (!selectedMarketTypeIds.length) {
+      setError("اختر فئة ثانوية واحدة على الأقل للمحل.");
       return;
     }
     const parsedDeliveryTimeMin = Number(deliveryTimeMin);
@@ -588,12 +592,12 @@ function MarketDialog({
               </div>
             </div>
             <label className="grid gap-2 text-sm font-semibold">اسم المحل *<Input value={name} onChange={(event) => setName(event.target.value)} /></label>
-            <label className="grid gap-2 text-sm font-semibold">فئة المحل *<AppSelect value={classificationId} onValueChange={changeClassification} options={classifications.map((item) => ({ value: String(item.id), label: `${item.name} - ${classificationTypeLabel(item.classification_type)}` }))} /></label>
+            <label className="grid gap-2 text-sm font-semibold">الفئة الأساسية للمحل *<AppSelect value={classificationId} onValueChange={changeClassification} options={classifications.map((item) => ({ value: String(item.id), label: `${item.name} - ظهور ${classificationTypeLabel(item.classification_type)}` }))} /></label>
             <div className="grid gap-3 rounded-lg border p-4 sm:col-span-2">
               <div>
-                <h3 className="text-sm font-bold">أنواع المحل</h3>
+                <h3 className="text-sm font-bold">الفئات الثانوية للمحل *</h3>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  مثل برجر وبيتزا ومشويات. يمكن اختيار أكثر من نوع، وهي مستقلة عن أقسام المنتجات.
+                  تظهر فقط الفئات التابعة للفئة الأساسية المختارة. اختر واحدة أو أكثر مثل برجر أو شاورما.
                 </p>
               </div>
               {availableMarketTypes.length ? (
@@ -620,10 +624,27 @@ function MarketDialog({
                   })}
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground">
-                  لا توجد أنواع مضافة لهذه الفئة؛ يمكن حفظ المحل بدونها.
-                </p>
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed p-3">
+                  <p className="text-xs text-destructive">
+                    لا توجد فئات ثانوية مضافة لهذه الفئة الأساسية، ولا يمكن حفظ المحل قبل إضافتها.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      window.location.href = "/categories/market-types";
+                    }}
+                  >
+                    إضافة فئة ثانوية
+                  </Button>
+                </div>
               )}
+              {availableMarketTypes.length && !selectedMarketTypeIds.length ? (
+                <p className="text-xs text-destructive">
+                  يجب اختيار فئة ثانوية واحدة على الأقل.
+                </p>
+              ) : null}
             </div>
             <label className="grid gap-2 text-sm font-semibold">وقت التوصيل من (دقيقة) *<Input type="number" min={1} inputMode="numeric" value={deliveryTimeMin} onChange={(event) => setDeliveryTimeMin(event.target.value)} /></label>
             <label className="grid gap-2 text-sm font-semibold">وقت التوصيل إلى (دقيقة) *<Input type="number" min={1} inputMode="numeric" value={deliveryTimeMax} onChange={(event) => setDeliveryTimeMax(event.target.value)} /></label>
@@ -808,7 +829,7 @@ function MissingClassificationsDialog({
           <Button
             type="button"
             onClick={() => {
-              window.location.href = "/categories/store-subcategories";
+              window.location.href = "/items/store-subcategories";
             }}
           >
             <Plus className="size-4" />

@@ -98,7 +98,7 @@ export function MarketTypesManager({
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!draft.classification_id) {
-      setError("اختر فئة المحلات الرئيسية.");
+      setError("اختر الفئة الأساسية للمحل.");
       return;
     }
     if (!draft.name_ar.trim() || !draft.name_en.trim()) {
@@ -106,7 +106,7 @@ export function MarketTypesManager({
       return;
     }
     if (!draft.id && !imageFile) {
-      setError("صورة التصنيف الدائرية مطلوبة.");
+      setError("الصورة الدائرية للفئة الثانوية مطلوبة.");
       return;
     }
 
@@ -128,7 +128,7 @@ export function MarketTypesManager({
       reset(saved.classification_id);
     } catch (reason) {
       setError(
-        reason instanceof Error ? reason.message : "تعذر حفظ تصنيف المحلات.",
+        reason instanceof Error ? reason.message : "تعذر حفظ الفئة الثانوية.",
       );
     } finally {
       setBusy(false);
@@ -136,7 +136,7 @@ export function MarketTypesManager({
   }
 
   async function remove(item: MarketType) {
-    if (!window.confirm(`هل تريد حذف تصنيف المحلات «${item.name_ar}»؟`)) return;
+    if (!window.confirm(`هل تريد حذف الفئة الثانوية «${item.name_ar}»؟`)) return;
     setBusy(true);
     setError("");
     try {
@@ -145,7 +145,7 @@ export function MarketTypesManager({
       if (draft.id === item.id) reset(item.classification_id);
     } catch (reason) {
       setError(
-        reason instanceof Error ? reason.message : "تعذر حذف تصنيف المحلات.",
+        reason instanceof Error ? reason.message : "تعذر حذف الفئة الثانوية.",
       );
     } finally {
       setBusy(false);
@@ -177,9 +177,9 @@ export function MarketTypesManager({
       >
         <header className="flex items-start justify-between border-b bg-muted/20 px-6 py-4">
           <div>
-            <h2 className="text-xl font-bold">تصنيفات المحلات داخل الفئات</h2>
+            <h2 className="text-xl font-bold">الفئات الثانوية للمحلات</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              اختر الفئة الرئيسية أولًا، ثم أضف تحتها تصنيفات مثل شاورما وسوشي وبرجر. ستظهر دائريًا للعملاء لتصفية المحلات.
+              اختر الفئة الأساسية أولًا، ثم أضف تحتها فئات مثل شاورما وسوشي وبرجر. ستظهر دائريًا للعملاء لتصفية المحلات.
             </p>
           </div>
           {onClose ? (
@@ -200,10 +200,10 @@ export function MarketTypesManager({
             className="grid content-start gap-4 border-b p-5 lg:border-b-0 lg:border-e"
           >
             <h3 className="font-bold">
-              {draft.id ? "تعديل التصنيف" : "إضافة تصنيف داخل الفئة"}
+              {draft.id ? "تعديل الفئة الثانوية" : "إضافة فئة ثانوية"}
             </h3>
             <label className="grid gap-2 text-sm font-semibold">
-              فئة المحلات الرئيسية *
+              الفئة الأساسية للمحل *
               <AppSelect
                 value={String(draft.classification_id || "")}
                 onValueChange={(value) =>
@@ -255,7 +255,7 @@ export function MarketTypesManager({
               />
             </label>
             <label className="flex cursor-pointer items-center justify-between rounded-md border px-3 py-3 text-sm font-semibold">
-              التصنيف نشط
+              الفئة الثانوية نشطة
               <Switch
                 checked={draft.is_active}
                 onCheckedChange={(checked) =>
@@ -279,7 +279,7 @@ export function MarketTypesManager({
               ) : (
                 <ImagePlus className="size-6 text-primary" />
               )}
-              <span>{imageFile?.name || "اختيار صورة دائرية للتصنيف *"}</span>
+                <span>{imageFile?.name || "اختيار صورة دائرية للفئة الثانوية *"}</span>
               <input
                 className="sr-only"
                 type="file"
@@ -300,7 +300,7 @@ export function MarketTypesManager({
                 ) : (
                   <Plus className="size-4" />
                 )}
-                حفظ التصنيف
+                حفظ الفئة الثانوية
               </Button>
               {draft.id ? (
                 <Button type="button" variant="outline" onClick={() => reset()}>
@@ -372,7 +372,7 @@ export function MarketTypesManager({
               ))}
               {!visibleItems.length ? (
                 <p className="text-sm text-muted-foreground">
-                  لا توجد تصنيفات داخل هذه الفئة بعد.
+                  لا توجد فئات ثانوية داخل هذه الفئة الأساسية بعد.
                 </p>
               ) : null}
             </div>

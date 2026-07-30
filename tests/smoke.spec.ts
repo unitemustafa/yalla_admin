@@ -43,15 +43,21 @@ test("categories use a dedicated navigation section below products", () => {
     productsItem?.children?.some((child) => child.page === "categories"),
   ).toBe(false);
   expect(
+    productsItem?.children?.some(
+      (child) =>
+        child.href === "/items/store-subcategories" &&
+        child.page === "store-subcategories",
+    ),
+  ).toBe(true);
+  expect(
     categoriesItem?.children?.map((child) => [child.href, child.page]),
   ).toEqual([
     ["/categories/markets", "categories"],
     ["/categories/market-types", "market-types"],
-    ["/categories/store-subcategories", "store-subcategories"],
   ]);
   expect(pageFromPathname("/categories/markets")).toBe("categories");
   expect(pageFromPathname("/categories/market-types")).toBe("market-types");
-  expect(pageFromPathname("/categories/store-subcategories")).toBe(
+  expect(pageFromPathname("/items/store-subcategories")).toBe(
     "store-subcategories",
   );
 });

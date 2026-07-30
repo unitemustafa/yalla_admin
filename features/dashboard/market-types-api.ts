@@ -67,7 +67,7 @@ async function parse(response: Response, fallback: string) {
 export async function loadMarketTypes(apiFetch: ApiFetch) {
   const data = await parse(
     await apiFetch("home/market-types/"),
-    "تعذر تحميل أنواع المحلات.",
+    "تعذر تحميل الفئات الثانوية للمحلات.",
   );
   return list(data)
     .map(normalizeMarketType)
@@ -115,16 +115,16 @@ export async function saveMarketType(
 
   const data = await parse(
     await apiFetch(path, { method, headers, body }),
-    "تعذر حفظ نوع المحل.",
+    "تعذر حفظ الفئة الثانوية للمحل.",
   );
   const item = normalizeMarketType(data);
-  if (!item) throw new Error("استجابة نوع المحل غير صالحة.");
+  if (!item) throw new Error("استجابة الفئة الثانوية للمحل غير صالحة.");
   return item;
 }
 
 export async function deleteMarketType(apiFetch: ApiFetch, id: number) {
   await parse(
     await apiFetch(`home/market-types/${id}/`, { method: "DELETE" }),
-    "تعذر حذف نوع المحل.",
+    "تعذر حذف الفئة الثانوية للمحل.",
   );
 }

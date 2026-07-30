@@ -1,5 +1,5 @@
-import { StoreSubcategoriesPage } from "@/features/dashboard/pages/store-subcategories";
+import { redirect } from "next/navigation";
 
 export default function StoreSubcategoriesRoute() {
-  return <StoreSubcategoriesPage />;
+  redirect("/items/store-subcategories");
 }
