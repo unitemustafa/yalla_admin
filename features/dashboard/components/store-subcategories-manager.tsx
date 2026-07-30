@@ -35,7 +35,7 @@ export function StoreSubcategoriesManager({
 }: {
   items: StoreSubcategory[];
   onChange: (items: StoreSubcategory[]) => void;
-  onClose: () => void;
+  onClose?: () => void;
 }) {
   const { apiFetch } = useAuth();
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -116,14 +116,19 @@ export function StoreSubcategoriesManager({
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/30 p-4 backdrop-blur-[1px]">
-      <section dir="rtl" role="dialog" aria-modal="true" className="flex h-[min(860px,calc(100dvh-2rem))] w-full max-w-6xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl">
+    <div className={onClose ? "fixed inset-0 z-[60] flex items-center justify-center bg-foreground/30 p-4 backdrop-blur-[1px]" : "mt-6"}>
+      <section
+        dir="rtl"
+        role={onClose ? "dialog" : undefined}
+        aria-modal={onClose ? true : undefined}
+        className={onClose ? "flex h-[min(860px,calc(100dvh-2rem))] w-full max-w-6xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl" : "flex min-h-[620px] w-full flex-col overflow-hidden rounded-xl border bg-background shadow-sm"}
+      >
         <header className="flex items-start justify-between border-b bg-muted/20 px-6 py-4">
           <div>
             <h2 className="text-xl font-bold">إدارة أقسام المنتجات</h2>
             <p className="mt-1 text-sm text-muted-foreground">أقسام نصية مشتركة لتنظيم المنتجات داخل المحلات، ولا تحتاج إلى صور.</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-full border p-2 hover:bg-accent" aria-label="إغلاق"><X className="size-4" /></button>
+          {onClose ? <button type="button" onClick={onClose} className="rounded-full border p-2 hover:bg-accent" aria-label="إغلاق"><X className="size-4" /></button> : null}
         </header>
         <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[390px_minmax(0,1fr)]">
           <form onSubmit={submit} className="grid content-start gap-4 border-b p-5 lg:border-b-0 lg:border-e">

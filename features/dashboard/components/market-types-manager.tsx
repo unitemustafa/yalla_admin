@@ -33,7 +33,7 @@ export function MarketTypesManager({
   items: MarketType[];
   classifications: Classification[];
   onChange: (items: MarketType[]) => void;
-  onClose: () => void;
+  onClose?: () => void;
 }) {
   const { apiFetch } = useAuth();
   const firstClassificationId = classifications[0]?.id ?? 0;
@@ -158,12 +158,22 @@ export function MarketTypesManager({
   }));
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/30 p-4 backdrop-blur-[1px]">
+    <div
+      className={
+        onClose
+          ? "fixed inset-0 z-[60] flex items-center justify-center bg-foreground/30 p-4 backdrop-blur-[1px]"
+          : "mt-6"
+      }
+    >
       <section
         dir="rtl"
-        role="dialog"
-        aria-modal="true"
-        className="flex h-[min(820px,calc(100dvh-2rem))] w-full max-w-6xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl"
+        role={onClose ? "dialog" : undefined}
+        aria-modal={onClose ? true : undefined}
+        className={
+          onClose
+            ? "flex h-[min(820px,calc(100dvh-2rem))] w-full max-w-6xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl"
+            : "flex min-h-[620px] w-full flex-col overflow-hidden rounded-xl border bg-background shadow-sm"
+        }
       >
         <header className="flex items-start justify-between border-b bg-muted/20 px-6 py-4">
           <div>
@@ -172,14 +182,16 @@ export function MarketTypesManager({
               اختر الفئة الرئيسية أولًا، ثم أضف تحتها تصنيفات مثل شاورما وسوشي وبرجر. ستظهر دائريًا للعملاء لتصفية المحلات.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border p-2 hover:bg-accent"
-            aria-label="إغلاق"
-          >
-            <X className="size-4" />
-          </button>
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full border p-2 hover:bg-accent"
+              aria-label="إغلاق"
+            >
+              <X className="size-4" />
+            </button>
+          ) : null}
         </header>
 
         <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[390px_minmax(0,1fr)]">

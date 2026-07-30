@@ -6,6 +6,8 @@ export type PageKey =
   | "create-item"
   | "shops"
   | "categories"
+  | "market-types"
+  | "store-subcategories"
   | "addons"
   | "orders"
   | "create-order"

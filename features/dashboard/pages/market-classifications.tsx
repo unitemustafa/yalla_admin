@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Edit3,
   ImagePlus,
-  Layers3,
   Plus,
   RefreshCw,
   Search,
@@ -39,16 +38,6 @@ import {
 import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
 import { cn } from "@/lib/utils";
-import { MarketTypesManager } from "../components/market-types-manager";
-import { StoreSubcategoriesManager } from "../components/store-subcategories-manager";
-import {
-  loadMarketTypes,
-  type MarketType,
-} from "../market-types-api";
-import {
-  loadStoreSubcategories,
-  type StoreSubcategory,
-} from "../store-subcategories-api";
 
 const pageSize = 10;
 
@@ -507,13 +496,6 @@ export function MarketClassificationsPage() {
   >();
   const [deleteClassification, setDeleteClassification] =
     useState<MarketClassification | null>(null);
-  const [marketTypes, setMarketTypes] = useState<MarketType[]>([]);
-  const [storeSubcategories, setStoreSubcategories] = useState<
-    StoreSubcategory[]
-  >([]);
-  const [showMarketTypesManager, setShowMarketTypesManager] = useState(false);
-  const [showSubcategoriesManager, setShowSubcategoriesManager] =
-    useState(false);
   const featuredOptionDisabled =
     classifications.filter(
       (classification) =>
@@ -526,22 +508,10 @@ export function MarketClassificationsPage() {
     setLoadError("");
 
     try {
-      const [
-        loadedClassifications,
-        loadedMarketTypes,
-        loadedStoreSubcategories,
-      ] = await Promise.all([
-        loadMarketClassifications(apiFetch),
-        loadMarketTypes(apiFetch).catch(() => []),
-        loadStoreSubcategories(apiFetch).catch(() => []),
-      ]);
+      const loadedClassifications = await loadMarketClassifications(apiFetch);
       setClassifications(loadedClassifications);
-      setMarketTypes(loadedMarketTypes);
-      setStoreSubcategories(loadedStoreSubcategories);
     } catch (reason) {
       setClassifications([]);
-      setMarketTypes([]);
-      setStoreSubcategories([]);
       setLoadError(
         reason instanceof Error
           ? reason.message
@@ -719,8 +689,8 @@ export function MarketClassificationsPage() {
   return (
     <div dir="rtl" className="px-6 py-6">
       <PageTitle
-        title="الفئات"
-        description="إدارة تصنيفات المحلات وربطها بالمحلات."
+        title="فئات المحلات الرئيسية"
+        description="إدارة الفئات الأساسية التي تتبعها المحلات، مثل المطاعم أو الأثاث."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -771,50 +741,6 @@ export function MarketClassificationsPage() {
           </div>
         </Card>
       </div>
-
-      <Card className="mt-6 overflow-hidden">
-        <div className="border-b p-4">
-          <h2 className="font-semibold">تنظيم الفئات</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            كل ما يخص التصنيفات موجود هنا: تصنيفات المحلات تحت الفئة الرئيسية، وأقسام المنتجات داخل المحل.
-          </p>
-        </div>
-        <div className="grid gap-3 p-4 md:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => setShowMarketTypesManager(true)}
-            disabled={!classifications.length}
-            className="flex min-h-24 items-center gap-4 rounded-lg border bg-background p-4 text-start transition hover:border-primary/45 hover:bg-primary/[0.03] disabled:cursor-not-allowed disabled:opacity-55"
-          >
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <Layers3 className="size-5" />
-            </span>
-            <span className="min-w-0">
-              <span className="block font-bold">تصنيفات المحلات داخل الفئات</span>
-              <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                {classifications.length
-                  ? `مثل مطاعم ← شاورما، سوشي، برجر. عدد التصنيفات: ${marketTypes.length}`
-                  : "أضف فئة محلات رئيسية أولًا، ثم أنشئ تصنيفات بداخلها."}
-              </span>
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowSubcategoriesManager(true)}
-            className="flex min-h-24 items-center gap-4 rounded-lg border bg-background p-4 text-start transition hover:border-primary/45 hover:bg-primary/[0.03]"
-          >
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
-              <Tags className="size-5" />
-            </span>
-            <span className="min-w-0">
-              <span className="block font-bold">أقسام المنتجات داخل المحلات</span>
-              <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                أقسام نصية بلا صور مثل مشروبات وحلويات. عدد الأقسام: {storeSubcategories.length}
-              </span>
-            </span>
-          </button>
-        </div>
-      </Card>
 
       <Card className="mt-6 overflow-hidden">
         <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -961,22 +887,6 @@ export function MarketClassificationsPage() {
         />
       ) : null}
 
-      {showMarketTypesManager ? (
-        <MarketTypesManager
-          items={marketTypes}
-          classifications={classifications}
-          onChange={(next) => setMarketTypes(next)}
-          onClose={() => setShowMarketTypesManager(false)}
-        />
-      ) : null}
-
-      {showSubcategoriesManager ? (
-        <StoreSubcategoriesManager
-          items={storeSubcategories}
-          onChange={(next) => setStoreSubcategories(next)}
-          onClose={() => setShowSubcategoriesManager(false)}
-        />
-      ) : null}
     </div>
   );
 }

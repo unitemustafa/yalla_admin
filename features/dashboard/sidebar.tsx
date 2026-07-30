@@ -207,6 +207,7 @@ export function Sidebar({
     const firstChildPage = item.children?.[0]?.page;
 
     if (firstChildPage === "items") return t("nav.products");
+    if (firstChildPage === "categories") return t("nav.categories");
     if (firstChildPage === "orders") return t("nav.orders");
     if (firstChildPage === "offers") return t("nav.offers");
     if (firstChildPage === "delivery-zone") return t("nav.delivery");

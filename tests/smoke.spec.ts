@@ -27,6 +27,35 @@ test("archives use one dedicated navigation section and distinct routes", () => 
   );
 });
 
+test("categories use a dedicated navigation section below products", () => {
+  const menuItems = navGroups[0].items;
+  const productsIndex = menuItems.findIndex((item) =>
+    item.children?.some((child) => child.page === "items"),
+  );
+  const categoriesIndex = menuItems.findIndex((item) =>
+    item.children?.some((child) => child.page === "categories"),
+  );
+  const productsItem = menuItems[productsIndex];
+  const categoriesItem = menuItems[categoriesIndex];
+
+  expect(categoriesIndex).toBe(productsIndex + 1);
+  expect(
+    productsItem?.children?.some((child) => child.page === "categories"),
+  ).toBe(false);
+  expect(
+    categoriesItem?.children?.map((child) => [child.href, child.page]),
+  ).toEqual([
+    ["/categories/markets", "categories"],
+    ["/categories/market-types", "market-types"],
+    ["/categories/store-subcategories", "store-subcategories"],
+  ]);
+  expect(pageFromPathname("/categories/markets")).toBe("categories");
+  expect(pageFromPathname("/categories/market-types")).toBe("market-types");
+  expect(pageFromPathname("/categories/store-subcategories")).toBe(
+    "store-subcategories",
+  );
+});
+
 test("protected dashboard routes redirect to login with a safe return path", async ({
   page,
 }) => {
@@ -46,6 +75,16 @@ test("archive routes are protected and preserve their return path", async ({
 
   await expect(page).toHaveURL(
     /\/login\?next=%2Farchives%2Fproducts$/,
+  );
+});
+
+test("category routes are protected and preserve their return path", async ({
+  page,
+}) => {
+  await page.goto("/categories/market-types");
+
+  await expect(page).toHaveURL(
+    /\/login\?next=%2Fcategories%2Fmarket-types$/,
   );
 });
 

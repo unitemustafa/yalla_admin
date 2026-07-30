@@ -808,7 +808,7 @@ function MissingClassificationsDialog({
           <Button
             type="button"
             onClick={() => {
-              window.location.href = "/items/categories";
+              window.location.href = "/categories/store-subcategories";
             }}
           >
             <Plus className="size-4" />
