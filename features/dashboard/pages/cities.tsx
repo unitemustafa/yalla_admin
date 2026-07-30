@@ -563,10 +563,14 @@ function DeliveryAreasDialog({
   );
 }
 
-export function CitiesPage() {
+export function CitiesPage({
+  initialArchived = false,
+}: {
+  initialArchived?: boolean;
+} = {}) {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
-  const [showArchived, setShowArchived] = useState(false);
+  const showArchived = initialArchived;
   const { cities, setCities, loading, error, reload } = useServiceCities({
     archived: showArchived,
   });
@@ -735,33 +739,14 @@ export function CitiesPage() {
   return (
     <div dir="rtl" className="px-6 py-6">
       <PageTitle
-        title="المدن"
-        description="إدارة المدن التي تحدد ظهور المحلات والمنتجات والعروض داخل تطبيق العميل."
+        title={showArchived ? "المدن المؤرشفة" : "المدن"}
+        description={
+          showArchived
+            ? "استعراض المدن المؤرشفة واستعادتها عند الحاجة."
+            : "إدارة المدن التي تحدد ظهور المحلات والمنتجات والعروض داخل تطبيق العميل."
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant={!showArchived ? "default" : "outline"}
-              onClick={() => {
-                setShowArchived(false);
-                setCurrentPage(1);
-              }}
-              className="h-9 px-4 text-sm"
-            >
-              المدن الحالية
-            </Button>
-            <Button
-              type="button"
-              variant={showArchived ? "default" : "outline"}
-              onClick={() => {
-                setShowArchived(true);
-                setCurrentPage(1);
-              }}
-              className="h-9 px-4 text-sm"
-            >
-              <Archive className="size-4" />
-              المؤرشف
-            </Button>
             <Button type="button" variant="outline" onClick={() => void reload()} disabled={loading} className="h-9 px-4 text-sm">
               <RefreshCw className="size-4" />
               تحديث

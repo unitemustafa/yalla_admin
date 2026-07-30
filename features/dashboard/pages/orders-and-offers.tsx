@@ -3436,7 +3436,11 @@ function OfferVisual({
   );
 }
 
-export function OffersPage() {
+export function OffersPage({
+  initialArchived = false,
+}: {
+  initialArchived?: boolean;
+} = {}) {
   const router = useRouter();
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
@@ -3454,7 +3458,7 @@ export function OffersPage() {
   const [offerTypeFilter, setOfferTypeFilter] = useState(allOffersFilterValue);
   const [offerCityFilter, setOfferCityFilter] = useState(allOffersFilterValue);
   const [expandedOfferIds, setExpandedOfferIds] = useState<Record<string, boolean>>({});
-  const [showArchived, setShowArchived] = useState(false);
+  const showArchived = initialArchived;
   const activeOffers = offers.filter(
     (offer) => offer.backendStatus === "active" && offerDateLifecycle(offer.startsAt, offer.endsAt) === "current",
   ).length;
@@ -3694,18 +3698,15 @@ export function OffersPage() {
   return (
     <div className="px-6 py-8">
       <PageTitle
-        title="العروض"
-        description="إدارة العروض والخصومات لكل الفروع"
+        title={showArchived ? "العروض المؤرشفة" : "العروض"}
+        description={
+          showArchived
+            ? "استعراض العروض المؤرشفة واستعادتها عند الحاجة"
+            : "إدارة العروض والخصومات لكل الفروع"
+        }
         size="compact"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant={!showArchived ? "default" : "outline"} className="h-9" onClick={() => setShowArchived(false)}>
-              العروض الحالية
-            </Button>
-            <Button type="button" variant={showArchived ? "default" : "outline"} className="h-9" onClick={() => setShowArchived(true)}>
-              <Archive className="size-4" />
-              المؤرشف
-            </Button>
             <Button type="button" variant="outline" className="h-9" onClick={() => void reloadOffers()} disabled={offersLoading}>
               <RefreshCw className={cn("size-4", offersLoading && "animate-spin")} />
               تحديث

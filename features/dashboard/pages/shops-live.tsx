@@ -16,8 +16,6 @@ import {
 import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
 import { cn } from "@/lib/utils";
-import { StoreSubcategoriesManager } from "../components/store-subcategories-manager";
-import { MarketTypesManager } from "../components/market-types-manager";
 import {
   loadStoreSubcategories,
   type StoreSubcategory,
@@ -822,7 +820,11 @@ function MissingClassificationsDialog({
   );
 }
 
-export function ShopsPage() {
+export function ShopsPage({
+  initialArchived = false,
+}: {
+  initialArchived?: boolean;
+} = {}) {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const queueUndoableDelete = useUndoableDelete();
@@ -838,9 +840,7 @@ export function ShopsPage() {
   const [query, setQuery] = useState("");
   const [dialogMarket, setDialogMarket] = useState<Market | null | undefined>();
   const [deleteMarket, setDeleteMarket] = useState<Market | null>(null);
-  const [showSubcategoryManager, setShowSubcategoryManager] = useState(false);
-  const [showMarketTypesManager, setShowMarketTypesManager] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
+  const showArchived = initialArchived;
 
   const loadServiceCityOptions = useCallback(async () => {
     setServiceCitiesLoading(true);
@@ -988,7 +988,7 @@ export function ShopsPage() {
 
   return (
     <div className="px-6 py-6">
-      <PageTitle title="المحلات" description="إدارة المحلات وربط ظهور منتجاتها بالمدن." actions={<div className="flex flex-wrap items-center gap-2"><Button type="button" variant={!showArchived ? "default" : "outline"} className="h-9 px-4 text-sm" onClick={() => setShowArchived(false)}>المحلات الحالية</Button><Button type="button" variant={showArchived ? "default" : "outline"} className="h-9 px-4 text-sm" onClick={() => setShowArchived(true)}><Archive className="size-4" />المؤرشف</Button><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => void load()} disabled={loading}><RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />تحديث</Button>{!showArchived ? <><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => setShowMarketTypesManager(true)}><Layers3 className="size-4" />إدارة أنواع المحلات</Button><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => setShowSubcategoryManager(true)}><Layers3 className="size-4" />إدارة أقسام المنتجات</Button><Button className="h-9 px-4 text-sm" onClick={() => setDialogMarket(null)} disabled={!subcategories.some((item) => item.is_active)}><Plus className="size-4" />إضافة محل</Button></> : null}</div>} />
+      <PageTitle title={showArchived ? "المحلات المؤرشفة" : "المحلات"} description={showArchived ? "استعراض المحلات المؤرشفة واستعادتها عند الحاجة." : "إدارة المحلات وربط ظهور منتجاتها بالمدن."} actions={<div className="flex flex-wrap items-center gap-2"><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => void load()} disabled={loading}><RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />تحديث</Button>{!showArchived ? <Button className="h-9 px-4 text-sm" onClick={() => setDialogMarket(null)} disabled={!subcategories.some((item) => item.is_active)}><Plus className="size-4" />إضافة محل</Button> : null}</div>} />
       <div className="mt-6 grid gap-3 md:grid-cols-3">
         {[["إجمالي المحلات", markets.length, Store], ["المحلات النشطة", markets.filter((item) => item.status === "active").length, Store], ["مدن الظهور", new Set(markets.flatMap((item) => marketServiceCityIds(item))).size, MapPin]].map(([label, value, Icon]) => { const MetricIcon = Icon as typeof Store; return <Card key={label as string} className="h-[80px]"><div className="flex h-full items-center gap-3 px-5"><span className="rounded-full bg-primary/10 p-3 text-primary"><MetricIcon className="size-5" /></span><div><p className="text-xs text-muted-foreground">{label as string}</p><p className="text-xl font-bold">{value as number}</p></div></div></Card>; })}
       </div>
@@ -1003,9 +1003,14 @@ export function ShopsPage() {
               {showArchived ? "المحلات التي تتم أرشفتها ستظهر هنا ويمكن استعادتها." : "سيظهر هنا أول محل تنشئه وتربطه بمدن الظهور."}
             </p>
             {!showArchived ? <div className="mt-6 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row">
-              <Button type="button" className="h-10 px-4" onClick={() => subcategories.some((item) => item.is_active) ? setDialogMarket(null) : setShowSubcategoryManager(true)}>
+              <Button
+                type="button"
+                className="h-10 px-4"
+                onClick={() => setDialogMarket(null)}
+                disabled={!subcategories.some((item) => item.is_active)}
+              >
                 {subcategories.some((item) => item.is_active) ? <Plus className="size-4" /> : <Layers3 className="size-4" />}
-                {subcategories.some((item) => item.is_active) ? "إنشاء أول محل" : "إنشاء فئة داخلية أولًا"}
+                {subcategories.some((item) => item.is_active) ? "إنشاء أول محل" : "أنشئ أقسام المنتجات من صفحة الفئات أولًا"}
               </Button>
             </div> : null}
           </div>
@@ -1033,8 +1038,6 @@ export function ShopsPage() {
           <MissingClassificationsDialog onClose={() => setDialogMarket(undefined)} />
         )
       ) : null}
-      {showSubcategoryManager ? <StoreSubcategoriesManager items={subcategories} onChange={(next) => { setSubcategories(next); void load(); }} onClose={() => setShowSubcategoryManager(false)} /> : null}
-      {showMarketTypesManager ? <MarketTypesManager items={marketTypes} classifications={classifications} onChange={(next) => { setMarketTypes(next); void load(); }} onClose={() => setShowMarketTypesManager(false)} /> : null}
     </div>
   );
 }

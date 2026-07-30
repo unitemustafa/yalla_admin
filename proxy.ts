@@ -5,6 +5,7 @@ import { AUTH_COOKIE_NAMES } from "@/lib/auth";
 
 const protectedPrefixes = [
   "/account",
+  "/archives",
   "/customers",
   "/dashboard",
   "/delivery",

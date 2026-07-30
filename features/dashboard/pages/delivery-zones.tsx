@@ -770,7 +770,11 @@ function MissingServiceCitiesDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function DeliveryZonesPage() {
+export function DeliveryZonesPage({
+  initialArchived = false,
+}: {
+  initialArchived?: boolean;
+} = {}) {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const queueUndoableDelete = useUndoableDelete();
@@ -787,7 +791,7 @@ export function DeliveryZonesPage() {
   const [deleteZone, setDeleteZone] = useState<DeliveryZone | null>(null);
   const [deletingZoneId, setDeletingZoneId] = useState<string | null>(null);
   const [changingStatusId, setChangingStatusId] = useState<string | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
+  const showArchived = initialArchived;
   const { cities, loading: citiesLoading, error: citiesError } = useServiceCities();
   const cityFilterOptions = useMemo(
     () => [
@@ -992,18 +996,15 @@ export function DeliveryZonesPage() {
   return (
     <div dir="rtl" className="px-6 py-8">
       <PageTitle
-        title="مناطق التوصيل"
-        description="إدارة المناطق وقواعد التسعير وحدود التوصيل من مكان واحد."
+        title={showArchived ? "مناطق التوصيل المؤرشفة" : "مناطق التوصيل"}
+        description={
+          showArchived
+            ? "استعراض مناطق التوصيل المؤرشفة واستعادتها عند الحاجة."
+            : "إدارة المناطق وقواعد التسعير وحدود التوصيل من مكان واحد."
+        }
         size="compact"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant={!showArchived ? "default" : "outline"} onClick={() => { setShowArchived(false); setCurrentPage(1); }}>
-              المناطق الحالية
-            </Button>
-            <Button variant={showArchived ? "default" : "outline"} onClick={() => { setShowArchived(true); setCurrentPage(1); }}>
-              <Archive className="size-4" />
-              المؤرشف
-            </Button>
             <Button variant="outline" onClick={() => void loadZones()} disabled={loading}>
               <RefreshCw className={cn("size-4", loading && "animate-spin")} />
               تحديث
@@ -1024,7 +1025,7 @@ export function DeliveryZonesPage() {
         ]}
       />
 
-      <div className="mt-6 flex flex-wrap gap-2 rounded-lg border bg-card p-2">
+      {!showArchived ? <div className="mt-6 flex flex-wrap gap-2 rounded-lg border bg-card p-2">
         {[
           ["zones", "المناطق الحالية", Truck],
           ["settings", "إعدادات التسعير العام", Settings2],
@@ -1055,14 +1056,20 @@ export function DeliveryZonesPage() {
             </button>
           );
         })}
-      </div>
+      </div> : null}
 
       {activeTab === "zones" ? (
         <section className="mt-6">
           <div className="grid gap-4 rounded-lg border bg-card p-4 xl:grid-cols-[minmax(0,1fr)_minmax(240px,320px)_minmax(320px,460px)] xl:items-end">
             <div>
-              <h2 className="font-semibold">كل مناطق التوصيل</h2>
-              <p className="text-xs text-muted-foreground">ابحث وراجع الحالة والتسعير لكل منطقة.</p>
+              <h2 className="font-semibold">
+                {showArchived ? "مناطق التوصيل المؤرشفة" : "كل مناطق التوصيل"}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {showArchived
+                  ? "ابحث في المناطق المؤرشفة واستعد ما تحتاجه."
+                  : "ابحث وراجع الحالة والتسعير لكل منطقة."}
+              </p>
             </div>
             <div className="min-w-0">
               <AppSelect

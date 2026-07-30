@@ -1,4 +1,5 @@
 import {
+  Archive,
   BadgeCheck,
   Handshake,
   LayoutDashboard,
@@ -95,6 +96,37 @@ export const navGroups: NavGroup[] = [
         page: "partners",
       },
       {
+        label: "المؤرشفات",
+        icon: Archive,
+        children: [
+          {
+            label: "المنتجات المؤرشفة",
+            href: "/archives/products",
+            page: "archived-items",
+          },
+          {
+            label: "المحلات المؤرشفة",
+            href: "/archives/shops",
+            page: "archived-shops",
+          },
+          {
+            label: "العروض المؤرشفة",
+            href: "/archives/offers",
+            page: "archived-offers",
+          },
+          {
+            label: "المدن المؤرشفة",
+            href: "/archives/cities",
+            page: "archived-cities",
+          },
+          {
+            label: "مناطق التوصيل المؤرشفة",
+            href: "/archives/delivery-zones",
+            page: "archived-delivery-zones",
+          },
+        ],
+      },
+      {
         label: "العضويات",
         icon: BadgeCheck,
         page: "memberships",
@@ -165,6 +197,31 @@ export const breadcrumbByPage: Record<PageKey, BreadcrumbItem[]> = {
   ],
   customers: [dashboardCrumb, { label: "العملاء" }],
   partners: [dashboardCrumb, { label: "الشركاء" }],
+  "archived-items": [
+    dashboardCrumb,
+    { label: "المؤرشفات" },
+    { label: "المنتجات المؤرشفة" },
+  ],
+  "archived-shops": [
+    dashboardCrumb,
+    { label: "المؤرشفات" },
+    { label: "المحلات المؤرشفة" },
+  ],
+  "archived-offers": [
+    dashboardCrumb,
+    { label: "المؤرشفات" },
+    { label: "العروض المؤرشفة" },
+  ],
+  "archived-cities": [
+    dashboardCrumb,
+    { label: "المؤرشفات" },
+    { label: "المدن المؤرشفة" },
+  ],
+  "archived-delivery-zones": [
+    dashboardCrumb,
+    { label: "المؤرشفات" },
+    { label: "مناطق التوصيل المؤرشفة" },
+  ],
   memberships: [dashboardCrumb, { label: "العضويات" }],
   account: [dashboardCrumb, { label: "Account" }],
   settings: [dashboardCrumb, { label: "الإعدادات" }],
@@ -210,6 +267,12 @@ export function pageFromPathname(pathname: string): PageKey {
     return "customers";
   if (pathname === "/partners" || pathname.startsWith("/partners/"))
     return "partners";
+  if (pathname === "/archives/products") return "archived-items";
+  if (pathname === "/archives/shops") return "archived-shops";
+  if (pathname === "/archives/offers") return "archived-offers";
+  if (pathname === "/archives/cities") return "archived-cities";
+  if (pathname === "/archives/delivery-zones")
+    return "archived-delivery-zones";
   if (pathname === "/account") return "account";
   if (pathname === "/settings" || pathname.startsWith("/settings/"))
     return "settings";

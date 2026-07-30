@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Edit3, ImagePlus, LoaderCircle, Plus, Trash2, X } from "lucide-react";
+import { useState } from "react";
+import { Edit3, Layers3, LoaderCircle, Plus, Trash2, X } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
-import { DashboardImage } from "../dashboard-image";
 import { Button, Input, Switch } from "../primitives";
 import {
   deleteStoreSubcategory,
@@ -19,7 +18,6 @@ type Draft = {
   description_ar: string;
   description_en: string;
   is_active: boolean;
-  image: string | null;
 };
 
 const emptyDraft: Draft = {
@@ -28,7 +26,6 @@ const emptyDraft: Draft = {
   description_ar: "",
   description_en: "",
   is_active: true,
-  image: null,
 };
 
 export function StoreSubcategoriesManager({
@@ -42,26 +39,23 @@ export function StoreSubcategoriesManager({
 }) {
   const { apiFetch } = useAuth();
   const [draft, setDraft] = useState<Draft>(emptyDraft);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => () => {
-    if (imagePreview.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
-  }, [imagePreview]);
-
   function edit(item: StoreSubcategory) {
-    setDraft(item);
-    setImageFile(null);
-    setImagePreview(item.image ?? "");
+    setDraft({
+      id: item.id,
+      name_ar: item.name_ar,
+      name_en: item.name_en,
+      description_ar: item.description_ar,
+      description_en: item.description_en,
+      is_active: item.is_active,
+    });
     setError("");
   }
 
   function reset() {
     setDraft(emptyDraft);
-    setImageFile(null);
-    setImagePreview("");
     setError("");
   }
 
@@ -80,7 +74,6 @@ export function StoreSubcategoriesManager({
         name_en: draft.name_en.trim(),
         description_ar: draft.description_ar.trim(),
         description_en: draft.description_en.trim(),
-        image: imageFile,
       });
       onChange(
         items.some((item) => item.id === saved.id)
@@ -127,32 +120,22 @@ export function StoreSubcategoriesManager({
       <section dir="rtl" role="dialog" aria-modal="true" className="flex h-[min(860px,calc(100dvh-2rem))] w-full max-w-6xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl">
         <header className="flex items-start justify-between border-b bg-muted/20 px-6 py-4">
           <div>
-            <h2 className="text-xl font-bold">إدارة الفئات الداخلية</h2>
-            <p className="mt-1 text-sm text-muted-foreground">مكتبة مشتركة للمحلات، مع أعداد المحلات والمنتجات المرتبطة.</p>
+            <h2 className="text-xl font-bold">إدارة أقسام المنتجات</h2>
+            <p className="mt-1 text-sm text-muted-foreground">أقسام نصية مشتركة لتنظيم المنتجات داخل المحلات، ولا تحتاج إلى صور.</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-full border p-2 hover:bg-accent" aria-label="إغلاق"><X className="size-4" /></button>
         </header>
         <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[390px_minmax(0,1fr)]">
           <form onSubmit={submit} className="grid content-start gap-4 border-b p-5 lg:border-b-0 lg:border-e">
-            <h3 className="font-bold">{draft.id ? "تعديل الفئة" : "إنشاء فئة جديدة"}</h3>
+            <h3 className="font-bold">{draft.id ? "تعديل القسم" : "إنشاء قسم جديد"}</h3>
             <label className="grid gap-2 text-sm font-semibold">الاسم بالعربية *<Input value={draft.name_ar} onChange={(event) => setDraft((value) => ({ ...value, name_ar: event.target.value }))} /></label>
             <label className="grid gap-2 text-sm font-semibold">الاسم بالإنجليزية *<Input dir="ltr" value={draft.name_en} onChange={(event) => setDraft((value) => ({ ...value, name_en: event.target.value }))} /></label>
             <label className="grid gap-2 text-sm font-semibold">الوصف بالعربية<textarea className="min-h-20 rounded-md border bg-input px-3 py-2 text-sm" value={draft.description_ar} onChange={(event) => setDraft((value) => ({ ...value, description_ar: event.target.value }))} /></label>
             <label className="grid gap-2 text-sm font-semibold">الوصف بالإنجليزية<textarea dir="ltr" className="min-h-20 rounded-md border bg-input px-3 py-2 text-sm" value={draft.description_en} onChange={(event) => setDraft((value) => ({ ...value, description_en: event.target.value }))} /></label>
             <label className="flex cursor-pointer items-center justify-between rounded-md border px-3 py-3 text-sm font-semibold">الفئة نشطة<Switch checked={draft.is_active} onCheckedChange={(checked) => setDraft((value) => ({ ...value, is_active: checked }))} /></label>
-            <label className="flex cursor-pointer items-center gap-3 rounded-md border border-dashed p-3 text-sm">
-              {imagePreview ? <DashboardImage src={imagePreview} alt="" width={56} height={56} className="size-14 rounded-md" imageClassName="object-cover" /> : <ImagePlus className="size-6 text-primary" />}
-              <span>{imageFile?.name || "اختيار صورة اختيارية"}</span>
-              <input className="sr-only" type="file" accept="image/*" onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (!file) return;
-                setImageFile(file);
-                setImagePreview(URL.createObjectURL(file));
-              }} />
-            </label>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
             <div className="flex gap-2">
-              <Button type="submit" disabled={busy}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : <Plus className="size-4" />}حفظ الفئة</Button>
+              <Button type="submit" disabled={busy}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : <Plus className="size-4" />}حفظ القسم</Button>
               {draft.id ? <Button type="button" variant="outline" onClick={reset}>إلغاء التعديل</Button> : null}
             </div>
           </form>
@@ -160,7 +143,9 @@ export function StoreSubcategoriesManager({
             <div className="grid gap-3 sm:grid-cols-2">
               {items.map((item) => (
                 <article key={item.id} className="flex min-w-0 items-center gap-3 rounded-lg border p-3">
-                  <DashboardImage src={item.image} alt="" width={56} height={56} className="size-14 shrink-0 rounded-md bg-muted" imageClassName="object-cover" />
+                  <span className="flex size-12 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Layers3 className="size-5" />
+                  </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2"><p className="truncate font-bold">{item.name_ar}</p><span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${item.is_active ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"}`}>{item.is_active ? "نشطة" : "معطلة"}</span></div>
                     <p dir="ltr" className="truncate text-xs text-muted-foreground">{item.name_en}</p>
@@ -172,7 +157,7 @@ export function StoreSubcategoriesManager({
                   </div>
                 </article>
               ))}
-              {!items.length ? <p className="text-sm text-muted-foreground">لا توجد فئات داخلية بعد.</p> : null}
+              {!items.length ? <p className="text-sm text-muted-foreground">لا توجد أقسام منتجات بعد.</p> : null}
             </div>
           </div>
         </div>

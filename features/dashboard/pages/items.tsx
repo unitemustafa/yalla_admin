@@ -1214,7 +1214,11 @@ function ItemsMobileCards({
   );
 }
 
-export function ItemsPage() {
+export function ItemsPage({
+  initialArchived = false,
+}: {
+  initialArchived?: boolean;
+} = {}) {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const [rows, setRows] = useState<ItemRow[]>([]);
@@ -1222,7 +1226,7 @@ export function ItemsPage() {
   const [additionRows, setAdditionRows] = useState(() => new Map<string, string>());
   const [filters, setFilters] = useState<ItemFilters>(defaultFilters);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
+  const showArchived = initialArchived;
   const [reloadKey, setReloadKey] = useState(0);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(false);
@@ -1429,19 +1433,16 @@ export function ItemsPage() {
   return (
     <div className="min-h-screen bg-muted/20 px-4 py-6 sm:px-6 lg:px-8">
       <PageTitle
-        title="المنتجات"
-        description="إدارة منتجات المنيو في كل الفروع"
+        title={showArchived ? "المنتجات المؤرشفة" : "المنتجات"}
+        description={
+          showArchived
+            ? "استعراض المنتجات المؤرشفة واستعادتها عند الحاجة"
+            : "إدارة منتجات المنيو في كل الفروع"
+        }
         size="compact"
         className="rounded-lg border bg-card p-4 shadow-sm"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant={!showArchived ? "default" : "outline"} className="h-9 px-4 text-sm" onClick={() => { setShowArchived(false); setCurrentPage(1); }}>
-              المنتجات الحالية
-            </Button>
-            <Button type="button" variant={showArchived ? "default" : "outline"} className="h-9 px-4 text-sm" onClick={() => { setShowArchived(true); setCurrentPage(1); }}>
-              <Archive className="size-4" />
-              المؤرشف
-            </Button>
             <Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => setReloadKey((current) => current + 1)} disabled={loading}>
               <RotateCcw className={cn("size-4", loading && "animate-spin")} />
               تحديث

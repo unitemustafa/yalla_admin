@@ -210,6 +210,7 @@ export function Sidebar({
     if (firstChildPage === "orders") return t("nav.orders");
     if (firstChildPage === "offers") return t("nav.offers");
     if (firstChildPage === "delivery-zone") return t("nav.delivery");
+    if (firstChildPage === "archived-items") return t("nav.archives");
 
     return item.soon ? t("nav.chat") : item.label;
   }
