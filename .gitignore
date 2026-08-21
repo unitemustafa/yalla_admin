@@ -43,21 +43,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-/ammenu-overview
-.playwright-mcp
-.codex
-/artifacts
-/.data/
-
-# local database
-/prisma/dev.db
-/prisma/dev.db-*
-dev-server.err.log
-dev-server.out.log 
-
-.serena
-.env.local
-
 # Environment files
 .env
 .env.*

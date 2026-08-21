@@ -13,10 +13,11 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
+    "sizecheck": "node scripts/check-source-size.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "deadcode": "knip --no-config-hints",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run deadcode && npm run build && npm run audit:prod",
+    "check": "npm run lint && npm run typecheck && npm run sizecheck && npm run test && npm run deadcode && npm run build && npm run audit:prod",
     "audit:prod": "npm audit --omit=dev",
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed"

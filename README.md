@@ -63,6 +63,7 @@ Local `.env*` files are ignored by Git. Only `.env.example` should be committed.
 | `npm run dev:turbo` | Start the development server with Turbopack. |
 | `npm run lint` | Run ESLint. |
 | `npm run typecheck` | Generate Next.js route types and run strict TypeScript checks. |
+| `npm run sizecheck` | Fail when a source file exceeds 800 lines. |
 | `npm run test` | Run the Vitest test suite once. |
 | `npm run test:coverage` | Run unit tests with coverage thresholds. |
 | `npm run deadcode` | Find unused files, exports, and dependencies with Knip. |
