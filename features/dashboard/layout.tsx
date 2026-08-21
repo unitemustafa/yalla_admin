@@ -70,10 +70,10 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             direction === "rtl"
               ? collapsed
                 ? "lg:pr-16"
-                : "lg:pr-[256px]"
+                : "lg:pr-64"
               : collapsed
                 ? "lg:pl-16"
-                : "lg:pl-[256px]",
+                : "lg:pl-64",
           )}
         >
           <Topbar

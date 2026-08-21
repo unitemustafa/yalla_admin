@@ -1,4 +1,4 @@
-import { UserDetailApiPage } from "@/features/dashboard/pages/user-detail";
+import { CustomerDetailPage } from "@/features/dashboard/customers/detail/page";
 
 export default async function CustomerDetailRoute({
   params,
@@ -7,5 +7,5 @@ export default async function CustomerDetailRoute({
 }) {
   const { userId } = await params;
 
-  return <UserDetailApiPage userId={userId} />;
+  return <CustomerDetailPage userId={userId} />;
 }

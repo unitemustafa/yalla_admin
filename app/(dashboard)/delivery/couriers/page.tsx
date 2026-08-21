@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { CouriersPage } from "@/features/dashboard/pages/couriers";
+import { CouriersPage } from "@/features/dashboard/couriers/page";
 
 export default function CouriersRoute() {
   return (

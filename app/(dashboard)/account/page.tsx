@@ -1,4 +1,4 @@
-import { AccountPage } from "@/features/dashboard/pages/account";
+import { AccountPage } from "@/features/dashboard/account/page";
 
 export default function AccountRoutePage() {
   return <AccountPage />;

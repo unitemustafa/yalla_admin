@@ -1,4 +1,4 @@
-import { CitiesPage } from "@/features/dashboard/pages/cities";
+import { CitiesPage } from "@/features/dashboard/cities/page";
 
 export default function Page() {
   return <CitiesPage />;

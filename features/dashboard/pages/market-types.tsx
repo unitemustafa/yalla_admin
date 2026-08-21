@@ -6,10 +6,8 @@ import { LoaderCircle, RefreshCw } from "lucide-react";
 import { useAuth } from "@/features/auth/auth-provider";
 import { MarketTypesManager } from "../components/market-types-manager";
 import { PageLoadError } from "../load-error-card";
-import {
-  loadMarketClassifications,
-  type MarketClassification,
-} from "../market-classifications-api";
+import { loadMarketClassifications } from "../market-classifications/api";
+import type { MarketClassification } from "../market-classifications/types";
 import { loadMarketTypes, type MarketType } from "../market-types-api";
 import { Button, Card, PageTitle } from "../primitives";
 

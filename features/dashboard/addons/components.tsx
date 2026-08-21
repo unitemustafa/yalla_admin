@@ -41,30 +41,6 @@ export function EmptyStateTable({
   );
 }
 
-export function addonMatchesSearch(addon: AddonRow, search: string) {
-  const normalizedSearch = search.trim().toLowerCase();
-
-  if (!normalizedSearch) {
-    return true;
-  }
-
-  return [
-    addon.id,
-    addon.name,
-    addon.nameAr,
-    addon.price,
-    addon.category,
-  ]
-    .join(" ")
-    .toLowerCase()
-    .includes(normalizedSearch);
-}
-
-export type AddonCategoryRecord = {
-  id: string;
-  name: string;
-};
-
 export function MissingAddonCategoriesDialog({
   onClose,
   onCreateCategory,
@@ -114,13 +90,6 @@ export function MissingAddonCategoriesDialog({
       </section>
     </div>
   );
-}
-
-export function translateAddonCategoryDeleteError(message: string) {
-  if (/cannot delete addition classification while product additions are using it/i.test(message)) {
-    return "لا يمكن حذف التصنيف لأنه مستخدم في إضافات حالية.";
-  }
-  return message;
 }
 
 export function AddonRowIconButton({
@@ -267,7 +236,7 @@ export function AddonIdentity({ addon }: { addon: AddonRow }) {
         width={52}
         height={52}
         sizes="52px"
-        className="size-[52px] shrink-0 rounded-md border bg-muted/35 shadow-sm"
+        className="size-13 shrink-0 rounded-md border bg-muted/35 shadow-sm"
         imageClassName="object-contain p-1"
       />
       <div className="min-w-0">

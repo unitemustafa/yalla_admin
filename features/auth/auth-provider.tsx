@@ -9,38 +9,44 @@ import {
   useRef,
   useState,
 } from "react";
-import { Cookies } from "react-cookie";
 
 import {
-  AUTH_COOKIE_NAMES,
-  AUTH_STORAGE_KEYS,
-  NETWORK_ERROR_MESSAGE,
-  type AuthSession,
-  type AuthTokens,
   type AuthUser,
-  isAbortError,
   isAccessTokenUsable,
-  isNetworkError,
   jwtExpiresAt,
 } from "@/lib/auth";
-import { optimizeImageRequestInit } from "@/lib/image-upload";
-import { API_BASE_URL } from "@/lib/api-config";
+
+import {
+  currentUserFromResponse,
+  fetchCurrentAdminUser,
+  loginAdmin,
+  type LoginInput,
+  logoutAdmin,
+} from "./auth-api";
+import { shouldKeepLocalSession } from "./auth-errors";
+import { authenticatedFetch } from "./authenticated-fetch";
+import {
+  clearSessionCookies,
+  clearSessionLifetime,
+  hasTemporaryTabSession,
+  persistSession,
+  persistUser,
+  readAccessToken,
+  readRefreshToken,
+  readRemember,
+  readSavedUser,
+  readSessionExpiresAt,
+} from "./session-storage";
+import { refreshTokens } from "./token-refresh";
 
 const REFRESH_BUFFER_MS = 60_000;
-const REMEMBER_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
-const TEMPORARY_MAX_AGE_SECONDS = 60 * 60 * 8;
-const cookies = new Cookies();
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
 type AuthContextValue = {
   status: AuthStatus;
   user: AuthUser | null;
-  login: (input: {
-    email: string;
-    password: string;
-    remember: boolean;
-  }) => Promise<void>;
+  login: (input: LoginInput) => Promise<void>;
   logout: () => Promise<void>;
   reloadUser: () => Promise<AuthUser>;
   updateUser: (nextUser: AuthUser) => void;
@@ -48,306 +54,6 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-let refreshPromise: Promise<AuthTokens> | null = null;
-
-class RateLimitError extends Error {
-  readonly retryAfterSeconds: number;
-
-  constructor(retryAfterSeconds: number) {
-    super(
-      retryAfterSeconds > 0
-        ? `طلبات كتير في وقت قصير. حاول تاني بعد ${retryAfterSeconds} ثانية.`
-        : "طلبات كتير في وقت قصير. استنى شوية وحاول تاني.",
-    );
-    this.name = "RateLimitError";
-    this.retryAfterSeconds = retryAfterSeconds;
-  }
-}
-
-function cookieOptions() {
-  return {
-    path: "/",
-    sameSite: "lax" as const,
-    secure: typeof window !== "undefined" && window.location.protocol === "https:",
-    maxAge: remainingSessionMaxAge(),
-  };
-}
-
-function removeOptions() {
-  return {
-    path: "/",
-    sameSite: "lax" as const,
-    secure: typeof window !== "undefined" && window.location.protocol === "https:",
-  };
-}
-
-function readRemember() {
-  return cookies.get(AUTH_COOKIE_NAMES.remember, { doNotParse: true }) === "true";
-}
-
-function hasTemporaryTabSession() {
-  try {
-    return (
-      sessionStorage.getItem(AUTH_STORAGE_KEYS.temporarySessionActive) ===
-      "true"
-    );
-  } catch {
-    return false;
-  }
-}
-
-function sessionExpiresAt() {
-  try {
-    const value = Number(
-      localStorage.getItem(AUTH_STORAGE_KEYS.sessionExpiresAt),
-    );
-    return Number.isFinite(value) && value > 0 ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-function remainingSessionMaxAge() {
-  const expiresAt = sessionExpiresAt();
-  return expiresAt && expiresAt > Date.now()
-    ? Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000))
-    : 0;
-}
-
-function persistSessionLifetime(remember: boolean) {
-  try {
-    localStorage.removeItem(AUTH_STORAGE_KEYS.sessionExpiredNotice);
-    localStorage.setItem(
-      AUTH_STORAGE_KEYS.sessionExpiresAt,
-      String(
-        Date.now() +
-          (remember
-            ? REMEMBER_MAX_AGE_SECONDS
-            : TEMPORARY_MAX_AGE_SECONDS) *
-            1000,
-      ),
-    );
-    if (remember) {
-      sessionStorage.removeItem(AUTH_STORAGE_KEYS.temporarySessionActive);
-      return;
-    }
-
-    sessionStorage.setItem(
-      AUTH_STORAGE_KEYS.temporarySessionActive,
-      "true",
-    );
-  } catch {
-    // Cookies still enforce the maximum lifetime if storage is unavailable.
-  }
-}
-
-function clearSessionLifetime(announceExpired: boolean) {
-  try {
-    sessionStorage.removeItem(AUTH_STORAGE_KEYS.temporarySessionActive);
-    localStorage.removeItem(AUTH_STORAGE_KEYS.sessionExpiresAt);
-    if (announceExpired) {
-      localStorage.setItem(AUTH_STORAGE_KEYS.sessionExpiredNotice, "true");
-    } else {
-      localStorage.removeItem(AUTH_STORAGE_KEYS.sessionExpiredNotice);
-    }
-  } catch {
-    // Storage failures must not block logout or session cleanup.
-  }
-}
-
-function persistTokens(tokens: AuthTokens) {
-  const options = cookieOptions();
-  cookies.set(AUTH_COOKIE_NAMES.accessToken, tokens.accessToken, options);
-  cookies.set(AUTH_COOKIE_NAMES.refreshToken, tokens.refreshToken, options);
-}
-
-function persistSession(session: AuthSession, remember: boolean) {
-  persistSessionLifetime(remember);
-  const options = cookieOptions();
-  persistTokens(session);
-  cookies.set(AUTH_COOKIE_NAMES.user, session.user, options);
-  cookies.set(AUTH_COOKIE_NAMES.remember, String(remember), options);
-}
-
-function persistUser(user: AuthUser) {
-  cookies.set(AUTH_COOKIE_NAMES.user, user, cookieOptions());
-}
-
-function clearSessionCookies() {
-  const options = removeOptions();
-  Object.values(AUTH_COOKIE_NAMES).forEach((name) => {
-    cookies.remove(name, options);
-  });
-}
-
-async function responseData(response: Response) {
-  return (await response.json().catch(() => null)) as unknown;
-}
-
-function positiveInteger(value: unknown) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.ceil(parsed) : 0;
-}
-
-function rateLimitError(response: Response, data: unknown) {
-  const payload = data && typeof data === "object" ? data as Record<string, unknown> : null;
-  const bodyWait = positiveInteger(payload?.retry_after_seconds);
-  const headerWait = positiveInteger(response.headers.get("Retry-After"));
-  return new RateLimitError(bodyWait || headerWait);
-}
-
-async function throwIfRateLimited(response: Response, data?: unknown) {
-  if (response.status !== 429) return;
-  const payload = data === undefined ? await responseData(response.clone()) : data;
-  throw rateLimitError(response, payload);
-}
-
-function waitForRateLimit(seconds: number) {
-  const safeSeconds = Math.min(60, Math.max(1, seconds));
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, safeSeconds * 1000);
-  });
-}
-
-function firstApiError(value: unknown): string | null {
-  if (typeof value === "string" && value.trim()) return value;
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const message = firstApiError(item);
-      if (message) return message;
-    }
-  }
-  if (value && typeof value === "object") {
-    for (const item of Object.values(value)) {
-      const message = firstApiError(item);
-      if (message) return message;
-    }
-  }
-  return null;
-}
-
-function localizedAuthError(value: unknown, fallback: string) {
-  const message = firstApiError(value);
-  if (!message) return fallback;
-
-  const normalized = message.toLowerCase();
-  if (normalized.includes("invalid email or password")) {
-    return "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
-  }
-  if (normalized.includes("not been verified")) {
-    return "الحساب غير مفعّل. أكّد البريد الإلكتروني أولًا.";
-  }
-  if (normalized.includes("required")) {
-    return "أكمل البريد الإلكتروني وكلمة المرور.";
-  }
-  return message;
-}
-
-function shouldKeepLocalSession(error: unknown) {
-  return error instanceof RateLimitError || isNetworkError(error) || isAbortError(error);
-}
-
-async function refreshTokens() {
-  if (refreshPromise) return refreshPromise;
-
-  const refreshToken = cookies.get(AUTH_COOKIE_NAMES.refreshToken, {
-    doNotParse: true,
-  }) as string | undefined;
-  if (!refreshToken) throw new Error("لا توجد جلسة قابلة للتجديد.");
-  const expiresAt = sessionExpiresAt();
-  if (!expiresAt || expiresAt <= Date.now()) {
-    throw new Error("انتهت الجلسة. سجّل الدخول من جديد.");
-  }
-
-  refreshPromise = (async () => {
-    async function sendRefresh() {
-      return fetch(`${API_BASE_URL}/auth/refresh/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken }),
-      });
-    }
-
-    let response: Response;
-    try {
-      response = await sendRefresh();
-    } catch (error) {
-      if (isNetworkError(error)) throw new Error(NETWORK_ERROR_MESSAGE);
-      throw error;
-    }
-    let data = (await responseData(response)) as Partial<AuthTokens> | null;
-    if (response.status === 429) {
-      const error = rateLimitError(response, data);
-      await waitForRateLimit(error.retryAfterSeconds);
-      const currentExpiry = sessionExpiresAt();
-      if (!currentExpiry || currentExpiry <= Date.now()) {
-        throw new Error("انتهت الجلسة. سجّل الدخول من جديد.");
-      }
-      try {
-        response = await sendRefresh();
-      } catch (retryError) {
-        if (isNetworkError(retryError)) throw new Error(NETWORK_ERROR_MESSAGE);
-        throw retryError;
-      }
-      data = (await responseData(response)) as Partial<AuthTokens> | null;
-    }
-    await throwIfRateLimited(response, data);
-
-    if (
-      (response.status === 401 || response.status === 403) ||
-      typeof data?.accessToken !== "string" ||
-      typeof data.refreshToken !== "string"
-    ) {
-      if (response.status === 401 || response.status === 403) {
-        throw new Error("انتهت الجلسة. سجّل الدخول من جديد.");
-      }
-      throw new Error(localizedAuthError(data, "تعذر تحديث الجلسة من الخادم."));
-    }
-
-    const nextTokens = {
-      accessToken: data.accessToken,
-      refreshToken: data.refreshToken,
-    };
-    persistTokens(nextTokens);
-    return nextTokens;
-  })();
-
-  try {
-    return await refreshPromise;
-  } finally {
-    refreshPromise = null;
-  }
-}
-
-async function fetchCurrentAdminUser(accessToken: string) {
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE_URL}/auth/me/`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-  } catch (error) {
-    if (isNetworkError(error)) throw new Error(NETWORK_ERROR_MESSAGE);
-    throw error;
-  }
-  const data = await responseData(response);
-  await throwIfRateLimited(response, data);
-
-  if (!response.ok || !data || typeof data !== "object") {
-    throw new Error(
-      localizedAuthError(
-        data,
-        "تعذر تحديث بيانات الحساب من الخادم.",
-      ),
-    );
-  }
-
-  const nextUser = data as AuthUser;
-  if (nextUser.role !== "admin") {
-    throw new Error("هذا الحساب لا يملك صلاحية دخول لوحة الإدارة.");
-  }
-
-  return nextUser;
-}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
@@ -370,29 +76,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStatus("unauthenticated");
   }, []);
 
-  const scheduleSessionExpiry = useCallback(
-    () => {
-      if (sessionExpiryTimer.current) {
-        clearTimeout(sessionExpiryTimer.current);
-        sessionExpiryTimer.current = null;
-      }
-      const expiresAt = sessionExpiresAt();
-      if (expiresAt === null) {
-        clearSession(true);
-        return;
-      }
-      if (expiresAt <= Date.now()) {
-        clearSession(true);
-        return;
-      }
+  const scheduleSessionExpiry = useCallback(() => {
+    if (sessionExpiryTimer.current) {
+      clearTimeout(sessionExpiryTimer.current);
+      sessionExpiryTimer.current = null;
+    }
+    const expiresAt = readSessionExpiresAt();
+    if (expiresAt === null || expiresAt <= Date.now()) {
+      clearSession(true);
+      return;
+    }
 
-      sessionExpiryTimer.current = setTimeout(
-        () => clearSession(true),
-        expiresAt - Date.now(),
-      );
-    },
-    [clearSession],
-  );
+    sessionExpiryTimer.current = setTimeout(
+      () => clearSession(true),
+      expiresAt - Date.now(),
+    );
+  }, [clearSession]);
 
   const scheduleRefresh = useCallback(
     function schedule(accessToken: string) {
@@ -419,12 +118,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let active = true;
 
     void Promise.resolve().then(async () => {
-      const accessToken = cookies.get(AUTH_COOKIE_NAMES.accessToken, {
-        doNotParse: true,
-      }) as string | undefined;
-      const refreshToken = cookies.get(AUTH_COOKIE_NAMES.refreshToken, {
-        doNotParse: true,
-      }) as string | undefined;
+      const accessToken = readAccessToken();
+      const refreshToken = readRefreshToken();
       const remember = readRemember();
 
       if (!active) return;
@@ -436,7 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearSession(true);
         return;
       }
-      const expiresAt = sessionExpiresAt();
+      const expiresAt = readSessionExpiresAt();
       if (!expiresAt || expiresAt <= Date.now()) {
         clearSession(true);
         return;
@@ -445,9 +140,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       scheduleSessionExpiry();
 
       try {
-        const usableAccessToken = isAccessTokenUsable(accessToken)
-          ? accessToken!
-          : (await refreshTokens()).accessToken;
+        const usableAccessToken =
+          typeof accessToken === "string" && isAccessTokenUsable(accessToken)
+            ? accessToken
+            : (await refreshTokens()).accessToken;
         if (!active) return;
 
         const nextUser = await fetchCurrentAdminUser(usableAccessToken);
@@ -459,7 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         if (active && !shouldKeepLocalSession(error)) clearSession(true);
         if (active && shouldKeepLocalSession(error)) {
-          const savedUser = cookies.get(AUTH_COOKIE_NAMES.user) as AuthUser | undefined;
+          const savedUser = readSavedUser();
           if (savedUser?.role === "admin") setUser(savedUser);
           setStatus("authenticated");
         }
@@ -474,43 +170,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clearSession, scheduleRefresh, scheduleSessionExpiry]);
 
   const login = useCallback(
-    async (input: { email: string; password: string; remember: boolean }) => {
-      let response: Response;
-      try {
-        response = await fetch(`${API_BASE_URL}/auth/login/admin/`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: input.email,
-            password: input.password,
-            remember: input.remember,
-          }),
-        });
-      } catch (error) {
-        if (isNetworkError(error)) throw new Error(NETWORK_ERROR_MESSAGE);
-        throw error;
-      }
-      const data = (await responseData(response)) as Partial<AuthSession> | null;
-      await throwIfRateLimited(response, data);
-
-      if (!response.ok) {
-        throw new Error(
-          localizedAuthError(data, "تعذر تسجيل الدخول. حاول مرة أخرى."),
-        );
-      }
-      if (
-        typeof data?.accessToken !== "string" ||
-        typeof data.refreshToken !== "string" ||
-        !data.user
-      ) {
-        throw new Error("استجابة تسجيل الدخول غير مكتملة.");
-      }
-      if (data.user.role !== "admin") {
-        clearSessionCookies();
-        throw new Error("هذا الحساب لا يملك صلاحية دخول لوحة الإدارة.");
-      }
-
-      const session = data as AuthSession;
+    async (input: LoginInput) => {
+      const session = await loginAdmin(input);
       persistSession(session, input.remember);
       setUser(session.user);
       setStatus("authenticated");
@@ -521,24 +182,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    const accessToken = cookies.get(AUTH_COOKIE_NAMES.accessToken, {
-      doNotParse: true,
-    }) as string | undefined;
-    const refreshToken = cookies.get(AUTH_COOKIE_NAMES.refreshToken, {
-      doNotParse: true,
-    }) as string | undefined;
+    const accessToken = readAccessToken();
+    const refreshToken = readRefreshToken();
 
     try {
-      if (accessToken && refreshToken) {
-        await fetch(`${API_BASE_URL}/auth/logout/`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ refresh: refreshToken }),
-        });
-      }
+      await logoutAdmin(accessToken, refreshToken);
     } catch {
       // Local logout must succeed even when Django is unavailable.
     } finally {
@@ -547,66 +195,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clearSession]);
 
   const apiFetch = useCallback(
-    async (path: string, init: RequestInit = {}) => {
-      const optimizedInit = await optimizeImageRequestInit(init);
-
-      async function request(accessToken: string) {
-        const headers = new Headers(optimizedInit.headers);
-        headers.set("Authorization", `Bearer ${accessToken}`);
-        try {
-          return await fetch(
-            path.startsWith("http") ? path : `${API_BASE_URL}/${path.replace(/^\/+/, "")}`,
-            { ...optimizedInit, headers },
-          );
-        } catch (error) {
-          if (isNetworkError(error)) throw new Error(NETWORK_ERROR_MESSAGE);
-          throw error;
-        }
-      }
-
-      let accessToken = cookies.get(AUTH_COOKIE_NAMES.accessToken, {
-        doNotParse: true,
-      }) as string | undefined;
-
-      if (!isAccessTokenUsable(accessToken)) {
-        try {
-          accessToken = (await refreshTokens()).accessToken;
-          scheduleRefresh(accessToken);
-        } catch (error) {
-          if (!shouldKeepLocalSession(error)) clearSession(true);
-          throw error;
-        }
-      }
-
-      let response = await request(accessToken!);
-      await throwIfRateLimited(response);
-      if (response.status !== 401) return response;
-
-      try {
-        accessToken = (await refreshTokens()).accessToken;
-        scheduleRefresh(accessToken);
-        response = await request(accessToken);
-        await throwIfRateLimited(response);
-        return response;
-      } catch (error) {
-        if (!shouldKeepLocalSession(error)) clearSession(true);
-        throw error;
-      }
-    },
+    (path: string, init: RequestInit = {}) =>
+      authenticatedFetch({
+        path,
+        init,
+        scheduleRefresh,
+        clearSession,
+      }),
     [clearSession, scheduleRefresh],
   );
 
   const reloadUser = useCallback(async () => {
-    const response = await apiFetch("auth/me/");
-    const data = await responseData(response);
-
-    if (!response.ok || !data || typeof data !== "object") {
-      throw new Error(
-        localizedAuthError(data, "تعذر تحديث بيانات الحساب من الخادم."),
-      );
-    }
-
-    const nextUser = data as AuthUser;
+    const nextUser = await currentUserFromResponse(
+      await apiFetch("auth/me/"),
+      false,
+    );
     persistUser(nextUser);
     setUser(nextUser);
     return nextUser;

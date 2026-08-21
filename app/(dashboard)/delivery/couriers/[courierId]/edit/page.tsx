@@ -1,4 +1,4 @@
-import { CourierFormPage } from "@/features/dashboard/pages/couriers";
+import { CourierFormPage } from "@/features/dashboard/couriers/form-page";
 
 export default async function EditCourierRoute({
   params,

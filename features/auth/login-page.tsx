@@ -1,85 +1,32 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import {
-  type FormEvent,
-  type KeyboardEvent,
-  useCallback,
-  useEffect,
-  useState,
-} from "react";
-import {
-  BarChart3,
-  Eye,
-  EyeOff,
-  LockKeyhole,
-  Mail,
-  MapPin,
-  MessageCircle,
-  PackageCheck,
-  ShieldCheck,
-  Truck,
-} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
-import { dashboardBrandLogos } from "@/features/dashboard/shared/branding";
-import { applyDashboardCustomization } from "@/features/dashboard/customization";
-import { DashboardAutoTranslate } from "@/features/dashboard/auto-translate";
-import { DashboardI18nProvider } from "@/features/dashboard/i18n";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { SafeImage } from "@/components/safe-image";
+import { DashboardAutoTranslate } from "@/features/dashboard/auto-translate";
+import { applyDashboardCustomization } from "@/features/dashboard/customization";
+import { DashboardI18nProvider } from "@/features/dashboard/i18n";
+import { dashboardBrandLogos } from "@/features/dashboard/shared/branding";
+import { THEME_CHANGE_EVENT } from "@/features/dashboard/sidebar/theme-domain";
+import type { LoginDashboardSnapshot } from "@/features/dashboard/static-data";
+import { isSafeNextPath } from "@/lib/auth";
+
+import { useAuth } from "./auth-provider";
+import { LoginDashboardPreview } from "./login-dashboard-snapshot";
+import { LoginForm } from "./login-form";
 import {
   hasLoginSplashBeenSeen,
   LoginSplash,
   markLoginSplashSeen,
-} from "@/features/auth/login-splash";
-import { useAuth } from "@/features/auth/auth-provider";
-import type { LoginDashboardSnapshot } from "@/features/dashboard/static-data";
-import {
-  AUTH_STORAGE_KEYS,
-  isNetworkError,
-  isSafeNextPath,
-  NETWORK_ERROR_MESSAGE,
-} from "@/lib/auth";
-
-const productImages = [
-  "https://bucket.ammenu.com/yalla-market/items/1778576027822-i19a0pn483.webp",
-  "https://bucket.ammenu.com/yalla-market/items/1778575947135-br72ie6ml76.webp",
-  "https://bucket.ammenu.com/yalla-market/items/1778544634562-e47zuvmo7jt.webp",
-  "https://bucket.ammenu.com/yalla-market/items/1778544524971-c0nqlzwbv1m.webp",
-];
-
-const supportWhatsAppUrl = "https://web.whatsapp.com/send?phone=201016487371";
-const themeChangeEvent = "yalla-theme-change";
-
-function stripWhitespace(value: string) {
-  return value.replace(/\s/g, "");
-}
-
-function preventWhitespaceInput(event: KeyboardEvent<HTMLInputElement>) {
-  if (/\s/.test(event.key)) {
-    event.preventDefault();
-  }
-}
-
-function cleanWhitespaceInput(event: FormEvent<HTMLInputElement>) {
-  const input = event.currentTarget;
-  const nextValue = stripWhitespace(input.value);
-  if (input.value !== nextValue) {
-    input.value = nextValue;
-  }
-}
+} from "./login-splash";
+import { MobileLoginBrand, SessionExpiredDialog } from "./login-visuals";
+import { consumeSessionExpiredNotice } from "./session-storage";
 
 function LoginPageContent({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
   const router = useRouter();
   const { login } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
-  const [error, setError] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<{
-    email?: string;
-    password?: string;
-  }>({});
-  const [pending, setPending] = useState(false);
-  const [passwordVisible, setPasswordVisible] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => {
     if (typeof window === "undefined") return "dark";
@@ -91,23 +38,6 @@ function LoginPageContent({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
   const loginBrandTagline = snapshot.branding.brandTagline || "لوحة التحكم";
   const serverLogo = snapshot.branding.logoUrl?.trim() ?? "";
   const loginLogo = serverLogo || dashboardBrandLogos[resolvedTheme];
-  const stats = [
-    {
-      label: "طلبات اليوم",
-      value: String(snapshot.todayOrders),
-      icon: PackageCheck,
-    },
-    {
-      label: "مدن متاحة",
-      value: String(snapshot.availableCities),
-      icon: MapPin,
-    },
-    {
-      label: "مناطق توصيل",
-      value: String(snapshot.deliveryZones),
-      icon: Truck,
-    },
-  ];
 
   useEffect(() => {
     function syncResolvedTheme() {
@@ -117,9 +47,9 @@ function LoginPageContent({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
     }
 
     syncResolvedTheme();
-    window.addEventListener(themeChangeEvent, syncResolvedTheme);
+    window.addEventListener(THEME_CHANGE_EVENT, syncResolvedTheme);
     return () =>
-      window.removeEventListener(themeChangeEvent, syncResolvedTheme);
+      window.removeEventListener(THEME_CHANGE_EVENT, syncResolvedTheme);
   }, []);
 
   useEffect(() => {
@@ -166,79 +96,20 @@ function LoginPageContent({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
-    let shouldShow = searchParams.get("session") === "expired";
-
-    try {
-      const expiresAt = Number(
-        localStorage.getItem(AUTH_STORAGE_KEYS.sessionExpiresAt),
-      );
-      shouldShow =
-        shouldShow ||
-        localStorage.getItem(AUTH_STORAGE_KEYS.sessionExpiredNotice) ===
-          "true" ||
-        (Number.isFinite(expiresAt) &&
-          expiresAt > 0 &&
-          expiresAt <= Date.now());
-      localStorage.removeItem(AUTH_STORAGE_KEYS.sessionExpiredNotice);
-      if (expiresAt <= Date.now()) {
-        localStorage.removeItem(AUTH_STORAGE_KEYS.sessionExpiresAt);
-      }
-    } catch {
-      // The login screen remains usable when browser storage is unavailable.
-    }
-
+    const shouldShow = consumeSessionExpiredNotice(
+      searchParams.get("session") === "expired",
+    );
     const timer = window.setTimeout(() => setSessionExpired(shouldShow), 0);
     return () => window.clearTimeout(timer);
   }, []);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-
-    const formData = new FormData(event.currentTarget);
-    const email = stripWhitespace(String(formData.get("email") ?? ""));
-    const password = stripWhitespace(String(formData.get("password") ?? ""));
-    const nextFieldErrors: { email?: string; password?: string } = {};
-
-    if (!email) {
-      nextFieldErrors.email = "يرجى إدخال البريد الإلكتروني.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      nextFieldErrors.email = "يرجى إدخال بريد إلكتروني صحيح.";
-    }
-
-    if (!password) {
-      nextFieldErrors.password = "يرجى إدخال كلمة المرور.";
-    }
-
-    setFieldErrors(nextFieldErrors);
-    if (Object.keys(nextFieldErrors).length > 0) return;
-
-    setPending(true);
-
-    try {
-      await login({
-        email,
-        password,
-        remember: formData.get("remember") === "on",
-      });
-    } catch (caughtError) {
-      setError(
-        isNetworkError(caughtError)
-          ? NETWORK_ERROR_MESSAGE
-          : caughtError instanceof Error
-            ? caughtError.message
-            : "تعذر تسجيل الدخول. حاول مرة أخرى.",
-      );
-      setPending(false);
-      return;
-    }
-
+  const finishLogin = useCallback(() => {
     const nextPath = new URLSearchParams(window.location.search).get("next");
-    const destination = isSafeNextPath(nextPath) ? nextPath! : "/dashboard";
+    const destination = isSafeNextPath(nextPath) ? nextPath : "/dashboard";
 
-    router.replace(destination);
+    router.replace(destination ?? "/dashboard");
     router.refresh();
-  }
+  }, [router]);
 
   return (
     <main className="relative h-dvh overflow-hidden bg-background text-foreground">
@@ -251,46 +122,7 @@ function LoginPageContent({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
         />
       ) : null}
       {sessionExpired ? (
-        <div className="fixed inset-0 z-[90] grid place-items-center bg-black/55 px-5 backdrop-blur-sm">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="session-expired-title"
-            className="w-full max-w-md rounded-lg border border-border bg-card p-6 text-center text-card-foreground shadow-2xl"
-          >
-            <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <LockKeyhole className="size-7" />
-            </span>
-            <h2
-              aria-hidden="true"
-              className="mt-4 hidden text-2xl font-extrabold"
-            >
-              انتهت الجلسة
-            </h2>
-            <h2
-              id="session-expired-title"
-              className="mt-4 text-2xl font-extrabold"
-            >
-              انتهت الجلسة
-            </h2>
-            <p className="mt-3 leading-7 text-muted-foreground">
-              انتهت جلستك. سجل الدخول من جديد للمتابعة، ويمكنك تفعيل
-              &quot;افتكرني&quot; للاحتفاظ بتسجيل الدخول لمدة أطول.
-            </p>
-            <p className="hidden">
-              سجّل الدخول من جديد للمتابعة. فعّل «افتكرني» للاحتفاظ بتسجيل
-              الدخول لمدة 30 يومًا حتى بعد غلق التاب.
-            </p>
-            <button
-              type="button"
-              className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-bold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20"
-              onClick={() => setSessionExpired(false)}
-            >
-              <span>تسجيل الدخول</span>
-              <span className="hidden">تسجيل الدخول</span>
-            </button>
-          </div>
-        </div>
+        <SessionExpiredDialog onClose={() => setSessionExpired(false)} />
       ) : null}
 
       <div className="absolute left-4 top-4 z-20">
@@ -298,102 +130,20 @@ function LoginPageContent({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
       </div>
 
       <div className="grid h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(440px,560px)]">
-        <section className="relative hidden overflow-hidden bg-primary px-10 py-8 text-primary-foreground lg:flex lg:flex-col lg:justify-between xl:px-14">
-          <div className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(to_left,white_1px,transparent_1px),linear-gradient(to_bottom,white_1px,transparent_1px)] [background-size:54px_54px]" />
-          <div className="absolute inset-x-0 bottom-0 h-56 bg-[linear-gradient(to_top,hsl(190_88%_8%/0.28),transparent)]" />
-
-          <div className="relative z-10 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <SafeImage
-                alt={loginBrandName}
-                src={loginLogo}
-                width={56}
-                height={56}
-                priority
-                className="size-14 rounded-xl border border-white/20 object-cover shadow-lg"
-              />
-              <div>
-                <p className="text-xl font-bold leading-6">{loginBrandName}</p>
-                <p className="text-sm text-white/75">{loginBrandTagline}</p>
-              </div>
-            </div>
-            <div className="inline-flex items-center gap-2 rounded-md border border-white/20 bg-white/10 px-3 py-2 text-sm text-white/80">
-              <ShieldCheck className="size-4" />
-              آمن وسريع
-            </div>
-          </div>
-
-          <div className="relative z-10 mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center py-12">
-            <div className="mb-8 grid grid-cols-3 gap-3">
-              {stats.map((item) => {
-                const Icon = item.icon;
-
-                return (
-                  <div
-                    key={item.label}
-                    className="rounded-lg border border-white/20 bg-white/10 p-4 shadow-sm backdrop-blur"
-                  >
-                    <Icon className="mb-5 size-5 text-amber-200" />
-                    <p className="text-3xl font-extrabold leading-none">
-                      {item.value}
-                    </p>
-                    <p className="mt-2 text-xs font-medium text-white/75">
-                      {item.label}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="rounded-xl border border-white/20 bg-white/10 p-5 shadow-2xl shadow-black/15 backdrop-blur">
-              <div className="mb-5 flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm text-white/70">نظرة سريعة</p>
-                  <h1 className="mt-1 text-3xl font-extrabold leading-tight xl:text-4xl">
-                    إدارة الطلبات والمنتجات والفروع من مكان واحد
-                  </h1>
-                </div>
-                <BarChart3 className="size-9 shrink-0 text-amber-200" />
-              </div>
-
-              <div>
-                <div className="grid grid-cols-4 gap-3">
-                  {productImages.map((src, index) => (
-                    <SafeImage
-                      key={src}
-                      alt={`منتج من يلا ماركت ${index + 1}`}
-                      src={src}
-                      width={240}
-                      height={170}
-                      quality={95}
-                      sizes="(min-width: 1280px) 180px, 22vw"
-                      className="aspect-[4/3] w-full rounded-lg border border-white/20 bg-white object-cover shadow-lg shadow-black/10"
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+        <LoginDashboardPreview
+          snapshot={snapshot}
+          brandName={loginBrandName}
+          brandTagline={loginBrandTagline}
+          logoUrl={loginLogo}
+        />
 
         <section className="flex h-dvh items-center justify-center overflow-hidden px-5 py-8 sm:px-8 lg:px-12">
           <div className="w-full max-w-md">
-            <div className="mb-9 flex items-center gap-3 lg:hidden">
-              <SafeImage
-                alt={loginBrandName}
-                src={loginLogo}
-                width={52}
-                height={52}
-                priority
-                className="size-12 rounded-xl object-cover shadow"
-              />
-              <div>
-                <p className="text-xl font-bold">{loginBrandName}</p>
-                <p className="text-sm text-muted-foreground">
-                  {loginBrandTagline}
-                </p>
-              </div>
-            </div>
+            <MobileLoginBrand
+              brandName={loginBrandName}
+              brandTagline={loginBrandTagline}
+              logoUrl={loginLogo}
+            />
 
             <div className="mb-8">
               <p className="mb-3 inline-flex rounded-md bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
@@ -408,153 +158,7 @@ function LoginPageContent({ snapshot }: { snapshot: LoginDashboardSnapshot }) {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} noValidate className="space-y-5">
-              <label className="block text-sm font-bold">
-                البريد الإلكتروني
-                <span
-                  className={`mt-2 flex h-12 items-center gap-3 rounded-lg border bg-card px-3 shadow-sm transition focus-within:ring-4 ${
-                    fieldErrors.email
-                      ? "border-red-500 focus-within:border-red-500 focus-within:ring-red-500/15"
-                      : "border-border focus-within:border-primary focus-within:ring-primary/15"
-                  }`}
-                >
-                  <Mail className="size-5 text-muted-foreground" />
-                  <input
-                    name="email"
-                    type="email"
-                    placeholder="البريد الإلكتروني"
-                    required
-                    dir="ltr"
-                    className="h-full min-w-0 flex-1 bg-transparent text-right text-base outline-none placeholder:text-sm placeholder:font-bold placeholder:text-muted-foreground"
-                    autoComplete="email"
-                    onKeyDown={preventWhitespaceInput}
-                    onInput={(event) => {
-                      cleanWhitespaceInput(event);
-                      if (fieldErrors.email) {
-                        setFieldErrors((current) => ({
-                          ...current,
-                          email: undefined,
-                        }));
-                      }
-                    }}
-                    aria-invalid={Boolean(fieldErrors.email)}
-                    aria-describedby={fieldErrors.email ? "email-error" : undefined}
-                  />
-                </span>
-                {fieldErrors.email ? (
-                  <span
-                    id="email-error"
-                    role="alert"
-                    className="mt-2 block text-sm font-semibold text-red-600 dark:text-red-400"
-                  >
-                    {fieldErrors.email}
-                  </span>
-                ) : null}
-              </label>
-
-              <label className="block text-sm font-bold">
-                كلمة المرور
-                <span
-                  className={`mt-2 flex h-12 items-center gap-3 rounded-lg border bg-card px-3 shadow-sm transition focus-within:ring-4 ${
-                    fieldErrors.password
-                      ? "border-red-500 focus-within:border-red-500 focus-within:ring-red-500/15"
-                      : "border-border focus-within:border-primary focus-within:ring-primary/15"
-                  }`}
-                >
-                  <LockKeyhole className="size-5 text-muted-foreground" />
-                  <input
-                    name="password"
-                    type={passwordVisible ? "text" : "password"}
-                    placeholder="كلمة المرور"
-                    required
-                    className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-sm placeholder:font-bold placeholder:text-muted-foreground"
-                    autoComplete="current-password"
-                    onKeyDown={preventWhitespaceInput}
-                    onInput={(event) => {
-                      cleanWhitespaceInput(event);
-                      if (fieldErrors.password) {
-                        setFieldErrors((current) => ({
-                          ...current,
-                          password: undefined,
-                        }));
-                      }
-                    }}
-                    aria-invalid={Boolean(fieldErrors.password)}
-                    aria-describedby={
-                      fieldErrors.password ? "password-error" : undefined
-                    }
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setPasswordVisible((visible) => !visible)}
-                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label={
-                      passwordVisible
-                        ? "إخفاء كلمة المرور"
-                        : "إظهار كلمة المرور"
-                    }
-                    title={
-                      passwordVisible
-                        ? "إخفاء كلمة المرور"
-                        : "إظهار كلمة المرور"
-                    }
-                  >
-                    {passwordVisible ? (
-                      <Eye className="size-5" />
-                    ) : (
-                      <EyeOff className="size-5" />
-                    )}
-                  </button>
-                </span>
-                {fieldErrors.password ? (
-                  <span
-                    id="password-error"
-                    role="alert"
-                    className="mt-2 block text-sm font-semibold text-red-600 dark:text-red-400"
-                  >
-                    {fieldErrors.password}
-                  </span>
-                ) : null}
-              </label>
-
-              <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
-                <label className="flex cursor-pointer items-center gap-2 font-bold">
-                  <input
-                    name="remember"
-                    type="checkbox"
-                    defaultChecked
-                    className="size-4 rounded border-border accent-primary"
-                  />
-                  افتكرني
-                </label>
-                <a
-                  href={supportWhatsAppUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex shrink-0 items-center gap-1.5 font-bold text-primary transition hover:text-primary/80"
-                >
-                  <MessageCircle className="size-4" />
-                  الدعم الفني
-                </a>
-              </div>
-
-              {error ? (
-                <div
-                  role="alert"
-                  className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-200"
-                >
-                  {error}
-                </div>
-              ) : null}
-
-              <button
-                type="submit"
-                disabled={pending}
-                className="inline-flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-bold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {pending ? "جاري الدخول..." : "دخول"}
-              </button>
-            </form>
+            <LoginForm login={login} onSuccess={finishLogin} />
           </div>
         </section>
       </div>

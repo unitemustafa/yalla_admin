@@ -1,4 +1,4 @@
-import { MarketClassificationsPage } from "@/features/dashboard/pages/market-classifications";
+import { MarketClassificationsPage } from "@/features/dashboard/market-classifications/page";
 
 export default function MarketCategoriesRoute() {
   return <MarketClassificationsPage />;

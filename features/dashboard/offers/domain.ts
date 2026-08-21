@@ -2,8 +2,9 @@ import type { ComponentType } from "react";
 import { Megaphone, Package, Percent, Truck, Zap } from "lucide-react";
 
 import type { BackendRecord } from "../admin-api";
+import { asRecord } from "../shared/api-data";
 
-type OfferType = "package" | "flash" | "discount" | "announcement" | "delivery";
+export type OfferType = "package" | "flash" | "discount" | "announcement" | "delivery";
 type OfferStatus = "active" | "inactive" | "expired";
 type OfferEffectiveStatus = OfferStatus | "scheduled";
 type OfferScope = "general" | "service_city";
@@ -143,8 +144,8 @@ function isActiveDay(value: unknown): value is ActiveDay {
 
 function recordDisplayName(value: unknown, fallback = "") {
   if (typeof value === "string" && value.trim()) return value.trim();
-  if (value && typeof value === "object") {
-    const record = value as BackendRecord;
+  const record = asRecord(value);
+  if (record) {
     for (const key of ["name_ar", "name", "title"]) {
       const text = record[key];
       if (typeof text === "string" && text.trim()) return text.trim();
@@ -190,7 +191,7 @@ export function offerCardFromApi(record: BackendRecord): OfferCard {
       : dateLifecycle === "current"
         ? "active"
         : dateLifecycle;
-  const market = record.market && typeof record.market === "object" ? (record.market as BackendRecord) : null;
+  const market = asRecord(record.market);
   const serviceCities = Array.isArray(record.service_cities)
     ? record.service_cities.filter((city): city is BackendRecord =>
         Boolean(city && typeof city === "object"),
@@ -258,4 +259,3 @@ export function offerCardFromApi(record: BackendRecord): OfferCard {
     deletionMode: record.deletion_mode === "archive" ? "archive" : "delete",
   };
 }
-

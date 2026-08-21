@@ -8,3 +8,14 @@ export type AddonRow = {
   category: string;
   active?: boolean;
 };
+
+export type AddonCategoryRecord = {
+  id: string;
+  name: string;
+};
+
+export type AddonDraft = {
+  category: string;
+  nameAr: string;
+  price: string;
+};

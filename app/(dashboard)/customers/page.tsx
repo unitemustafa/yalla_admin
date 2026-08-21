@@ -1,4 +1,4 @@
-import { CustomersPage } from "@/features/dashboard/pages/customers";
+import { CustomersPage } from "@/features/dashboard/customers/page";
 
 export default function CustomersRoute() {
   return <CustomersPage />;

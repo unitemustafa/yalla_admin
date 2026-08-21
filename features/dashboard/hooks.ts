@@ -3,8 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 
-import { breadcrumbsFromPathname, navGroups, pageFromPathname } from "./routes";
-import type { PageKey } from "./types";
+import { breadcrumbsFromPathname, pageFromPathname } from "./routes";
 
 function useDisclosure(initialOpen = false) {
   const [isOpen, setIsOpen] = useState(initialOpen);
@@ -32,53 +31,4 @@ export function useDashboardFrame() {
     openMobileNav: sidebar.open,
     toggleCollapsed: useCallback(() => setCollapsed((value) => !value), []),
   };
-}
-
-function activeGroupLabelForPage(activePage: PageKey) {
-  for (const group of navGroups) {
-    for (const item of group.items) {
-      if (item.children?.some((child) => child.page === activePage)) {
-        return item.label;
-      }
-    }
-  }
-
-  return null;
-}
-
-export function useSidebarGroups(activePage: PageKey) {
-  const routeOpenGroup = activeGroupLabelForPage(activePage);
-  const [groupState, setGroupState] = useState<{
-    activePage: PageKey;
-    openGroup?: string | null;
-  }>(() => ({ activePage }));
-  const openGroup =
-    groupState.activePage === activePage
-      ? groupState.openGroup === undefined
-        ? routeOpenGroup
-        : groupState.openGroup
-      : routeOpenGroup;
-
-  const toggleGroup = useCallback((label: string) => {
-    setGroupState((currentState) => {
-      const currentOpenGroup =
-        currentState.activePage === activePage
-          ? currentState.openGroup === undefined
-            ? routeOpenGroup
-            : currentState.openGroup
-          : routeOpenGroup;
-
-      return {
-        activePage,
-        openGroup: currentOpenGroup === label ? null : label,
-      };
-    });
-  }, [activePage, routeOpenGroup]);
-
-  const isGroupOpen = useCallback(
-    (label: string) => openGroup === label,
-    [openGroup],
-  );
-
-  return { isGroupOpen, toggleGroup };
 }

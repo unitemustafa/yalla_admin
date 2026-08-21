@@ -3,234 +3,32 @@
 import { useMemo, useState } from "react";
 import { Check, ChefHat, ImagePlus, Plus, Sparkles, Store, X } from "lucide-react";
 
-import type { ProductAttributeValuePayload } from "../admin-api";
 import { DashboardImage } from "../dashboard-image";
 import { CurrencyText } from "../primitives";
 import { cn } from "@/lib/utils";
-
-export type ProductLivePreviewMarket = {
-  id: string;
-  name: string;
-  branch?: string;
-};
-
-type ProductLivePreviewOption = {
-  id?: number;
-  clientId?: string;
-  attributeId?: number;
-  attributeClientId?: string;
-  colorHex?: string;
-  isActive?: boolean;
-  value: string;
-};
-
-export type ProductLivePreviewAttribute = {
-  id?: number;
-  clientId?: string;
-  name: string;
-  options: ProductLivePreviewOption[];
-};
-
-export type ProductLivePreviewAddition = {
-  id: string;
-  name: string;
-  price: string;
-};
-
-export type ProductLivePreviewVariant = {
-  tempId: string;
-  price: string;
-  sku?: string;
-  attributeValues: ProductAttributeValuePayload[];
-  selections?: Array<{
-    attributeId?: number;
-    optionId?: number;
-    attributeClientId?: string;
-    optionClientId?: string;
-  }>;
-};
-
-type PreviewAttributeChoice = {
-  attribute: ProductLivePreviewAttribute;
-  options: ProductLivePreviewOption[];
-};
-
-type ProductLivePreviewProps = {
-  additions: ProductLivePreviewAddition[];
-  attributes: ProductLivePreviewAttribute[];
-  description: string;
-  discount: string;
-  imageSrc: string | null;
-  isAvailable: boolean;
-  isPopular: boolean;
-  markets: ProductLivePreviewMarket[];
-  name: string;
-  previewSource: "api" | "draft";
-  selectedAdditionIds: number[];
-  selectedMarketId: string;
-  theme: "clothing" | "consumer" | "other";
-  variantRows: ProductLivePreviewVariant[];
-};
-
-function numberFromText(value: string) {
-  const numericValue = value.replace(/[^\d.]/g, "");
-  return Number(numericValue);
-}
-
-function formatPriceAmount(value: number) {
-  return Number.isInteger(value)
-    ? String(value)
-    : value.toFixed(2).replace(/\.?0+$/, "");
-}
-
-function validPrice(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return false;
-  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return false;
-  return Number.isFinite(Number(trimmed));
-}
-
-function isColorAttributeName(name: string) {
-  const normalized = name.trim().toLowerCase();
-  return normalized.includes("لون") || normalized.includes("ط§ظ„ظ„ظˆظ†") || normalized.includes("color");
-}
-
-function optionIsActive(option: ProductLivePreviewOption) {
-  return option.isActive !== false;
-}
-
-function discountPercent(value: string) {
-  const percent = numberFromText(value);
-  return Number.isFinite(percent) && percent > 0 && percent < 100 ? percent : 0;
-}
-
-function oldPriceFromDiscount(price: string, discount: string) {
-  const currentPrice = numberFromText(price);
-  const percent = discountPercent(discount);
-
-  if (!currentPrice || !percent) {
-    return "";
-  }
-
-  return formatPriceAmount(currentPrice / (1 - percent / 100));
-}
-
-function discountLabel(discount: string) {
-  const percent = discountPercent(discount);
-  return percent ? `${formatPriceAmount(percent)}%` : "";
-}
-
-function firstValidPreviewVariant(variants: ProductLivePreviewVariant[]) {
-  return variants.find((variant) => validPrice(variant.price)) ?? null;
-}
-
-function attributeKey(attribute: ProductLivePreviewAttribute) {
-  return attribute.id !== undefined ? `id:${attribute.id}` : `client:${attribute.clientId ?? ""}`;
-}
-
-function optionKey(option: ProductLivePreviewOption) {
-  return option.id !== undefined ? `id:${option.id}` : `client:${option.clientId ?? ""}`;
-}
-
-function selectionAttributeKey(value: {
-  attribute_id?: number;
-  option_id?: number;
-  attributeId?: number;
-  optionId?: number;
-  attributeClientId?: string;
-  optionClientId?: string;
-}) {
-  const id = value.attribute_id ?? value.attributeId;
-  return id !== undefined ? `id:${id}` : `client:${value.attributeClientId ?? ""}`;
-}
-
-function selectionOptionKey(value: {
-  option_id?: number;
-  optionId?: number;
-  optionClientId?: string;
-}) {
-  const id = value.option_id ?? value.optionId;
-  return id !== undefined ? `id:${id}` : `client:${value.optionClientId ?? ""}`;
-}
-
-function variantSelections(variant: ProductLivePreviewVariant | null) {
-  if (!variant) return [];
-  return variant.selections?.length ? variant.selections : variant.attributeValues;
-}
-
-function selectedOptionId(variant: ProductLivePreviewVariant | null, attribute: ProductLivePreviewAttribute) {
-  const key = attributeKey(attribute);
-  const selection = variantSelections(variant).find(
-    (value) => selectionAttributeKey(value) === key,
-  );
-  return selection ? selectionOptionKey(selection) : undefined;
-}
-
-function marketName(markets: ProductLivePreviewMarket[], selectedMarketId: string) {
-  const market = markets.find((item) => item.id === selectedMarketId);
-  if (!market) return "لم يتم اختيار المحل";
-  return market.branch ? `${market.name} - ${market.branch}` : market.name;
-}
-
-function selectedAdditions(
-  additions: ProductLivePreviewAddition[],
-  selectedAdditionIds: number[],
-) {
-  const selectedIds = new Set(selectedAdditionIds.map(String));
-  return additions.filter((addition) => selectedIds.has(addition.id));
-}
-
-function previewAttributeChoices(attributes: ProductLivePreviewAttribute[]): PreviewAttributeChoice[] {
-  return attributes
-    .map((attribute) => ({
-      attribute,
-      options: attribute.options,
-    }))
-    .filter((item) => item.options.length > 0);
-}
-
-function matchingVariant(
-  variants: ProductLivePreviewVariant[],
-  selection: Record<string, string>,
-) {
-  const entries = Object.entries(selection);
-
-  return (
-    variants.find((variant) =>
-      entries.every(([attributeId, optionId]) =>
-        variantSelections(variant).some(
-          (value) =>
-            selectionAttributeKey(value) === attributeId &&
-            selectionOptionKey(value) === optionId,
-        ),
-      ),
-    ) ?? null
-  );
-}
-
-function variantMatchesSelection(
-  variant: ProductLivePreviewVariant,
-  selection: Record<string, string>,
-) {
-  return Object.entries(selection).every(([attributeId, optionId]) =>
-    variantSelections(variant).some(
-      (value) =>
-        selectionAttributeKey(value) === attributeId &&
-        selectionOptionKey(value) === optionId,
-    ),
-  );
-}
-
-function variantUsesOnlyActiveOptions(
-  variant: ProductLivePreviewVariant,
-  attributes: ProductLivePreviewAttribute[],
-) {
-  return variantSelections(variant).every((selection) => {
-    const attribute = attributes.find((item) => attributeKey(item) === selectionAttributeKey(selection));
-    const option = attribute?.options.find((item) => optionKey(item) === selectionOptionKey(selection));
-    return Boolean(option && optionIsActive(option));
-  });
-}
+import {
+  discountLabel,
+  firstValidPreviewVariant,
+  formatPriceAmount,
+  isPreviewColorAttribute,
+  matchingPreviewVariant,
+  oldPriceFromDiscount,
+  previewAttributeChoices,
+  previewAttributeKey,
+  previewMarketName,
+  previewOptionIsActive,
+  previewOptionKey,
+  previewVariantMatchesSelection,
+  previewVariantUsesOnlyActiveOptions,
+  selectedPreviewAdditions,
+  selectedPreviewOptionId,
+  validPreviewPrice,
+} from "../products/preview/domain";
+import type {
+  PreviewAttributeChoice,
+  ProductLivePreviewProps,
+  ProductLivePreviewVariant,
+} from "../products/preview/types";
 
 function AppPreviewPriceHeader({
   discount,
@@ -278,7 +76,7 @@ function AppPreviewVariants({
   selectedVariant,
 }: {
   fields: PreviewAttributeChoice[];
-  onSelect: (attributeKeyValue: string, optionKeyValue: string) => void;
+  onSelect: (previewAttributeKeyValue: string, previewOptionKeyValue: string) => void;
   selectedVariant: ProductLivePreviewVariant | null;
 }) {
   if (!fields.length) {
@@ -288,7 +86,7 @@ function AppPreviewVariants({
   return (
     <div className="mt-5 grid gap-5">
       {fields.map(({ attribute, options }) => (
-        <div key={attributeKey(attribute)}>
+        <div key={previewAttributeKey(attribute)}>
           <div className="mb-2 text-right text-xl font-black leading-6 text-white">
             {attribute.name}
           </div>
@@ -303,11 +101,11 @@ function AppPreviewVariants({
             )}
           >
             {options.map((option) => {
-              const currentAttributeKey = attributeKey(attribute);
-              const currentOptionKey = optionKey(option);
-              const selected = selectedOptionId(selectedVariant, attribute) === currentOptionKey;
-              const isColor = isColorAttributeName(attribute.name);
-              const active = optionIsActive(option);
+              const currentAttributeKey = previewAttributeKey(attribute);
+              const currentOptionKey = previewOptionKey(option);
+              const selected = selectedPreviewOptionId(selectedVariant, attribute) === currentOptionKey;
+              const isColor = isPreviewColorAttribute(attribute.name);
+              const active = previewOptionIsActive(option);
 
               return (
                 <button
@@ -361,7 +159,7 @@ export function ProductLivePreview({
   const validVariants = useMemo(
     () =>
       variantRows.filter(
-        (variant) => validPrice(variant.price) && variantUsesOnlyActiveOptions(variant, attributes),
+        (variant) => validPreviewPrice(variant.price) && previewVariantUsesOnlyActiveOptions(variant, attributes),
       ),
     [attributes, variantRows],
   );
@@ -375,24 +173,24 @@ export function ProductLivePreview({
 
   const previewSelectionComplete =
     attributes.length > 0 &&
-    attributes.every((attribute) => Boolean(previewSelection[attributeKey(attribute)]));
+    attributes.every((attribute) => Boolean(previewSelection[previewAttributeKey(attribute)]));
   const selectedVariant = attributes.length
     ? previewSelectionComplete
-      ? matchingVariant(validVariants, previewSelection)
+      ? matchingPreviewVariant(validVariants, previewSelection)
       : null
     : firstValidVariant;
-  const matchingVariants = attributes.length && Object.keys(previewSelection).length
-    ? validVariants.filter((variant) => variantMatchesSelection(variant, previewSelection))
+  const matchingPreviewVariants = attributes.length && Object.keys(previewSelection).length
+    ? validVariants.filter((variant) => previewVariantMatchesSelection(variant, previewSelection))
     : validVariants;
   const priceSource = previewSelectionComplete
     ? selectedVariant
       ? [selectedVariant]
       : []
-    : matchingVariants;
-  const validPrices = priceSource.map((variant) => Number(variant.price));
-  const uniquePrices = Array.from(new Set(validPrices));
-  const minPrice = validPrices.length ? Math.min(...validPrices) : null;
-  const maxPrice = validPrices.length ? Math.max(...validPrices) : null;
+    : matchingPreviewVariants;
+  const validPreviewPrices = priceSource.map((variant) => Number(variant.price));
+  const uniquePrices = Array.from(new Set(validPreviewPrices));
+  const minPrice = validPreviewPrices.length ? Math.min(...validPreviewPrices) : null;
+  const maxPrice = validPreviewPrices.length ? Math.max(...validPreviewPrices) : null;
   const currentPrice = selectedVariant?.price.trim() ?? "";
   const unavailableSelection = previewSelectionComplete && validVariants.length > 0 && !selectedVariant;
   const currentPriceText = currentPrice
@@ -406,8 +204,8 @@ export function ProductLivePreview({
         : `من ${formatPriceAmount(minPrice ?? 0)} إلى ${formatPriceAmount(maxPrice ?? 0)} EGP`;
   const oldPrice = currentPrice ? oldPriceFromDiscount(currentPrice, discount) : "";
   const currentDiscount = currentPrice ? discountLabel(discount) : "";
-  const currentMarketName = marketName(markets, selectedMarketId);
-  const visibleAdditions = selectedAdditions(additions, selectedAdditionIds);
+  const currentMarketName = previewMarketName(markets, selectedMarketId);
+  const visibleAdditions = selectedPreviewAdditions(additions, selectedAdditionIds);
   const previewSelectedAdditions = visibleAdditions.filter((addition) =>
     previewAdditionIds.includes(addition.id),
   );
