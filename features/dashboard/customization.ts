@@ -25,8 +25,8 @@ export type DashboardCustomization = {
   customColors: DashboardCustomColors;
 };
 
-export const dashboardCustomizationStorageKey = "yalla-dashboard-customization";
-export const dashboardCustomizationChangeEvent =
+const dashboardCustomizationStorageKey = "yalla-dashboard-customization";
+const dashboardCustomizationChangeEvent =
   "yalla-dashboard-customization-change";
 
 export const defaultDashboardCustomization: DashboardCustomization = {
@@ -156,7 +156,7 @@ export const dashboardPalettes: Array<{
   },
 ];
 
-export const dashboardFonts: Array<{
+const dashboardFonts: Array<{
   id: DashboardFontId;
   name: string;
   cssValue: string;
@@ -322,7 +322,7 @@ function currentThemeMode(): ThemeMode {
   return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }
 
-export function readDashboardCustomization(): DashboardCustomization {
+function readDashboardCustomization(): DashboardCustomization {
   if (typeof window === "undefined") {
     return defaultDashboardCustomization;
   }
@@ -375,7 +375,7 @@ export function applyDashboardCustomization(
   root.style.setProperty("--dashboard-font-family", font.cssValue);
 }
 
-export function saveDashboardCustomization(
+function saveDashboardCustomization(
   customization: DashboardCustomization,
 ) {
   localStorage.setItem(
@@ -390,7 +390,7 @@ export function saveDashboardCustomization(
   );
 }
 
-export function resetDashboardCustomization() {
+function resetDashboardCustomization() {
   localStorage.removeItem(dashboardCustomizationStorageKey);
   applyDashboardCustomization(defaultDashboardCustomization);
   window.dispatchEvent(

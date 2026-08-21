@@ -1,4 +1,4 @@
-export type AssignedRepresentativeShape =
+type AssignedRepresentativeShape =
   | number
   | string
   | { id?: number | string | null }
@@ -16,22 +16,12 @@ const activeAssignedStatuses = new Set([
   "picked_up",
 ]);
 
-const terminalStatuses = new Set([
-  "delivered",
-  "cancelled",
-  "failed_delivery",
-]);
-
 export function assignedRepresentativeId(order: CourierOrderRuleLike) {
   const representative = order.assigned_representative;
   if (typeof representative === "number" || typeof representative === "string") {
     return String(representative);
   }
   return String(representative?.id ?? order.assigned_representative_id ?? "");
-}
-
-export function isTerminalOrder(order: CourierOrderRuleLike) {
-  return terminalStatuses.has(String(order.status ?? ""));
 }
 
 export function isActiveAssignedOrder(order: CourierOrderRuleLike) {

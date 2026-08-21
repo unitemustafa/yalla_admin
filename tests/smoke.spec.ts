@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { navGroups, pageFromPathname } from "../features/dashboard/data";
+import { navGroups, pageFromPathname } from "../features/dashboard/routes";
 
 test("archives use one dedicated navigation section and distinct routes", () => {
   const archiveItem = navGroups

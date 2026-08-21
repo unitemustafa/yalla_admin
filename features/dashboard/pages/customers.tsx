@@ -23,7 +23,7 @@ import {
   isBackendDashboardUser,
   translateApiMessage,
 } from "../users/api-users";
-import type { DashboardUser } from "../users/default-dashboard-users";
+import type { DashboardUser } from "../users/types";
 import { DashboardImage } from "../dashboard-image";
 import {
   Badge,

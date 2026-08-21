@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
-import { currentUser } from "@/features/dashboard/profile-data";
+import { neutralDashboardUserName } from "@/features/dashboard/users/types";
 import { Button, Card, Input, PageTitle } from "@/features/dashboard/primitives";
 import { DashboardImage } from "@/features/dashboard/dashboard-image";
 import { DASHBOARD_PLACEHOLDERS, imageOrPlaceholder } from "@/features/dashboard/placeholders";
@@ -38,7 +38,7 @@ const DEFAULT_AVATAR_SRC = DASHBOARD_PLACEHOLDERS.user;
 const AVATAR_UPLOAD_FIELD = "avatar";
 
 function displayName(firstName?: string, lastName?: string, username?: string) {
-  return [firstName, lastName].filter(Boolean).join(" ") || username || currentUser.fullName;
+  return [firstName, lastName].filter(Boolean).join(" ") || username || neutralDashboardUserName;
 }
 
 function splitDisplayName(value: string) {
@@ -152,7 +152,7 @@ export function AccountPage() {
   const [profileName, setProfileName] = useState(() =>
     displayName(user?.first_name, user?.last_name, user?.username),
   );
-  const [profileEmail, setProfileEmail] = useState(() => user?.email ?? currentUser.email);
+  const [profileEmail, setProfileEmail] = useState(() => user?.email ?? "");
   const [avatarUrl, setAvatarUrl] = useState(() => avatarSrc(user));
   const [selectedAvatar, setSelectedAvatar] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
@@ -160,7 +160,7 @@ export function AccountPage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [busyAction, setBusyAction] = useState<"request" | "reset" | null>(null);
   const name = displayName(user?.first_name, user?.last_name, user?.username);
-  const email = profileEmail || user?.email || currentUser.email;
+  const email = profileEmail || user?.email || "—";
 
   useEffect(() => {
     let active = true;

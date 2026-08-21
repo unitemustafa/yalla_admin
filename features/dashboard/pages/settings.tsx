@@ -27,7 +27,7 @@ import {
   saveDashboardSettings,
 } from "@/features/dashboard/dashboard-settings-api";
 import { DashboardImage } from "@/features/dashboard/dashboard-image";
-import { dashboardBrandLogos } from "@/features/dashboard/data";
+import { dashboardBrandLogos } from "@/features/dashboard/shared/branding";
 import { useDashboardI18n } from "@/features/dashboard/i18n";
 import {
   Button,

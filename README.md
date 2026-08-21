@@ -34,9 +34,7 @@ npm run dev
 
 ```powershell
 npm ci
-npm run lint
-npx tsc --noEmit
-npm run build
+npm run check
 ```
 
 لتشغيل نسخة الإنتاج محليًا بعد نجاح البناء:
@@ -52,16 +50,27 @@ npm run start
 - `npm run dev`: تشغيل التطوير باستخدام Webpack.
 - `npm run dev:turbo`: تشغيل التطوير باستخدام Turbopack.
 - `npm run lint`: فحص ESLint.
+- `npm run typecheck`: توليد أنواع مسارات Next.js ثم فحص TypeScript الصارم.
+- `npm run test`: تشغيل اختبارات Vitest مرة واحدة.
+- `npm run test:coverage`: تشغيل اختبارات الوحدة مع حد تغطية 80% لأدوات المجال المستخرجة.
+- `npm run deadcode`: فحص الملفات والـexports والاعتماديات غير المستخدمة بواسطة Knip.
 - `npm run build`: إنشاء production build.
 - `npm run start`: تشغيل الـ production build.
-- `npm run e2e`: تشغيل اختبارات Playwright عند توفر بيئة الاختبار والباك إند.
-- `npm run e2e:headed`: تشغيل Playwright بواجهة مرئية.
+- `npm run audit:prod`: فحص ثغرات اعتماديات الإنتاج.
+- `npm run check`: تشغيل lint وtypecheck واختبارات الوحدة وKnip والبناء وproduction audit بالتتابع.
+
+يتجاهل إعداد Knip حزمتَي `tailwindcss` و`tw-animate-css` فقط لأن استعمالهما يتم عبر `@import` داخل `app/globals.css`، وهو استيراد CSS لا يتتبعه فحص exports الخاص بـTypeScript.
+
+تفاصيل تقسيم المجالات ومسار البيانات والمسارات الرسمية موجودة في [`ARCHITECTURE.md`](./ARCHITECTURE.md). مشاكل عقود Django الثماني المعروفة موثقة في [`API_REPORT.md`](./API_REPORT.md) وتبقى خارج نطاق refactor الأدمن.
 
 ## أهم المسارات
 
 - `/login`
 - `/dashboard`
 - `/items`
+- `/items/create`
+- `/items/store-subcategories`
+- `/categories/markets`
 - `/orders`
 - `/offers`
 - `/customers`

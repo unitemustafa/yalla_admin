@@ -22,7 +22,7 @@ import {
   XCircle,
 } from "lucide-react";
 
-import { type ItemRow } from "../data";
+import type { ItemRow } from "../products/types";
 import { useAuth } from "@/features/auth/auth-provider";
 import {
   AdminApiError,

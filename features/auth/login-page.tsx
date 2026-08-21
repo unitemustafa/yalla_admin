@@ -21,7 +21,7 @@ import {
   Truck,
 } from "lucide-react";
 
-import { dashboardBrandLogos } from "@/features/dashboard/data";
+import { dashboardBrandLogos } from "@/features/dashboard/shared/branding";
 import { applyDashboardCustomization } from "@/features/dashboard/customization";
 import { DashboardAutoTranslate } from "@/features/dashboard/auto-translate";
 import { DashboardI18nProvider } from "@/features/dashboard/i18n";

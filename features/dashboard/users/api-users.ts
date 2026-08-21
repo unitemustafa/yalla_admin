@@ -1,4 +1,4 @@
-import type { DashboardUser } from "./default-dashboard-users";
+import type { DashboardUser } from "./types";
 import { normalizeImageSrc } from "@/lib/media-url";
 import { displayLocalPhone } from "./account-fields";
 import { userAvatarPlaceholder } from "../placeholders";
@@ -70,14 +70,14 @@ export function fullNameFromBackendUser(user: BackendDashboardUser) {
   );
 }
 
-export function roleLabel(role: string | null | undefined) {
+function roleLabel(role: string | null | undefined) {
   if (role === "client") return "عميل";
   if (role === "admin") return "مدير";
   if (role === "representative") return "مندوب";
   return unset;
 }
 
-export function formatBackendDate(value: string | null | undefined) {
+function formatBackendDate(value: string | null | undefined) {
   if (!value) return unavailable;
 
   const date = new Date(value);

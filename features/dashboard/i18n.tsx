@@ -10,9 +10,9 @@ import {
 import { ar } from "./locales/ar";
 import type { BreadcrumbItem, PageKey } from "./types";
 
-export type DashboardLanguage = "ar";
-export type DashboardDirection = "rtl";
-export type TranslationKey = keyof typeof ar;
+type DashboardLanguage = "ar";
+type DashboardDirection = "rtl";
+type TranslationKey = keyof typeof ar;
 
 const languageStorageKey = "yalla-language";
 const arabicLatinNumberLocale = "ar-EG-u-nu-latn";

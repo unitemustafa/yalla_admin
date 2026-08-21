@@ -1,0 +1,10 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "app/**/*.{ts,tsx}"
+  ],
+  "ignoreDependencies": [
+    "tailwindcss",
+    "tw-animate-css"
+  ]
+}

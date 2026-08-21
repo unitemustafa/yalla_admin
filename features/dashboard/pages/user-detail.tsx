@@ -23,7 +23,7 @@ import {
   firstApiError,
   isBackendDashboardUser,
 } from "../users/api-users";
-import type { DashboardUser } from "../users/default-dashboard-users";
+import type { DashboardUser } from "../users/types";
 import { DashboardImage } from "../dashboard-image";
 import {
   Badge,
@@ -297,7 +297,7 @@ function UserDetailErrorState({
   );
 }
 
-export function UserDetailPage({
+function UserDetailPage({
   user,
   orders,
   activationPending,

@@ -2,18 +2,26 @@
   "name": "yalla-admin",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
     "dev": "next dev --webpack",
     "dev:turbo": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "deadcode": "knip --no-config-hints",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run deadcode && npm run build && npm run audit:prod",
     "audit:prod": "npm audit --omit=dev",
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed"
   },
   "dependencies": {
-    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.16.0",
@@ -34,10 +42,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^9.39.4",
     "eslint-config-next": "16.2.12",
+    "knip": "^6.32.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.11"
   },
   "overrides": {
     "postcss": "8.5.23",

@@ -24,10 +24,8 @@ import {
   jwtExpiresAt,
 } from "@/lib/auth";
 import { optimizeImageRequestInit } from "@/lib/image-upload";
+import { API_BASE_URL } from "@/lib/api-config";
 
-const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1"
-).replace(/\/+$/, "");
 const REFRESH_BUFFER_MS = 60_000;
 const REMEMBER_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 const TEMPORARY_MAX_AGE_SECONDS = 60 * 60 * 8;
@@ -52,7 +50,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 let refreshPromise: Promise<AuthTokens> | null = null;
 
-export class RateLimitError extends Error {
+class RateLimitError extends Error {
   readonly retryAfterSeconds: number;
 
   constructor(retryAfterSeconds: number) {

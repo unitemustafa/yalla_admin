@@ -11,7 +11,6 @@ import {
   ChevronRight,
   ChevronUp,
   MoreHorizontal,
-  Search,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -676,72 +675,6 @@ export function FormCard({
   );
 }
 
-export function FilterBar({
-  fields,
-  className,
-}: {
-    fields: Array<{
-      label: string;
-      type?: "search" | "select";
-      value?: string;
-      options?: string[];
-      placeholder?: string;
-      disabled?: boolean;
-      width?: string;
-  }>;
-  disabled?: boolean;
-  showReset?: boolean;
-  className?: string;
-}) {
-    return (
-      <div
-        className={cn(
-          "flex flex-col justify-between gap-4 border-b p-0 md:flex-row md:items-end",
-          className,
-        )}
-      >
-        <div className="flex flex-1 flex-col gap-2 md:flex-row">
-          {fields.map((field, index) => (
-            <div
-              key={field.label}
-            className={cn(
-              "flex flex-col gap-2",
-              field.width ?? "md:w-44",
-              index === 1 && "md:ms-2",
-            )}
-          >
-            <div className="text-sm leading-5">{field.label}</div>
-              {field.type === "search" ? (
-                <div className="relative">
-                  <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    className="h-10 ps-9"
-                    placeholder={field.placeholder ?? "بحث..."}
-                  />
-              </div>
-              ) : field.options?.length ? (
-                <AppSelect
-                  defaultValue={field.value ?? field.options[0]}
-                  disabled={field.disabled}
-                  options={field.options.map((option) => ({
-                    value: option,
-                    label: option,
-                  }))}
-                  className="h-10"
-                  ariaLabel={field.label}
-                />
-              ) : (
-                <SelectBox className="h-10" disabled={field.disabled}>
-                  {field.value ?? "الكل"}
-                </SelectBox>
-              )}
-            </div>
-          ))}
-        </div>
-    </div>
-  );
-}
-
 export function DataTable({
   headers,
   rows,
@@ -890,41 +823,5 @@ export function Pagination({
         </Button>
       </div>
     </div>
-  );
-}
-
-export function Row({
-  label,
-  value,
-  strong,
-}: {
-  label: string;
-  value: React.ReactNode;
-  strong?: boolean;
-}) {
-  return (
-    <div className="flex justify-between gap-4">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={cn("text-start", strong && "text-lg font-semibold")}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-export function SideInfo({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Card>
-      <div className="rounded-t-xl border-b bg-muted/30 px-6 py-4 font-semibold">
-        {title}
-      </div>
-      <div className="flex flex-col gap-4 p-6 text-sm">{children}</div>
-    </Card>
   );
 }

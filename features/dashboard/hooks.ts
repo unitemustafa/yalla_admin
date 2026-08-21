@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 
-import { breadcrumbsFromPathname, navGroups, pageFromPathname } from "./data";
+import { breadcrumbsFromPathname, navGroups, pageFromPathname } from "./routes";
 import type { PageKey } from "./types";
 
-export function useDisclosure(initialOpen = false) {
+function useDisclosure(initialOpen = false) {
   const [isOpen, setIsOpen] = useState(initialOpen);
 
   return {
@@ -25,7 +25,7 @@ export function useDashboardFrame() {
 
   return {
     activePage,
-    breadcrumbs: breadcrumbsFromPathname(pathname, activePage),
+    breadcrumbs: breadcrumbsFromPathname(pathname),
     collapsed,
     mobileNavOpen: sidebar.isOpen,
     closeMobileNav: sidebar.close,
@@ -81,30 +81,4 @@ export function useSidebarGroups(activePage: PageKey) {
   );
 
   return { isGroupOpen, toggleGroup };
-}
-
-export function useItemTableState() {
-  const [openRow, setOpenRow] = useState<string | null>(null);
-  const deleteDialog = useDisclosure(false);
-
-  return {
-    openRow,
-    deleteOpen: deleteDialog.isOpen,
-    closeDelete: deleteDialog.close,
-    openDelete: deleteDialog.open,
-    toggleRow: useCallback((rowId: string) => {
-      setOpenRow((currentRow) => (currentRow === rowId ? null : rowId));
-    }, []),
-  };
-}
-
-export function useMountedOnFrame() {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => setMounted(true));
-    return () => cancelAnimationFrame(frame);
-  }, []);
-
-  return mounted;
 }

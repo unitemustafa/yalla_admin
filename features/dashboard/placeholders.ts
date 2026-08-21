@@ -1,12 +1,12 @@
 export const DASHBOARD_PLACEHOLDERS = {
-  user: "/images/placeholders/default_user_avatar.png",
-  customer: "/images/placeholders/default_admin_avatar_alt.png",
-  store: "/images/placeholders/default_store.png",
-  category: "/images/placeholders/default_category.png",
-  product: "/images/placeholders/default_product.png",
-  addon: "/images/placeholders/default_addon.png",
-  offer: "/images/placeholders/default_offer.png",
-  courier: "/images/placeholders/default_courier.png",
+  user: "/images/placeholders/default_user_avatar.webp",
+  customer: "/images/placeholders/default_admin_avatar_alt.webp",
+  store: "/images/placeholders/default_store.webp",
+  category: "/images/placeholders/default_category.webp",
+  product: "/images/placeholders/default_product.webp",
+  addon: "/images/placeholders/default_addon.webp",
+  offer: "/images/placeholders/default_offer.webp",
+  courier: "/images/placeholders/default_courier.webp",
 } as const;
 
 export function userAvatarPlaceholder(gender: string | null | undefined) {

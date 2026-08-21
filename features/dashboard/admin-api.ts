@@ -1,6 +1,10 @@
-import type { AddonRow, CategoryRow, ItemRow, ProductVariant } from "./data";
-import { firstApiError } from "./users/api-users";
+import type { AddonRow } from "./addons/types";
+import type { ItemRow, ProductVariant } from "./products/types";
+import { apiListData, asRecord, firstApiError } from "./shared/api-data";
+import { formatMoney, safeNumber } from "./shared/money";
 import { normalizeImageSrc } from "@/lib/media-url";
+
+export { formatMoney, safeNumber } from "./shared/money";
 
 export const adminApiPaths = {
   products: "catalog/products/",
@@ -40,11 +44,11 @@ export function deletionResult(value: unknown): DeletionResult {
   return { action: "deleted" };
 }
 
-export type ProductLike = {
+type ProductLike = {
   variants?: unknown;
 };
 
-export type NormalizedProductVariant = BackendRecord & {
+type NormalizedProductVariant = BackendRecord & {
   id?: number | string | null;
   price?: string | number | null;
   sku?: string | null;
@@ -52,7 +56,7 @@ export type NormalizedProductVariant = BackendRecord & {
   selections?: unknown[];
 };
 
-export type NormalizedProductAttributeOption = {
+type NormalizedProductAttributeOption = {
   id?: number | null;
   client_id?: string;
   value: string;
@@ -67,7 +71,7 @@ export type NormalizedProductAttribute = {
   options: NormalizedProductAttributeOption[];
 };
 
-export type NormalizedProductImage = {
+type NormalizedProductImage = {
   id: number;
   image: string | null;
   url: string | null;
@@ -106,7 +110,7 @@ export type ProductAttributeValuePayload = {
   option_id: number;
 };
 
-export type ProductVariantSelectionPayload =
+type ProductVariantSelectionPayload =
   | {
       attribute_id: number;
       option_id: number;
@@ -147,28 +151,6 @@ export type ProductNotificationDispatchResult = {
   sentAt: string;
   suppressedByMarketNotification: boolean;
   marketName: string;
-};
-
-export type NormalizedProductCategory = {
-  id: number;
-  classificationId: number | null;
-  classification: BackendRecord | null;
-  name: string;
-  type: string;
-  description: string;
-  image: string | null;
-};
-
-export type CategoryClassification = {
-  id: number;
-  name: string;
-};
-
-export type ProductCategoryWritePayload = {
-  classification_id: number;
-  name: string;
-  type: string;
-  description: string;
 };
 
 export class AdminApiError extends Error {
@@ -232,26 +214,6 @@ export async function readApiData(response: Response) {
   return (await response.json().catch(() => null)) as unknown;
 }
 
-export function safeNumber(value: unknown) {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : 0;
-  }
-  if (typeof value === "string") {
-    const parsed = Number(value.replace(/,/g, "").trim());
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-}
-
-export function formatMoney(value: unknown, currency = "EGP") {
-  const amount = safeNumber(value).toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
-  return `${currency || "EGP"} ${amount}`;
-}
-
 export function formatPercent(value: unknown) {
   const percentage = safeNumber(value);
   const decimals = Number.isInteger(percentage) ? 0 : 1;
@@ -283,15 +245,8 @@ function isDashboardOverview(value: unknown): value is DashboardOverview {
 }
 
 export function apiList(value: unknown): BackendRecord[] {
-  const list =
-    Array.isArray(value)
-      ? value
-      : value && typeof value === "object" && Array.isArray((value as { results?: unknown }).results)
-        ? (value as { results: unknown[] }).results
-        : [];
-
-  return list.filter(
-    (item): item is BackendRecord => Boolean(item && typeof item === "object"),
+  return apiListData<unknown>(value).filter(
+    (item): item is BackendRecord => asRecord(item) !== null,
   );
 }
 
@@ -398,7 +353,7 @@ function normalizeProductAttribute(raw: unknown): NormalizedProductAttribute | n
   };
 }
 
-export function normalizeProduct(raw: unknown): NormalizedProduct {
+function normalizeProduct(raw: unknown): NormalizedProduct {
   const record = backendRecord(raw) ?? {};
   const market = backendRecord(record.market);
   const category = backendRecord(record.category);
@@ -495,47 +450,6 @@ export function primaryProductImageUrl(product: NormalizedProduct) {
   return primary?.url ?? primary?.image ?? first?.url ?? first?.image ?? null;
 }
 
-export function normalizeProductCategory(raw: unknown): NormalizedProductCategory {
-  const record = backendRecord(raw) ?? {};
-  const classification = backendRecord(record.classification);
-
-  return {
-    id: Number(record.id),
-    classificationId: nullableNumber(record.classification_id ?? classification?.id),
-    classification,
-    name: typeof record.name === "string" ? record.name : "",
-    type: typeof record.type === "string" ? record.type : "",
-    description: typeof record.description === "string" ? record.description : "",
-    image: typeof record.image === "string" && record.image.trim() ? record.image : null,
-  };
-}
-
-function assertReadableProductCategory(
-  category: NormalizedProductCategory,
-  fallback: string,
-) {
-  if (!Number.isFinite(category.id)) {
-    throw new AdminApiError(fallback, 200, category);
-  }
-
-  return category;
-}
-
-function normalizeCategoryClassification(raw: unknown): CategoryClassification | null {
-  const record = backendRecord(raw);
-  const id = nullableNumber(record?.id);
-
-  if (!record || id === null) return null;
-
-  return {
-    id,
-    name:
-      typeof record.name === "string" && record.name.trim()
-        ? record.name.trim()
-        : `تصنيف #${id}`,
-  };
-}
-
 function assertReadableProduct(product: NormalizedProduct, fallback: string) {
   if (!Number.isFinite(product.id)) {
     throw new AdminApiError(fallback, 200, product);
@@ -623,42 +537,6 @@ function productRequestInit(
   };
 }
 
-function productCategoryPayloadFormData(
-  payload: ProductCategoryWritePayload,
-  imageFile: File,
-) {
-  const formData = new FormData();
-
-  formData.append("classification_id", String(Number(payload.classification_id)));
-  formData.append("name", payload.name);
-  formData.append("type", payload.type);
-  formData.append("description", payload.description);
-  formData.append("image", imageFile);
-
-  return formData;
-}
-
-function productCategoryRequestInit(
-  method: "POST" | "PATCH",
-  payload: ProductCategoryWritePayload,
-  imageFile?: File | null,
-): RequestInit {
-  if (imageFile) {
-    return {
-      method,
-      body: productCategoryPayloadFormData(payload, imageFile),
-    };
-  }
-
-  return {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  };
-}
-
 function text(record: BackendRecord, keys: string[], fallback = "") {
   for (const key of keys) {
     const value = record[key];
@@ -721,13 +599,13 @@ function productVariantPrices(product: ProductLike) {
     .filter((variantPrice) => Number.isFinite(variantPrice) && variantPrice >= 0);
 }
 
-export function getProductDisplayPrice(product: ProductLike): number {
+function getProductDisplayPrice(product: ProductLike): number {
   const prices = productVariantPrices(product);
   if (prices.length === 0) return 0;
   return Math.min(...prices);
 }
 
-export function formatProductPrice(product: ProductLike): string {
+function formatProductPrice(product: ProductLike): string {
   const prices = productVariantPrices(product);
 
   if (prices.length === 0) return "بدون سعر";
@@ -830,24 +708,6 @@ export function productRowFromApi(value: unknown, index: number): ItemRow {
     archived: product.archivedAt !== null,
     deletionMode: product.deletionMode,
     visibilityMode: marketScope === "service_city" ? "regions" : "general",
-  };
-}
-
-export function categoryRowFromApi(record: BackendRecord, index: number): CategoryRow {
-  const classification =
-    nestedName(record.classification) ||
-    text(record, ["classification_name", "section", "category_classification_name"], "غير مصنف");
-
-  return {
-    index: id(record, index),
-    image: image(record),
-    name: text(record, ["name", "name_ar", "name_en"], `فئة #${index + 1}`),
-    nameAr: text(record, ["name_ar"], ""),
-    type: text(record, ["type"], ""),
-    sections: [classification].filter(Boolean),
-    active: bool(record, ["is_active", "active", "status"], true),
-    featured: text(record, ["type"]).includes("مميزة") ? "نعم" : "لا",
-    total: text(record, ["products_count", "total", "count"], "0"),
   };
 }
 
@@ -1105,88 +965,6 @@ export async function toggleProductAvailability(
   return updateProduct(apiFetch, productId, {
     is_available: isAvailable,
   });
-}
-
-export async function listProductCategories(apiFetch: ApiFetch) {
-  const response = await apiFetch(adminApiPaths.productCategories);
-  const data = await parseAdminResponse(response, "تعذر تحميل الفئات");
-
-  return apiList(data).map((record) => normalizeProductCategory(record));
-}
-
-export async function getProductCategory(
-  apiFetch: ApiFetch,
-  categoryId: string | number,
-) {
-  const response = await apiFetch(
-    `${adminApiPaths.productCategories}${encodeURIComponent(String(categoryId))}/`,
-  );
-  const data = await parseAdminResponse(
-    response,
-    response.status === 404 ? "تعذر العثور على الفئة" : "تعذر تحميل بيانات الفئة",
-  );
-
-  return assertReadableProductCategory(
-    normalizeProductCategory(data),
-    "تعذر قراءة بيانات الفئة",
-  );
-}
-
-export async function createProductCategory(
-  apiFetch: ApiFetch,
-  payload: ProductCategoryWritePayload,
-  imageFile?: File | null,
-) {
-  const response = await apiFetch(
-    adminApiPaths.productCategories,
-    productCategoryRequestInit("POST", payload, imageFile),
-  );
-  const data = await parseAdminResponse(response, "تعذر حفظ الفئة");
-
-  return assertReadableProductCategory(
-    normalizeProductCategory(data),
-    "تعذر قراءة بيانات الفئة",
-  );
-}
-
-export async function updateProductCategory(
-  apiFetch: ApiFetch,
-  categoryId: string | number,
-  payload: ProductCategoryWritePayload,
-  imageFile?: File | null,
-) {
-  const response = await apiFetch(
-    `${adminApiPaths.productCategories}${encodeURIComponent(String(categoryId))}/`,
-    productCategoryRequestInit("PATCH", payload, imageFile),
-  );
-  const data = await parseAdminResponse(response, "تعذر حفظ الفئة");
-
-  return assertReadableProductCategory(
-    normalizeProductCategory(data),
-    "تعذر قراءة بيانات الفئة",
-  );
-}
-
-export async function deleteProductCategory(
-  apiFetch: ApiFetch,
-  categoryId: string | number,
-) {
-  const response = await apiFetch(
-    `${adminApiPaths.productCategories}${encodeURIComponent(String(categoryId))}/`,
-    { method: "DELETE" },
-  );
-  await parseAdminResponse(response, "تعذر حذف الفئة");
-}
-
-export async function listCategoryClassifications(apiFetch: ApiFetch) {
-  const response = await apiFetch(adminApiPaths.categoryClassifications);
-  const data = await parseAdminResponse(response, "تعذر تحميل تصنيفات الفئات");
-
-  return apiList(data)
-    .map(normalizeCategoryClassification)
-    .filter((classification): classification is CategoryClassification =>
-      Boolean(classification),
-    );
 }
 
 export async function getDashboardOverview(

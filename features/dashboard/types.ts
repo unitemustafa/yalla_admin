@@ -37,7 +37,7 @@ export type NavChild = {
   soon?: boolean;
 };
 
-export type NavItem = {
+type NavItem = {
   label: string;
   href?: string;
   page?: PageKey;

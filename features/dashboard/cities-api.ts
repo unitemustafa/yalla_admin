@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { deletionResult } from "./admin-api";
+import { apiListData } from "./shared/api-data";
 
 export type PolygonGeoJson = {
   type: "Polygon";
@@ -42,7 +43,7 @@ export type ServiceCityPayload = {
   is_active: boolean;
 };
 
-export type ServiceCityCoverage = {
+type ServiceCityCoverage = {
   name: string | null;
   formattedAddress: string | null;
   latitude: number;
@@ -63,19 +64,6 @@ export type DeliveryArea = {
   delivery_price: string;
   eta_min_minutes: number | null;
   eta_max_minutes: number | null;
-  is_active: boolean;
-};
-
-export type DeliveryAreaPayload = {
-  service_city_id: number;
-  name: string;
-  center_latitude: string | null;
-  center_longitude: string | null;
-  radius_km: string | null;
-  boundary_geojson?: PolygonGeoJson | null;
-  delivery_price: string;
-  eta_min_minutes?: number | null;
-  eta_max_minutes?: number | null;
   is_active: boolean;
 };
 
@@ -152,20 +140,6 @@ function nullableNumberText(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   if (typeof value === "string" && value.trim()) return value.trim();
   return null;
-}
-
-function responseList(value: unknown) {
-  if (Array.isArray(value)) return value;
-  if (value && typeof value === "object") {
-    const record = value as { results?: unknown; data?: unknown };
-    if (Array.isArray(record.results)) return record.results;
-    if (Array.isArray(record.data)) return record.data;
-    if (record.data && typeof record.data === "object") {
-      const nested = record.data as { results?: unknown };
-      if (Array.isArray(nested.results)) return nested.results;
-    }
-  }
-  return [];
 }
 
 function cityFromResponse(value: unknown): ServiceCity | null {
@@ -410,45 +384,7 @@ export async function loadDeliveryAreas(
   if (!response.ok) {
     throw new Error(firstError(data) ?? "تعذر تحميل مناطق التوصيل.");
   }
-  return responseList(data)
+  return apiListData<unknown>(data)
     .map(deliveryAreaFromResponse)
     .filter((area): area is DeliveryArea => Boolean(area));
-}
-
-export async function saveDeliveryArea(
-  apiFetch: (path: string, init?: RequestInit) => Promise<Response>,
-  payload: DeliveryAreaPayload,
-  areaId?: number,
-) {
-  const response = await apiFetch(
-    areaId
-      ? `locations/delivery-areas/${areaId}/`
-      : "locations/delivery-areas/",
-    {
-      method: areaId ? "PATCH" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    },
-  );
-  const data = await responseJson(response);
-  if (!response.ok || !data || typeof data !== "object") {
-    throw new Error(firstError(data) ?? "تعذر حفظ منطقة التوصيل.");
-  }
-  const area = deliveryAreaFromResponse(data);
-  if (!area) {
-    throw new Error("تم الحفظ لكن استجابة منطقة التوصيل غير مكتملة.");
-  }
-  return area;
-}
-
-export async function deleteDeliveryArea(
-  apiFetch: (path: string, init?: RequestInit) => Promise<Response>,
-  areaId: number,
-) {
-  const response = await apiFetch(`locations/delivery-areas/${areaId}/`, {
-    method: "DELETE",
-  });
-  if (response.ok) return;
-  const data = await responseJson(response);
-  throw new Error(firstError(data) ?? "تعذر حذف منطقة التوصيل.");
 }

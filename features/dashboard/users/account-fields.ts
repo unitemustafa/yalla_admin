@@ -12,7 +12,7 @@ export type AvailabilityState =
 
 export type AvailabilityField = "username" | "email" | "phone";
 
-export const availabilityMessages: Record<
+const availabilityMessages: Record<
   AvailabilityField,
   { available: string; taken: string; invalid: string }
 > = {
@@ -33,7 +33,7 @@ export const availabilityMessages: Record<
   },
 };
 
-export const availabilityRequestError =
+const availabilityRequestError =
   "تعذر التحقق حاليًا، حاول مرة أخرى.";
 
 export function normalizeUsername(value: string) {
@@ -44,11 +44,11 @@ export function normalizeEmail(value: string) {
   return value.replace(/\s/g, "").toLowerCase();
 }
 
-export function digitsOnly(value: string) {
+function digitsOnly(value: string) {
   return value.replace(/\D/g, "");
 }
 
-export function localPhoneValue(value: string | null | undefined) {
+function localPhoneValue(value: string | null | undefined) {
   const clean = String(value ?? "").trim();
   if (clean.startsWith("+20")) return `0${clean.slice(3)}`;
   if (clean.startsWith("20")) return `0${clean.slice(2)}`;

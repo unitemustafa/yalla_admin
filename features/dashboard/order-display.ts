@@ -11,7 +11,7 @@ export type OrderNamedObject = {
   service_city_id?: string | number | null;
 };
 
-export type OrderAddressLike = {
+type OrderAddressLike = {
   id?: string | number | null;
   name?: string | null;
   details?: string | null;
@@ -35,7 +35,7 @@ export type OrderAddressLike = {
   delivery_price_preview?: OrderMoneyValue;
 };
 
-export type OrderItemLike = {
+type OrderItemLike = {
   id?: string | number | null;
   section_id?: string | number | null;
   variant_id?: string | number | null;
@@ -93,7 +93,7 @@ export type OrderMarketSectionLike = {
   offers?: OrderOfferLike[] | null;
 };
 
-export type OrderPickupStopLike = {
+type OrderPickupStopLike = {
   market_id?: string | number | null;
   market?: OrderNamedObject | null;
   pickup_status?: string | null;
@@ -129,7 +129,7 @@ export type DashboardOrderLike = {
   offer_titles?: string[] | null;
 };
 
-export const unknownLabel = "غير محدد";
+const unknownLabel = "غير محدد";
 export const deliveryLaterLabel = "يحدد لاحقاً";
 
 export const orderStatusLabels = {
@@ -215,7 +215,7 @@ export function getDeliveryTypeLabel(order: DashboardOrderLike) {
   return cleanText(order.delivery_type) || unknownLabel;
 }
 
-export function getOrderOffers(order: DashboardOrderLike) {
+function getOrderOffers(order: DashboardOrderLike) {
   const offers = getMarketSections(order).flatMap((section) => section.offers ?? []);
   if (offers.length > 0) return offers;
   return Array.isArray(order.offers) ? order.offers : [];
@@ -238,7 +238,7 @@ export function getDashboardOrderOfferTitles(order: DashboardOrderLike) {
   return getOrderOffers(order).map(orderOfferTitle).filter(Boolean);
 }
 
-export function dashboardOrderHasOffer(order: DashboardOrderLike) {
+function dashboardOrderHasOffer(order: DashboardOrderLike) {
   if (typeof order.has_offer === "boolean") return order.has_offer;
   return getOrderOffers(order).length > 0;
 }
@@ -291,7 +291,7 @@ export function getDeliveryAreaName(order: DashboardOrderLike) {
   );
 }
 
-export function getAddressDetails(order: DashboardOrderLike) {
+function getAddressDetails(order: DashboardOrderLike) {
   const address = order.delivery_address;
   const formatted = cleanText(address?.formatted_address);
   if (formatted) return formatted;
@@ -420,27 +420,6 @@ export function getOrderMarketsSummary(order: DashboardOrderLike) {
 
 export function isMultiMarket(order: DashboardOrderLike) {
   return Boolean(order.is_multi_market) || getMarketCount(order) > 1;
-}
-
-export function getPickupStops(order: DashboardOrderLike): OrderPickupStopLike[] {
-  if (Array.isArray(order.pickup_stops) && order.pickup_stops.length > 0) {
-    return order.pickup_stops;
-  }
-
-  return getMarketSections(order).map((section) => ({
-    market_id: section.market_id,
-    market: section.market,
-    pickup_status: section.pickup_status,
-    picked_up_at: section.picked_up_at,
-    sort_order: section.sort_order,
-  }));
-}
-
-export function getPickupStatusLabel(value: unknown) {
-  const status = cleanText(value).toLowerCase();
-  if (status === "picked_up") return "تم الاستلام";
-  if (status === "pending") return "في انتظار الاستلام";
-  return cleanText(value) || "في انتظار الاستلام";
 }
 
 export function getDeliveryDestination(order: DashboardOrderLike) {

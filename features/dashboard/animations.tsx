@@ -61,7 +61,7 @@ export function useInViewOnce<TElement extends Element>({
   return { ref, isInView };
 }
 
-export function usePrefersReducedMotion() {
+function usePrefersReducedMotion() {
   return useSyncExternalStore(
     (onStoreChange) => {
       const mediaQuery = window.matchMedia(reducedMotionQuery);
@@ -75,7 +75,7 @@ export function usePrefersReducedMotion() {
   );
 }
 
-export function useAnimatedValue(
+function useAnimatedValue(
   target: number,
   {
     duration = defaultDuration,

@@ -1,4 +1,5 @@
 import type { ApiFetch } from "./admin-api";
+import { apiListData } from "./shared/api-data";
 
 export type MarketType = {
   id: number;
@@ -17,14 +18,6 @@ function record(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function list(value: unknown): unknown[] {
-  if (Array.isArray(value)) return value;
-  const response = record(value);
-  if (Array.isArray(response?.results)) return response.results;
-  if (Array.isArray(response?.data)) return response.data;
-  return [];
-}
-
 function firstError(value: unknown): string {
   if (typeof value === "string" && value.trim()) return value;
   if (Array.isArray(value)) return firstError(value[0]);
@@ -38,7 +31,7 @@ function firstError(value: unknown): string {
   return "";
 }
 
-export function normalizeMarketType(value: unknown): MarketType | null {
+function normalizeMarketType(value: unknown): MarketType | null {
   const item = record(value);
   const id = Number(item?.id);
   const classificationId = Number(item?.classification_id);
@@ -69,7 +62,7 @@ export async function loadMarketTypes(apiFetch: ApiFetch) {
     await apiFetch("home/market-types/"),
     "تعذر تحميل الفئات الثانوية للمحلات.",
   );
-  return list(data)
+  return apiListData<unknown>(data)
     .map(normalizeMarketType)
     .filter((item): item is MarketType => item !== null);
 }

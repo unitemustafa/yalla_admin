@@ -14,7 +14,7 @@ export type ProductLivePreviewMarket = {
   branch?: string;
 };
 
-export type ProductLivePreviewOption = {
+type ProductLivePreviewOption = {
   id?: number;
   clientId?: string;
   attributeId?: number;
@@ -104,7 +104,7 @@ function discountPercent(value: string) {
   return Number.isFinite(percent) && percent > 0 && percent < 100 ? percent : 0;
 }
 
-export function oldPriceFromDiscount(price: string, discount: string) {
+function oldPriceFromDiscount(price: string, discount: string) {
   const currentPrice = numberFromText(price);
   const percent = discountPercent(discount);
 
@@ -115,12 +115,12 @@ export function oldPriceFromDiscount(price: string, discount: string) {
   return formatPriceAmount(currentPrice / (1 - percent / 100));
 }
 
-export function discountLabel(discount: string) {
+function discountLabel(discount: string) {
   const percent = discountPercent(discount);
   return percent ? `${formatPriceAmount(percent)}%` : "";
 }
 
-export function firstValidPreviewVariant(variants: ProductLivePreviewVariant[]) {
+function firstValidPreviewVariant(variants: ProductLivePreviewVariant[]) {
   return variants.find((variant) => validPrice(variant.price)) ?? null;
 }
 

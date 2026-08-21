@@ -18,13 +18,14 @@ import {
   User,
 } from "lucide-react";
 
-import { dashboardBrandLogos, navGroups } from "./data";
+import { navGroups } from "./routes";
+import { dashboardBrandLogos } from "./shared/branding";
 import { DashboardImage } from "./dashboard-image";
 import { useDashboardCustomization } from "./customization";
 import { useSidebarGroups } from "./hooks";
 import { useDashboardI18n } from "./i18n";
 import { useDashboardNotifications } from "./notifications-context";
-import { currentUser } from "./profile-data";
+import { neutralDashboardUserName } from "./users/types";
 import type { PageKey } from "./types";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -103,7 +104,7 @@ export function Sidebar({
   const userFullName =
     [user?.first_name, user?.last_name].filter(Boolean).join(" ") ||
     user?.username ||
-    currentUser.fullName;
+    neutralDashboardUserName;
   const userAvatar = user?.avatar_url?.trim();
   const [theme, setTheme] = useState<ThemeChoice>(() => {
     if (typeof window === "undefined") {

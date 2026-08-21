@@ -4,10 +4,7 @@ import {
   type LoginDashboardBranding,
   type LoginDashboardSnapshot,
 } from "@/features/dashboard/static-data";
-
-const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1"
-).replace(/\/+$/, "");
+import { API_BASE_URL } from "@/lib/api-config";
 
 function isSnapshot(value: unknown): value is Omit<LoginDashboardSnapshot, "branding"> & {
   branding?: Partial<LoginDashboardBranding>;

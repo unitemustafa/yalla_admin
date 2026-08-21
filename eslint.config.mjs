@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "ammenu-overview/**",
     "out/**",
     "build/**",
+    "coverage/**",
+    "test-results/**",
+    "playwright-report/**",
     "next-env.d.ts",
   ]),
 ]);

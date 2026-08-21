@@ -1,4 +1,5 @@
 import { deletionResult, type ApiFetch } from "./admin-api";
+import { apiListData } from "./shared/api-data";
 
 export type StoreSubcategory = {
   id: number;
@@ -15,14 +16,6 @@ export type StoreSubcategory = {
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? value as Record<string, unknown> : null;
-}
-
-function listFromResponse(value: unknown): unknown[] {
-  if (Array.isArray(value)) return value;
-  const record = asRecord(value);
-  if (Array.isArray(record?.results)) return record.results;
-  if (Array.isArray(record?.data)) return record.data;
-  return [];
 }
 
 function firstError(value: unknown): string {
@@ -67,7 +60,7 @@ export async function loadStoreSubcategories(apiFetch: ApiFetch) {
     await apiFetch("catalog/store-subcategories/"),
     "تعذر تحميل الفئات الداخلية.",
   );
-  return listFromResponse(data)
+  return apiListData<unknown>(data)
     .map(normalizeStoreSubcategory)
     .filter((item): item is StoreSubcategory => item !== null);
 }

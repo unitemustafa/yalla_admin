@@ -44,6 +44,3 @@ export function PageLoadingState({ className = "min-h-[280px]" }: { className?: 
     </section>
   );
 }
-
-/** @deprecated Use PageLoadError. */
-export const LoadErrorCard = PageLoadError;

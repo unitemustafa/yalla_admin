@@ -2,26 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 import { AUTH_COOKIE_NAMES } from "@/lib/auth";
-
-const protectedPrefixes = [
-  "/account",
-  "/archives",
-  "/categories",
-  "/customers",
-  "/dashboard",
-  "/delivery",
-  "/delivery-zone",
-  "/items",
-  "/notifications",
-  "/offers",
-  "/orders",
-];
-
-function isProtectedPath(pathname: string) {
-  return protectedPrefixes.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
-}
+import { isProtectedPath } from "@/lib/protected-routes";
 
 function safeNextPath(request: NextRequest) {
   return `${request.nextUrl.pathname}${request.nextUrl.search}`;

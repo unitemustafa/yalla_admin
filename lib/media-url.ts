@@ -1,26 +1,17 @@
+import { configuredBackendOrigin } from "@/lib/api-config";
+
 const mediaPathPattern = /^\/?media\//i;
 export const defaultImageFallback = "/default-user-avatar.svg";
 
-function configuredBackendUrl() {
-  return (
-    process.env.NEXT_PUBLIC_BACKEND_URL?.trim() ||
-    process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ||
-    ""
-  );
-}
-
-export function getBackendOrigin() {
-  const backendUrl = configuredBackendUrl();
-  if (!backendUrl) return "";
-
+function getBackendOrigin() {
   try {
-    return new URL(backendUrl).origin;
+    return configuredBackendOrigin();
   } catch {
     return "";
   }
 }
 
-export function isMediaPath(value: string) {
+function isMediaPath(value: string) {
   return mediaPathPattern.test(value.trim());
 }
 
@@ -66,7 +57,7 @@ export function normalizeImageSrc(
   return resolveMediaUrl(value);
 }
 
-export function isExternalUrl(src: unknown) {
+function isExternalUrl(src: unknown) {
   return typeof src === "string" && /^https?:\/\//i.test(src.trim());
 }
 
@@ -142,7 +133,7 @@ function isLocalBackendHostname(hostname: string) {
   return secondOctet >= 16 && secondOctet <= 31;
 }
 
-export function shouldUnoptimizeMediaUrl(src: unknown) {
+function shouldUnoptimizeMediaUrl(src: unknown) {
   if (process.env.NODE_ENV !== "development" || typeof src !== "string") {
     return false;
   }

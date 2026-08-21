@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Check,
   ChevronDown,
@@ -29,6 +29,8 @@ import { PageLoadError, PageLoadingState } from "../load-error-card";
 import { DashboardImage } from "../dashboard-image";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/media-url";
+import { isAbortError } from "@/lib/auth";
+import { apiListData } from "../shared/api-data";
 import { AppSelect, Badge, Button, Card, CurrencyText, Field, Input, PageTitle, Pagination } from "../primitives";
 import { useSnackbar } from "../snackbar";
 import {
@@ -530,21 +532,6 @@ function OrderDeliveryIcon({ order }: { order: BackendOrder }) {
 
 function orderNumber(order: BackendOrder) {
   return order.order_number || `#${order.id}`;
-}
-
-function apiListData<T>(value: unknown): T[] {
-  if (Array.isArray(value)) return value as T[];
-  if (!value || typeof value !== "object") return [];
-
-  const record = value as { results?: unknown; data?: unknown };
-  if (Array.isArray(record.results)) return record.results as T[];
-  if (Array.isArray(record.data)) return record.data as T[];
-  if (record.data && typeof record.data === "object") {
-    const nested = record.data as { results?: unknown };
-    if (Array.isArray(nested.results)) return nested.results as T[];
-  }
-
-  return [];
 }
 
 function apiOrderData(value: unknown): BackendOrder | null {
@@ -1157,8 +1144,12 @@ export function BackendOrdersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const loadControllerRef = useRef<AbortController | null>(null);
 
-  async function loadOrders(nextStatus: "all" | BackendOrderStatus = status) {
+  const loadOrders = useCallback(async (nextStatus: "all" | BackendOrderStatus) => {
+    loadControllerRef.current?.abort();
+    const controller = new AbortController();
+    loadControllerRef.current = controller;
     setLoading(true);
     setError(null);
     try {
@@ -1166,37 +1157,49 @@ export function BackendOrdersPage() {
         nextStatus === "all"
           ? "orders/"
           : `orders/?status=${encodeURIComponent(nextStatus)}`;
-      const ordersResponse = await apiFetch(ordersPath);
+      const ordersResponse = await apiFetch(ordersPath, {
+        signal: controller.signal,
+      });
       const ordersData = await apiResponseData(ordersResponse);
       if (!ordersResponse.ok) throw new Error(apiError(ordersData, "تعذر تحميل الطلبات."));
+      if (controller.signal.aborted) return;
       setOrders(apiListData<BackendOrder>(ordersData));
       try {
-        const representativesResponse = await apiFetch("auth/representatives/");
+        const representativesResponse = await apiFetch("auth/representatives/", {
+          signal: controller.signal,
+        });
         const representativesData = await apiResponseData(representativesResponse);
-        if (representativesResponse.ok) {
+        if (representativesResponse.ok && !controller.signal.aborted) {
           setRepresentatives(
             Array.isArray(representativesData)
               ? representativesData.filter(isBackendDashboardUser)
               : [],
           );
         }
-      } catch {
+      } catch (reason) {
+        if (isAbortError(reason)) return;
         setRepresentatives([]);
       }
     } catch (reason) {
+      if (isAbortError(reason)) return;
       setError(reason instanceof Error ? reason.message : "تعذر تحميل الطلبات.");
     } finally {
-      setLoading(false);
+      if (loadControllerRef.current === controller) {
+        loadControllerRef.current = null;
+        setLoading(false);
+      }
     }
-  }
+  }, [apiFetch]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void loadOrders();
+      void loadOrders("all");
     }, 0);
-    return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => {
+      window.clearTimeout(timer);
+      loadControllerRef.current?.abort();
+    };
+  }, [loadOrders]);
 
   useEffect(() => {
     function handleOrdersChanged() {
@@ -1205,8 +1208,7 @@ export function BackendOrdersPage() {
 
     window.addEventListener(dashboardOrdersChangedEvent, handleOrdersChanged);
     return () => window.removeEventListener(dashboardOrdersChangedEvent, handleOrdersChanged);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [loadOrders, status]);
 
   const visibleOrders = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -1265,7 +1267,7 @@ export function BackendOrdersPage() {
         size="compact"
         actions={
           <>
-            <Button type="button" variant="outline" onClick={() => void loadOrders()}>
+            <Button type="button" variant="outline" onClick={() => void loadOrders(status)}>
               <RefreshCw className="size-4" />
               تحديث
             </Button>
@@ -1340,7 +1342,7 @@ export function BackendOrdersPage() {
         {loading ? (
           <PageLoadingState className="min-h-64" />
         ) : error ? (
-          <PageLoadError onRetry={() => void loadOrders()} />
+          <PageLoadError onRetry={() => void loadOrders(status)} />
         ) : visibleOrders.length === 0 ? (
           <div className="p-10 text-center text-sm text-muted-foreground">
             لا توجد طلبات مطابقة.
@@ -1534,16 +1536,20 @@ export function BackendCreateOrderPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const initialDataControllerRef = useRef<AbortController | null>(null);
 
-  async function loadInitialData() {
+  const loadInitialData = useCallback(async () => {
+    initialDataControllerRef.current?.abort();
+    const controller = new AbortController();
+    initialDataControllerRef.current = controller;
     setLoading(true);
     setError(null);
     try {
       const [usersResponse, productsResponse, marketsResponse, offersResponse] = await Promise.all([
-        apiFetch("auth/users/"),
-        apiFetch("catalog/products/"),
-        apiFetch("home/markets/"),
-        apiFetch("offers/"),
+        apiFetch("auth/users/", { signal: controller.signal }),
+        apiFetch("catalog/products/", { signal: controller.signal }),
+        apiFetch("home/markets/", { signal: controller.signal }),
+        apiFetch("offers/", { signal: controller.signal }),
       ]);
       const [usersData, productsData, marketsData, offersData] = await Promise.all([
         apiResponseData(usersResponse),
@@ -1555,6 +1561,7 @@ export function BackendCreateOrderPage() {
       if (!productsResponse.ok) throw new Error(apiError(productsData, "تعذر تحميل المنتجات."));
       if (!marketsResponse.ok) throw new Error(apiError(marketsData, "تعذر تحميل المحلات."));
       if (!offersResponse.ok) throw new Error(apiError(offersData, "تعذر تحميل العروض."));
+      if (controller.signal.aborted) return;
       setUsers(
         apiListData<BackendDashboardUser>(usersData)
           .filter(isBackendDashboardUser)
@@ -1564,11 +1571,15 @@ export function BackendCreateOrderPage() {
       setMarkets(apiListData<BackendMarket>(marketsData));
       setOffers(apiListData<BackendOffer>(offersData));
     } catch (reason) {
+      if (isAbortError(reason)) return;
       setError(reason instanceof Error ? reason.message : "تعذر تحميل بيانات إنشاء الطلب.");
     } finally {
-      setLoading(false);
+      if (initialDataControllerRef.current === controller) {
+        initialDataControllerRef.current = null;
+        setLoading(false);
+      }
     }
-  }
+  }, [apiFetch]);
 
   async function loadAddresses(userId: string) {
     setSelectedAddress("");
@@ -1642,9 +1653,11 @@ export function BackendCreateOrderPage() {
     const timer = window.setTimeout(() => {
       void loadInitialData();
     }, 0);
-    return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => {
+      window.clearTimeout(timer);
+      initialDataControllerRef.current?.abort();
+    };
+  }, [loadInitialData]);
 
   const variants = useMemo<ProductVariantOption[]>(() => {
     return products.flatMap((product) =>
@@ -3140,16 +3153,23 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
   const [selectedRepresentativeId, setSelectedRepresentativeId] = useState("");
   const [representativesLoading, setRepresentativesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const orderControllerRef = useRef<AbortController | null>(null);
 
-  async function loadOrder() {
+  const loadOrder = useCallback(async () => {
+    orderControllerRef.current?.abort();
+    const controller = new AbortController();
+    orderControllerRef.current = controller;
     setLoading(true);
     setError(null);
     try {
-      const response = await apiFetch(`orders/${encodeURIComponent(orderId)}/`);
+      const response = await apiFetch(`orders/${encodeURIComponent(orderId)}/`, {
+        signal: controller.signal,
+      });
       const data = await apiResponseData(response);
       if (!response.ok) throw new Error(apiError(data, "تعذر تحميل تفاصيل الطلب."));
       const nextOrder = apiOrderData(data);
       if (!nextOrder) throw new Error("تعذر قراءة تفاصيل الطلب من استجابة الباك.");
+      if (controller.signal.aborted) return;
       setOrder(nextOrder);
       setDeliveryPriceDraft(nextOrder.delivery_price ?? "");
       setRepresentativeOptions([]);
@@ -3157,27 +3177,37 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
       const representativeId = assignedRepresentativeId(nextOrder);
       if (representativeId && !nextOrder.assigned_representative?.name) {
         try {
-          const representativeResponse = await apiFetch(`auth/users/${encodeURIComponent(String(representativeId))}/`);
-          const representativeData = await apiResponseData(representativeResponse);
-          setRepresentativeUser(
-            representativeResponse.ok &&
-              isBackendDashboardUser(representativeData) &&
-              representativeData.role === "representative"
-              ? representativeData
-              : null,
+          const representativeResponse = await apiFetch(
+            `auth/users/${encodeURIComponent(String(representativeId))}/`,
+            { signal: controller.signal },
           );
-        } catch {
+          const representativeData = await apiResponseData(representativeResponse);
+          if (!controller.signal.aborted) {
+            setRepresentativeUser(
+              representativeResponse.ok &&
+                isBackendDashboardUser(representativeData) &&
+                representativeData.role === "representative"
+                ? representativeData
+                : null,
+            );
+          }
+        } catch (reason) {
+          if (isAbortError(reason)) return;
           setRepresentativeUser(null);
         }
       } else {
         setRepresentativeUser(null);
       }
     } catch (reason) {
+      if (isAbortError(reason)) return;
       setError(reason instanceof Error ? reason.message : "تعذر تحميل تفاصيل الطلب.");
     } finally {
-      setLoading(false);
+      if (orderControllerRef.current === controller) {
+        orderControllerRef.current = null;
+        setLoading(false);
+      }
     }
-  }
+  }, [apiFetch, orderId]);
 
   async function updateStatus(nextStatus: BackendOrderStatus) {
     if (!order || order.status === nextStatus) return;
@@ -3353,9 +3383,11 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
     const timer = window.setTimeout(() => {
       void loadOrder();
     }, 0);
-    return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId]);
+    return () => {
+      window.clearTimeout(timer);
+      orderControllerRef.current?.abort();
+    };
+  }, [loadOrder]);
 
   useEffect(() => {
     function handleOrdersChanged(event: Event) {
@@ -3367,8 +3399,7 @@ export function BackendOrderDetailPage({ orderId }: { orderId: string }) {
 
     window.addEventListener(dashboardOrdersChangedEvent, handleOrdersChanged);
     return () => window.removeEventListener(dashboardOrdersChangedEvent, handleOrdersChanged);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId]);
+  }, [loadOrder, orderId]);
 
   const representativeMap = useMemo(
     () =>
@@ -3828,7 +3859,7 @@ function DeliveryProofCard({ order }: { order: BackendOrder }) {
           >
             <DashboardImage
               src={proofUrl}
-              fallbackSrc="/images/placeholders/default_offer.png"
+              fallbackSrc="/images/placeholders/default_offer.webp"
               alt={`صورة إثبات تسليم الطلب ${orderNumber(order)}`}
               width={720}
               height={960}
