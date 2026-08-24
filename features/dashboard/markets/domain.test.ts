@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createMarketDraft,
   marketCityNames,
+  marketDraftCanSubmit,
   marketPayload,
   normalizeClassification,
   validateMarketDraft,
@@ -34,6 +35,28 @@ describe("market domain", () => {
     const draft = createMarketDraft(market, [classification]);
     expect(validateMarketDraft(draft, { editing: true, hasImage: false, hasCover: false })).toBeNull();
     expect(validateMarketDraft({ ...draft, deliveryTimeMax: "10" }, { editing: false, hasImage: true, hasCover: true })).toContain("وقت توصيل");
+  });
+
+  it("allows saving a market before internal categories are selected", () => {
+    const draft = {
+      ...createMarketDraft(market, [classification]),
+      selectedSubcategoryIds: [],
+    };
+
+    expect(
+      validateMarketDraft(draft, {
+        editing: false,
+        hasImage: true,
+        hasCover: true,
+      }),
+    ).toBeNull();
+    expect(
+      marketDraftCanSubmit(draft, {
+        editing: false,
+        hasImage: true,
+        hasCover: true,
+      }),
+    ).toBe(true);
   });
 
   it("builds the unchanged market payload contract", () => {

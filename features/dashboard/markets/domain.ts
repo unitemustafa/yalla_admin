@@ -123,7 +123,6 @@ export function validateMarketDraft(
   if (!editing && (!Number.isFinite(deliveryTimeMin) || deliveryTimeMin <= 0 || !Number.isFinite(deliveryTimeMax) || deliveryTimeMax < deliveryTimeMin)) {
     return "أدخل وقت توصيل صحيحًا، والحد الأقصى لا يقل عن الحد الأدنى.";
   }
-  if (!draft.selectedSubcategoryIds.length) return "اختر فئة داخلية واحدة على الأقل للمحل.";
   if (!draft.showInGeneral && !draft.showInServiceCities) return "اختر نطاق ظهور المحل";
   if (draft.showInGeneral && draft.showInServiceCities) return "اختر العام أو مدينة واحدة فقط.";
   if (draft.showInServiceCities && draft.selectedServiceCityIds.length === 0) return "اختر مدينة واحدة على الأقل";
@@ -141,7 +140,6 @@ export function marketDraftCanSubmit(
     draft.name.trim() &&
     draft.classificationId &&
     draft.selectedMarketTypeIds.length &&
-    draft.selectedSubcategoryIds.length &&
     (draft.showInGeneral || draft.showInServiceCities) &&
     (editing || (
       hasImage &&
