@@ -1,6 +1,6 @@
 "use client";
 
-import { Layers3, MapPin, Plus, RefreshCw, Search, Store } from "lucide-react";
+import { MapPin, Plus, RefreshCw, Search, Store } from "lucide-react";
 
 import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
 import { Button, Card, Input, PageTitle } from "../primitives";
@@ -12,7 +12,6 @@ import { useMarketsPage } from "./use-markets-page";
 
 export function ShopsPage({ initialArchived = false }: { initialArchived?: boolean } = {}) {
   const page = useMarketsPage(initialArchived);
-  const hasActiveSubcategory = page.subcategories.some((item) => item.is_active);
   const metrics = [
     ["إجمالي المحلات", page.markets.length, Store],
     ["المحلات النشطة", page.markets.filter((item) => item.status === "active").length, Store],
@@ -21,7 +20,7 @@ export function ShopsPage({ initialArchived = false }: { initialArchived?: boole
 
   return (
     <div className="px-6 py-6">
-      <PageTitle title={initialArchived ? "المحلات المؤرشفة" : "المحلات"} description={initialArchived ? "استعراض المحلات المؤرشفة واستعادتها عند الحاجة." : "إدارة المحلات وربط ظهور منتجاتها بالمدن."} actions={<div className="flex flex-wrap items-center gap-2"><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => void page.load()} disabled={page.loading}><RefreshCw className={`size-4 ${page.loading ? "animate-spin" : ""}`} />تحديث</Button>{!initialArchived ? <Button className="h-9 px-4 text-sm" onClick={() => page.setDialogMarket(null)} disabled={!hasActiveSubcategory}><Plus className="size-4" />إضافة محل</Button> : null}</div>} />
+      <PageTitle title={initialArchived ? "المحلات المؤرشفة" : "المحلات"} description={initialArchived ? "استعراض المحلات المؤرشفة واستعادتها عند الحاجة." : "إدارة المحلات وربط ظهور منتجاتها بالمدن."} actions={<div className="flex flex-wrap items-center gap-2"><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => void page.load()} disabled={page.loading}><RefreshCw className={`size-4 ${page.loading ? "animate-spin" : ""}`} />تحديث</Button>{!initialArchived ? <Button className="h-9 px-4 text-sm" onClick={() => page.setDialogMarket(null)}><Plus className="size-4" />إضافة محل</Button> : null}</div>} />
       <div className="mt-6 grid gap-3 md:grid-cols-3">{metrics.map(([label, value, Icon]) => <Card key={label} className="h-20"><div className="flex h-full items-center gap-3 px-5"><span className="rounded-full bg-primary/10 p-3 text-primary"><Icon className="size-5" /></span><div><p className="text-xs text-muted-foreground">{label}</p><p className="text-xl font-bold">{value}</p></div></div></Card>)}</div>
 
       {!page.loading && !page.error && page.markets.length === 0 ? (
@@ -30,7 +29,7 @@ export function ShopsPage({ initialArchived = false }: { initialArchived?: boole
             <div className="flex size-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary"><Store className="size-8" /></div>
             <h2 className="mt-6 text-xl font-semibold leading-7">{initialArchived ? "لا توجد محلات مؤرشفة" : "لا توجد محلات حتى الآن"}</h2>
             <p className="mt-2 max-w-[430px] text-sm leading-6 text-muted-foreground">{initialArchived ? "المحلات التي تتم أرشفتها ستظهر هنا ويمكن استعادتها." : "سيظهر هنا أول محل تنشئه وتربطه بمدن الظهور."}</p>
-            {!initialArchived ? <div className="mt-6 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row"><Button type="button" className="h-10 px-4" onClick={() => page.setDialogMarket(null)} disabled={!hasActiveSubcategory}>{hasActiveSubcategory ? <Plus className="size-4" /> : <Layers3 className="size-4" />}{hasActiveSubcategory ? "إنشاء أول محل" : "أنشئ أقسام المنتجات من قسم المنتجات أولًا"}</Button></div> : null}
+            {!initialArchived ? <div className="mt-6 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row"><Button type="button" className="h-10 px-4" onClick={() => page.setDialogMarket(null)}><Plus className="size-4" />إنشاء أول محل</Button></div> : null}
           </div>
         </Card>
       ) : (
