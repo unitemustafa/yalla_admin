@@ -74,7 +74,7 @@ export async function saveMarketType(
     classification_id: number;
     name_ar: string;
     name_en: string;
-    sort_order: number;
+    sort_order?: number;
     is_active: boolean;
     image?: File | null;
   },
@@ -91,7 +91,9 @@ export async function saveMarketType(
     form.set("classification_id", String(payload.classification_id));
     form.set("name_ar", payload.name_ar);
     form.set("name_en", payload.name_en);
-    form.set("sort_order", String(payload.sort_order));
+    if (payload.sort_order !== undefined) {
+      form.set("sort_order", String(payload.sort_order));
+    }
     form.set("is_active", String(payload.is_active));
     form.set("image", payload.image);
     body = form;
@@ -101,7 +103,9 @@ export async function saveMarketType(
       classification_id: payload.classification_id,
       name_ar: payload.name_ar,
       name_en: payload.name_en,
-      sort_order: payload.sort_order,
+      ...(payload.sort_order === undefined
+        ? {}
+        : { sort_order: payload.sort_order }),
       is_active: payload.is_active,
     });
   }
@@ -120,4 +124,23 @@ export async function deleteMarketType(apiFetch: ApiFetch, id: number) {
     await apiFetch(`home/market-types/${id}/`, { method: "DELETE" }),
     "تعذر حذف الفئة الثانوية للمحل.",
   );
+}
+
+export async function reorderMarketTypes(apiFetch: ApiFetch, ids: number[]) {
+  const data = await parse(
+    await apiFetch("home/market-types/reorder/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    }),
+    "تعذر حفظ ترتيب الفئات الثانوية.",
+  );
+  const response = record(data);
+  const orderedIds = Array.isArray(response?.ids)
+    ? response.ids.map(Number).filter(Number.isFinite)
+    : [];
+  if (orderedIds.length !== ids.length) {
+    throw new Error("استجابة ترتيب الفئات الثانوية غير صالحة.");
+  }
+  return orderedIds;
 }
