@@ -30,7 +30,7 @@ export function ShopsPage({ initialArchived = false }: { initialArchived?: boole
             <div className="flex size-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary"><Store className="size-8" /></div>
             <h2 className="mt-6 text-xl font-semibold leading-7">{initialArchived ? "لا توجد محلات مؤرشفة" : "لا توجد محلات حتى الآن"}</h2>
             <p className="mt-2 max-w-[430px] text-sm leading-6 text-muted-foreground">{initialArchived ? "المحلات التي تتم أرشفتها ستظهر هنا ويمكن استعادتها." : "سيظهر هنا أول محل تنشئه وتربطه بمدن الظهور."}</p>
-            {!initialArchived ? <div className="mt-6 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row"><Button type="button" className="h-10 px-4" onClick={() => page.setDialogMarket(null)} disabled={!hasActiveSubcategory}>{hasActiveSubcategory ? <Plus className="size-4" /> : <Layers3 className="size-4" />}{hasActiveSubcategory ? "إنشاء أول محل" : "أنشئ أقسام المنتجات من صفحة الفئات أولًا"}</Button></div> : null}
+            {!initialArchived ? <div className="mt-6 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row"><Button type="button" className="h-10 px-4" onClick={() => page.setDialogMarket(null)} disabled={!hasActiveSubcategory}>{hasActiveSubcategory ? <Plus className="size-4" /> : <Layers3 className="size-4" />}{hasActiveSubcategory ? "إنشاء أول محل" : "أنشئ أقسام المنتجات من قسم المنتجات أولًا"}</Button></div> : null}
           </div>
         </Card>
       ) : (

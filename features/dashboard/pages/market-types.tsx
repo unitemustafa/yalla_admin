@@ -78,7 +78,7 @@ export function MarketTypesPage() {
           <p className="font-bold">أضف فئة محلات رئيسية أولًا</p>
           <p className="max-w-xl text-sm text-muted-foreground">
             الفئة الثانوية يجب أن تتبع فئة أساسية. افتح «الفئات الأساسية
-            للمحلات» من قسم الفئات وأنشئها أولًا.
+            للمحلات» من قسم المحلات وأنشئها أولًا.
           </p>
         </Card>
       ) : (

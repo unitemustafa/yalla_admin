@@ -35,6 +35,10 @@ describe("sidebar navigation logic", () => {
     expect(sidebarChildLabel("items", t, pageTitle)).toBe(
       "t:nav.allProducts",
     );
+    expect(sidebarItemLabel(navGroups[0].items[2], t, pageTitle)).toBe(
+      "t:nav.shops",
+    );
+    expect(sidebarChildLabel("shops", t, pageTitle)).toBe("t:nav.allShops");
     expect(sidebarChildLabel("cities", t, pageTitle)).toBe("page:cities");
   });
 

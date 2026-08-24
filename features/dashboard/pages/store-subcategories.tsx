@@ -27,7 +27,7 @@ export function StoreSubcategoriesPage() {
       setLoadError(
         reason instanceof Error
           ? reason.message
-          : "تعذر تحميل أقسام منتجات المحلات.",
+          : "تعذر تحميل أقسام المنتجات.",
       );
     } finally {
       setLoading(false);
@@ -42,7 +42,7 @@ export function StoreSubcategoriesPage() {
   return (
     <div dir="rtl" className="px-6 py-6">
       <PageTitle
-        title="أقسام منتجات المحلات"
+        title="أقسام المنتجات"
         description="أقسام نصية لتنظيم المنتجات داخل المحل، مثل الوجبات والمشروبات والحلويات، وهي مستقلة عن فئات المحلات."
         actions={
           <Button

@@ -40,6 +40,25 @@ describe("dashboard routes", () => {
     }
   });
 
+  it("groups shops and their categories separately from products", () => {
+    const menuItems = navGroups[0].items;
+    const products = menuItems.find((item) => item.label === "المنتجات");
+    const shops = menuItems.find((item) => item.label === "المحلات");
+
+    expect(products?.children?.map((child) => child.page)).toEqual([
+      "items",
+      "create-item",
+      "store-subcategories",
+      "addons",
+    ]);
+    expect(shops?.children?.map((child) => child.page)).toEqual([
+      "shops",
+      "categories",
+      "market-types",
+    ]);
+    expect(menuItems.some((item) => item.label === "الفئات")).toBe(false);
+  });
+
   it("uses a neutral dynamic order breadcrumb", () => {
     expect(breadcrumbsFromPathname("/orders/view/123").at(-1)?.label).toBe(
       "تفاصيل الطلب",

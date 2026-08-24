@@ -44,7 +44,7 @@ export function sidebarItemLabel(
   const firstChildPage = item.children?.[0]?.page;
 
   if (firstChildPage === "items") return t("nav.products");
-  if (firstChildPage === "categories") return t("nav.categories");
+  if (firstChildPage === "shops") return t("nav.shops");
   if (firstChildPage === "orders") return t("nav.orders");
   if (firstChildPage === "offers") return t("nav.offers");
   if (firstChildPage === "delivery-zone") return t("nav.delivery");
@@ -59,6 +59,7 @@ export function sidebarChildLabel(
   pageTitle: PageTitle,
 ) {
   if (page === "items") return t("nav.allProducts");
+  if (page === "shops") return t("nav.allShops");
   if (page === "orders") return t("nav.allOrders");
   if (page === "offers") return t("nav.allOffers");
 
