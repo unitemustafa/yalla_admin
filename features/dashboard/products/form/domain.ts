@@ -209,6 +209,7 @@ export function variantFromProductVariant(
 
 export function productMarketChoice(product: NormalizedProduct): CatalogMarket | null {
   if (product.marketId === null) return null;
+  const subcategory = normalizeStoreSubcategory(product.subcategory);
   return {
     id: String(product.marketId),
     name: textValue(product.market?.name, `محل #${product.marketId}`),
@@ -216,7 +217,7 @@ export function productMarketChoice(product: NormalizedProduct): CatalogMarket |
     status: textValue(product.market?.status, "inactive"),
     scope: textValue(product.market?.scope, "service_city"),
     serviceCities: [],
-    subcategories: [],
+    subcategories: subcategory ? [subcategory] : [],
   };
 }
 
@@ -255,7 +256,7 @@ function validPrice(value: string) {
 export function validateProductForm(values: ProductFormValues) {
   if (!values.name.trim()) return "اسم المنتج مطلوب";
   if (!values.selectedMarketId) return "اختر المحل";
-  if (!values.selectedSubcategoryId) return "اختر الفئة الداخلية";
+  if (!values.selectedSubcategoryId) return "اختر قسم المنتج";
   const discountValue = Number(values.discount);
   if (!Number.isFinite(discountValue) || discountValue < 0 || discountValue >= 100) {
     return "الخصم غير صالح";

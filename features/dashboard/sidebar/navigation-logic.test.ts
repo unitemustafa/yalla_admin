@@ -20,6 +20,7 @@ describe("sidebar navigation logic", () => {
 
     expect(navItemIsActive(direct, "overview")).toBe(true);
     expect(navItemIsActive(products, "items")).toBe(true);
+    expect(navItemIsActive(products, "create-item")).toBe(true);
     expect(navItemIsActive(products, "orders")).toBe(false);
   });
 

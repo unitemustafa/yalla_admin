@@ -47,7 +47,6 @@ describe("dashboard routes", () => {
 
     expect(products?.children?.map((child) => child.page)).toEqual([
       "items",
-      "create-item",
       "store-subcategories",
       "addons",
     ]);

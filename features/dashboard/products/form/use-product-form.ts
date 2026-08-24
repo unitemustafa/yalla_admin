@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { useSnackbar } from "../../snackbar";
+import type { StoreSubcategory } from "../../store-subcategories-api";
 import { productAdditionsPath } from "../../addons/api";
 import {
   AdminApiError,
@@ -55,6 +56,7 @@ export function useProductForm() {
   const [saving, setSaving] = useState(false);
   const [markets, setMarkets] = useState<CatalogMarket[]>([]);
   const [marketModalOpen, setMarketModalOpen] = useState(false);
+  const [marketSubcategoriesOpen, setMarketSubcategoriesOpen] = useState(false);
   const [marketQuery, setMarketQuery] = useState("");
   const [marketTab, setMarketTab] = useState<"general" | "service_city">("general");
   const [additions, setAdditions] = useState<ProductAdditionChoice[]>([]);
@@ -333,6 +335,22 @@ export function useProductForm() {
     setMarketModalOpen(false);
   }
 
+  function saveSelectedMarketSubcategories(items: StoreSubcategory[]) {
+    const marketId = selectedMarket?.id;
+    if (!marketId) return;
+    setMarkets((current) => current.map((market) =>
+      market.id === marketId ? { ...market, subcategories: items } : market,
+    ));
+    setSelectedSubcategoryId((current) =>
+      items.some((item) => String(item.id) === current)
+        ? current
+        : items[0] ? String(items[0].id) : "",
+    );
+    setMarketSubcategoriesOpen(false);
+    setSaveError("");
+    showSnackbar({ message: "تم حفظ أقسام المحل.", tone: "success" });
+  }
+
   const pageTitle = isEditing ? "تعديل منتج" : "إضافة منتج";
   const pageDescription = isEditing
     ? "عدّل بيانات المنتج ومتغيراته من العقد الجديد."
@@ -360,6 +378,7 @@ export function useProductForm() {
     isPopular,
     legacyMissingPrice,
     marketModalOpen,
+    marketSubcategoriesOpen,
     marketQuery,
     markets,
     marketTab,
@@ -372,6 +391,7 @@ export function useProductForm() {
     productLoading,
     saveError,
     saveProduct,
+    saveSelectedMarketSubcategories,
     saving,
     selectMarket,
     selectedAdditionIds,
@@ -387,6 +407,7 @@ export function useProductForm() {
     setIsAvailable,
     setIsPopular,
     setMarketModalOpen,
+    setMarketSubcategoriesOpen,
     setMarketQuery,
     setMarketTab,
     setName,

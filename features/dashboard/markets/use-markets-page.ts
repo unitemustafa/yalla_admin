@@ -7,7 +7,6 @@ import { loadServiceCities } from "../cities/api";
 import type { ServiceCity } from "../cities/types";
 import type { MarketType } from "../market-types-api";
 import { useSnackbar } from "../snackbar";
-import type { StoreSubcategory } from "../store-subcategories-api";
 import { useUndoableDelete } from "../use-undoable-delete";
 import { deleteMarket, loadMarketsPageData, restoreMarket, setMarketActive } from "./api";
 import { filterMarkets } from "./domain";
@@ -19,7 +18,6 @@ export function useMarketsPage(initialArchived: boolean) {
   const queueUndoableDelete = useUndoableDelete();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [classifications, setClassifications] = useState<Classification[]>([]);
-  const [subcategories, setSubcategories] = useState<StoreSubcategory[]>([]);
   const [marketTypes, setMarketTypes] = useState<MarketType[]>([]);
   const [serviceCities, setServiceCities] = useState<ServiceCity[]>([]);
   const [serviceCitiesLoading, setServiceCitiesLoading] = useState(true);
@@ -52,7 +50,6 @@ export function useMarketsPage(initialArchived: boolean) {
       const data = await loadMarketsPageData(apiFetch, initialArchived);
       setMarkets(data.markets);
       setClassifications(data.classifications);
-      setSubcategories(data.subcategories);
       setMarketTypes(data.marketTypes);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر تحميل المحلات.");
@@ -127,7 +124,6 @@ export function useMarketsPage(initialArchived: boolean) {
   return {
     markets,
     classifications,
-    subcategories,
     marketTypes,
     serviceCities,
     serviceCitiesLoading,

@@ -58,7 +58,7 @@ async function parse(response: Response, fallback: string) {
 export async function loadStoreSubcategories(apiFetch: ApiFetch) {
   const data = await parse(
     await apiFetch("catalog/store-subcategories/"),
-    "تعذر تحميل الفئات الداخلية.",
+    "تعذر تحميل أقسام المنتجات.",
   );
   return apiListData<unknown>(data)
     .map(normalizeStoreSubcategory)
@@ -104,17 +104,49 @@ export async function saveStoreSubcategory(
   }
   const data = await parse(
     await apiFetch(path, { method, headers, body }),
-    "تعذر حفظ الفئة الداخلية.",
+    "تعذر حفظ قسم المنتجات.",
   );
   const item = normalizeStoreSubcategory(data);
-  if (!item) throw new Error("استجابة الفئة الداخلية غير صالحة.");
+  if (!item) throw new Error("استجابة قسم المنتجات غير صالحة.");
   return item;
 }
 
 export async function deleteStoreSubcategory(apiFetch: ApiFetch, id: number) {
   const data = await parse(
     await apiFetch(`catalog/store-subcategories/${id}/`, { method: "DELETE" }),
-    "تعذر حذف الفئة الداخلية.",
+    "تعذر حذف قسم المنتجات.",
   );
   return deletionResult(data);
+}
+
+export async function saveMarketSubcategories(
+  apiFetch: ApiFetch,
+  marketId: string,
+  subcategoryIds: number[],
+) {
+  let data: unknown;
+  try {
+    data = await parse(
+      await apiFetch(`home/markets/${encodeURIComponent(marketId)}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subcategory_ids: subcategoryIds }),
+      }),
+      "تعذر حفظ أقسام المحل.",
+    );
+  } catch (reason) {
+    const message = reason instanceof Error ? reason.message : "";
+    if (message.includes("Move products to another subcategory")) {
+      throw new Error("انقل منتجات القسم إلى قسم آخر قبل إزالته من المحل.");
+    }
+    if (message.includes("Only active store subcategories")) {
+      throw new Error("يمكن ربط الأقسام النشطة فقط بالمحل.");
+    }
+    throw reason;
+  }
+  const record = asRecord(data);
+  const values = Array.isArray(record?.subcategories) ? record.subcategories : [];
+  return values
+    .map(normalizeStoreSubcategory)
+    .filter((item): item is StoreSubcategory => item !== null);
 }

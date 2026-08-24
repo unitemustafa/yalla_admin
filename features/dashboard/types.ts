@@ -44,6 +44,7 @@ type NavItem = {
   icon: LucideIcon;
   soon?: boolean;
   children?: NavChild[];
+  activePages?: PageKey[];
 };
 
 export type NavGroup = {

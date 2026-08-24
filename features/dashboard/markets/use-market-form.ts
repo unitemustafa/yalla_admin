@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/features/auth/auth-provider";
 import type { ServiceCity } from "../cities/types";
 import type { MarketType } from "../market-types-api";
-import type { StoreSubcategory } from "../store-subcategories-api";
 import { saveMarket } from "./api";
 import {
   createMarketDraft,
@@ -20,19 +19,17 @@ export function useMarketForm({
   market,
   serviceCities,
   classifications,
-  subcategories,
   marketTypes,
   onSaved,
 }: {
   market?: Market;
   serviceCities: ServiceCity[];
   classifications: Classification[];
-  subcategories: StoreSubcategory[];
   marketTypes: MarketType[];
   onSaved: (market: Market, notificationRequested: boolean) => void;
 }) {
   const { apiFetch } = useAuth();
-  const [draft, setDraft] = useState(() => createMarketDraft(market, classifications));
+  const [draft, setDraft] = useState(() => createMarketDraft(market, classifications, marketTypes));
   const [imagePreview, setImagePreview] = useState(market?.image ?? "");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageName, setImageName] = useState(market?.image ? "صورة المحل الحالية" : "");
@@ -47,11 +44,6 @@ export function useMarketForm({
     hasImage: Boolean(imagePreview),
     hasCover: Boolean(coverPreview),
   });
-
-  const availableSubcategories = useMemo(() => {
-    const selected = new Set(draft.selectedSubcategoryIds);
-    return subcategories.filter((item) => item.is_active || selected.has(item.id));
-  }, [draft.selectedSubcategoryIds, subcategories]);
 
   const availableMarketTypes = useMemo(() => {
     const selected = new Set(draft.selectedMarketTypeIds);
@@ -96,23 +88,6 @@ export function useMarketForm({
     update("selectedMarketTypeIds", draft.selectedMarketTypeIds.includes(id)
       ? draft.selectedMarketTypeIds.filter((item) => item !== id)
       : [...draft.selectedMarketTypeIds, id]);
-  }
-
-  function toggleSubcategory(id: number) {
-    update("selectedSubcategoryIds", draft.selectedSubcategoryIds.includes(id)
-      ? draft.selectedSubcategoryIds.filter((item) => item !== id)
-      : [...draft.selectedSubcategoryIds, id]);
-  }
-
-  function moveSubcategory(id: number, direction: -1 | 1) {
-    setDraft((current) => {
-      const index = current.selectedSubcategoryIds.indexOf(id);
-      const nextIndex = index + direction;
-      if (index < 0 || nextIndex < 0 || nextIndex >= current.selectedSubcategoryIds.length) return current;
-      const selectedSubcategoryIds = [...current.selectedSubcategoryIds];
-      [selectedSubcategoryIds[index], selectedSubcategoryIds[nextIndex]] = [selectedSubcategoryIds[nextIndex], selectedSubcategoryIds[index]];
-      return { ...current, selectedSubcategoryIds };
-    });
   }
 
   function setGeneralVisibility(enabled: boolean) {
@@ -211,13 +186,10 @@ export function useMarketForm({
     imageName,
     coverPreview,
     coverName,
-    availableSubcategories,
     availableMarketTypes,
     availableServiceCities,
     changeClassification,
     toggleMarketType,
-    toggleSubcategory,
-    moveSubcategory,
     setGeneralVisibility,
     setServiceCityVisibility,
     toggleServiceCity,

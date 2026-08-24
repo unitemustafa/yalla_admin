@@ -46,7 +46,6 @@ export type MarketDraft = {
   selectedServiceCityIds: number[];
   deliveryTimeMin: string;
   deliveryTimeMax: string;
-  selectedSubcategoryIds: number[];
   selectedMarketTypeIds: number[];
 };
 
@@ -60,7 +59,6 @@ export type MarketPayload = {
   scope: MarketScope;
   delivery_area_ids: number[];
   service_city_ids: number[];
-  subcategory_ids: number[];
   market_type_ids: number[];
   send_notification: boolean;
 };

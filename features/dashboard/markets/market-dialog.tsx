@@ -5,26 +5,24 @@ import { AlertCircle, LoaderCircle, Plus, X } from "lucide-react";
 import type { ServiceCity } from "../cities/types";
 import type { MarketType } from "../market-types-api";
 import { Button } from "../primitives";
-import type { StoreSubcategory } from "../store-subcategories-api";
 import { MarketCategoryFields } from "./market-category-fields";
 import { MarketMediaFields } from "./market-media-fields";
 import { MarketVisibilityFields } from "./market-visibility-fields";
 import type { Classification, Market } from "./types";
 import { useMarketForm } from "./use-market-form";
 
-export function MarketDialog({ market, serviceCities, serviceCitiesLoading, serviceCitiesError, classifications, subcategories, marketTypes, onClose, onSaved, onReloadServiceCities }: {
+export function MarketDialog({ market, serviceCities, serviceCitiesLoading, serviceCitiesError, classifications, marketTypes, onClose, onSaved, onReloadServiceCities }: {
   market?: Market;
   serviceCities: ServiceCity[];
   serviceCitiesLoading: boolean;
   serviceCitiesError: string;
   classifications: Classification[];
-  subcategories: StoreSubcategory[];
   marketTypes: MarketType[];
   onClose: () => void;
   onSaved: (market: Market, notificationRequested: boolean) => void;
   onReloadServiceCities: () => void;
 }) {
-  const form = useMarketForm({ market, serviceCities, classifications, subcategories, marketTypes, onSaved });
+  const form = useMarketForm({ market, serviceCities, classifications, marketTypes, onSaved });
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-foreground/30 p-4 backdrop-blur-[1px]">
       <section role="dialog" aria-modal="true" className="flex h-[min(820px,calc(100dvh-2rem))] w-full max-w-4xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl">

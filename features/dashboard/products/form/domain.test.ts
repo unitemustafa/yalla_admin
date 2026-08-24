@@ -27,6 +27,7 @@ describe("product form domain", () => {
   it("validates the base price and required catalog choices", () => {
     expect(validateProductForm(baseValues)).toBeNull();
     expect(validateProductForm({ ...baseValues, name: "" })).toBe("اسم المنتج مطلوب");
+    expect(validateProductForm({ ...baseValues, selectedSubcategoryId: "" })).toBe("اختر قسم المنتج");
     expect(validateProductForm({ ...baseValues, discount: "100" })).toBe("الخصم غير صالح");
     expect(
       validateProductForm({

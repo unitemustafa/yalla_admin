@@ -7,7 +7,8 @@ type PageTitle = (page: PageKey) => string;
 export function navItemIsActive(item: NavItem, activePage: PageKey) {
   return (
     item.page === activePage ||
-    Boolean(item.children?.some((child) => child.page === activePage))
+    Boolean(item.children?.some((child) => child.page === activePage)) ||
+    Boolean(item.activePages?.includes(activePage))
   );
 }
 
@@ -17,7 +18,10 @@ export function activeGroupLabelForPage(
 ) {
   for (const group of navGroups) {
     for (const item of group.items) {
-      if (item.children?.some((child) => child.page === activePage)) {
+      if (
+        item.children?.some((child) => child.page === activePage) ||
+        item.activePages?.includes(activePage)
+      ) {
         return item.label;
       }
     }

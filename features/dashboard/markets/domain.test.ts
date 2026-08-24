@@ -5,6 +5,7 @@ import {
   marketCityNames,
   marketDraftCanSubmit,
   marketPayload,
+  missingMarketCreatePrerequisite,
   normalizeClassification,
   validateMarketDraft,
 } from "./domain";
@@ -37,11 +38,8 @@ describe("market domain", () => {
     expect(validateMarketDraft({ ...draft, deliveryTimeMax: "10" }, { editing: false, hasImage: true, hasCover: true })).toContain("وقت توصيل");
   });
 
-  it("allows saving a market before internal categories are selected", () => {
-    const draft = {
-      ...createMarketDraft(market, [classification]),
-      selectedSubcategoryIds: [],
-    };
+  it("allows saving a market without product sections in its draft", () => {
+    const draft = createMarketDraft(market, [classification]);
 
     expect(
       validateMarketDraft(draft, {
@@ -57,18 +55,37 @@ describe("market domain", () => {
         hasCover: true,
       }),
     ).toBe(true);
+    expect(draft).not.toHaveProperty("selectedSubcategoryIds");
   });
 
-  it("builds the unchanged market payload contract", () => {
+  it("builds a market payload without product sections", () => {
     const draft = createMarketDraft(market, [classification]);
-    expect(marketPayload({ ...draft, name: " متجر المدينة ", sendStoreNotification: true }, false)).toMatchObject({
+    const payload = marketPayload({ ...draft, name: " متجر المدينة ", sendStoreNotification: true }, false);
+    expect(payload).toMatchObject({
       classification_id: 2,
       name: "متجر المدينة",
       scope: "service_city",
       service_city_ids: [7],
-      subcategory_ids: [5],
       market_type_ids: [9],
       send_notification: true,
     });
+    expect(payload).not.toHaveProperty("subcategory_ids");
+  });
+
+  it("defaults new markets to a classification with an active secondary type", () => {
+    const draft = createMarketDraft(undefined, [
+      { id: 1, name: "بدون فئات ثانوية" },
+      classification,
+    ], market.market_types ?? []);
+    expect(draft.classificationId).toBe("2");
+  });
+
+  it("requires primary and active secondary classifications before creating a market", () => {
+    expect(missingMarketCreatePrerequisite([], [])).toBe("classification");
+    expect(missingMarketCreatePrerequisite([classification], [])).toBe("market-type");
+    expect(missingMarketCreatePrerequisite([classification], market.market_types ?? [])).toBeNull();
+    expect(missingMarketCreatePrerequisite([classification], [
+      { ...(market.market_types?.[0] ?? { id: 9, classification_id: 2, name_ar: "سريع", name_en: "Fast", image: null, sort_order: 1, market_count: 0 }), is_active: false },
+    ])).toBe("market-type");
   });
 });

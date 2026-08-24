@@ -64,7 +64,7 @@ export function ItemsMobileCards({
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
                 <div className="rounded-md bg-muted/40 p-2">
-                  <div className="text-muted-foreground">الفئة الداخلية</div>
+                  <div className="text-muted-foreground">قسم المنتج</div>
                   <div className="mt-1 truncate font-medium">{row.category}</div>
                 </div>
                 <div className="rounded-md bg-muted/40 p-2">

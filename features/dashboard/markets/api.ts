@@ -1,6 +1,5 @@
 import { deletionResult, type ApiFetch } from "../admin-api";
 import { loadMarketTypes } from "../market-types-api";
-import { loadStoreSubcategories } from "../store-subcategories-api";
 import {
   listFromResponse,
   marketErrorMessage,
@@ -13,10 +12,9 @@ async function responseJson(response: Response) {
 }
 
 export async function loadMarketsPageData(apiFetch: ApiFetch, archived: boolean) {
-  const [marketsResponse, classificationsResponse, subcategories, marketTypes] = await Promise.all([
+  const [marketsResponse, classificationsResponse, marketTypes] = await Promise.all([
     apiFetch(`home/markets/${archived ? "?archived=true" : ""}`),
     apiFetch("home/market-classifications/"),
-    loadStoreSubcategories(apiFetch),
     loadMarketTypes(apiFetch),
   ]);
   const [marketsData, classificationsData] = await Promise.all([
@@ -30,7 +28,6 @@ export async function loadMarketsPageData(apiFetch: ApiFetch, archived: boolean)
     classifications: listFromResponse(classificationsData)
       .map(normalizeClassification)
       .filter((item): item is Classification => item !== null),
-    subcategories,
     marketTypes,
   };
 }
@@ -50,7 +47,6 @@ function marketFormData(payload: MarketPayload, imageFile: File | null, coverFil
   formData.set("scope", payload.scope);
   formData.set("send_notification", String(payload.send_notification));
   payload.service_city_ids.forEach((id) => formData.append("service_city_ids", String(id)));
-  payload.subcategory_ids.forEach((id) => formData.append("subcategory_ids", String(id)));
   payload.market_type_ids.forEach((id) => formData.append("market_type_ids", String(id)));
   if (imageFile) formData.set("image", imageFile);
   if (coverFile) formData.set("cover_image", coverFile);

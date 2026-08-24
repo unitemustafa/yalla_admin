@@ -189,9 +189,9 @@ export const navGroups: NavGroup[] = [
       {
         label: "المنتجات",
         icon: ShoppingBag,
+        activePages: ["create-item"],
         children: [
           navChild("items", "كل المنتجات"),
-          navChild("create-item", "إضافة منتج"),
           navChild("store-subcategories", "أقسام المنتجات"),
           navChild("addons", "الإضافات"),
         ],

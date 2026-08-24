@@ -16,6 +16,7 @@ import {
 import { ProductBasicSection } from "./product-basic-section";
 import { ProductFormHeader } from "./product-form-header";
 import { ProductImagesSection } from "./product-images-section";
+import { MarketSubcategoriesDialog } from "./market-subcategories-dialog";
 import { ProductVariantsSection } from "./product-variants-section";
 import { useProductForm } from "./use-product-form";
 
@@ -51,6 +52,7 @@ export function ProductFormPage() {
   }
 
   return (
+    <>
     <form
       className="min-h-screen bg-muted/20 px-4 py-6 sm:px-6 lg:px-8"
       dir="rtl"
@@ -90,8 +92,10 @@ export function ProductFormPage() {
         </aside>
       </div>
 
-      <ProductAdditionsDialog controller={controller} />
-      <MarketPickerDialog controller={controller} />
     </form>
+    <ProductAdditionsDialog controller={controller} />
+    <MarketPickerDialog controller={controller} />
+    {controller.marketSubcategoriesOpen && controller.selectedMarket ? <MarketSubcategoriesDialog market={controller.selectedMarket} onClose={() => controller.setMarketSubcategoriesOpen(false)} onSaved={controller.saveSelectedMarketSubcategories} /> : null}
+    </>
   );
 }

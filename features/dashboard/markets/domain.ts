@@ -1,4 +1,5 @@
 import type { ServiceCity } from "../cities/types";
+import type { MarketType } from "../market-types-api";
 import type {
   Classification,
   Market,
@@ -67,6 +68,17 @@ export function normalizeClassification(value: unknown): Classification | null {
   return Number.isFinite(id) && name ? { id, name, classification_type } : null;
 }
 
+export function missingMarketCreatePrerequisite(
+  classifications: Classification[],
+  marketTypes: MarketType[],
+): "classification" | "market-type" | null {
+  if (!classifications.length) return "classification";
+  const classificationIds = new Set(classifications.map((item) => item.id));
+  return marketTypes.some(
+    (item) => item.is_active && classificationIds.has(item.classification_id),
+  ) ? null : "market-type";
+}
+
 export function serviceCityName(city: Pick<ServiceCity, "id" | "name"> | MarketServiceCity) {
   return city.name || `مدينة رقم ${city.id}`;
 }
@@ -92,20 +104,26 @@ export function marketCityNames(market: Market, serviceCities: ServiceCity[]) {
   return marketServiceCityIds(market).map((id) => names.get(id) || `مدينة رقم ${id}`);
 }
 
-export function createMarketDraft(market: Market | undefined, classifications: Classification[]): MarketDraft {
+export function createMarketDraft(
+  market: Market | undefined,
+  classifications: Classification[],
+  marketTypes: MarketType[] = [],
+): MarketDraft {
   const scope = market?.scope === "service_city" ? "service_city" : "general";
+  const defaultClassification = classifications.find((classification) =>
+    marketTypes.some((item) => item.is_active && item.classification_id === classification.id),
+  ) ?? classifications[0];
   return {
     name: market?.name ?? "",
     description: market?.description ?? "",
     isPopular: market?.is_popular ?? false,
     sendStoreNotification: false,
-    classificationId: String(market?.classification?.id ?? classifications[0]?.id ?? ""),
+    classificationId: String(market?.classification?.id ?? defaultClassification?.id ?? ""),
     showInGeneral: scope === "general",
     showInServiceCities: scope === "service_city",
     selectedServiceCityIds: scope === "service_city" && market ? marketServiceCityIds(market).slice(0, 1) : [],
     deliveryTimeMin: market?.delivery_time_min_minutes?.toString() ?? "",
     deliveryTimeMax: market?.delivery_time_max_minutes?.toString() ?? "",
-    selectedSubcategoryIds: (market?.subcategories ?? []).slice().sort((first, second) => (first.sort_order ?? 0) - (second.sort_order ?? 0)).map((item) => item.id),
     selectedMarketTypeIds: (market?.market_types ?? []).map((item) => item.id),
   };
 }
@@ -161,7 +179,6 @@ export function marketPayload(draft: MarketDraft, editing: boolean): MarketPaylo
     scope: draft.showInGeneral ? "general" : "service_city",
     delivery_area_ids: [],
     service_city_ids: draft.showInServiceCities ? uniqueNumbers(draft.selectedServiceCityIds) : [],
-    subcategory_ids: draft.selectedSubcategoryIds,
     market_type_ids: draft.selectedMarketTypeIds,
     send_notification: !editing && draft.sendStoreNotification,
   };

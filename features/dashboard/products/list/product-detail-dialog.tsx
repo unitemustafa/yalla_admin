@@ -142,7 +142,7 @@ export function ProductDetailDialog({
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     <DetailRow label="السوق" value={nestedDetailName(product.market)} />
                     <DetailRow label="فرع السوق" value={detailText(product.market?.branch)} />
-                    <DetailRow label="الفئة الداخلية" value={nestedDetailName(product.subcategory)} />
+                    <DetailRow label="قسم المنتج" value={nestedDetailName(product.subcategory)} />
                     <DetailRow label="الحالة" value={product.isAvailable ? "متاح" : "غير متاح"} />
                     <DetailRow label="الخصم" value={`${detailText(product.discount, "0.00")}%`} />
                     <DetailRow label="رقم المنتج" value={`#${product.id}`} />
