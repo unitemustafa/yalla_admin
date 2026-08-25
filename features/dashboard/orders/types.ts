@@ -133,6 +133,8 @@ export type BackendOrder = {
   review_status?: BackendReviewStatus | string | null;
   delivery_price?: string | null;
   subtotal_price?: string | null;
+  multi_market_fee_rate?: string | null;
+  multi_market_fee?: string | null;
   total_price?: string | null;
   assigned_at?: string | null;
   delivered_at?: string | null;
@@ -335,4 +337,5 @@ export type OrderCreatePayload = {
   delivery_note: string;
   items: Array<{ variant_id: number; quantity: number }>;
   offers: Array<{ offer_id: number }>;
+  market_order?: number[];
 };

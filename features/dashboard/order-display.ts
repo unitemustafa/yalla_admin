@@ -115,6 +115,8 @@ export type DashboardOrderLike = {
   delivery_price?: OrderMoneyValue;
   subtotal_price?: OrderMoneyValue;
   discount?: OrderMoneyValue;
+  multi_market_fee_rate?: OrderMoneyValue;
+  multi_market_fee?: OrderMoneyValue;
   total_price?: OrderMoneyValue;
   is_multi_market?: boolean | null;
   market_count?: string | number | null;

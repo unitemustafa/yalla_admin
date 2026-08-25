@@ -81,6 +81,14 @@ export function money(value: string | number | null | undefined) {
   return `${formatted} EGP`;
 }
 
+export function multiMarketFeeTitle(order: BackendOrder) {
+  const rate = Number(order.multi_market_fee_rate ?? 0);
+  const label = Number.isInteger(rate)
+    ? rate.toFixed(0)
+    : rate.toFixed(2).replace(/\.?0+$/, "");
+  return `القيمة الإضافية (${label}%)`;
+}
+
 export function dateTime(value: string | null | undefined) {
   if (!value) return "غير متاح";
   const date = new Date(value);

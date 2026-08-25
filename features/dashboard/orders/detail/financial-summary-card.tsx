@@ -1,6 +1,6 @@
-import { numberValue } from "../../order-display";
+import { isMultiMarket, numberValue } from "../../order-display";
 import { Card } from "../../primitives";
-import { deliveryFeeLabel, money } from "../formatters";
+import { deliveryFeeLabel, money, multiMarketFeeTitle } from "../formatters";
 import { SummaryRow } from "../summary";
 import type { BackendOrder } from "../types";
 
@@ -12,6 +12,7 @@ export function FinancialSummaryCard({ order }: { order: BackendOrder }) {
       <SummaryRow label="المنتجات" value={money(order.subtotal_price)} />
       <SummaryRow label="التوصيل" value={deliveryFeeLabel(order)} />
       {discount > 0 ? <SummaryRow label="الخصم" value={money(order.discount)} /> : null}
+      {isMultiMarket(order) ? <SummaryRow label={multiMarketFeeTitle(order)} value={money(order.multi_market_fee)} /> : null}
       <div className="mt-3 border-t pt-3"><SummaryRow label="الإجمالي" value={money(order.total_price)} strong /></div>
     </Card>
   );

@@ -10,6 +10,7 @@ import {
   getDeliveryDestination,
   getDashboardOrderOfferTitles,
   getMarketCount,
+  isMultiMarket,
 } from "../../order-display";
 import { Badge, CurrencyText } from "../../primitives";
 import { useSnackbar } from "../../snackbar";
@@ -21,6 +22,7 @@ import {
   isDeliveryOrder,
   marketName,
   money,
+  multiMarketFeeTitle,
   orderLocationCoordinates,
   orderMapUrl,
   orderNumber,
@@ -143,6 +145,7 @@ export function OrderListCard({ order, index }: { order: BackendOrder; index: nu
           <PriceRow label="المنتجات" value={money(order.subtotal_price)} />
           <PriceRow label="التوصيل" value={deliveryFeeLabel(order)} />
           <PriceRow label="الخصم" value={money(order.discount)} />
+          {isMultiMarket(order) ? <PriceRow label={multiMarketFeeTitle(order)} value={money(order.multi_market_fee)} /> : null}
           <div className="flex justify-between gap-2 border-t pt-1">
             <span className="font-bold">الإجمالي</span>
             <CurrencyText className="font-extrabold tabular-nums">{money(order.total_price)}</CurrencyText>

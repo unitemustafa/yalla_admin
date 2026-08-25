@@ -13,7 +13,7 @@ import {
   type BackendDashboardUser,
 } from "../../users/api-users";
 import { numberValue, notifyDashboardOrdersChanged } from "../../order-display";
-import { apiOrderData, orderApiError } from "../api";
+import { apiOrderData, isRecord, orderApiError } from "../api";
 import {
   buildOrderPayload,
   buildVariantOptions,
@@ -70,6 +70,10 @@ export function useCreateOrder() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewResult, setPreviewResult] = useState<{
+    key: string;
+    summary: Record<string, unknown>;
+  } | null>(null);
   const initialDataControllerRef = useRef<AbortController | null>(null);
 
   const loadInitialData = useCallback(async () => {
@@ -178,6 +182,46 @@ export function useCreateOrder() {
           selectedAddressRecord.delivery_area?.delivery_price,
       ) ?? 0
     : 0;
+  const previewPayload = buildOrderPayload(draftContext);
+  const previewKey = JSON.stringify(previewPayload);
+
+  useEffect(() => {
+    if (!previewPayload) {
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await apiFetch("orders/preview/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: previewKey,
+          signal: controller.signal,
+        });
+        const data = await apiResponseData(response);
+        if (response.ok && isRecord(data) && isRecord(data.summary)) {
+          setPreviewResult({ key: previewKey, summary: data.summary });
+        } else {
+          setPreviewResult(null);
+        }
+      } catch (reason) {
+        if (!isAbortError(reason)) setPreviewResult(null);
+      }
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [apiFetch, previewKey]);
+
+  const activePreviewSummary =
+    previewPayload && previewResult?.key === previewKey
+      ? previewResult.summary
+      : null;
+  const previewTotal = numberValue(activePreviewSummary?.grand_total);
+  const multiMarketFee = numberValue(activePreviewSummary?.multi_market_fee) ?? 0;
+  const multiMarketFeeRate = numberValue(activePreviewSummary?.multi_market_fee_rate) ??
+    (selectedMarketRecords.length > 1 ? 5 : 0);
 
   const activePickerSection = pickerTarget
     ? marketSections.find((section) => section.id === pickerTarget.sectionId) ?? null
@@ -412,7 +456,8 @@ export function useCreateOrder() {
     selectedMarketRecords, selectedOfferLines, selectedProductLines, selectedUser, setAddressName,
     setCreateAddressOpen, setCustomerPickerOpen, setCustomerQuery, setDeliveryNote, setDescription,
     setPaymentMethod, setPickerTarget, setProductAvailabilityFilter, setProductCategoryFilter,
-    setProductQuery, submitOrder, subtotal, summaryTotal: subtotal + deliveryAmount,
+    setProductQuery, submitOrder, subtotal, multiMarketFee, multiMarketFeeRate,
+    summaryTotal: previewTotal ?? subtotal + deliveryAmount,
     updateLine, updateOffer, updateSectionMarket, users, validationMessage, variants, description,
   };
 }

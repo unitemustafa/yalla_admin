@@ -40,6 +40,7 @@ export function CreateOrderSummary({ state }: { state: CreateOrderState }) {
         <SummaryRow label="طريقة الدفع" value={state.paymentMethod ? paymentMethodLabel(state.paymentMethod) : "-"} />
         <SummaryRow label="نوع التوصيل" value={deliveryType} />
         <SummaryRow label="سعر التوصيل" value={deliveryPrice} />
+        {state.selectedMarketRecords.length > 1 ? <SummaryRow label={`القيمة الإضافية (${state.multiMarketFeeRate.toLocaleString("en-US")}%)`} value={money(state.multiMarketFee)} /> : null}
         <SummaryRow label="الإجمالي المتوقع" value={money(state.summaryTotal)} strong />
         <div className="mt-auto border-t pt-4" />
       </div>

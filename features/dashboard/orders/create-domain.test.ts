@@ -58,6 +58,7 @@ describe("order creation domain", () => {
       delivery_note: "اتصل أولًا",
       items: [{ variant_id: 200, quantity: 2 }],
       offers: [{ offer_id: 11 }],
+      market_order: [2],
     });
   });
 

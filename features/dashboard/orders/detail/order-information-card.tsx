@@ -18,6 +18,7 @@ import {
   fulfillmentLabel,
   marketName,
   money,
+  multiMarketFeeTitle,
   orderLocationCoordinates,
   orderMapUrl,
   paymentMethodLabel,
@@ -64,6 +65,7 @@ export function OrderInformationCard({ order, onCopyLocation }: { order: Backend
           <SummaryRow label="إجمالي المنتجات" value={money(order.subtotal_price)} />
           <SummaryRow label="سعر التوصيل" value={deliveryFeeLabel(order)} />
           <SummaryRow label="الخصم" value={money(order.discount)} />
+          {isMultiMarket(order) ? <SummaryRow label={multiMarketFeeTitle(order)} value={money(order.multi_market_fee)} /> : null}
           <SummaryRow label="الإجمالي النهائي" value={money(order.total_price)} strong />
           <SummaryRow label="ملاحظات الطلب" value={order.description?.trim() || "-"} />
           <SummaryRow label="ملاحظة التوصيل" value={order.delivery_note?.trim() || "-"} />

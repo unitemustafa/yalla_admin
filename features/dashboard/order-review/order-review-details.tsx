@@ -40,6 +40,10 @@ export function OrderReviewDetails({ order }: { order: ApiRecord }) {
   const typedOrder = orderLike(order);
   const delivery = deliveryDetails(order);
   const sections = getMarketSections(typedOrder);
+  const feeRate = Number(recordValue(order, ["multi_market_fee_rate"]) ?? 0);
+  const feeRateLabel = Number.isInteger(feeRate)
+    ? feeRate.toFixed(0)
+    : feeRate.toFixed(2).replace(/\.?0+$/, "");
   return (
     <div className="grid gap-4">
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -55,6 +59,7 @@ export function OrderReviewDetails({ order }: { order: ApiRecord }) {
         <DetailItem label={isGeneralOrder(typedOrder) ? "المنطقة اليدوية" : "الفرع"} value={isGeneralOrder(typedOrder) ? getManualArea(typedOrder) : marketBranch(order)} />
         <DetailItem label="عنوان التوصيل" value={delivery.destination} />
         <DetailItem label="الإجمالي" value={<CurrencyText className="tabular-nums text-emerald-700 dark:text-emerald-300">{moneyLabel(recordValue(order, ["total_price"]))}</CurrencyText>} />
+        {isMultiMarket(typedOrder) ? <DetailItem label={`القيمة الإضافية (${feeRateLabel}%)`} value={<CurrencyText>{moneyLabel(recordValue(order, ["multi_market_fee"]))}</CurrencyText>} /> : null}
         <DetailItem label="تاريخ الإنشاء" value={dateTimeLabel(recordValue(order, ["created_at"]) ?? recordValue(order, ["createdAt"]))} />
       </div>
       <div className="rounded-md border border-border/70 bg-card p-4">

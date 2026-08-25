@@ -336,5 +336,6 @@ export function buildOrderPayload(context: OrderDraftContext): OrderCreatePayloa
       quantity: Number(line.quantity),
     })),
     offers: selected.offers.map(({ offer }) => ({ offer_id: Number(offer.offerId) })),
+    market_order: nonEmptySections.map((section) => Number(section.marketId)),
   };
 }
