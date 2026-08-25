@@ -44,6 +44,7 @@ export function OrderInformationCard({ order, onCopyLocation }: { order: Backend
           <SummaryRow label="العميل" value={<Link href={customerHref(order)} className="max-w-56 truncate font-semibold text-primary hover:underline">{customerName(order)}</Link>} />
           <SummaryRow label="الهاتف" value={<span dir="ltr" className="[unicode-bidi:plaintext]">{formatEgyptPhoneForDisplay(order.customer?.phone)}</span>} />
           <SummaryRow label="طريقة الدفع" value={paymentMethodLabel(order.payment_method || "cash")} />
+          <SummaryRow label="شركة الشحن" value={order.shipping_company?.name?.trim() || "-"} />
           <SummaryRow label="نوع الطلب" value={getDashboardOrderTypeLabel(order)} />
           <SummaryRow label="حالة المراجعة" value={reviewStatusLabel(order.review_status)} />
           <SummaryRow label="محلات الطلب" value={marketName(order)} />

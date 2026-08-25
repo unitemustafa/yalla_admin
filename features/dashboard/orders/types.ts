@@ -58,6 +58,12 @@ export type BackendOrder = {
     phone?: string | null;
   } | null;
   delivery_address?: BackendAddress | null;
+  shipping_company_id?: number | string | null;
+  shipping_company?: {
+    id?: number | string | null;
+    name?: string | null;
+    logo_url?: string | null;
+  } | null;
   assigned_representative?: {
     id: number;
     name?: string | null;

@@ -114,6 +114,11 @@ export const dashboardRoutes = {
     matches: ["/delivery-zone"],
     breadcrumbs: [dashboardCrumb, { label: "مناطق التوصيل" }],
   },
+  "shipping-companies": {
+    href: "/delivery/shipping-companies",
+    matches: ["/delivery/shipping-companies"],
+    breadcrumbs: [dashboardCrumb, { label: "التوصيل" }, { label: "شركات الشحن" }],
+  },
   couriers: {
     href: "/delivery/couriers",
     matches: ["/delivery/couriers"],
@@ -161,6 +166,11 @@ export const dashboardRoutes = {
     href: "/archives/delivery-zones",
     matches: ["/archives/delivery-zones"],
     breadcrumbs: [dashboardCrumb, { label: "المؤرشفات" }, { label: "مناطق التوصيل المؤرشفة" }],
+  },
+  "archived-shipping-companies": {
+    href: "/archives/shipping-companies",
+    matches: ["/archives/shipping-companies"],
+    breadcrumbs: [dashboardCrumb, { label: "المؤرشفات" }, { label: "شركات الشحن المؤرشفة" }],
   },
   memberships: {
     matches: [],
@@ -241,6 +251,7 @@ export const navGroups: NavGroup[] = [
         icon: Truck,
         children: [
           navChild("delivery-zone", "مناطق التوصيل"),
+          navChild("shipping-companies", "شركات الشحن"),
           navChild("couriers", "المندوبين"),
           navChild("create-courier", "إضافة مندوب"),
         ],
@@ -256,6 +267,7 @@ export const navGroups: NavGroup[] = [
           navChild("archived-offers", "العروض المؤرشفة"),
           navChild("archived-cities", "المدن المؤرشفة"),
           navChild("archived-delivery-zones", "مناطق التوصيل المؤرشفة"),
+          navChild("archived-shipping-companies", "شركات الشحن المؤرشفة"),
         ],
       },
       { label: "العضويات", icon: BadgeCheck, page: "memberships", soon: true },

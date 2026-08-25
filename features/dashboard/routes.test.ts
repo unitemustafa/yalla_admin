@@ -17,6 +17,8 @@ describe("dashboard routes", () => {
     ["/orders/view/ORD-1", "order-detail"],
     ["/delivery/couriers/new", "create-courier"],
     ["/delivery/couriers/9", "couriers"],
+    ["/delivery/shipping-companies", "shipping-companies"],
+    ["/archives/shipping-companies", "archived-shipping-companies"],
   ] as const)("maps %s to %s", (pathname, page) => {
     expect(pageFromPathname(pathname)).toBe(page);
   });
