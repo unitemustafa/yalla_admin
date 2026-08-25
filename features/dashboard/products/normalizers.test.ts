@@ -9,6 +9,10 @@ describe("product normalizers", () => {
       name: "قميص",
       market_id: "4",
       subcategory: { id: 6, name: "ملابس" },
+      subcategories: [
+        { id: 7, name_ar: "عروض" },
+        { id: 6, name_ar: "ملابس" },
+      ],
       theme: "clothing",
       is_popular: true,
       is_available: true,
@@ -29,6 +33,7 @@ describe("product normalizers", () => {
     });
 
     expect(product.marketId).toBe(4);
+    expect(product.subcategoryIds).toEqual([6, 7]);
     expect(product.additions).toEqual([2, 3, 4]);
     expect(product.images.map((image) => image.id)).toEqual([1, 2]);
     expect(product.attributes[0]?.options.map((option) => option.value)).toEqual(["أسود"]);

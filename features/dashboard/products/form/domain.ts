@@ -209,7 +209,13 @@ export function variantFromProductVariant(
 
 export function productMarketChoice(product: NormalizedProduct): CatalogMarket | null {
   if (product.marketId === null) return null;
-  const subcategory = normalizeStoreSubcategory(product.subcategory);
+  const subcategories = product.subcategories
+    .map(normalizeStoreSubcategory)
+    .filter((item): item is StoreSubcategory => item !== null);
+  const legacySubcategory = normalizeStoreSubcategory(product.subcategory);
+  if (legacySubcategory && !subcategories.some((item) => item.id === legacySubcategory.id)) {
+    subcategories.unshift(legacySubcategory);
+  }
   return {
     id: String(product.marketId),
     name: textValue(product.market?.name, `محل #${product.marketId}`),
@@ -217,7 +223,7 @@ export function productMarketChoice(product: NormalizedProduct): CatalogMarket |
     status: textValue(product.market?.status, "inactive"),
     scope: textValue(product.market?.scope, "service_city"),
     serviceCities: [],
-    subcategories: subcategory ? [subcategory] : [],
+    subcategories,
   };
 }
 
@@ -256,7 +262,7 @@ function validPrice(value: string) {
 export function validateProductForm(values: ProductFormValues) {
   if (!values.name.trim()) return "اسم المنتج مطلوب";
   if (!values.selectedMarketId) return "اختر المحل";
-  if (!values.selectedSubcategoryId) return "اختر قسم المنتج";
+  if (!values.selectedSubcategoryIds.length) return "اختر قسمًا واحدًا على الأقل للمنتج";
   const discountValue = Number(values.discount);
   if (!Number.isFinite(discountValue) || discountValue < 0 || discountValue >= 100) {
     return "الخصم غير صالح";
@@ -341,7 +347,8 @@ export function buildProductPayload(
 ): ProductWritePayload {
   return {
     market_id: Number(values.selectedMarketId),
-    subcategory_id: Number(values.selectedSubcategoryId),
+    subcategory_id: Number(values.selectedSubcategoryIds[0]),
+    subcategory_ids: values.selectedSubcategoryIds.map(Number),
     theme: values.theme,
     is_popular: values.isPopular,
     is_available: values.isAvailable,

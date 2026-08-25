@@ -2,7 +2,7 @@
 
 import { Layers3, Sparkles, Store } from "lucide-react";
 
-import { AppSelect, Button, Input, Switch } from "../../primitives";
+import { Button, Input, Switch } from "../../primitives";
 import { FormSection, LabelText } from "./form-section";
 import type { ProductFormController } from "./use-product-form";
 
@@ -49,7 +49,7 @@ export function ProductBasicSection({
               <Store className="size-4 text-muted-foreground" />
             </button>
           </LabelText>
-          <LabelText label="قسم المنتج">
+          <LabelText label="أقسام المنتج">
             {controller.selectedMarket && !controller.availableSubcategories.length ? (
               <div className="flex min-h-20 flex-col items-start justify-center rounded-md border border-dashed border-primary/30 bg-primary/5 px-3 py-2">
                 <p className="text-sm font-bold">لا توجد أقسام منتجات لهذا المحل</p>
@@ -57,18 +57,29 @@ export function ProductBasicSection({
                 <Button type="button" size="sm" className="mt-3" onClick={() => controller.setMarketSubcategoriesOpen(true)}><Layers3 className="size-4" />إعداد أقسام المحل</Button>
               </div>
             ) : (
-              <div className="flex gap-2">
-                <div className="min-w-0 flex-1">
-                  <AppSelect
-                    value={controller.selectedSubcategoryId}
-                    onValueChange={controller.setSelectedSubcategoryId}
-                    placeholder={controller.selectedMarket ? "اختر القسم" : "اختر المحل أولًا"}
-                    disabled={!controller.selectedMarket}
-                    options={controller.availableSubcategories.map((item) => ({
-                      value: String(item.id),
-                      label: `${item.name_ar}${item.is_active ? "" : " (معطل حاليًا)"}`,
-                    }))}
-                  />
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1 rounded-md border bg-input p-2">
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    اختر قسمًا أو أكثر. للنقل ألغِ القسم القديم واختر القسم الجديد.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {controller.availableSubcategories.map((item) => {
+                      const id = String(item.id);
+                      const selected = controller.selectedSubcategoryIds.includes(id);
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          disabled={!item.is_active && !selected}
+                          aria-pressed={selected}
+                          onClick={() => controller.toggleSubcategory(id)}
+                          className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${selected ? "border-primary bg-primary/10 text-primary" : "hover:bg-accent"} ${!item.is_active ? "border-dashed text-muted-foreground" : ""}`}
+                        >
+                          {item.name_ar}{item.is_active ? "" : " (معطل حاليًا)"}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 {controller.selectedMarket ? <Button type="button" size="icon" variant="outline" onClick={() => controller.setMarketSubcategoriesOpen(true)} aria-label="إدارة أقسام المحل"><Layers3 className="size-4" /></Button> : null}
               </div>

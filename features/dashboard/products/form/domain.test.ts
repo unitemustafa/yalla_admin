@@ -11,7 +11,7 @@ const baseValues: ProductFormValues = {
   name: " منتج ",
   description: " وصف ",
   selectedMarketId: "4",
-  selectedSubcategoryId: "7",
+  selectedSubcategoryIds: ["7", "9"],
   selectedAdditionIds: [2, Number.NaN, 3],
   theme: "clothing",
   isAvailable: true,
@@ -27,7 +27,7 @@ describe("product form domain", () => {
   it("validates the base price and required catalog choices", () => {
     expect(validateProductForm(baseValues)).toBeNull();
     expect(validateProductForm({ ...baseValues, name: "" })).toBe("اسم المنتج مطلوب");
-    expect(validateProductForm({ ...baseValues, selectedSubcategoryId: "" })).toBe("اختر قسم المنتج");
+    expect(validateProductForm({ ...baseValues, selectedSubcategoryIds: [] })).toBe("اختر قسمًا واحدًا على الأقل للمنتج");
     expect(validateProductForm({ ...baseValues, discount: "100" })).toBe("الخصم غير صالح");
     expect(
       validateProductForm({
@@ -86,6 +86,7 @@ describe("product form domain", () => {
     expect(buildProductPayload(baseValues, { includeVariants: true })).toEqual({
       market_id: 4,
       subcategory_id: 7,
+      subcategory_ids: [7, 9],
       theme: "clothing",
       is_popular: true,
       is_available: true,

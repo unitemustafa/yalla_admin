@@ -61,7 +61,7 @@ export type ProductFormValues = {
   name: string;
   description: string;
   selectedMarketId: string;
-  selectedSubcategoryId: string;
+  selectedSubcategoryIds: string[];
   selectedAdditionIds: number[];
   theme: ProductTheme;
   isAvailable: boolean;

@@ -82,6 +82,10 @@ export function ProductDetailDialog({
 
   const variants = product?.variants ?? [];
   const additions = product?.additions ?? [];
+  const subcategoryNames = product?.subcategories
+    .map((item) => nestedDetailName(item, ""))
+    .filter(Boolean)
+    .join("، ");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-none bg-foreground/30 px-4 py-6 backdrop-blur-[1px]">
@@ -142,7 +146,7 @@ export function ProductDetailDialog({
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     <DetailRow label="السوق" value={nestedDetailName(product.market)} />
                     <DetailRow label="فرع السوق" value={detailText(product.market?.branch)} />
-                    <DetailRow label="قسم المنتج" value={nestedDetailName(product.subcategory)} />
+                    <DetailRow label="أقسام المنتج" value={subcategoryNames || nestedDetailName(product.subcategory)} />
                     <DetailRow label="الحالة" value={product.isAvailable ? "متاح" : "غير متاح"} />
                     <DetailRow label="الخصم" value={`${detailText(product.discount, "0.00")}%`} />
                     <DetailRow label="رقم المنتج" value={`#${product.id}`} />

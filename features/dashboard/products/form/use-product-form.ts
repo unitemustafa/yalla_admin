@@ -65,7 +65,7 @@ export function useProductForm() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [selectedMarketId, setSelectedMarketId] = useState("");
-  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState("");
+  const [selectedSubcategoryIds, setSelectedSubcategoryIds] = useState<string[]>([]);
   const [selectedAdditionIds, setSelectedAdditionIds] = useState<number[]>([]);
   const [isAvailable, setIsAvailable] = useState(true);
   const [isPopular, setIsPopular] = useState(false);
@@ -75,27 +75,24 @@ export function useProductForm() {
   const [legacyMissingPrice, setLegacyMissingPrice] = useState(false);
 
   const selectedMarket = markets.find((market) => market.id === selectedMarketId) ?? null;
-  const currentProductSubcategory = useMemo(() => {
-    if (!selectedSubcategoryId) return null;
+  const currentProductSubcategories = useMemo(() => {
+    if (!selectedSubcategoryIds.length) return [];
+    const selectedIds = new Set(selectedSubcategoryIds);
+    const found = new Map<number, StoreSubcategory>();
     for (const market of markets) {
-      const item = market.subcategories.find(
-        (candidate) => String(candidate.id) === selectedSubcategoryId,
-      );
-      if (item) return item;
+      for (const item of market.subcategories) {
+        if (selectedIds.has(String(item.id))) found.set(item.id, item);
+      }
     }
-    return null;
-  }, [markets, selectedSubcategoryId]);
+    return Array.from(found.values());
+  }, [markets, selectedSubcategoryIds]);
   const availableSubcategories = useMemo(() => {
     const items = (selectedMarket?.subcategories ?? []).filter((item) => item.is_active);
-    if (
-      currentProductSubcategory &&
-      !currentProductSubcategory.is_active &&
-      !items.some((item) => item.id === currentProductSubcategory.id)
-    ) {
-      return [...items, currentProductSubcategory];
+    for (const selected of currentProductSubcategories) {
+      if (!items.some((item) => item.id === selected.id)) items.push(selected);
     }
     return items;
-  }, [currentProductSubcategory, selectedMarket]);
+  }, [currentProductSubcategories, selectedMarket]);
   const additionClassifications = useMemo(
     () => Array.from(new Set(additions.map((item) => item.classification || "غير مصنف"))),
     [additions],
@@ -194,8 +191,11 @@ export function useProductForm() {
         );
         setSelectedMarketId(marketChoice.id);
       }
-      setSelectedSubcategoryId(
-        product.subcategoryId === null ? "" : String(product.subcategoryId),
+      setSelectedSubcategoryIds(
+        (product.subcategoryIds.length
+          ? product.subcategoryIds
+          : product.subcategoryId === null ? [] : [product.subcategoryId]
+        ).map(String),
       );
       setName(clone ? `${product.name} (نسخة)` : product.name);
       setDescription(product.description);
@@ -253,7 +253,7 @@ export function useProductForm() {
       name,
       description,
       selectedMarketId,
-      selectedSubcategoryId,
+      selectedSubcategoryIds,
       selectedAdditionIds,
       theme: variants.theme,
       isAvailable,
@@ -330,7 +330,7 @@ export function useProductForm() {
   }
 
   function selectMarket(market: CatalogMarket) {
-    if (market.id !== selectedMarketId) setSelectedSubcategoryId("");
+    if (market.id !== selectedMarketId) setSelectedSubcategoryIds([]);
     setSelectedMarketId(market.id);
     setMarketModalOpen(false);
   }
@@ -341,11 +341,10 @@ export function useProductForm() {
     setMarkets((current) => current.map((market) =>
       market.id === marketId ? { ...market, subcategories: items } : market,
     ));
-    setSelectedSubcategoryId((current) =>
-      items.some((item) => String(item.id) === current)
-        ? current
-        : items[0] ? String(items[0].id) : "",
-    );
+    setSelectedSubcategoryIds((current) => {
+      const availableIds = new Set(items.map((item) => String(item.id)));
+      return current.filter((id) => availableIds.has(id));
+    });
     setMarketSubcategoriesOpen(false);
     setSaveError("");
     showSnackbar({ message: "تم حفظ أقسام المحل.", tone: "success" });
@@ -398,7 +397,7 @@ export function useProductForm() {
     selectedAdditions,
     selectedMarket,
     selectedMarketId,
-    selectedSubcategoryId,
+    selectedSubcategoryIds,
     sendPushNotification,
     setAdditionClassification,
     setAdditionPickerOpen,
@@ -411,7 +410,12 @@ export function useProductForm() {
     setMarketQuery,
     setMarketTab,
     setName,
-    setSelectedSubcategoryId,
+    toggleSubcategory(subcategoryId: string) {
+      setSelectedSubcategoryIds((current) => current.includes(subcategoryId)
+        ? current.filter((id) => id !== subcategoryId)
+        : [...current, subcategoryId]);
+      setSaveError("");
+    },
     setSendPushNotification,
     toggleAddition,
     variants,

@@ -50,6 +50,8 @@ export type NormalizedProduct = {
   category: ProductRecord | null;
   subcategoryId: number | null;
   subcategory: ProductRecord | null;
+  subcategoryIds: number[];
+  subcategories: ProductRecord[];
   theme: ProductTheme;
   isPopular: boolean;
   image: string | null;
@@ -91,6 +93,7 @@ export type ProductVariantPayload = {
 export type ProductWritePayload = {
   market_id?: number;
   subcategory_id?: number;
+  subcategory_ids?: number[];
   theme?: ProductTheme;
   is_popular?: boolean;
   is_available?: boolean;

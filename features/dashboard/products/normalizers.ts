@@ -66,6 +66,10 @@ function nestedName(value: unknown) {
   return record ? text(record, ["name", "name_ar", "name_en", "title"]) : "";
 }
 
+function nestedNames(values: unknown[]) {
+  return values.map(nestedName).filter(Boolean).join("، ");
+}
+
 function normalizeAdditionId(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim()) {
@@ -149,6 +153,21 @@ export function normalizeProduct(raw: unknown): NormalizedProduct {
   const market = backendRecord(record.market);
   const category = backendRecord(record.category);
   const subcategory = backendRecord(record.subcategory);
+  const subcategories = Array.isArray(record.subcategories)
+    ? record.subcategories
+        .map(backendRecord)
+        .filter((item): item is ProductRecord => item !== null)
+    : subcategory ? [subcategory] : [];
+  const subcategoryIds = subcategories
+    .map((item) => nullableNumber(item.id))
+    .filter((id): id is number => id !== null);
+  const primarySubcategoryId = nullableNumber(
+    record.subcategory_id ?? record.subcategoryId ?? subcategory?.id,
+  );
+  const orderedSubcategoryIds = [
+    ...(primarySubcategoryId === null ? [] : [primarySubcategoryId]),
+    ...subcategoryIds.filter((id) => id !== primarySubcategoryId),
+  ];
   const variants = Array.isArray(record.variants)
     ? record.variants
         .map((variant) => backendRecord(variant))
@@ -177,10 +196,10 @@ export function normalizeProduct(raw: unknown): NormalizedProduct {
     market,
     categoryId: nullableNumber(record.category_id ?? record.categoryId ?? category?.id),
     category,
-    subcategoryId: nullableNumber(
-      record.subcategory_id ?? record.subcategoryId ?? subcategory?.id,
-    ),
+    subcategoryId: primarySubcategoryId,
     subcategory,
+    subcategoryIds: orderedSubcategoryIds,
+    subcategories,
     theme: productTheme(record.theme),
     isPopular:
       typeof record.is_popular === "boolean"
@@ -295,6 +314,7 @@ export function productRowFromApi(value: unknown, index: number): ItemRow {
         ? "استهلاكي"
         : "أخرى";
   const category =
+    nestedNames(product.subcategories) ||
     nestedName(product.subcategory) ||
     nestedName(product.category) ||
     themeLabel ||
@@ -351,7 +371,9 @@ export function productRowFromApi(value: unknown, index: number): ItemRow {
     description: product.description || text(record, ["description", "details"], ""),
     category,
     subcategory:
-      nestedName(product.subcategory) || text(record, ["subcategory_name"], category),
+      nestedNames(product.subcategories) ||
+      nestedName(product.subcategory) ||
+      text(record, ["subcategory_name"], category),
     marketId,
     shopName,
     scopeLabel,
