@@ -94,6 +94,16 @@ export const dashboardRoutes = {
     matches: ["/offers/create"],
     breadcrumbs: [dashboardCrumb, { label: "العروض", href: "/offers" }, { label: "إنشاء عرض" }],
   },
+  "home-campaigns": {
+    href: "/offers/home-campaigns",
+    matches: ["/offers/home-campaigns"],
+    breadcrumbs: [dashboardCrumb, { label: "العروض", href: "/offers" }, { label: "حملات الهوم" }],
+  },
+  "create-home-campaign": {
+    href: "/offers/home-campaigns/create",
+    matches: ["/offers/home-campaigns/create"],
+    breadcrumbs: [dashboardCrumb, { label: "حملات الهوم", href: "/offers/home-campaigns" }, { label: "إنشاء حملة هوم" }],
+  },
   cities: {
     href: "/cities",
     matches: ["/cities"],
@@ -213,7 +223,12 @@ export const navGroups: NavGroup[] = [
       {
         label: "العروض",
         icon: Tag,
-        children: [navChild("offers", "كل العروض"), navChild("create-offer", "إنشاء عرض")],
+        children: [
+          navChild("offers", "كل العروض"),
+          navChild("create-offer", "إنشاء عرض"),
+          navChild("home-campaigns", "حملات الهوم"),
+          navChild("create-home-campaign", "إنشاء حملة هوم"),
+        ],
       },
       { icon: MapPinned, ...navChild("cities", "المدن") },
     ],

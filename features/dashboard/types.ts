@@ -14,6 +14,8 @@ export type PageKey =
   | "order-detail"
   | "offers"
   | "create-offer"
+  | "home-campaigns"
+  | "create-home-campaign"
   | "cities"
   | "delivery-zone"
   | "couriers"

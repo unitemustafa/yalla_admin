@@ -9,6 +9,9 @@ export const adminApiPaths = {
   marketClassifications: "home/market-classifications/",
   users: "auth/users/",
   offers: "offers/",
+  homeCampaigns: "offers/home-campaigns/",
+  products: "catalog/products/",
+  productCategories: "catalog/product-categories/",
   dashboardOverview: "dashboard/overview/",
 } as const;
 
