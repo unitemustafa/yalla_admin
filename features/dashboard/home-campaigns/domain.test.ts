@@ -19,6 +19,7 @@ describe("home campaign domain", () => {
       effective_status: "scheduled",
       service_city_name: "القاهرة",
       target_name: "عرض أول طلب",
+      use_theme_colors: true,
     });
   });
 
@@ -35,7 +36,10 @@ describe("home campaign domain", () => {
       target_product_id: 12,
       target_market_id: null,
       target_product_category_id: null,
+      use_theme_colors: true,
     });
+    expect(campaignPayload(form)).not.toHaveProperty("priority");
+    expect(campaignPayload(form)).not.toHaveProperty("audience");
   });
 
   it("requires the video and poster before activating", () => {

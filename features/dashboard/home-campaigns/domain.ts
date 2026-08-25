@@ -3,16 +3,16 @@ import type { BackendRecord } from "../admin-api";
 
 export const campaignLabels = {
   status: { active: "نشطة", scheduled: "مجدولة", expired: "منتهية", inactive: "متوقفة" },
-  audience: { all_clients: "كل العملاء", new_clients: "عميل جديد", returning_clients: "عميل عائد" },
   media: { none: "بدون ميديا", image: "صورة", video: "فيديو MP4" },
   action: { none: "بدون زر", offer: "عرض", product: "منتج", market: "محل", product_category: "تصنيف منتجات", external_url: "رابط خارجي", copy_text: "نسخ نص/كود" },
 } as const;
 
 export type CampaignForm = {
-  internal_name: string; is_active: boolean; priority: string;
+  internal_name: string; is_active: boolean;
   start_time: string; end_time: string; show_in_general: boolean; service_city_id: string;
-  audience: string; teaser_text: string; title: string; description: string;
+  teaser_text: string; title: string; description: string;
   template: string; sheet_size: string; content_alignment: string;
+  use_theme_colors: boolean;
   teaser_background_color: string; teaser_text_color: string;
   sheet_background_color: string; sheet_text_color: string;
   button_background_color: string; button_text_color: string;
@@ -40,11 +40,12 @@ export function initialCampaignForm(): CampaignForm {
   const start = new Date();
   const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
   return {
-    internal_name: "", is_active: false, priority: "0",
+    internal_name: "", is_active: false,
     start_time: localDate(start), end_time: localDate(end),
-    show_in_general: true, service_city_id: "", audience: "all_clients",
+    show_in_general: true, service_city_id: "",
     teaser_text: "اكتشف العرض الآن", title: "عرض مخصوص ليك", description: "",
     template: "hero", sheet_size: "large", content_alignment: "center",
+    use_theme_colors: true,
     teaser_background_color: "#FF5A00", teaser_text_color: "#FFFFFF",
     sheet_background_color: "#FFFFFF", sheet_text_color: "#202124",
     button_background_color: "#FF5A00", button_text_color: "#FFFFFF",
@@ -103,7 +104,6 @@ export function selectOptions(records: BackendRecord[], nameKeys = ["name", "tit
 export function campaignPayload(form: CampaignForm) {
   return {
     ...form,
-    priority: Number(form.priority) || 0,
     start_time: new Date(form.start_time).toISOString(),
     end_time: new Date(form.end_time).toISOString(),
     service_city_id: form.show_in_general ? null : Number(form.service_city_id),
@@ -115,7 +115,7 @@ export function campaignPayload(form: CampaignForm) {
 }
 
 export function validateCampaign(form: CampaignForm, files: CampaignFiles, existing?: CampaignRow) {
-  if (!form.internal_name.trim() || !form.teaser_text.trim() || !form.title.trim()) return "أدخل الاسم الإداري ونص الشريط والعنوان.";
+  if (!form.internal_name.trim() || !form.teaser_text.trim() || !form.title.trim()) return "أدخل اسم الحملة ونص الشريط والعنوان.";
   if (!form.start_time || !form.end_time || new Date(form.end_time) <= new Date(form.start_time)) return "وقت النهاية يجب أن يكون بعد البداية.";
   if (!form.show_in_general && !form.service_city_id) return "اختر مدينة الخدمة.";
   if (form.action_type !== "none" && !form.cta_label.trim()) return "نص الزر مطلوب مع الإجراء.";

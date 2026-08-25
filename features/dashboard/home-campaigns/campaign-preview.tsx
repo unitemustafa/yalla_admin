@@ -61,7 +61,7 @@ export function CampaignPreview({ form, files, existing }: { form: CampaignForm;
             <span className="text-xl">⌃</span>
           </button>
         ) : (
-          <div className={`${heightClass} relative rounded-t-[28px] p-4 shadow-[0_-10px_40px_rgba(0,0,0,.2)]`} style={{ backgroundColor: form.sheet_background_color, color: form.sheet_text_color }}>
+          <div className={`${heightClass} relative rounded-t-[28px] p-4 shadow-[0_-10px_40px_rgba(0,0,0,.2)] ${form.use_theme_colors ? "bg-background text-foreground" : ""}`} style={form.use_theme_colors ? undefined : { backgroundColor: form.sheet_background_color, color: form.sheet_text_color }}>
             <button type="button" aria-label="إغلاق المعاينة" onClick={() => setOpen(false)} className="absolute end-3 top-3 z-10 rounded-full bg-black/10 p-1"><X className="size-4" /></button>
             {form.template === "split" ? <div className="grid grid-cols-2 items-start gap-3 pt-7">{mediaPreview}{copyPreview}</div> : <div className="grid gap-4">{mediaPreview}{copyPreview}</div>}
             {hasButton ? <button type="button" className="mt-4 h-12 w-full rounded-xl font-bold" style={{ backgroundColor: form.button_background_color, color: form.button_text_color }}>{form.cta_label || "نص الزر"}</button> : null}
