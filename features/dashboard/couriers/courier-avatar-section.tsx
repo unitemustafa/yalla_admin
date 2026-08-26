@@ -2,6 +2,7 @@
 
 import { Camera, Upload } from "lucide-react";
 
+import { mediaSpecHint, mediaSpecs } from "@/lib/media-specs";
 import { DashboardImage } from "../dashboard-image";
 import { Button, Card } from "../primitives";
 import type { useCourierForm } from "./use-courier-form";
@@ -19,7 +20,8 @@ export function CourierAvatarSection({ form }: { form: CourierForm }) {
         </div>
         <div className="mt-auto rounded-xl border border-dashed bg-muted/20 p-4 text-start">
           <div className="mb-3 flex items-center gap-2 text-xs font-bold"><Camera className="size-4 text-primary" />صورة المندوب</div>
-          <label className="inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border bg-background px-3 text-sm font-bold text-muted-foreground transition hover:bg-accent hover:text-foreground"><Upload className="size-4" />رفع صورة من الجهاز<input type="file" accept="image/*" className="sr-only" onChange={(event) => form.uploadAvatar(event.target.files?.[0])} /></label>
+          <label className="inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border bg-background px-3 text-sm font-bold text-muted-foreground transition hover:bg-accent hover:text-foreground"><Upload className="size-4" />رفع صورة من الجهاز<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => void form.uploadAvatar(event.target.files?.[0])} /></label>
+          <p className="mt-2 text-xs text-muted-foreground">{mediaSpecHint(mediaSpecs.avatar)}</p>
           {(form.avatarFile || form.avatarPreviewUrl || form.draft.avatarUrl) ? <Button type="button" variant="outline" className="mt-2 w-full text-destructive hover:text-destructive" disabled={form.saving} onClick={() => void form.removeAvatar()}>حذف الصورة</Button> : null}
           {form.avatarError ? <p className="mt-2 text-xs font-semibold text-destructive">{form.avatarError}</p> : null}
         </div>

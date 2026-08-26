@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 
 import { useAuth } from "@/features/auth/auth-provider";
+import { validateImageUpload } from "@/lib/image-upload";
+import { mediaSpecs } from "@/lib/media-specs";
 import type { ServiceCity } from "../cities/types";
 import { useSnackbar } from "../snackbar";
 import {
@@ -72,7 +74,7 @@ export function useCourierForm({ cities, courier, onSaved }: {
     return submitted ? errors[key] : undefined;
   }
 
-  function uploadAvatar(file: File | undefined) {
+  async function uploadAvatar(file: File | undefined) {
     if (!file) return;
     if (!allowedCourierAvatarTypes.has(file.type)) {
       setAvatarFile(null);
@@ -84,6 +86,13 @@ export function useCourierForm({ cities, courier, onSaved }: {
       setAvatarFile(null);
       setAvatarPreviewUrl(draft.avatarUrl);
       setAvatarError("يجب ألا يتجاوز حجم صورة المندوب 5 ميجابايت.");
+      return;
+    }
+    const dimensionError = await validateImageUpload(file, mediaSpecs.avatar);
+    if (dimensionError) {
+      setAvatarFile(null);
+      setAvatarPreviewUrl(draft.avatarUrl);
+      setAvatarError(dimensionError);
       return;
     }
     setAvatarError(null);

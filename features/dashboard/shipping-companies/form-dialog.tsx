@@ -4,7 +4,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { ImagePlus, Save, Truck, X } from "lucide-react";
 
-import { compressImageUpload } from "@/lib/image-upload";
+import { compressImageUpload, validateImageUpload } from "@/lib/image-upload";
+import { mediaSpecHint, mediaSpecs } from "@/lib/media-specs";
 import type { ServiceCity } from "../cities/types";
 import { Button, Field, Input, Switch } from "../primitives";
 import type { ShippingCompany, ShippingCompanyDraft } from "./types";
@@ -54,6 +55,11 @@ export function ShippingCompanyFormDialog({ company, cities, onClose, onSave }: 
       setError("نوع اللوجو غير مدعوم. استخدم JPG أو PNG أو WEBP.");
       return;
     }
+    const dimensionError = await validateImageUpload(selected, mediaSpecs.shippingLogo);
+    if (dimensionError) {
+      setError(dimensionError);
+      return;
+    }
     const compressed = await compressImageUpload(selected);
     if (compressed.size > 5 * 1024 * 1024) {
       setError("تعذر ضغط اللوجو إلى الحد المسموح (5MB). اختر صورة أصغر.");
@@ -98,6 +104,7 @@ export function ShippingCompanyFormDialog({ company, cities, onClose, onSave }: 
                 {previewUrl ? <img src={previewUrl} alt="معاينة لوجو شركة الشحن" className="size-full object-contain p-2" /> : <Truck className="size-10 text-muted-foreground" />}
               </div>
               <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm font-semibold hover:bg-accent"><ImagePlus className="size-4" />اختيار لوجو<input className="hidden" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void selectLogo(event)} /></label>
+              <p className="text-xs text-muted-foreground">{mediaSpecHint(mediaSpecs.shippingLogo)}</p>
               {(company?.logoUrl || logoFile) && !removeLogo ? <button type="button" className="block text-xs font-semibold text-destructive" onClick={() => { setLogoFile(null); setRemoveLogo(true); }}>إزالة اللوجو</button> : null}
             </div>
             <div className="space-y-4">

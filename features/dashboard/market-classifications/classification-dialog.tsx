@@ -4,6 +4,8 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 
+import { validateImageUpload } from "@/lib/image-upload";
+import { mediaSpecHint, mediaSpecs } from "@/lib/media-specs";
 import { cn } from "@/lib/utils";
 import { DashboardImage } from "../dashboard-image";
 import { Button, Input } from "../primitives";
@@ -84,9 +86,15 @@ export function ClassificationDialog({
 
   useLockedPageScroll(true);
 
-  function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
+  async function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    event.target.value = "";
+    const validationError = await validateImageUpload(file, mediaSpecs.classification);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
 
     setForm((current) => {
       if (current.imagePreview) URL.revokeObjectURL(current.imagePreview);
@@ -96,7 +104,7 @@ export function ClassificationDialog({
         imageFile: file,
       };
     });
-    event.target.value = "";
+    setError("");
   }
 
   function clearLocalPreview() {
@@ -183,11 +191,11 @@ export function ClassificationDialog({
           <div className="grid gap-3 text-sm font-medium lg:sticky lg:top-0">
             <div className="text-sm font-medium leading-5">صورة الفئة</div>
             <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/15 p-3">
-              <label className="group relative flex aspect-8/5 min-h-[190px] cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-background text-center transition hover:border-primary/50 hover:bg-accent/40">
+              <label className="group relative flex aspect-square min-h-[190px] cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-background text-center transition hover:border-primary/50 hover:bg-accent/40">
                 <input
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   className="sr-only"
-                  onChange={handleImageChange}
+                  onChange={(event) => void handleImageChange(event)}
                   type="file"
                 />
                 {form.imagePreview ? (
@@ -196,10 +204,10 @@ export function ClassificationDialog({
                       src={form.imagePreview}
                       alt="معاينة صورة الفئة"
                       width={360}
-                      height={225}
+                      height={360}
                       sizes="360px"
                       className="absolute inset-0 size-full"
-                      imageClassName="object-cover"
+                      imageClassName="object-contain p-3"
                       unoptimized
                     />
                     <span className="absolute inset-0 z-20 bg-black/0 transition group-hover:bg-black/35" />
@@ -218,6 +226,7 @@ export function ClassificationDialog({
                   </span>
                 )}
               </label>
+              <p className="text-xs text-muted-foreground">{mediaSpecHint(mediaSpecs.classification)}</p>
               <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground">
                 <span className="min-w-0 truncate">
                   {form.imageFile ? form.imageFile.name : "لم يتم اختيار صورة"}

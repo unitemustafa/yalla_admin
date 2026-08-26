@@ -2,6 +2,7 @@
 
 import { ArrowDown, ArrowUp, ImagePlus, Trash2 } from "lucide-react";
 
+import { mediaSpecHint, mediaSpecs } from "@/lib/media-specs";
 import { Button } from "../../primitives";
 import { ConfirmDeleteDialog } from "../../confirm-delete-dialog";
 import { DashboardImage } from "../../dashboard-image";
@@ -55,7 +56,7 @@ export function ProductImagesSection({
             {images.productImages.length ? "إضافة صور أخرى" : "اختر صور المنتج"}
           </span>
           <span className="text-xs text-muted-foreground">
-            JPG أو PNG أو WEBP؛ الصور الكبيرة تُضغط تلقائيًا (5 ميجابايت بعد الضغط)
+            {mediaSpecHint(mediaSpecs.product)} — JPG أو PNG أو WebP حتى 5MB بعد الضغط
           </span>
         </label>
         {controller.isEditing &&

@@ -1,3 +1,6 @@
+import type { MediaSpec } from "./media-specs";
+import { validateImageDimensions } from "./media-specs";
+
 const PROCESS_IMAGE_OVER_BYTES = 256 * 1024;
 const MAX_IMAGE_DIMENSION = 1600;
 const OUTPUT_QUALITY = 0.82;
@@ -54,6 +57,18 @@ async function loadDrawable(file: File): Promise<DrawableImage> {
     width: image.naturalWidth,
     dispose: () => URL.revokeObjectURL(objectUrl),
   };
+}
+
+export async function validateImageUpload(file: File, spec: MediaSpec) {
+  let drawable: DrawableImage | null = null;
+  try {
+    drawable = await loadDrawable(file);
+    return validateImageDimensions(drawable.width, drawable.height, spec);
+  } catch {
+    return "تعذر قراءة أبعاد الصورة. استخدم ملف JPG أو PNG أو WebP صالحًا.";
+  } finally {
+    drawable?.dispose();
+  }
 }
 
 export async function compressImageUpload(file: File): Promise<File> {

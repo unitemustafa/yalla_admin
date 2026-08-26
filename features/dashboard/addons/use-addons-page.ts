@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/features/auth/auth-provider";
+import { validateImageUpload } from "@/lib/image-upload";
+import { mediaSpecs } from "@/lib/media-specs";
 import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
 import {
@@ -122,26 +124,36 @@ export function useAddonsPage() {
     }
   }
 
-  function handleAddonImageChange(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleAddonImageChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    event.target.value = "";
+    const validationError = await validateImageUpload(file, mediaSpecs.addon);
+    if (validationError) {
+      showSnackbar({ message: validationError, tone: "danger" });
+      return;
+    }
     revokeAddonImageObjectUrl();
     const nextPreview = URL.createObjectURL(file);
     addonImageObjectUrlRef.current = nextPreview;
     setAddonImagePreview(nextPreview);
     setAddonImageName(file.name);
     setAddonImageFile(file);
-    event.target.value = "";
   }
 
-  function handleEditAddonImageChange(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleEditAddonImageChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file || !editingAddon) return;
+    event.target.value = "";
+    const validationError = await validateImageUpload(file, mediaSpecs.addon);
+    if (validationError) {
+      showSnackbar({ message: validationError, tone: "danger" });
+      return;
+    }
     revokeEditAddonImageObjectUrl();
     const nextPreview = URL.createObjectURL(file);
     editAddonImageObjectUrlRef.current = nextPreview;
     setEditingAddon({ ...editingAddon, image: nextPreview });
-    event.target.value = "";
   }
 
   function resetAddonImage() {

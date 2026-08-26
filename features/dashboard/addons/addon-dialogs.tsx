@@ -2,6 +2,7 @@
 
 import { ImagePlus, X } from "lucide-react";
 
+import { mediaSpecHint, mediaSpecs } from "@/lib/media-specs";
 import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
 import { DashboardImage } from "../dashboard-image";
 import { AppSelect, Button, Field, Input } from "../primitives";
@@ -136,9 +137,9 @@ export function AddonCreateDialog({
             <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/15 p-3 sm:grid-cols-[150px_minmax(0,1fr)] sm:items-center">
               <label className="group relative flex aspect-square min-h-33 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-background text-center transition hover:border-primary/50 hover:bg-accent/40">
                 <input
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   className="sr-only"
-                  onChange={controller.handleAddonImageChange}
+                  onChange={(event) => void controller.handleAddonImageChange(event)}
                   type="file"
                 />
                 {controller.addonImagePreview ? (
@@ -151,7 +152,7 @@ export function AddonCreateDialog({
                       height={300}
                       sizes="150px"
                       className="absolute inset-0 size-full"
-                      imageClassName="object-cover"
+                      imageClassName="object-contain p-2"
                     />
                     <span className="absolute inset-0 z-20 bg-black/0 transition group-hover:bg-black/35" />
                     <span className="relative z-30 rounded-md bg-background/95 px-3 py-2 text-sm font-semibold opacity-0 shadow-sm transition group-hover:opacity-100">
@@ -169,7 +170,7 @@ export function AddonCreateDialog({
               </label>
               <div className="flex min-w-0 flex-col gap-3">
                 <p className="text-xs leading-5 text-muted-foreground">
-                  استخدم صورة مربعة وواضحة. الصيغ المدعومة PNG, JPG, WEBP.
+                  {mediaSpecHint(mediaSpecs.addon)} — ستظهر كاملة بدون قص.
                 </p>
                 <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground">
                   <span className="min-w-0 truncate">

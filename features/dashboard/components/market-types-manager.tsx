@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { ImagePlus, LoaderCircle, Plus, X } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
+import { validateImageUpload } from "@/lib/image-upload";
+import { mediaSpecHint, mediaSpecs } from "@/lib/media-specs";
 import { DashboardImage } from "../dashboard-image";
 import { AppSelect, Button, Input, Switch } from "../primitives";
 import {
@@ -106,6 +108,21 @@ export function MarketTypesManager({
     setDraft(item);
     setImageFile(null);
     setImagePreview(item.image ?? "");
+    setFormError("");
+  }
+
+  async function handleImageChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    event.target.value = "";
+    const validationError = await validateImageUpload(file, mediaSpecs.marketType);
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
+    if (imagePreview.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
     setFormError("");
   }
 
@@ -334,7 +351,7 @@ export function MarketTypesManager({
                   width={64}
                   height={64}
                   className="size-16 rounded-full"
-                  imageClassName="object-cover"
+                  imageClassName="object-contain p-1"
                 />
               ) : (
                 <ImagePlus className="size-6 text-primary" />
@@ -343,15 +360,11 @@ export function MarketTypesManager({
               <input
                 className="sr-only"
                 type="file"
-                accept="image/*"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (!file) return;
-                  setImageFile(file);
-                  setImagePreview(URL.createObjectURL(file));
-                }}
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => void handleImageChange(event)}
               />
             </label>
+            <p className="-mt-2 text-xs text-muted-foreground">{mediaSpecHint(mediaSpecs.marketType)}</p>
             {formError ? (
               <p className="text-sm text-destructive">{formError}</p>
             ) : null}

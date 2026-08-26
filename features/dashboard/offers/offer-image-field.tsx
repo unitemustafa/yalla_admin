@@ -1,5 +1,6 @@
 import { ImagePlus, X } from "lucide-react";
 
+import { mediaSpecHint, mediaSpecs } from "@/lib/media-specs";
 import { DashboardImage } from "../dashboard-image";
 import type { CreateOfferFormController } from "./use-create-offer-form";
 
@@ -7,11 +8,11 @@ export function OfferImageField({ form }: { form: CreateOfferFormController }) {
   const { state } = form;
   return (
     <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/15 p-3 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-center">
-      <label className="group relative flex aspect-[16/9] min-h-[138px] cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-background text-center transition hover:border-primary/50 hover:bg-accent/40">
+      <label className="group relative flex aspect-[8/3] min-h-[98px] cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-background text-center transition hover:border-primary/50 hover:bg-accent/40">
         <input
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp"
           className="sr-only"
-          onChange={form.handleImageChange}
+          onChange={(event) => void form.handleImageChange(event)}
           type="file"
         />
         {state.imagePreview ? (
@@ -21,7 +22,7 @@ export function OfferImageField({ form }: { form: CreateOfferFormController }) {
               placeholderType="offer"
               alt="معاينة صورة العرض"
               width={640}
-              height={360}
+              height={240}
               sizes="260px"
               className="absolute inset-0 size-full"
               imageClassName="object-cover"
@@ -44,8 +45,9 @@ export function OfferImageField({ form }: { form: CreateOfferFormController }) {
         <div>
           <div className="text-sm font-semibold">صورة العرض</div>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            استخدم صورة أفقية واضحة للبانر. الصيغ المدعومة PNG, JPG, WEBP.
+            {mediaSpecHint(mediaSpecs.offerBanner)} — ضع النص والشعار داخل منطقة الأمان.
           </p>
+          {state.imageError ? <p className="mt-2 text-xs font-semibold text-destructive">{state.imageError}</p> : null}
         </div>
         <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground">
           <span className="min-w-0 truncate">{state.imageName || "لم يتم اختيار صورة"}</span>

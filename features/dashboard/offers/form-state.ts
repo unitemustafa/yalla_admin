@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { validateImageUpload } from "@/lib/image-upload";
+import { mediaSpecs } from "@/lib/media-specs";
 import { currentScheduleValues } from "./schedule";
 import type { OfferFormState } from "./form-types";
 
@@ -23,6 +25,7 @@ export function initialOfferFormState(): OfferFormState {
     imagePreview: "",
     imageName: "",
     imageFile: null,
+    imageError: "",
     selectedType: "خصم",
     discountProductId: "",
     discountVariantId: "",
@@ -83,20 +86,26 @@ export function useOfferFormState() {
     URL.revokeObjectURL(imageObjectUrlRef.current);
     imageObjectUrlRef.current = null;
   }, []);
-  const handleImageChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    event.target.value = "";
+    const validationError = await validateImageUpload(file, mediaSpecs.offerBanner);
+    if (validationError) {
+      patchState({ imageError: validationError });
+      return;
+    }
     revokeImageObjectUrl();
     const preview = URL.createObjectURL(file);
     imageObjectUrlRef.current = preview;
-    patchState({ imagePreview: preview, imageName: file.name, imageFile: file });
-    event.target.value = "";
+    patchState({ imagePreview: preview, imageName: file.name, imageFile: file, imageError: "" });
   }, [patchState, revokeImageObjectUrl]);
   const removeImage = useCallback(() => {
     revokeImageObjectUrl();
     setState((current) => ({
       ...current,
       imageFile: null,
+      imageError: "",
       imagePreview: current.editingOffer?.image ?? "",
       imageName: current.editingOffer?.image ? "صورة العرض الحالية" : "",
     }));

@@ -27,6 +27,7 @@ export type OfferFormState = {
   imagePreview: string;
   imageName: string;
   imageFile: File | null;
+  imageError: string;
   selectedType: ArabicOfferType;
   discountProductId: string;
   discountVariantId: string;

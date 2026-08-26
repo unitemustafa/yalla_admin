@@ -4,7 +4,8 @@ import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/features/auth/auth-provider";
-import { compressImageUpload } from "@/lib/image-upload";
+import { compressImageUpload, validateImageUpload } from "@/lib/image-upload";
+import { mediaSpecs } from "@/lib/media-specs";
 import { useSnackbar } from "../../snackbar";
 import {
   deleteProductImage,
@@ -122,6 +123,11 @@ export function useProductImages(productId: string | undefined) {
         }
         if (accepted.length >= availableSlots) {
           validationMessage ||= "وصلت إلى الحد الأقصى للصور (10 صور).";
+          continue;
+        }
+        const dimensionError = await validateImageUpload(selectedFile, mediaSpecs.product);
+        if (dimensionError) {
+          validationMessage ||= dimensionError;
           continue;
         }
         const file = await compressImageUpload(selectedFile);

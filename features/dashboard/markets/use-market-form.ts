@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/features/auth/auth-provider";
+import { validateImageUpload } from "@/lib/image-upload";
+import { mediaSpecs } from "@/lib/media-specs";
 import type { ServiceCity } from "../cities/types";
 import type { MarketType } from "../market-types-api";
 import { saveMarket } from "./api";
@@ -112,14 +114,20 @@ export function useMarketForm({
     update("selectedServiceCityIds", draft.selectedServiceCityIds.includes(cityId) ? [] : [cityId]);
   }
 
-  function handleImageChange(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImageChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    event.target.value = "";
+    const validationError = await validateImageUpload(file, mediaSpecs.storeLogo);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
     if (imagePreview.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
     setImagePreview(URL.createObjectURL(file));
     setImageFile(file);
     setImageName(file.name);
-    event.target.value = "";
+    setError("");
   }
 
   function removeSelectedImage() {
@@ -129,14 +137,20 @@ export function useMarketForm({
     setImageName(market?.image ? "صورة المحل الحالية" : "");
   }
 
-  function handleCoverChange(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleCoverChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    event.target.value = "";
+    const validationError = await validateImageUpload(file, mediaSpecs.storeCover);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
     if (coverPreview.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
     setCoverPreview(URL.createObjectURL(file));
     setCoverFile(file);
     setCoverName(file.name);
-    event.target.value = "";
+    setError("");
   }
 
   function removeSelectedCover() {
