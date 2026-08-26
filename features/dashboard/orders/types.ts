@@ -127,6 +127,7 @@ export type BackendOrder = {
   offer_titles?: string[] | null;
   discount?: string | null;
   description?: string | null;
+  image?: string | null;
   delivery_note?: string | null;
   delivery_proof?: string | null;
   status: BackendOrderStatus;

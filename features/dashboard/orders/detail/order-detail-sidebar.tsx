@@ -3,6 +3,7 @@
 import { DeliveryProofCard } from "./delivery-proof-card";
 import { DeliveryPriceCard } from "./delivery-price-card";
 import { OrderInformationCard } from "./order-information-card";
+import { OrderAttachmentCard } from "./order-attachment-card";
 import { RepresentativeCard } from "./representative-card";
 import { StatusActionsCard } from "./status-actions-card";
 import type { useOrderDetail } from "./use-order-detail";
@@ -15,6 +16,7 @@ export function OrderDetailSidebar({ state }: { state: DetailState }) {
   return (
     <div className="grid gap-4">
       <StatusActionsCard order={order} saving={state.savingStatus} onUpdate={(status) => void state.updateStatus(status)} />
+      <OrderAttachmentCard order={order} />
       <DeliveryProofCard order={order} />
       <OrderInformationCard order={order} onCopyLocation={() => void state.copyLocation()} />
       <RepresentativeCard

@@ -1,11 +1,11 @@
-import { ExternalLink, ImageIcon } from "lucide-react";
+import { ImageIcon } from "lucide-react";
 
 import { resolveMediaUrl } from "@/lib/media-url";
 import { cleanText } from "../../order-display";
-import { DashboardImage } from "../../dashboard-image";
 import { Badge, Card } from "../../primitives";
 import { assignedRepresentativeId, dateTime, orderNumber, representativeName } from "../formatters";
 import type { BackendOrder } from "../types";
+import { AuthenticatedOrderImage } from "./authenticated-order-image";
 
 export function DeliveryProofCard({ order }: { order: BackendOrder }) {
   const rawProofUrl = cleanText(order.delivery_proof);
@@ -20,10 +20,11 @@ export function DeliveryProofCard({ order }: { order: BackendOrder }) {
       </div>
       <div className="grid gap-3 p-5">
         {proofUrl ? (
-          <a href={proofUrl} target="_blank" rel="noreferrer" className="group relative block overflow-hidden rounded-lg border bg-muted/20 outline-none transition hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/30" aria-label={`فتح صورة إثبات تسليم الطلب ${orderNumber(order)} بالحجم الكامل`}>
-            <DashboardImage src={proofUrl} fallbackSrc="/images/placeholders/default_offer.webp" alt={`صورة إثبات تسليم الطلب ${orderNumber(order)}`} width={720} height={960} sizes="(max-width: 1280px) 100vw, 360px" className="aspect-[4/3] w-full bg-background" imageClassName="object-contain" />
-            <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-md bg-black/70 px-2.5 py-1.5 text-xs font-semibold text-white opacity-90 transition group-hover:opacity-100"><ExternalLink className="size-3.5" />فتح بالحجم الكامل</span>
-          </a>
+          <AuthenticatedOrderImage
+            src={proofUrl}
+            alt={`صورة إثبات تسليم الطلب ${orderNumber(order)}`}
+            className="rounded-lg border transition hover:border-primary/40"
+          />
         ) : (
           <div className="grid min-h-28 place-items-center gap-2 rounded-lg border border-dashed bg-muted/15 p-4 text-center text-muted-foreground">
             <ImageIcon className="size-7 opacity-60" />
