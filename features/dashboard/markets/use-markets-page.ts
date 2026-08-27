@@ -25,6 +25,8 @@ export function useMarketsPage(initialArchived: boolean) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [serviceCityFilter, setServiceCityFilter] = useState("all");
+  const [classificationFilter, setClassificationFilter] = useState("all");
   const [dialogMarket, setDialogMarket] = useState<Market | null | undefined>();
   const [deleteCandidate, setDeleteCandidate] = useState<Market | null>(null);
 
@@ -60,7 +62,10 @@ export function useMarketsPage(initialArchived: boolean) {
 
   useEffect(() => { void Promise.resolve().then(load); }, [load]);
   useEffect(() => { void Promise.resolve().then(loadServiceCityOptions); }, [loadServiceCityOptions]);
-  const filteredMarkets = useMemo(() => filterMarkets(markets, query), [markets, query]);
+  const filteredMarkets = useMemo(
+    () => filterMarkets(markets, query, serviceCityFilter, classificationFilter),
+    [classificationFilter, markets, query, serviceCityFilter],
+  );
 
   function remove(market: Market) {
     const marketIndex = markets.findIndex((item) => item.id === market.id);
@@ -132,6 +137,10 @@ export function useMarketsPage(initialArchived: boolean) {
     error,
     query,
     setQuery,
+    serviceCityFilter,
+    setServiceCityFilter,
+    classificationFilter,
+    setClassificationFilter,
     filteredMarkets,
     dialogMarket,
     setDialogMarket,

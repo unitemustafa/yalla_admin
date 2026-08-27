@@ -13,6 +13,7 @@ import type {
 import type {
   AttributeDraft,
   CatalogMarket,
+  MarketPickerTab,
   OptionDraft,
   ProductAdditionChoice,
   ProductFormValues,
@@ -225,6 +226,45 @@ export function productMarketChoice(product: NormalizedProduct): CatalogMarket |
     serviceCities: [],
     subcategories,
   };
+}
+
+export function marketServiceCityOptions(markets: CatalogMarket[]) {
+  return Array.from(
+    new Set(markets.flatMap((market) => market.serviceCities).filter(Boolean)),
+  ).sort((first, second) => first.localeCompare(second, "ar"));
+}
+
+export function filterCatalogMarkets(
+  markets: CatalogMarket[],
+  {
+    query,
+    tab,
+    serviceCity,
+    selectedMarketId,
+  }: {
+    query: string;
+    tab: MarketPickerTab;
+    serviceCity: string;
+    selectedMarketId: string;
+  },
+) {
+  const normalizedQuery = query.trim().toLocaleLowerCase("ar-EG");
+  return markets.filter((market) => {
+    if (market.status !== "active" && market.id !== selectedMarketId) return false;
+    if (tab === "general" && market.scope !== "general") return false;
+    if (tab === "service_city" && market.serviceCities.length === 0) return false;
+    if (
+      tab === "service_city" &&
+      serviceCity !== "all" &&
+      !market.serviceCities.includes(serviceCity)
+    ) {
+      return false;
+    }
+    if (!normalizedQuery) return true;
+    return `${market.name} ${market.branch} ${market.serviceCities.join(" ")}`
+      .toLocaleLowerCase("ar-EG")
+      .includes(normalizedQuery);
+  });
 }
 
 export function selectionKeyFromSelections(

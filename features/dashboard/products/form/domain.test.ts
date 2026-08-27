@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildProductPayload,
+  filterCatalogMarkets,
+  marketServiceCityOptions,
   validateProductForm,
   variantCombinations,
 } from "./domain";
-import type { ProductFormValues } from "./types";
+import type { CatalogMarket, ProductFormValues } from "./types";
 
 const baseValues: ProductFormValues = {
   name: " منتج ",
@@ -24,6 +26,22 @@ const baseValues: ProductFormValues = {
 };
 
 describe("product form domain", () => {
+  it("lists service cities and filters the market picker by the selected city", () => {
+    const markets: CatalogMarket[] = [
+      { id: "1", name: "متجر مدينتي", branch: "", status: "active", scope: "service_city", serviceCities: ["مدينتي"], subcategories: [] },
+      { id: "2", name: "متجر الإسكندرية", branch: "", status: "active", scope: "service_city", serviceCities: ["الإسكندرية"], subcategories: [] },
+      { id: "3", name: "الشحن العام", branch: "", status: "active", scope: "general", serviceCities: [], subcategories: [] },
+    ];
+
+    expect(marketServiceCityOptions(markets)).toEqual(["الإسكندرية", "مدينتي"]);
+    expect(filterCatalogMarkets(markets, {
+      query: "",
+      tab: "service_city",
+      serviceCity: "مدينتي",
+      selectedMarketId: "",
+    })).toEqual([markets[0]]);
+  });
+
   it("validates the base price and required catalog choices", () => {
     expect(validateProductForm(baseValues)).toBeNull();
     expect(validateProductForm({ ...baseValues, name: "" })).toBe("اسم المنتج مطلوب");

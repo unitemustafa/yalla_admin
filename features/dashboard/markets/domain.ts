@@ -184,9 +184,34 @@ export function marketPayload(draft: MarketDraft, editing: boolean): MarketPaylo
   };
 }
 
-export function filterMarkets(markets: Market[], query: string) {
+export function filterMarkets(
+  markets: Market[],
+  query: string,
+  serviceCityId = "all",
+  classificationId = "all",
+) {
   const normalized = query.trim().toLowerCase();
-  return normalized
-    ? markets.filter((market) => [market.name, classificationLabel(market)].some((item) => item.toLowerCase().includes(normalized)))
-    : markets;
+  const selectedServiceCityId = Number(serviceCityId);
+  const selectedClassificationId = Number(classificationId);
+
+  return markets.filter((market) => {
+    if (
+      serviceCityId !== "all" &&
+      !marketServiceCityIds(market).includes(selectedServiceCityId)
+    ) {
+      return false;
+    }
+    if (
+      classificationId !== "all" &&
+      market.classification?.id !== selectedClassificationId
+    ) {
+      return false;
+    }
+    return (
+      !normalized ||
+      [market.name, classificationLabel(market)].some((item) =>
+        item.toLowerCase().includes(normalized),
+      )
+    );
+  });
 }

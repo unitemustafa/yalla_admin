@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Check, Plus, Search, Store, X } from "lucide-react";
+import { Check, MapPin, Plus, Search, Store, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Input } from "../../primitives";
@@ -63,6 +63,35 @@ export function MarketPickerDialog({
               ))}
             </div>
           </div>
+          {controller.marketTab === "service_city" ? (
+            <div className="grid gap-2 border-b pb-4">
+              <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                <MapPin className="size-4" />
+                اختر مدينة الخدمة
+              </div>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="مدن الخدمة">
+                {["all", ...controller.marketServiceCities].map((city) => {
+                  const selected = controller.marketServiceCity === city;
+                  return (
+                    <button
+                      key={city}
+                      type="button"
+                      aria-pressed={selected}
+                      className={cn(
+                        "min-h-9 rounded-md border px-3 py-1.5 text-sm font-semibold transition hover:border-primary/50 hover:text-foreground",
+                        selected
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "bg-background text-muted-foreground",
+                      )}
+                      onClick={() => controller.setMarketServiceCity(city)}
+                    >
+                      {city === "all" ? "كل المدن" : city}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
           <div className="max-h-[54vh] overflow-y-auto">
             <div className="grid gap-2">
               {controller.filteredMarkets.map((market) => (

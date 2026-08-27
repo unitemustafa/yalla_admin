@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   classificationNameError,
-  featuredClassificationLimitReached,
   filterMarketClassifications,
   paginateMarketClassifications,
   translateMarketClassificationError,
@@ -36,22 +35,6 @@ describe("market classification domain", () => {
     expect(filterMarketClassifications(classifications, "أثاث")).toEqual([
       classifications[1],
     ]);
-  });
-
-  it("counts only active featured classifications toward the limit", () => {
-    const featured = Array.from({ length: 4 }, (_, index) => ({
-      ...classifications[0],
-      id: index + 10,
-      classification_type: "featured" as const,
-    }));
-
-    expect(featuredClassificationLimitReached(featured)).toBe(true);
-    expect(
-      featuredClassificationLimitReached([
-        ...featured.slice(0, 3),
-        { ...featured[3], is_active: false },
-      ]),
-    ).toBe(false);
   });
 
   it("clamps pagination to the final populated page", () => {

@@ -24,12 +24,14 @@ import type { NormalizedProduct } from "../types";
 import {
   additionFromRecord,
   buildProductPayload,
+  filterCatalogMarkets,
   formatApiErrors,
+  marketServiceCityOptions,
   normalizeMarket,
   productMarketChoice,
   validateProductForm,
 } from "./domain";
-import type { CatalogMarket, ProductAdditionChoice } from "./types";
+import type { CatalogMarket, MarketPickerTab, ProductAdditionChoice } from "./types";
 import { useProductImages } from "./use-product-images";
 import { useProductVariants } from "./use-product-variants";
 
@@ -58,7 +60,8 @@ export function useProductForm() {
   const [marketModalOpen, setMarketModalOpen] = useState(false);
   const [marketSubcategoriesOpen, setMarketSubcategoriesOpen] = useState(false);
   const [marketQuery, setMarketQuery] = useState("");
-  const [marketTab, setMarketTab] = useState<"general" | "service_city">("general");
+  const [marketTab, setMarketTab] = useState<MarketPickerTab>("general");
+  const [marketServiceCity, setMarketServiceCity] = useState("all");
   const [additions, setAdditions] = useState<ProductAdditionChoice[]>([]);
   const [additionPickerOpen, setAdditionPickerOpen] = useState(false);
   const [additionClassification, setAdditionClassification] = useState("all");
@@ -108,18 +111,19 @@ export function useProductForm() {
     const selectedIds = new Set(selectedAdditionIds.map(String));
     return additions.filter((addition) => selectedIds.has(addition.id));
   }, [additions, selectedAdditionIds]);
-  const filteredMarkets = useMemo(() => {
-    const query = marketQuery.trim().toLowerCase();
-    return markets.filter((market) => {
-      if (market.status !== "active" && market.id !== selectedMarketId) return false;
-      if (marketTab === "general" && market.scope !== "general") return false;
-      if (marketTab === "service_city" && market.serviceCities.length === 0) return false;
-      if (!query) return true;
-      return `${market.name} ${market.branch} ${market.serviceCities.join(" ")}`
-        .toLowerCase()
-        .includes(query);
-    });
-  }, [marketQuery, marketTab, markets, selectedMarketId]);
+  const marketServiceCities = useMemo(
+    () => marketServiceCityOptions(markets),
+    [markets],
+  );
+  const filteredMarkets = useMemo(
+    () => filterCatalogMarkets(markets, {
+      query: marketQuery,
+      tab: marketTab,
+      serviceCity: marketServiceCity,
+      selectedMarketId,
+    }),
+    [marketQuery, marketServiceCity, marketTab, markets, selectedMarketId],
+  );
 
   useEffect(() => {
     if (!marketModalOpen) return;
@@ -379,6 +383,8 @@ export function useProductForm() {
     marketModalOpen,
     marketSubcategoriesOpen,
     marketQuery,
+    marketServiceCity,
+    marketServiceCities,
     markets,
     marketTab,
     markDraft: () => setPreviewSource("draft"),
@@ -408,6 +414,7 @@ export function useProductForm() {
     setMarketModalOpen,
     setMarketSubcategoriesOpen,
     setMarketQuery,
+    setMarketServiceCity,
     setMarketTab,
     setName,
     toggleSubcategory(subcategoryId: string) {

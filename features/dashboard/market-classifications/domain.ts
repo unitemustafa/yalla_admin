@@ -10,11 +10,11 @@ export const classificationTypeOptions: ReadonlyArray<{
   label: string;
 }> = [
   { value: "normal", label: "عادية" },
-  { value: "featured", label: "مميزة" },
   { value: "popular", label: "شائعة" },
 ];
 
 export function classificationTypeLabel(value: MarketClassificationType) {
+  if (value === "featured") return "مميزة";
   return (
     classificationTypeOptions.find((option) => option.value === value)?.label ??
     "عادية"
@@ -61,18 +61,6 @@ export function filterMarketClassifications(
       .join(" ")
       .toLocaleLowerCase("ar-EG")
       .includes(normalizedQuery),
-  );
-}
-
-export function featuredClassificationLimitReached(
-  classifications: MarketClassification[],
-) {
-  return (
-    classifications.filter(
-      (classification) =>
-        classification.is_active &&
-        classification.classification_type === "featured",
-    ).length >= 4
   );
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createMarketDraft,
+  filterMarkets,
   marketCityNames,
   marketDraftCanSubmit,
   marketPayload,
@@ -30,6 +31,22 @@ describe("market domain", () => {
   it("normalizes classifications and de-duplicates city coverage", () => {
     expect(normalizeClassification({ id: "2", name: " مطاعم ", classification_type: "popular" })).toEqual({ id: 2, name: "مطاعم", classification_type: "popular" });
     expect(marketCityNames(market, [])).toEqual(["طرابلس"]);
+  });
+
+  it("filters markets by search, service city, and classification", () => {
+    const otherMarket: Market = {
+      ...market,
+      id: 4,
+      name: "متجر الساحل",
+      classification: { id: 8, name: "صيدليات" },
+      service_city_ids: [12],
+      service_cities: [{ id: 12, name: "الإسكندرية" }],
+    };
+
+    expect(filterMarkets([market, otherMarket], "", "7", "all")).toEqual([market]);
+    expect(filterMarkets([market, otherMarket], "", "all", "8")).toEqual([otherMarket]);
+    expect(filterMarkets([market, otherMarket], "الساحل", "12", "8")).toEqual([otherMarket]);
+    expect(filterMarkets([market, otherMarket], "", "7", "8")).toEqual([]);
   });
 
   it("validates create-only media and delivery-time requirements", () => {

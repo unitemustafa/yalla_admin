@@ -12,7 +12,6 @@ import {
   updateMarketClassification,
 } from "./api";
 import {
-  featuredClassificationLimitReached,
   filterMarketClassifications,
   paginateMarketClassifications,
   translateMarketClassificationError,
@@ -70,11 +69,6 @@ export function useMarketClassificationsPage() {
     () => paginateMarketClassifications(filteredClassifications, currentPage),
     [currentPage, filteredClassifications],
   );
-  const featuredOptionDisabled = useMemo(
-    () => featuredClassificationLimitReached(classifications),
-    [classifications],
-  );
-
   function setQuery(queryValue: string) {
     setQueryState(queryValue);
     setCurrentPage(1);
@@ -252,7 +246,6 @@ export function useMarketClassificationsPage() {
     load,
     query,
     setQuery,
-    featuredOptionDisabled,
     dialogClassification,
     setDialogClassification,
     saveClassification,

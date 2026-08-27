@@ -11,6 +11,8 @@ export type CatalogMarket = {
   subcategories: StoreSubcategory[];
 };
 
+export type MarketPickerTab = "general" | "service_city";
+
 export type ProductAdditionChoice = {
   classification: string;
   id: string;

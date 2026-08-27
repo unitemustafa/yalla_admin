@@ -1,9 +1,9 @@
 "use client";
 
-import { MapPin, Plus, RefreshCw, Search, Store } from "lucide-react";
+import { MapPin, Plus, RefreshCw, Search, Store, Tags } from "lucide-react";
 
 import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
-import { Button, Card, Input, PageTitle } from "../primitives";
+import { AppSelect, Button, Card, Input, PageTitle } from "../primitives";
 import { marketServiceCityIds, missingMarketCreatePrerequisite } from "./domain";
 import { MarketDialog } from "./market-dialog";
 import { MarketsTable } from "./markets-table";
@@ -37,7 +37,36 @@ export function ShopsPage({ initialArchived = false }: { initialArchived?: boole
         </Card>
       ) : (
         <Card className="mt-6 overflow-hidden">
-          <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold">كل المحلات</h2><p className="text-xs text-muted-foreground">المنتجات ترث نطاق الظهور من المحل.</p></div><div className="relative w-full sm:w-175"><Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={page.query} onChange={(event) => page.setQuery(event.target.value)} className="h-11 ps-9" placeholder="ابحث عن محل..." /></div></div>
+          <div className="flex flex-col gap-3 border-b p-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="shrink-0"><h2 className="font-semibold">كل المحلات</h2><p className="text-xs text-muted-foreground">المنتجات ترث نطاق الظهور من المحل.</p></div>
+            <div className="grid w-full gap-2 sm:grid-cols-2 xl:max-w-230 xl:grid-cols-[minmax(260px,1fr)_200px_200px]">
+              <div className="relative sm:col-span-2 xl:col-span-1"><Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={page.query} onChange={(event) => page.setQuery(event.target.value)} className="h-11 ps-9" placeholder="ابحث عن محل..." /></div>
+              <AppSelect
+                value={page.serviceCityFilter}
+                onValueChange={page.setServiceCityFilter}
+                ariaLabel="تصفية المحلات حسب المدينة"
+                dir="rtl"
+                className="h-11"
+                icon={<MapPin className="size-4" />}
+                options={[
+                  { value: "all", label: "كل المدن" },
+                  ...page.serviceCities.map((city) => ({ value: String(city.id), label: city.name })),
+                ]}
+              />
+              <AppSelect
+                value={page.classificationFilter}
+                onValueChange={page.setClassificationFilter}
+                ariaLabel="تصفية المحلات حسب الفئة"
+                dir="rtl"
+                className="h-11"
+                icon={<Tags className="size-4" />}
+                options={[
+                  { value: "all", label: "كل الفئات" },
+                  ...page.classifications.map((classification) => ({ value: String(classification.id), label: classification.name })),
+                ]}
+              />
+            </div>
+          </div>
           <MarketsTable markets={page.filteredMarkets} serviceCities={page.serviceCities} archived={initialArchived} loading={page.loading} error={page.error} onReload={() => void page.load()} onEdit={page.setDialogMarket} onDelete={page.setDeleteCandidate} onRestore={(market) => void page.restoreArchivedMarket(market)} onToggle={(market, active) => void page.toggleMarketActive(market, active)} />
         </Card>
       )}

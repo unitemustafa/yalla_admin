@@ -16,7 +16,7 @@ export function MarketClassificationsPage() {
     <div dir="rtl" className="px-6 py-6">
       <PageTitle
         title="الفئات الأساسية للمحلات"
-        description="الفئة الأساسية مثل مطاعم أو أثاث، ونوع ظهورها يحدد مكانها في التطبيق: شائعة أو مميزة أو عادية."
+        description="الفئة الأساسية مثل مطاعم أو أثاث، ونوع ظهورها يحدد مكانها في التطبيق: شائعة أو عادية."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -93,7 +93,6 @@ export function MarketClassificationsPage() {
       {page.dialogClassification !== undefined ? (
         <ClassificationDialog
           classification={page.dialogClassification ?? undefined}
-          featuredOptionDisabled={page.featuredOptionDisabled}
           onClose={() => page.setDialogClassification(undefined)}
           onSubmit={page.saveClassification}
         />

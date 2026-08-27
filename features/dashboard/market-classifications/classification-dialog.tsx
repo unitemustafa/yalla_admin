@@ -24,37 +24,29 @@ import { useLockedPageScroll } from "./use-locked-page-scroll";
 function TypeSelector({
   value,
   onChange,
-  featuredDisabled,
 }: {
   value: MarketClassificationType;
   onChange: (value: MarketClassificationType) => void;
-  featuredDisabled: boolean;
 }) {
   return (
-    <div className="grid gap-2 sm:grid-cols-3">
+    <div className="grid gap-2 sm:grid-cols-2">
       {classificationTypeOptions.map((option) => {
         const selected = option.value === value;
-        const disabled =
-          option.value === "featured" && featuredDisabled && !selected;
 
         return (
           <button
             key={option.value}
             type="button"
             aria-pressed={selected}
-            disabled={disabled}
             onClick={() => onChange(option.value)}
             className={cn(
               "min-h-11 rounded-md border px-3 py-2 text-sm font-bold transition",
               selected
                 ? "border-primary bg-primary/10 text-primary shadow-sm"
                 : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-accent hover:text-foreground",
-              disabled &&
-                "cursor-not-allowed border-border bg-muted/40 text-muted-foreground opacity-55 hover:border-border hover:bg-muted/40 hover:text-muted-foreground",
             )}
           >
             فئة {option.label}
-            {disabled ? " (4/4)" : ""}
           </button>
         );
       })}
@@ -66,17 +58,16 @@ export function ClassificationDialog({
   classification,
   onClose,
   onSubmit,
-  featuredOptionDisabled,
 }: {
   classification?: MarketClassification;
   onClose: () => void;
   onSubmit: (payload: ClassificationFormPayload) => Promise<void>;
-  featuredOptionDisabled: boolean;
 }) {
   const editing = Boolean(classification);
   const [form, setForm] = useState<ClassificationFormState>({
     name: classification?.name ?? "",
-    classificationType: classification?.classification_type ?? "normal",
+    classificationType:
+      classification?.classification_type === "popular" ? "popular" : "normal",
     description: classification?.description ?? "",
     imagePreview: classification?.image ?? null,
     imageFile: null,
@@ -267,7 +258,6 @@ export function ClassificationDialog({
               نوع الفئة
               <TypeSelector
                 value={form.classificationType}
-                featuredDisabled={featuredOptionDisabled}
                 onChange={(classificationType) =>
                   setForm((current) => ({
                     ...current,
