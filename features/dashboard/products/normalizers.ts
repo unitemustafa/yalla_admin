@@ -375,6 +375,7 @@ export function productRowFromApi(value: unknown, index: number): ItemRow {
       nestedName(product.subcategory) ||
       text(record, ["subcategory_name"], category),
     marketId,
+    marketCategoryId: text(market ?? {}, ["classification_id"]),
     shopName,
     scopeLabel,
     calories: text(record, ["stock", "quantity", "calories"], ""),
@@ -404,6 +405,7 @@ export function normalizeItemRow(row: ItemRow, market?: ShopRow): ItemRow {
   return {
     ...row,
     code: row.code ?? row.id,
+    marketCategoryId: market?.categoryId ?? row.marketCategoryId ?? "",
     shopName: market?.name ?? row.shopName ?? "",
     price: priceLabel,
     displayPriceLabel: priceLabel,

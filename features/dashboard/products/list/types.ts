@@ -2,9 +2,9 @@ export type ItemScopeFilter = "all" | "general" | "cities";
 
 export type ItemAdvancedFilters = {
   scope: ItemScopeFilter;
-  cityIds: string[];
-  shopIds: string[];
-  status: "all" | "active" | "inactive";
+  cityId: string;
+  categoryId: string;
+  shopId: string;
 };
 
 export type ItemFilters = ItemAdvancedFilters & {
@@ -13,10 +13,12 @@ export type ItemFilters = ItemAdvancedFilters & {
 
 export const defaultAdvancedFilters: ItemAdvancedFilters = {
   scope: "all",
-  cityIds: [],
-  shopIds: [],
-  status: "all",
+  cityId: "",
+  categoryId: "",
+  shopId: "",
 };
+
+export const unclassifiedMarketCategoryId = "__unclassified__";
 
 export const defaultFilters: ItemFilters = {
   search: "",

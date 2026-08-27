@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, MapPin, RotateCcw, Search, SlidersHorizontal, Store, X } from "lucide-react";
+import { Check, MapPin, RotateCcw, Search, SlidersHorizontal, Store, Tags, X } from "lucide-react";
 
 import type { ShopRow } from "../../admin-api";
 import { Button } from "../../primitives";
+import type { ItemRow } from "../types";
 import { cn } from "@/lib/utils";
-import { compareItemText } from "./domain";
+import { deriveItemFilterOptions } from "./domain";
 import {
   defaultAdvancedFilters,
   type ItemAdvancedFilters,
@@ -14,15 +15,55 @@ import {
   type ItemScopeFilter,
 } from "./types";
 
+function ProductSearchField({
+  label,
+  placeholder,
+  search,
+  onSearchChange,
+}: {
+  label: string;
+  placeholder: string;
+  search: string;
+  onSearchChange: (search: string) => void;
+}) {
+  return (
+    <label className="grid min-w-0 flex-1 gap-2 text-sm font-medium">
+      {label}
+      <span className="relative">
+        <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+          placeholder={placeholder}
+          className="h-10 w-full rounded-md border border-border bg-input px-10 text-sm shadow-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+        />
+        {search ? (
+          <button
+            type="button"
+            onClick={() => onSearchChange("")}
+            className="absolute end-2 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"
+            aria-label="مسح البحث"
+          >
+            <X className="size-4" />
+          </button>
+        ) : null}
+      </span>
+    </label>
+  );
+}
+
 export function ItemsFilters({
   filters,
   markets,
+  rows,
   onSearchChange,
   onApply,
   onClear,
 }: {
   filters: ItemFilters;
   markets: ShopRow[];
+  rows: ItemRow[];
   onSearchChange: (search: string) => void;
   onApply: (filters: ItemAdvancedFilters) => void;
   onClear: () => void;
@@ -30,59 +71,48 @@ export function ItemsFilters({
   const [open, setOpen] = useState(false);
   const [draftFilters, setDraftFilters] = useState<ItemAdvancedFilters>(() => ({
     scope: filters.scope,
-    cityIds: [...filters.cityIds],
-    shopIds: [...filters.shopIds],
-    status: filters.status,
+    cityId: filters.cityId,
+    categoryId: filters.categoryId,
+    shopId: filters.shopId,
   }));
   const triggerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const cityOptions = useMemo(() => {
-    const cities = new Map<string, string>();
-
-    for (const market of markets) {
-      if (market.scope !== "service_city") continue;
-      const cityIds = market.serviceCityIds ?? [];
-      const cityNames = market.serviceCityNames ?? [];
-      cityIds.forEach((cityId, index) => {
-        cities.set(cityId, cityNames[index] || `مدينة رقم ${cityId}`);
-      });
-    }
-
-    return Array.from(cities, ([id, name]) => ({ id, name })).sort((first, second) =>
-      compareItemText(first.name, second.name),
-    );
-  }, [markets]);
-
-  const eligibleMarkets = useMemo(() => {
-    if (draftFilters.scope === "general") {
-      return markets.filter((market) => market.scope !== "service_city");
-    }
-    if (draftFilters.scope === "cities" && draftFilters.cityIds.length > 0) {
-      return markets.filter(
-        (market) =>
-          market.scope === "service_city" &&
-          (market.serviceCityIds ?? []).some((cityId) =>
-            draftFilters.cityIds.includes(cityId),
-          ),
-      );
-    }
-    return [];
-  }, [draftFilters.cityIds, draftFilters.scope, markets]);
+  const { cityOptions, categoryOptions, eligibleMarkets } = useMemo(
+    () =>
+      deriveItemFilterOptions({
+        rows,
+        markets,
+        search: filters.search,
+        scope: draftFilters.scope,
+        cityId: draftFilters.cityId,
+        categoryId: draftFilters.categoryId,
+      }),
+    [
+      draftFilters.categoryId,
+      draftFilters.cityId,
+      draftFilters.scope,
+      filters.search,
+      markets,
+      rows,
+    ],
+  );
 
   const activeFilterCount =
-    (filters.scope !== "all" ? 1 : 0) +
-    filters.cityIds.length +
-    filters.shopIds.length +
-    (filters.status !== "all" ? 1 : 0);
+    Number(filters.scope !== "all") +
+    Number(Boolean(filters.cityId)) +
+    Number(Boolean(filters.categoryId)) +
+    Number(Boolean(filters.shopId));
   const hasAdvancedFilters = activeFilterCount > 0;
   const hasDraftAdvancedFilters =
     draftFilters.scope !== "all" ||
-    draftFilters.cityIds.length > 0 ||
-    draftFilters.shopIds.length > 0 ||
-    draftFilters.status !== "all";
-  const citySelectionRequired =
-    draftFilters.scope === "cities" && draftFilters.cityIds.length === 0;
+    Boolean(draftFilters.cityId) ||
+    Boolean(draftFilters.categoryId) ||
+    Boolean(draftFilters.shopId);
+  const citySelectionRequired = draftFilters.scope === "cities" && !draftFilters.cityId;
+  const canChooseCategory =
+    draftFilters.scope === "general" ||
+    (draftFilters.scope === "cities" && Boolean(draftFilters.cityId));
 
   function closePanel() {
     setOpen(false);
@@ -92,9 +122,9 @@ export function ItemsFilters({
   function openPanel() {
     setDraftFilters({
       scope: filters.scope,
-      cityIds: [...filters.cityIds],
-      shopIds: [...filters.shopIds],
-      status: filters.status,
+      cityId: filters.cityId,
+      categoryId: filters.categoryId,
+      shopId: filters.shopId,
     });
     setOpen(true);
   }
@@ -147,45 +177,47 @@ export function ItemsFilters({
     };
   }, [open]);
 
+  function changeSearch(search: string) {
+    onSearchChange(search);
+    setDraftFilters((current) => ({
+      ...current,
+      cityId: "",
+      categoryId: "",
+      shopId: "",
+    }));
+  }
+
   function changeScope(scope: Exclude<ItemScopeFilter, "all">) {
     setDraftFilters((current) => ({
-      ...current,
       scope: current.scope === scope ? "all" : scope,
-      cityIds: [],
-      shopIds: [],
+      cityId: "",
+      categoryId: "",
+      shopId: "",
     }));
   }
 
-  function toggleCity(cityId: string) {
-    setDraftFilters((current) => {
-      const cityIds = current.cityIds.includes(cityId)
-        ? current.cityIds.filter((id) => id !== cityId)
-        : [...current.cityIds, cityId];
-      const allowedMarketIds = new Set(
-        markets
-          .filter(
-            (market) =>
-              market.scope === "service_city" &&
-              (market.serviceCityIds ?? []).some((id) => cityIds.includes(id)),
-          )
-          .map((market) => market.id),
-      );
-
-      return {
-        ...current,
-        cityIds,
-        shopIds: current.shopIds.filter((shopId) => allowedMarketIds.has(shopId)),
-      };
-    });
-  }
-
-  function toggleShop(shopId: string) {
+  function changeCity(cityId: string) {
     setDraftFilters((current) => ({
       ...current,
-      shopIds: current.shopIds.includes(shopId)
-        ? current.shopIds.filter((id) => id !== shopId)
-        : [...current.shopIds, shopId],
+      cityId: current.cityId === cityId ? "" : cityId,
+      categoryId: "",
+      shopId: "",
     }));
+  }
+
+  function changeCategory(categoryId: string) {
+    setDraftFilters((current) => ({
+      ...current,
+      categoryId: current.categoryId === categoryId ? "" : categoryId,
+      shopId: "",
+    }));
+  }
+
+  function selectShop(shopId: string) {
+    const nextFilters = { ...draftFilters, shopId };
+    setDraftFilters(nextFilters);
+    onApply(nextFilters);
+    closePanel();
   }
 
   return (
@@ -197,28 +229,12 @@ export function ItemsFilters({
         بحث وتصفية
       </div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <label className="grid min-w-0 flex-1 gap-2 text-sm font-medium">
-          بحث
-          <span className="relative">
-            <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={filters.search}
-              onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="ابحث بالاسم أو الوصف..."
-              className="h-10 w-full rounded-md border border-border bg-input px-10 text-sm shadow-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
-            />
-            {filters.search ? (
-              <button
-                type="button"
-                onClick={() => onSearchChange("")}
-                className="absolute end-2 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"
-                aria-label="مسح البحث"
-              >
-                <X className="size-4" />
-              </button>
-            ) : null}
-          </span>
-        </label>
+        <ProductSearchField
+          label="بحث"
+          placeholder="ابحث بالاسم أو الوصف..."
+          search={filters.search}
+          onSearchChange={onSearchChange}
+        />
         <div ref={triggerRef} className="relative sm:self-end">
           <Button
             type="button"
@@ -260,7 +276,7 @@ export function ItemsFilters({
                       تصفية المنتجات
                     </h2>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      اختر النطاق ثم المدن والمحلات المناسبة.
+                      ابحث ثم اختر النطاق والمدينة والفئة والمحل.
                     </p>
                   </div>
                   <button
@@ -274,6 +290,13 @@ export function ItemsFilters({
                 </div>
 
                 <div className="min-h-0 space-y-5 overflow-y-auto p-4">
+                  <ProductSearchField
+                    label="اسم المنتج"
+                    placeholder="اكتب اسم المنتج مثل زيت..."
+                    search={filters.search}
+                    onSearchChange={changeSearch}
+                  />
+
                   <fieldset>
                     <legend className="mb-2 text-sm font-bold">نطاق الظهور</legend>
                     <div className="grid grid-cols-2 gap-2">
@@ -303,144 +326,130 @@ export function ItemsFilters({
                       })}
                     </div>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      عدم اختيار نطاق يعني عرض كل المنتجات.
+                      عدم اختيار نطاق يعني عرض كل المنتجات المطابقة للبحث.
                     </p>
                   </fieldset>
 
                   {draftFilters.scope === "cities" ? (
                     <fieldset>
-                      <div className="mb-2 flex items-center justify-between gap-3">
-                        <legend className="text-sm font-bold">المدن</legend>
-                        <span className="text-xs text-muted-foreground">
-                          {draftFilters.cityIds.length} محددة
-                        </span>
-                      </div>
+                      <legend className="mb-2 text-sm font-bold">المدينة</legend>
                       {cityOptions.length ? (
                         <div className="grid max-h-40 gap-2 overflow-y-auto rounded-md border bg-background p-2 sm:grid-cols-2">
                           {cityOptions.map((city) => {
-                            const selected = draftFilters.cityIds.includes(city.id);
+                            const selected = draftFilters.cityId === city.id;
                             return (
-                              <label
+                              <button
                                 key={city.id}
+                                type="button"
+                                aria-pressed={selected}
+                                onClick={() => changeCity(city.id)}
                                 className={cn(
-                                  "flex min-h-10 cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold transition",
+                                  "flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-start text-sm font-semibold transition",
                                   selected
                                     ? "border-primary/50 bg-primary/10 text-foreground"
                                     : "border-transparent hover:bg-accent",
                                 )}
                               >
-                                <input
-                                  type="checkbox"
-                                  checked={selected}
-                                  onChange={() => toggleCity(city.id)}
-                                  className="size-4 accent-primary"
-                                />
-                                <span className="truncate">{city.name}</span>
-                              </label>
+                                <MapPin className="size-4 shrink-0 text-muted-foreground" />
+                                <span className="min-w-0 flex-1 truncate">{city.name}</span>
+                                {selected ? <Check className="size-4 shrink-0 text-primary" /> : null}
+                              </button>
                             );
                           })}
                         </div>
                       ) : (
                         <div className="rounded-md border border-dashed bg-muted/20 px-3 py-4 text-center text-xs text-muted-foreground">
-                          لا توجد مدن مرتبطة بالمحلات حاليًا.
+                          لا توجد مدن بها منتجات مطابقة للبحث.
                         </div>
                       )}
                       {citySelectionRequired ? (
                         <p className="mt-2 text-xs font-semibold text-amber-600 dark:text-amber-300">
-                          اختر مدينة واحدة على الأقل لعرض النتائج.
+                          اختر مدينة واحدة لعرض فئات المحلات المتاحة.
                         </p>
                       ) : null}
                     </fieldset>
                   ) : null}
 
-                  {draftFilters.scope !== "all" ? (
+                  {canChooseCategory ? (
                     <fieldset>
-                      <div className="mb-2 flex items-center justify-between gap-3">
-                        <legend className="text-sm font-bold">المحلات</legend>
-                        <span className="text-xs text-muted-foreground">
-                          {draftFilters.shopIds.length
-                            ? `${draftFilters.shopIds.length} محددة`
-                            : "الكل"}
-                        </span>
-                      </div>
+                      <legend className="mb-2 text-sm font-bold">فئة المحل</legend>
+                      {categoryOptions.length ? (
+                        <div className="grid max-h-40 gap-2 overflow-y-auto rounded-md border bg-background p-2 sm:grid-cols-2">
+                          {categoryOptions.map((category) => {
+                            const selected = draftFilters.categoryId === category.id;
+                            return (
+                              <button
+                                key={category.id}
+                                type="button"
+                                aria-pressed={selected}
+                                onClick={() => changeCategory(category.id)}
+                                className={cn(
+                                  "flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-start text-sm font-semibold transition",
+                                  selected
+                                    ? "border-primary/50 bg-primary/10 text-foreground"
+                                    : "border-transparent hover:bg-accent",
+                                )}
+                              >
+                                <Tags className="size-4 shrink-0 text-muted-foreground" />
+                                <span className="min-w-0 flex-1 truncate">{category.name}</span>
+                                {selected ? <Check className="size-4 shrink-0 text-primary" /> : null}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="rounded-md border border-dashed bg-muted/20 px-3 py-4 text-center text-xs text-muted-foreground">
+                          لا توجد فئات محلات بها منتجات مطابقة لهذا الاختيار.
+                        </div>
+                      )}
+                    </fieldset>
+                  ) : null}
+
+                  {draftFilters.categoryId ? (
+                    <fieldset>
+                      <legend className="mb-2 text-sm font-bold">المحل</legend>
                       {eligibleMarkets.length ? (
                         <div className="grid max-h-44 gap-2 overflow-y-auto rounded-md border bg-background p-2 sm:grid-cols-2">
                           {eligibleMarkets.map((market) => {
-                            const selected = draftFilters.shopIds.includes(market.id);
+                            const selected = draftFilters.shopId === market.id;
                             return (
-                              <label
+                              <button
                                 key={market.id}
+                                type="button"
+                                aria-pressed={selected}
+                                onClick={() => selectShop(market.id)}
                                 className={cn(
-                                  "flex min-h-10 cursor-pointer items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm font-semibold transition",
+                                  "flex min-h-10 items-center justify-between gap-2 rounded-md border px-3 py-2 text-start text-sm font-semibold transition",
                                   selected
                                     ? "border-primary/50 bg-primary/10 text-foreground"
                                     : "border-transparent hover:bg-accent",
                                 )}
                               >
                                 <span className="flex min-w-0 items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={selected}
-                                    onChange={() => toggleShop(market.id)}
-                                    className="size-4 shrink-0 accent-primary"
-                                  />
+                                  <Store className="size-4 shrink-0 text-muted-foreground" />
                                   <span className="truncate">{market.name}</span>
                                 </span>
                                 {!market.active ? (
                                   <span className="shrink-0 text-[10px] text-destructive">
                                     معطل
                                   </span>
+                                ) : selected ? (
+                                  <Check className="size-4 shrink-0 text-primary" />
                                 ) : null}
-                              </label>
+                              </button>
                             );
                           })}
                         </div>
                       ) : (
                         <div className="rounded-md border border-dashed bg-muted/20 px-3 py-4 text-center text-xs text-muted-foreground">
-                          {draftFilters.scope === "cities" && draftFilters.cityIds.length === 0
-                            ? "اختر المدن أولًا لعرض المحلات."
-                            : "لا توجد محلات مطابقة لهذا الاختيار."}
+                          لا توجد محلات في هذه الفئة تحتوي منتجات مطابقة للبحث.
                         </div>
                       )}
                       <p className="mt-2 text-xs text-muted-foreground">
-                        ترك المحلات بدون تحديد يعني كل المحلات المطابقة.
+                        اختيار المحل يطبّق الفلاتر ويعرض المنتجات فورًا.
                       </p>
                     </fieldset>
                   ) : null}
-
-                  <fieldset>
-                    <legend className="mb-2 text-sm font-bold">حالة المنتج</legend>
-                    <div className="grid grid-cols-3 gap-2">
-                      {([
-                        ["all", "الكل"],
-                        ["active", "نشط"],
-                        ["inactive", "غير نشط"],
-                      ] as const).map(([value, label]) => {
-                        const selected = draftFilters.status === value;
-                        return (
-                          <button
-                            key={value}
-                            type="button"
-                            aria-pressed={selected}
-                            onClick={() =>
-                              setDraftFilters((current) => ({
-                                ...current,
-                                status: value,
-                              }))
-                            }
-                            className={cn(
-                              "h-10 rounded-md border text-xs font-bold transition",
-                              selected
-                                ? "border-primary bg-primary/10 text-primary"
-                                : "bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
-                            )}
-                          >
-                            {label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </fieldset>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 border-t bg-muted/10 p-3">
@@ -448,9 +457,10 @@ export function ItemsFilters({
                     type="button"
                     variant="outline"
                     className="h-10"
-                    disabled={!hasAdvancedFilters && !hasDraftAdvancedFilters}
+                    disabled={!filters.search && !hasAdvancedFilters && !hasDraftAdvancedFilters}
                     onClick={() => {
                       setDraftFilters(defaultAdvancedFilters);
+                      onSearchChange("");
                       onClear();
                       closePanel();
                     }}

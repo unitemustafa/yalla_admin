@@ -1,5 +1,10 @@
+import type { ShopRow } from "../../admin-api";
 import type { ItemRow } from "../types";
-import type { ItemFilters } from "./types";
+import {
+  unclassifiedMarketCategoryId,
+  type ItemFilters,
+  type ItemScopeFilter,
+} from "./types";
 
 const itemSortCollator = new Intl.Collator("ar", {
   numeric: true,
@@ -43,9 +48,9 @@ export function splitItemPrice(price: string) {
   return { amount, currency };
 }
 
-export function matchesItemFilters(row: ItemRow, filters: ItemFilters) {
-  const search = filters.search.trim().toLowerCase();
-  const matchesSearch =
+export function matchesItemSearch(row: ItemRow, searchValue: string) {
+  const search = searchValue.trim().toLowerCase();
+  return (
     !search ||
     [
       row.code,
@@ -58,19 +63,91 @@ export function matchesItemFilters(row: ItemRow, filters: ItemFilters) {
     ]
       .join(" ")
       .toLowerCase()
-      .includes(search);
-  const matchesShop =
-    filters.shopIds.length === 0 ||
-    (row.marketId ? filters.shopIds.includes(row.marketId) : false);
-  const matchesStatus =
-    filters.status === "all" ||
-    (filters.status === "active" ? row.active : !row.active);
+      .includes(search)
+  );
+}
+
+function marketCategoryId(market: ShopRow) {
+  return market.categoryId || unclassifiedMarketCategoryId;
+}
+
+export function deriveItemFilterOptions({
+  rows,
+  markets,
+  search,
+  scope,
+  cityId,
+  categoryId,
+}: {
+  rows: ItemRow[];
+  markets: ShopRow[];
+  search: string;
+  scope: ItemScopeFilter;
+  cityId: string;
+  categoryId: string;
+}) {
+  const matchingMarketIds = new Set(
+    rows
+      .filter((row) => matchesItemSearch(row, search))
+      .map((row) => row.marketId)
+      .filter((marketId): marketId is string => Boolean(marketId)),
+  );
+  const matchingMarkets = markets.filter((market) => matchingMarketIds.has(market.id));
+  const cities = new Map<string, string>();
+
+  for (const market of matchingMarkets) {
+    if (market.scope !== "service_city") continue;
+    const cityIds = market.serviceCityIds ?? [];
+    const cityNames = market.serviceCityNames ?? [];
+    cityIds.forEach((marketCityId, index) => {
+      cities.set(marketCityId, cityNames[index] || `مدينة رقم ${marketCityId}`);
+    });
+  }
+
+  const scopedMarkets =
+    scope === "general"
+      ? matchingMarkets.filter((market) => market.scope !== "service_city")
+      : scope === "cities" && cityId
+        ? matchingMarkets.filter(
+            (market) =>
+              market.scope === "service_city" &&
+              (market.serviceCityIds ?? []).includes(cityId),
+          )
+        : [];
+  const categories = new Map<string, string>();
+  for (const market of scopedMarkets) {
+    categories.set(marketCategoryId(market), market.category || "غير مصنف");
+  }
+
+  return {
+    cityOptions: Array.from(cities, ([id, name]) => ({ id, name })).sort((first, second) =>
+      compareItemText(first.name, second.name),
+    ),
+    categoryOptions: Array.from(categories, ([id, name]) => ({ id, name })).sort(
+      (first, second) => compareItemText(first.name, second.name),
+    ),
+    eligibleMarkets: categoryId
+      ? scopedMarkets
+          .filter((market) => marketCategoryId(market) === categoryId)
+          .sort((first, second) => compareItemText(first.name, second.name))
+      : [],
+  };
+}
+
+export function matchesItemFilters(row: ItemRow, filters: ItemFilters) {
+  const matchesShop = !filters.shopId || row.marketId === filters.shopId;
+  const matchesCategory =
+    !filters.categoryId ||
+    (filters.categoryId === unclassifiedMarketCategoryId
+      ? !row.marketCategoryId
+      : row.marketCategoryId === filters.categoryId);
   const matchesScope =
     filters.scope === "all" ||
     (filters.scope === "general"
       ? row.visibilityMode !== "regions"
       : row.visibilityMode === "regions" &&
-        filters.cityIds.some((cityId) => (row.regionSlugs ?? []).includes(cityId)));
+        Boolean(filters.cityId) &&
+        (row.regionSlugs ?? []).includes(filters.cityId));
 
-  return matchesSearch && matchesShop && matchesStatus && matchesScope;
+  return matchesItemSearch(row, filters.search) && matchesShop && matchesCategory && matchesScope;
 }

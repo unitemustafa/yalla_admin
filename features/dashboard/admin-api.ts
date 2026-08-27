@@ -50,6 +50,7 @@ export class AdminApiError extends Error {
 export type ShopRow = {
   id: string;
   name: string;
+  categoryId?: string;
   category: string;
   branch: string;
   products: string;
@@ -129,6 +130,7 @@ function nestedName(value: unknown) {
 }
 
 export function shopRowFromApi(record: BackendRecord, index: number): ShopRow {
+  const classification = asRecord(record.classification);
   const serviceCities = Array.isArray(record.service_cities)
     ? record.service_cities.filter(
         (city): city is BackendRecord => asRecord(city) !== null,
@@ -146,8 +148,10 @@ export function shopRowFromApi(record: BackendRecord, index: number): ShopRow {
   return {
     id: id(record, index),
     name: text(record, ["name", "name_ar", "name_en"], `محل #${index + 1}`),
+    categoryId:
+      text(classification ?? {}, ["id"]) || text(record, ["classification_id"]),
     category:
-      nestedName(record.classification) ||
+      nestedName(classification) ||
       text(record, ["classification_name", "category"], "غير مصنف"),
     branch,
     products: text(record, ["products_count", "total_products", "products"], "0"),

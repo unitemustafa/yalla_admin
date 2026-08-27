@@ -243,6 +243,7 @@ export function useProductsList(showArchived: boolean) {
     previousPage: () => setCurrentPage((page) => Math.max(1, Math.min(page, totalPages) - 1)),
     reload: () => setReloadKey((current) => current + 1),
     restoreArchivedProduct,
+    rows,
     selectedRows,
     setDeleteId,
     showEmptyState,

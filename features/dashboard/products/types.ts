@@ -127,6 +127,7 @@ export type ItemRow = {
   category: string;
   subcategory: string;
   marketId?: string;
+  marketCategoryId?: string;
   shopName?: string;
   scopeLabel?: string;
   calories: string;

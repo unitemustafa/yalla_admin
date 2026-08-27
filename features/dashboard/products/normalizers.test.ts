@@ -48,6 +48,7 @@ describe("product normalizers", () => {
         market: {
           id: 5,
           name: "المحل",
+          classification_id: 14,
           scope: "service_city",
           service_city_names: ["طرابلس"],
         },
@@ -60,6 +61,7 @@ describe("product normalizers", () => {
 
     expect(row.price).toBe("EGP 10.00 - EGP 15.50");
     expect(row.shopName).toBe("المحل");
+    expect(row.marketCategoryId).toBe("14");
     expect(row.visibilityMode).toBe("regions");
     expect(row.active).toBe(true);
   });

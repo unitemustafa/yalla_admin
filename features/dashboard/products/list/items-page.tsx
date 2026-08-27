@@ -99,6 +99,7 @@ export function ItemsPage({
             <ItemsFilters
               filters={list.filters}
               markets={list.markets}
+              rows={list.rows}
               onSearchChange={list.changeSearch}
               onApply={list.applyAdvancedFilters}
               onClear={list.clearAdvancedFilters}
