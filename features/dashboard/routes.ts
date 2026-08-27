@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import type { BreadcrumbItem, NavChild, NavGroup, PageKey } from "./types";
+import { ar } from "./locales/ar";
 
 type DashboardRoute = {
   href?: string;
@@ -52,12 +53,12 @@ export const dashboardRoutes = {
   categories: {
     href: "/categories/markets",
     matches: ["/categories", "/categories/markets"],
-    breadcrumbs: [dashboardCrumb, { label: "المحلات", href: "/items/shops" }, { label: "الفئات الأساسية للمحلات" }],
+    breadcrumbs: [dashboardCrumb, { label: ar["nav.categories"] }, { label: ar["page.categories"] }],
   },
   "market-types": {
     href: "/categories/market-types",
     matches: ["/categories/market-types"],
-    breadcrumbs: [dashboardCrumb, { label: "المحلات", href: "/items/shops" }, { label: "الفئات الثانوية للمحلات" }],
+    breadcrumbs: [dashboardCrumb, { label: ar["nav.categories"] }, { label: ar["page.marketTypes"] }],
   },
   "store-subcategories": {
     href: "/items/store-subcategories",
@@ -123,12 +124,12 @@ export const dashboardRoutes = {
     href: "/delivery/couriers",
     matches: ["/delivery/couriers"],
     prefixMatches: ["/delivery/couriers/"],
-    breadcrumbs: [dashboardCrumb, { label: "التوصيل" }, { label: "المندوبين" }],
+    breadcrumbs: [dashboardCrumb, { label: ar["nav.couriers"] }],
   },
   "create-courier": {
     href: "/delivery/couriers/new",
     matches: ["/delivery/couriers/new"],
-    breadcrumbs: [dashboardCrumb, { label: "التوصيل" }, { label: "المندوبين", href: "/delivery/couriers" }, { label: "إضافة مندوب" }],
+    breadcrumbs: [dashboardCrumb, { label: ar["nav.couriers"], href: "/delivery/couriers" }, { label: ar["page.createCourier"] }],
   },
   customers: {
     href: "/customers",
@@ -207,6 +208,19 @@ export const navGroups: NavGroup[] = [
     items: [
       { icon: LayoutDashboard, ...navChild("overview", "لوحة التحكم") },
       {
+        label: ar["nav.categories"],
+        icon: Tag,
+        children: [
+          navChild("categories", ar["nav.primaryCategories"]),
+          navChild("market-types", ar["nav.marketTypes"]),
+        ],
+      },
+      {
+        label: "المحلات",
+        icon: Store,
+        children: [navChild("shops", "كل المحلات")],
+      },
+      {
         label: "المنتجات",
         icon: ShoppingBag,
         activePages: ["create-item"],
@@ -214,15 +228,6 @@ export const navGroups: NavGroup[] = [
           navChild("items", "كل المنتجات"),
           navChild("store-subcategories", "أقسام المنتجات"),
           navChild("addons", "الإضافات"),
-        ],
-      },
-      {
-        label: "المحلات",
-        icon: Store,
-        children: [
-          navChild("shops", "كل المحلات"),
-          navChild("categories", "الفئات الأساسية للمحلات"),
-          navChild("market-types", "الفئات الثانوية للمحلات"),
         ],
       },
       {
@@ -252,8 +257,14 @@ export const navGroups: NavGroup[] = [
         children: [
           navChild("delivery-zone", "مناطق التوصيل"),
           navChild("shipping-companies", "شركات الشحن"),
-          navChild("couriers", "المندوبين"),
-          navChild("create-courier", "إضافة مندوب"),
+        ],
+      },
+      {
+        label: ar["nav.couriers"],
+        icon: Users,
+        children: [
+          navChild("couriers", ar["nav.allCouriers"]),
+          navChild("create-courier", ar["nav.createCourier"]),
         ],
       },
       { icon: Users, ...navChild("customers", "العملاء") },

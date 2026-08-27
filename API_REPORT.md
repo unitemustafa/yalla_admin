@@ -117,7 +117,7 @@ Localized/Arabic errors:
   - `لا يمكن استخدام عرض مدينة داخل طلب عام`
   - `لا يمكن استخدام عرض عام داخل طلب مدينة`
   - `لا يمكن دمج منتجات من مدن مختلفة في نفس الطلب`
-  - `هذا المندوب لا يعمل في نفس مدينة الطلب.`
+  - `هذا الطيار لا يعمل في نفس مدينة الطلب.`
 
 Endpoint index:
 
@@ -1570,7 +1570,7 @@ Invalid variant:
 Courier city mismatch:
 
 ```json
-{"representative_id": "هذا المندوب لا يعمل في نفس مدينة الطلب."}
+{"representative_id": "هذا الطيار لا يعمل في نفس مدينة الطلب."}
 ```
 
 Image upload error captured through dashboard invalid logo:
@@ -2306,7 +2306,7 @@ Structured events are order_created, order_review_approved, order_review_rejecte
   "status": "picked_up",
   "review_status": "approved",
   "title": "تم استلام طلبك من المحلات 📦",
-  "message": "المندوب استلم طلبك #123 من المحلات.",
+  "message": "الطيار استلم طلبك #123 من المحلات.",
   "market_count": "2",
   "is_multi_market": "true",
   "market_names_summary": "مطبخ النيل، السوق الثاني"

@@ -164,7 +164,7 @@ export function representativeName(representative: ApiRecord) {
     textAt(representative, [["first_name"], ["user", "first_name"]], ""),
     textAt(representative, [["last_name"], ["user", "last_name"]], ""),
   ].filter(Boolean).join(" ");
-  return split || `مندوب #${representativeId(representative) || "-"}`;
+  return split || `طيار #${representativeId(representative) || "-"}`;
 }
 
 export function representativePhone(representative: ApiRecord) {
@@ -197,8 +197,8 @@ export function localizedApiError(value: unknown, fallback: string) {
   if (!message) return fallback;
   const normalized = message.toLowerCase();
   if (normalized.includes("already") && normalized.includes("review")) return "تمت مراجعة الطلب بالفعل. حدّث التنبيه.";
-  if (normalized.includes("approved before assignment") || normalized.includes("must be approved")) return "يجب قبول الطلب قبل إسناده للمندوب.";
-  if (normalized.includes("same service city") || normalized.includes("service city")) return "المندوب ليس في نفس مدينة خدمة الطلب.";
+  if (normalized.includes("approved before assignment") || normalized.includes("must be approved")) return "يجب قبول الطلب قبل إسناده للطيار.";
+  if (normalized.includes("same service city") || normalized.includes("service city")) return "الطيار ليس في نفس مدينة خدمة الطلب.";
   if (normalized.includes("unauthorized") || normalized.includes("authentication")) return "انتهت الجلسة أو لا تملك صلاحية تنفيذ هذا الإجراء.";
   return message;
 }

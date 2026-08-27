@@ -171,7 +171,7 @@ export function useOrderReviewBlocker() {
   const fetchRepresentatives = useCallback(async (targetOrderId: string) => {
     const response = await apiFetch(`admin/orders/${targetOrderId}/service-city-representatives/`);
     const data = await apiResponseData(response);
-    if (!response.ok) throw new Error(localizedApiError(data, "تعذر تحميل مندوبين مدينة الخدمة."));
+    if (!response.ok) throw new Error(localizedApiError(data, "تعذر تحميل طيارين مدينة الخدمة."));
     return representativeListFromResponse(data);
   }, [apiFetch]);
 
@@ -194,7 +194,7 @@ export function useOrderReviewBlocker() {
         try {
           nextRepresentatives = await fetchRepresentatives(currentOrderId);
         } catch (reason) {
-          representativesError = reason instanceof Error ? reason.message : "تعذر تحميل مندوبين مدينة الخدمة.";
+          representativesError = reason instanceof Error ? reason.message : "تعذر تحميل طيارين مدينة الخدمة.";
         }
       }
       setRepresentatives(nextRepresentatives);
@@ -214,9 +214,9 @@ export function useOrderReviewBlocker() {
     try {
       const next = await fetchRepresentatives(currentOrderId);
       setRepresentatives(next);
-      if (!next.length) setError(currentOrderIsGeneral ? "لا يوجد مندوبين متاحين حاليًا." : "لا يوجد مندوبين متاحين لهذه المدينة حاليًا.");
+      if (!next.length) setError(currentOrderIsGeneral ? "لا يوجد طيارين متاحين حاليًا." : "لا يوجد طيارين متاحين لهذه المدينة حاليًا.");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "تعذر تحميل مندوبين مدينة الخدمة.");
+      setError(reason instanceof Error ? reason.message : "تعذر تحميل طيارين مدينة الخدمة.");
     } finally {
       setRepresentativesLoading(false);
     }
@@ -224,19 +224,19 @@ export function useOrderReviewBlocker() {
 
   const assignRepresentative = useCallback(async () => {
     if (!currentOrderId) return setError("تعذر تحديد الطلب الحالي.");
-    if (!selectedRepresentativeId) return setError("اختر مندوبًا قبل إرسال الطلب.");
+    if (!selectedRepresentativeId) return setError("اختر طيارًا قبل إرسال الطلب.");
     setPhase("assigning");
     setError(null);
     try {
       const representativeId = numericValue(selectedRepresentativeId) ?? selectedRepresentativeId;
       const response = await apiFetch(`orders/${currentOrderId}/assignment/`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ representative_id: representativeId }) });
       const data = await apiResponseData(response);
-      if (!response.ok) throw new Error(localizedApiError(data, "تعذر إسناد الطلب للمندوب."));
-      showSnackbar({ message: "تم قبول الطلب وإرساله للمندوب.", tone: "success" });
+      if (!response.ok) throw new Error(localizedApiError(data, "تعذر إسناد الطلب للطيار."));
+      showSnackbar({ message: "تم قبول الطلب وإرساله للطيار.", tone: "success" });
       notifyDashboardOrdersChanged(currentOrderId);
       await Promise.all([loadBlocker({ silent: true, ignoreBusy: true }), refreshUnreadCount()]);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "تعذر إسناد الطلب للمندوب.");
+      setError(reason instanceof Error ? reason.message : "تعذر إسناد الطلب للطيار.");
       setPhase("selecting_representative");
     }
   }, [apiFetch, currentOrderId, loadBlocker, refreshUnreadCount, selectedRepresentativeId, showSnackbar]);
@@ -244,7 +244,7 @@ export function useOrderReviewBlocker() {
   const saveApprovedOrder = useCallback(async () => {
     if (!currentOrderId) return setError("تعذر تحديد الطلب الحالي.");
     setError(null);
-    showSnackbar({ message: "تم حفظ الطلب بدون إسناد مندوب.", tone: "success" });
+    showSnackbar({ message: "تم حفظ الطلب بدون إسناد طيار.", tone: "success" });
     notifyDashboardOrdersChanged(currentOrderId);
     await Promise.all([loadBlocker({ silent: true, ignoreBusy: true }), refreshUnreadCount()]);
   }, [currentOrderId, loadBlocker, refreshUnreadCount, showSnackbar]);

@@ -16,7 +16,7 @@ const pageTitle = (page: Parameters<typeof sidebarChildLabel>[0]) =>
 describe("sidebar navigation logic", () => {
   it("marks both direct and child navigation items active", () => {
     const direct = navGroups[0].items[0];
-    const products = navGroups[0].items[1];
+    const products = navGroups[0].items[3];
 
     expect(navItemIsActive(direct, "overview")).toBe(true);
     expect(navItemIsActive(products, "items")).toBe(true);
@@ -30,7 +30,7 @@ describe("sidebar navigation logic", () => {
   });
 
   it("keeps special parent and child labels", () => {
-    expect(sidebarItemLabel(navGroups[0].items[1], t, pageTitle)).toBe(
+    expect(sidebarItemLabel(navGroups[0].items[3], t, pageTitle)).toBe(
       "t:nav.products",
     );
     expect(sidebarChildLabel("items", t, pageTitle)).toBe(

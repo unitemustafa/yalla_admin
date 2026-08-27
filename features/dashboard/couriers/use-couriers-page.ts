@@ -53,7 +53,7 @@ export function useCouriersPage() {
       setOrders(data.orders);
       setCities(data.cities);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "تعذر تحميل بيانات المندوبين.");
+      setError(reason instanceof Error ? reason.message : "تعذر تحميل بيانات الطيارين.");
     } finally {
       setLoading(false);
     }
@@ -115,7 +115,7 @@ export function useCouriersPage() {
     setBusy(`assign-${assigning.id}`);
     try {
       await assignOrder(apiFetch, selectedOrder, assigning.id);
-      showSnackbar({ message: `تم إسناد الطلب للمندوب ${fullNameFromBackendUser(assigning)}.`, tone: "success" });
+      showSnackbar({ message: `تم إسناد الطلب للطيار ${fullNameFromBackendUser(assigning)}.`, tone: "success" });
       closeAssignment();
       await load();
     } catch (reason) {
@@ -145,9 +145,9 @@ export function useCouriersPage() {
     try {
       const saved = await setCourierAvailability(apiFetch, courier.id, checked);
       setCouriers((rows) => rows.map((row) => row.id === courier.id ? saved : row));
-      showSnackbar({ message: checked ? "تم جعل المندوب متاحًا." : "تم جعل المندوب غير متاح.", tone: checked ? "success" : "danger" });
+      showSnackbar({ message: checked ? "تم جعل الطيار متاحًا." : "تم جعل الطيار غير متاح.", tone: checked ? "success" : "danger" });
     } catch (reason) {
-      showSnackbar({ message: reason instanceof Error ? reason.message : "تعذر تحديث توفر المندوب.", tone: "danger" });
+      showSnackbar({ message: reason instanceof Error ? reason.message : "تعذر تحديث توفر الطيار.", tone: "danger" });
     } finally {
       setBusy(null);
     }

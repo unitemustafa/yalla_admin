@@ -73,7 +73,7 @@ export function fullNameFromBackendUser(user: BackendDashboardUser) {
 function roleLabel(role: string | null | undefined) {
   if (role === "client") return "عميل";
   if (role === "admin") return "مدير";
-  if (role === "representative") return "مندوب";
+  if (role === "representative") return "طيار";
   return unset;
 }
 
@@ -165,10 +165,10 @@ export function translateApiMessage(message: string) {
     .replace(/[.!؟?]+$/u, "");
   const translations: Record<string, string> = {
     "delivery area cannot be deleted while representatives are using it":
-      "لا يمكن حذف منطقة التوصيل لأنها مستخدمة بواسطة مندوبين.",
+      "لا يمكن حذف منطقة التوصيل لأنها مستخدمة بواسطة طيارين.",
     "service city must be active": "يجب أن تكون مدينة الخدمة مفعلة.",
     "reassign active orders before deleting this courier":
-      "أعد إسناد الطلبات النشطة قبل حذف هذا المندوب.",
+      "أعد إسناد الطلبات النشطة قبل حذف هذا الطيار.",
     "password must contain at least one uppercase letter":
       "يجب أن تحتوي كلمة المرور على حرف إنجليزي كبير واحد على الأقل.",
     "password must contain at least one lowercase letter":
@@ -183,7 +183,7 @@ export function translateApiMessage(message: string) {
       "كلمة المرور الجديدة يجب أن تكون مختلفة عن كلمة المرور الحالية.",
     "spaces are not allowed in this field":
       "لا يسمح بوجود مسافات داخلية في هذا الحقل.",
-    "service city is required for couriers": "مدينة التشغيل مطلوبة للمندوب.",
+    "service city is required for couriers": "مدينة التشغيل مطلوبة للطيار.",
     "upload a valid profile photo: jpg, jpeg, png, or webp":
       "ارفع صورة شخصية بصيغة JPG أو JPEG أو PNG أو WEBP.",
     "profile photo must be 5 mb or smaller":

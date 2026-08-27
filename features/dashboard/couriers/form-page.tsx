@@ -30,7 +30,7 @@ export function CourierFormPage({ courierId }: { courierId?: string }) {
         setCities(data.cities);
         setCourier(data.courier);
       } catch (reason) {
-        setError(reason instanceof Error ? reason.message : "تعذر تحميل صفحة المندوب.");
+        setError(reason instanceof Error ? reason.message : "تعذر تحميل صفحة الطيار.");
       } finally {
         setLoading(false);
       }
@@ -40,5 +40,5 @@ export function CourierFormPage({ courierId }: { courierId?: string }) {
 
   if (loading) return <div className="flex min-h-80 items-center justify-center"><Loader2 className="size-7 animate-spin text-primary" /></div>;
   if (error) return <div className="mx-auto max-w-3xl px-6 py-8"><Card className="p-6 text-destructive"><AlertCircle className="me-2 inline size-5" />{error}</Card></div>;
-  return <CourierForm cities={cities} courier={courierId ? courier : null} onClose={() => router.push("/delivery/couriers")} onSaved={() => { showSnackbar({ message: "تم حفظ بيانات المندوب.", tone: "success" }); router.push("/delivery/couriers"); }} />;
+  return <CourierForm cities={cities} courier={courierId ? courier : null} onClose={() => router.push("/delivery/couriers")} onSaved={() => { showSnackbar({ message: "تم حفظ بيانات الطيار.", tone: "success" }); router.push("/delivery/couriers"); }} />;
 }

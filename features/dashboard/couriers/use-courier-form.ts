@@ -85,7 +85,7 @@ export function useCourierForm({ cities, courier, onSaved }: {
     if (file.size > maxCourierAvatarSize) {
       setAvatarFile(null);
       setAvatarPreviewUrl(draft.avatarUrl);
-      setAvatarError("يجب ألا يتجاوز حجم صورة المندوب 5 ميجابايت.");
+      setAvatarError("يجب ألا يتجاوز حجم صورة الطيار 5 ميجابايت.");
       return;
     }
     const dimensionError = await validateImageUpload(file, mediaSpecs.avatar);
@@ -115,9 +115,9 @@ export function useCourierForm({ cities, courier, onSaved }: {
       setAvatarPreviewUrl("");
       setDraft((current) => ({ ...current, avatarUrl: "" }));
       onSaved(saved);
-      showSnackbar({ message: "تم حذف صورة المندوب." });
+      showSnackbar({ message: "تم حذف صورة الطيار." });
     } catch (reason) {
-      setAvatarError(reason instanceof Error ? reason.message : "تعذر حذف صورة المندوب.");
+      setAvatarError(reason instanceof Error ? reason.message : "تعذر حذف صورة الطيار.");
     } finally {
       setSaving(false);
     }
@@ -130,7 +130,7 @@ export function useCourierForm({ cities, courier, onSaved }: {
       if (deliveryHasErrors) {
         setDeliveryOpen(true);
         setError("بيانات التوصيل مطلوبة.");
-      } else if (avatarError) setError("راجع صورة المندوب ثم حاول مرة أخرى.");
+      } else if (avatarError) setError("راجع صورة الطيار ثم حاول مرة أخرى.");
       else setError("راجع البيانات المطلوبة ثم حاول مرة أخرى.");
       return;
     }
@@ -140,7 +140,7 @@ export function useCourierForm({ cities, courier, onSaved }: {
     try {
       onSaved(await saveCourier(apiFetch, courier, courierPayload(draft, courier), avatarFile));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "تعذر حفظ بيانات المندوب.");
+      setError(reason instanceof Error ? reason.message : "تعذر حفظ بيانات الطيار.");
     } finally {
       setSaving(false);
     }

@@ -42,8 +42,8 @@ function orderEventLabel(event: BackendOrderEvent, order: BackendOrder) {
     case "order_created": return "تم إنشاء الطلب";
     case "review_approved": return "تمت الموافقة على الطلب";
     case "review_rejected": return "تم رفض الطلب";
-    case "assigned": return "تم تعيين مندوب";
-    case "unassigned": return "تم إلغاء إسناد المندوب";
+    case "assigned": return "تم تعيين طيار";
+    case "unassigned": return "تم إلغاء إسناد الطيار";
     case "delivery_price_changed": return "تم تحديث سعر التوصيل";
     case "delivery_quote_sent": return "تم إرسال سعر التوصيل للعميل";
     case "delivery_quote_accepted": return "وافق العميل على سعر التوصيل";
@@ -96,7 +96,7 @@ export function orderTimelineEvents(order: BackendOrder): OrderTimelineEvent[] {
       ? { key: "approved", label: "تمت الموافقة على الطلب", detail: "", time: order.approved_at, active: order.review_status === "approved", cancelled: false }
       : null,
     order.assigned_at
-      ? { key: "assigned", label: "تم إسناد مندوب", detail: "", time: order.assigned_at, active: order.status === "assigned", cancelled: false }
+      ? { key: "assigned", label: "تم إسناد طيار", detail: "", time: order.assigned_at, active: order.status === "assigned", cancelled: false }
       : null,
     order.delivered_at
       ? { key: "delivered", label: "تم تسليم الطلب", detail: "", time: order.delivered_at, active: order.status === "delivered", cancelled: false }

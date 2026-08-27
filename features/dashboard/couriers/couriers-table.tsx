@@ -25,7 +25,7 @@ export function CouriersTable({ couriers, orders, startIndex, currentPage, total
   onAvailabilityChange: (courier: BackendDashboardUser, checked: boolean) => void;
 }) {
   if (!couriers.length) {
-    return <Card className="mt-8 overflow-hidden border-dashed bg-card/70"><div className="flex min-h-44 flex-col items-center justify-center gap-4 px-6 py-10 text-center"><span className="flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary"><UserRoundPlus className="size-7" /></span><div><h3 className="text-lg font-bold text-foreground">لا توجد حسابات مندوبين هنا</h3><p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">غيّر فلتر المنطقة أو أضف مندوبًا جديدًا.</p></div><Link href="/delivery/couriers/new" className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90"><Plus className="size-4" />أضف أول مندوب</Link></div></Card>;
+    return <Card className="mt-8 overflow-hidden border-dashed bg-card/70"><div className="flex min-h-44 flex-col items-center justify-center gap-4 px-6 py-10 text-center"><span className="flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary"><UserRoundPlus className="size-7" /></span><div><h3 className="text-lg font-bold text-foreground">لا توجد حسابات طيارين هنا</h3><p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">غيّر فلتر المنطقة أو أضف طيارًا جديدًا.</p></div><Link href="/delivery/couriers/new" className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90"><Plus className="size-4" />أضف أول طيار</Link></div></Card>;
   }
   return (
     <div className="mt-8 grid gap-3">
@@ -37,7 +37,7 @@ export function CouriersTable({ couriers, orders, startIndex, currentPage, total
         const isAvailable = courier.is_active !== false && profile?.is_available !== false;
         const isAtCapacity = maxActiveOrders > 0 && stats.active >= maxActiveOrders;
         const canAssign = hasSignedIn && isAvailable && !isAtCapacity && assignableCount > 0 && busy === null;
-        const disabledReason = !hasSignedIn ? "لم يسجل الحساب بعد" : assignableCount === 0 ? "لا توجد طلبات مؤهلة للإسناد" : !isAvailable ? "المندوب غير متاح" : isAtCapacity ? "المندوب وصل للحد الأقصى للطلبات النشطة" : undefined;
+        const disabledReason = !hasSignedIn ? "لم يسجل الحساب بعد" : assignableCount === 0 ? "لا توجد طلبات مؤهلة للإسناد" : !isAvailable ? "الطيار غير متاح" : isAtCapacity ? "الطيار وصل للحد الأقصى للطلبات النشطة" : undefined;
         return (
           <Card key={courier.id} className="grid gap-4 p-4 xl:grid-cols-[minmax(220px,1fr)_320px_400px] xl:items-center">
             <Link href={`/delivery/couriers/${courier.id}`} className="flex min-w-0 items-center gap-3 rounded-lg transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25" aria-label={`عرض تفاصيل ${fullNameFromBackendUser(courier)}`}>

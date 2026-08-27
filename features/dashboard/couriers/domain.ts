@@ -160,9 +160,9 @@ export function assignmentOrderLabel(order: AdminOrder, courier: BackendDashboar
   const orderCityId = orderServiceCityId(order);
   return [
     orderLabel,
-    currentlyAssigned ? "مسند حالياً لهذا المندوب" : "",
+    currentlyAssigned ? "مسند حالياً لهذا الطيار" : "",
     currentlyAssigned && courierCityId && orderCityId && courierCityId !== orderCityId
-      ? "مدينة الطلب لا تطابق مدينة تشغيل المندوب."
+      ? "مدينة الطلب لا تطابق مدينة تشغيل الطيار."
       : "",
   ].filter(Boolean).join(" - ");
 }

@@ -31,6 +31,6 @@ describe("order review normalizers", () => {
 
   it("localizes assignment errors", () => {
     expect(localizedApiError({ detail: "Representative must be approved before assignment" }, "fallback"))
-      .toBe("يجب قبول الطلب قبل إسناده للمندوب.");
+      .toBe("يجب قبول الطلب قبل إسناده للطيار.");
   });
 });

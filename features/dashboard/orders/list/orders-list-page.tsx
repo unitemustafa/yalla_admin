@@ -35,7 +35,7 @@ export function OrdersListPage() {
       <div className="mt-6 grid gap-3 md:grid-cols-4">
         <Metric title="إجمالي الطلبات" value={state.metrics.total} />
         <Metric title="جاهزة للإسناد" value={state.metrics.assignmentReady} />
-        <Metric title="مسندة لمندوب" value={state.metrics.assigned} />
+        <Metric title="مسندة لطيار" value={state.metrics.assigned} />
         <Metric title="تم التسليم" value={state.metrics.delivered} />
       </div>
       <Card className="mt-6 overflow-hidden">

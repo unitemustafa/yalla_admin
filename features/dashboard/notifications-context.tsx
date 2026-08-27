@@ -91,10 +91,10 @@ function dashboardNotificationMessage(notification: DashboardOrderNotification) 
     return notification.message || "تم استلام طلب تسجيل شريك جديد.";
   }
   if (notification.event === "courier_order_picked_up") {
-    return notification.message || `المندوب استلم الطلب${orderLabel}.`;
+    return notification.message || `الطيار استلم الطلب${orderLabel}.`;
   }
   if (notification.event === "courier_order_delivered") {
-    return notification.message || `المندوب سلّم الطلب${orderLabel} للعميل.`;
+    return notification.message || `الطيار سلّم الطلب${orderLabel} للعميل.`;
   }
   return notification.message || notification.title;
 }

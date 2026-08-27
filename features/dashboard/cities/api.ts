@@ -84,7 +84,7 @@ export async function deleteServiceCity(
       delivery_areas: "مناطق التوصيل",
       markets: "المحلات",
       offers: "العروض",
-      couriers: "المندوبون",
+      couriers: "الطيارون",
       addresses: "عناوين العملاء",
       orders: "الطلبات",
       users: "حسابات العملاء",

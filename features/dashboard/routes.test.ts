@@ -42,22 +42,43 @@ describe("dashboard routes", () => {
     }
   });
 
-  it("groups shops and their categories separately from products", () => {
+  it("orders categories, shops, and products after the dashboard", () => {
     const menuItems = navGroups[0].items;
+    const categories = menuItems.find((item) => item.label === "الفئات");
     const products = menuItems.find((item) => item.label === "المنتجات");
     const shops = menuItems.find((item) => item.label === "المحلات");
 
+    expect(menuItems.slice(0, 4).map((item) => item.label)).toEqual([
+      "لوحة التحكم",
+      "الفئات",
+      "المحلات",
+      "المنتجات",
+    ]);
+    expect(categories?.children?.map((child) => child.page)).toEqual([
+      "categories",
+      "market-types",
+    ]);
     expect(products?.children?.map((child) => child.page)).toEqual([
       "items",
       "store-subcategories",
       "addons",
     ]);
-    expect(shops?.children?.map((child) => child.page)).toEqual([
-      "shops",
-      "categories",
-      "market-types",
+    expect(shops?.children?.map((child) => child.page)).toEqual(["shops"]);
+  });
+
+  it("keeps couriers in their own pilots group", () => {
+    const managementItems = navGroups[1].items;
+    const delivery = managementItems.find((item) => item.label === "التوصيل");
+    const pilots = managementItems.find((item) => item.label === "الطيارين");
+
+    expect(delivery?.children?.map((child) => child.page)).toEqual([
+      "delivery-zone",
+      "shipping-companies",
     ]);
-    expect(menuItems.some((item) => item.label === "الفئات")).toBe(false);
+    expect(pilots?.children?.map((child) => [child.page, child.label])).toEqual([
+      ["couriers", "كل الطيارين"],
+      ["create-courier", "إضافة طيار"],
+    ]);
   });
 
   it("uses a neutral dynamic order breadcrumb", () => {

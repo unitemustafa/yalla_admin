@@ -168,7 +168,7 @@ export function useOrderDetail(orderId: string) {
       const data = await apiResponseData(response);
       if (!response.ok) throw new Error(orderApiError(data, "تعذر إلغاء إسناد الطلب."));
       await loadOrder();
-      showSnackbar({ message: "تم إلغاء إسناد المندوب.", tone: "success" });
+      showSnackbar({ message: "تم إلغاء إسناد الطيار.", tone: "success" });
     } catch (reason) {
       showSnackbar({ message: reason instanceof Error ? reason.message : "تعذر إلغاء الإسناد.", tone: "danger" });
     } finally {
@@ -182,12 +182,12 @@ export function useOrderDetail(orderId: string) {
     try {
       const response = await apiFetch(`admin/orders/${targetOrder.id}/service-city-representatives/`);
       const data = await apiResponseData(response);
-      if (!response.ok) throw new Error(orderApiError(data, "تعذر تحميل المندوبين المتاحين."));
+      if (!response.ok) throw new Error(orderApiError(data, "تعذر تحميل الطيارين المتاحين."));
       const options = representativeOptionsFromResponse(data);
       setRepresentativeOptions(options);
-      if (!options.length) showSnackbar({ message: "لا يوجد مندوبين متاحين لهذا الطلب حاليًا.", tone: "danger" });
+      if (!options.length) showSnackbar({ message: "لا يوجد طيارين متاحين لهذا الطلب حاليًا.", tone: "danger" });
     } catch (reason) {
-      showSnackbar({ message: reason instanceof Error ? reason.message : "تعذر تحميل المندوبين المتاحين.", tone: "danger" });
+      showSnackbar({ message: reason instanceof Error ? reason.message : "تعذر تحميل الطيارين المتاحين.", tone: "danger" });
     } finally {
       setRepresentativesLoading(false);
     }
@@ -204,11 +204,11 @@ export function useOrderDetail(orderId: string) {
         body: JSON.stringify({ representative_id: Number.isFinite(numericId) ? numericId : selectedRepresentativeId }),
       });
       const data = await apiResponseData(response);
-      if (!response.ok) throw new Error(orderApiError(data, "تعذر إسناد الطلب للمندوب."));
+      if (!response.ok) throw new Error(orderApiError(data, "تعذر إسناد الطلب للطيار."));
       await loadOrder();
-      showSnackbar({ message: "تم إسناد الطلب للمندوب.", tone: "success" });
+      showSnackbar({ message: "تم إسناد الطلب للطيار.", tone: "success" });
     } catch (reason) {
-      showSnackbar({ message: reason instanceof Error ? reason.message : "تعذر إسناد الطلب للمندوب.", tone: "danger" });
+      showSnackbar({ message: reason instanceof Error ? reason.message : "تعذر إسناد الطلب للطيار.", tone: "danger" });
     } finally {
       setSavingAssignment(false);
     }

@@ -36,7 +36,7 @@ export function useCourierDetail(courierId: string) {
       setCourier(data.courier);
       setOrders(data.orders);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "تعذر تحميل تفاصيل المندوب.");
+      setError(reason instanceof Error ? reason.message : "تعذر تحميل تفاصيل الطيار.");
     } finally {
       setLoading(false);
     }

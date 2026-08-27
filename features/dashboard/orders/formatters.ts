@@ -127,21 +127,21 @@ export function deliveryAreaName(order: BackendOrder) {
 }
 
 function representativeLookupName(user: BackendDashboardUser) {
-  return fullNameFromBackendUser(user).replace(/^مستخدم #/, "مندوب #");
+  return fullNameFromBackendUser(user).replace(/^مستخدم #/, "طيار #");
 }
 
 export function representativeName(order: BackendOrder) {
   const representative = order.assigned_representative;
   if (!representative) {
     const representativeId = assignedRepresentativeId(order);
-    return representativeId ? `مندوب #${representativeId}` : "لم يتم تعيين مندوب";
+    return representativeId ? `طيار #${representativeId}` : "لم يتم تعيين طيار";
   }
   if (representative.name?.trim()) return representative.name.trim();
   return (
     [representative.first_name, representative.last_name]
       .map((part) => String(part ?? "").trim())
       .filter(Boolean)
-      .join(" ") || "مندوب غير معروف"
+      .join(" ") || "طيار غير معروف"
   );
 }
 

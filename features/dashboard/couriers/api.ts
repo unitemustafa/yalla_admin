@@ -55,9 +55,9 @@ export async function loadCourierFormData(apiFetch: ApiFetch, courierId?: string
   if (!courierId) return { cities, courier: null };
   const response = await apiFetch(`auth/users/${encodeURIComponent(courierId)}/`);
   const data = await apiResponseData(response);
-  if (!response.ok) throw new Error(errorMessage(data, "تعذر تحميل بيانات المندوب."));
+  if (!response.ok) throw new Error(errorMessage(data, "تعذر تحميل بيانات الطيار."));
   if (!isBackendDashboardUser(data) || data.role !== "representative") {
-    throw new Error("حساب المندوب غير موجود.");
+    throw new Error("حساب الطيار غير موجود.");
   }
   return { cities, courier: data };
 }
@@ -88,7 +88,7 @@ export async function removeCourierAvatar(apiFetch: ApiFetch, courierId: number 
   });
   const data = await apiResponseData(response);
   if (!response.ok || !isBackendDashboardUser(data)) {
-    throw new Error(errorMessage(data, "تعذر حذف صورة المندوب."));
+    throw new Error(errorMessage(data, "تعذر حذف صورة الطيار."));
   }
   return data;
 }
@@ -127,7 +127,7 @@ export async function setCourierAvailability(apiFetch: ApiFetch, courierId: numb
   });
   const data = await apiResponseData(response);
   if (!response.ok || !isBackendDashboardUser(data)) {
-    throw new Error(errorMessage(data, "تعذر تحديث توفر المندوب."));
+    throw new Error(errorMessage(data, "تعذر تحديث توفر الطيار."));
   }
   return data;
 }
@@ -141,10 +141,10 @@ export async function loadCourierDetailData(apiFetch: ApiFetch, courierId: strin
     apiResponseData(courierResponse),
     apiResponseData(ordersResponse),
   ]);
-  if (!courierResponse.ok) throw new Error(errorMessage(courierData, "تعذر تحميل بيانات المندوب."));
-  if (!ordersResponse.ok) throw new Error(errorMessage(ordersData, "تعذر تحميل طلبات المندوب."));
+  if (!courierResponse.ok) throw new Error(errorMessage(courierData, "تعذر تحميل بيانات الطيار."));
+  if (!ordersResponse.ok) throw new Error(errorMessage(ordersData, "تعذر تحميل طلبات الطيار."));
   if (!isBackendDashboardUser(courierData) || courierData.role !== "representative") {
-    throw new Error("حساب المندوب غير موجود.");
+    throw new Error("حساب الطيار غير موجود.");
   }
   const orders = Array.isArray(ordersData)
     ? (ordersData as CourierOrder[])

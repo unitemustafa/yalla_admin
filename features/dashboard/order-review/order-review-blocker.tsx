@@ -28,7 +28,7 @@ export function OrderReviewBlocker() {
                   <Badge tone="secondary">عدد الطلبات المعلقة: {state.pendingLabel}</Badge>
                 </div>
                 <h2 id="admin-order-review-blocker-title" className="text-xl font-extrabold tracking-normal sm:text-2xl">مراجعة طلب قبل متابعة استخدام لوحة التحكم</h2>
-                <p className="mt-1 text-sm leading-6 text-muted-foreground">يجب قبول الطلب أو رفضه قبل الرجوع للوحة التحكم، ويتم إسناد المندوب فقط للطلبات التي تحتاج ذلك.</p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">يجب قبول الطلب أو رفضه قبل الرجوع للوحة التحكم، ويتم إسناد الطيار فقط للطلبات التي تحتاج ذلك.</p>
               </div>
               <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-red-500/10 text-red-600 dark:text-red-300"><ShieldAlert className="size-6" /></span>
             </div>
@@ -63,7 +63,7 @@ export function OrderReviewBlocker() {
             {selectingRepresentative ? (
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <Button type="button" variant="outline" disabled={state.phase === "assigning"} onClick={() => void state.saveApprovedOrder()}><CheckCircle2 className="size-4" />حفظ الطلب</Button>
-                <Button type="button" className="bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400" disabled={!state.selectedRepresentativeId || state.phase === "assigning"} onClick={() => void state.assignRepresentative()}>{state.phase === "assigning" ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}إرسال للمندوب</Button>
+                <Button type="button" className="bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400" disabled={!state.selectedRepresentativeId || state.phase === "assigning"} onClick={() => void state.assignRepresentative()}>{state.phase === "assigning" ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}إرسال للطيار</Button>
               </div>
             ) : state.confirmReject ? (
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -98,11 +98,11 @@ function RepresentativeSelection({ state }: { state: BlockerState }) {
       ) : null}
       <div>
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div><h3 className="text-lg font-bold">اختيار المندوب</h3><p className="text-sm text-muted-foreground">{state.currentOrderIsGeneral ? "طلب عام - اختر أي مندوب متاح يدوياً" : "اختر مندوبًا من نفس مدينة الخدمة لإرسال الطلب."}</p></div>
-          <Button type="button" variant="outline" disabled={state.representativesLoading || state.phase === "assigning"} onClick={() => void state.refreshRepresentatives()}>{state.representativesLoading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}تحديث المندوبين</Button>
+          <div><h3 className="text-lg font-bold">اختيار الطيار</h3><p className="text-sm text-muted-foreground">{state.currentOrderIsGeneral ? "طلب عام - اختر أي طيار متاح يدوياً" : "اختر طيارًا من نفس مدينة الخدمة لإرسال الطلب."}</p></div>
+          <Button type="button" variant="outline" disabled={state.representativesLoading || state.phase === "assigning"} onClick={() => void state.refreshRepresentatives()}>{state.representativesLoading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}تحديث الطيارين</Button>
         </div>
         {state.representatives.length === 0 ? (
-          <div className="rounded-md border border-dashed bg-muted/20 px-4 py-8 text-center text-sm font-semibold text-muted-foreground">{state.currentOrderIsGeneral ? "لا يوجد مندوبين متاحين حاليًا." : "لا يوجد مندوبين متاحين لهذه المدينة حاليًا."}</div>
+          <div className="rounded-md border border-dashed bg-muted/20 px-4 py-8 text-center text-sm font-semibold text-muted-foreground">{state.currentOrderIsGeneral ? "لا يوجد طيارين متاحين حاليًا." : "لا يوجد طيارين متاحين لهذه المدينة حاليًا."}</div>
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
             {state.representatives.map((representative, index) => {

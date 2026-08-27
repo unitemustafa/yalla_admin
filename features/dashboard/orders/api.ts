@@ -106,7 +106,7 @@ export function representativeOptionsFromResponse(value: unknown): Representativ
       const phone = textFromRecord(representative, [["phone"], ["user", "phone"]]);
       return {
         id,
-        name: directName || splitName || (id ? `مندوب #${id}` : "مندوب"),
+        name: directName || splitName || (id ? `طيار #${id}` : "طيار"),
         phone: phone || null,
       };
     })
