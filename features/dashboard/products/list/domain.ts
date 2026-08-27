@@ -17,7 +17,7 @@ export function compareItems(firstRow: ItemRow, secondRow: ItemRow) {
 
 export function itemVisibilityLabel(row: ItemRow) {
   if (row.scopeLabel?.trim()) return row.scopeLabel;
-  if (row.visibilityMode !== "regions") return "عام";
+  if (row.visibilityMode !== "regions") return "جاهز للشحن";
   const names = row.regionNames?.length ? row.regionNames : row.regionSlugs;
   return names?.length ? names.join("، ") : "مناطق محددة";
 }

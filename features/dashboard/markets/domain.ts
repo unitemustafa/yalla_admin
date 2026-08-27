@@ -142,7 +142,7 @@ export function validateMarketDraft(
     return "أدخل وقت توصيل صحيحًا، والحد الأقصى لا يقل عن الحد الأدنى.";
   }
   if (!draft.showInGeneral && !draft.showInServiceCities) return "اختر نطاق ظهور المحل";
-  if (draft.showInGeneral && draft.showInServiceCities) return "اختر العام أو مدينة واحدة فقط.";
+  if (draft.showInGeneral && draft.showInServiceCities) return "اختر جاهز للشحن أو مدينة واحدة فقط.";
   if (draft.showInServiceCities && draft.selectedServiceCityIds.length === 0) return "اختر مدينة واحدة على الأقل";
   if (draft.selectedServiceCityIds.length > 1) return "يمكن اختيار مدينة واحدة فقط للمحل.";
   return null;

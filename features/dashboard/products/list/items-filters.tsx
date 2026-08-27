@@ -278,7 +278,7 @@ export function ItemsFilters({
                     <legend className="mb-2 text-sm font-bold">نطاق الظهور</legend>
                     <div className="grid grid-cols-2 gap-2">
                       {([
-                        ["general", "عام", Store],
+                        ["general", "جاهز للشحن", Store],
                         ["cities", "مدن", MapPin],
                       ] as const).map(([value, label, Icon]) => {
                         const selected = draftFilters.scope === value;

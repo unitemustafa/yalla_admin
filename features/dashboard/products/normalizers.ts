@@ -330,7 +330,7 @@ export function productRowFromApi(value: unknown, index: number): ItemRow {
   const marketScope = typeof market?.scope === "string" ? market.scope : "";
   const scopeLabel =
     marketScope === "general"
-      ? "عام"
+      ? "جاهز للشحن"
       : marketScope === "service_city"
         ? text(market ?? {}, ["branch"], "مدينة خدمة")
         : text(market ?? {}, ["scope"], "");
@@ -417,7 +417,7 @@ export function normalizeItemRow(row: ItemRow, market?: ShopRow): ItemRow {
     scopeLabel: market
       ? isCityMarket
         ? marketCityNames.join("، ") || "مدينة خدمة"
-        : "عام"
+        : "جاهز للشحن"
       : row.scopeLabel,
   };
 }

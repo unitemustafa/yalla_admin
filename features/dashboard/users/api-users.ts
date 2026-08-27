@@ -99,7 +99,7 @@ export function dashboardUserFromBackend(
     user.market_region_mode === "service_city" && serviceCityName
       ? serviceCityName
       : user.market_region_mode === "general"
-        ? "عام"
+        ? "جاهز للشحن"
         : unset;
 
   return {

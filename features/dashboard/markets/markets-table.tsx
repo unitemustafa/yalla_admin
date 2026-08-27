@@ -10,7 +10,7 @@ import { classificationLabel, marketCityNames } from "./domain";
 import type { Market } from "./types";
 
 function MarketLocationsCell({ market, serviceCities }: { market: Market; serviceCities: ServiceCity[] }) {
-  if (market.scope === "general") return <div className="grid gap-1 text-sm text-muted-foreground"><p><span className="font-semibold text-foreground">المدن: </span>عام</p></div>;
+  if (market.scope === "general") return <div className="grid gap-1 text-sm text-muted-foreground"><p><span className="font-semibold text-foreground">المدن: </span>جاهز للشحن</p></div>;
   const names = marketCityNames(market, serviceCities);
   return <div className="grid gap-1 text-sm text-muted-foreground"><p><span className="font-semibold text-foreground">المدن: </span>{names.length ? names.join("، ") : "لا توجد مدن محددة"}</p></div>;
 }

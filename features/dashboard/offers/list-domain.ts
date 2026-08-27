@@ -18,7 +18,7 @@ function normalizeOfferFilterText(value: string) {
 export function offerCityOptions(cities: ServiceCity[]) {
   return [
     { value: allOffersFilterValue, label: "كل المدن" },
-    { value: generalOffersFilterValue, label: "عام" },
+    { value: generalOffersFilterValue, label: "جاهز للشحن" },
     ...cities
       .filter((city) => city.is_active !== false)
       .map((city) => ({ value: String(city.id), label: city.name })),

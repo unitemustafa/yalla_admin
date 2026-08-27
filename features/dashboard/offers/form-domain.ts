@@ -107,10 +107,10 @@ export type OfferPayloadResult =
 function validateScope(state: OfferFormState, markets: OfferMarket[]): OfferPayloadResult | null {
   if (!state.title.trim()) return { ok: false, message: "العنوان مطلوب" };
   if (!state.appearsInGeneral && !state.appearsInServiceCity) {
-    return { ok: false, message: "اختر الظهور في العام أو المدن واحدة على الأقل." };
+    return { ok: false, message: "اختر الظهور في جاهز للشحن أو مدينة واحدة على الأقل." };
   }
   if (state.appearsInGeneral && state.appearsInServiceCity) {
-    return { ok: false, message: "اختر العام أو مدينة واحدة فقط." };
+    return { ok: false, message: "اختر جاهز للشحن أو مدينة واحدة فقط." };
   }
   if (state.appearsInServiceCity && !state.serviceCityIds.length) {
     return { ok: false, message: "اختر المدن" };
@@ -120,7 +120,7 @@ function validateScope(state: OfferFormState, markets: OfferMarket[]): OfferPayl
   }
   if (state.selectedType !== "إعلان" && !markets.length) {
     const message = state.appearsInGeneral
-      ? "لا توجد محلات عامة. أنشئ محلًا عامًا من صفحة المحلات أولاً."
+      ? "لا توجد محلات جاهزة للشحن. أنشئ محلًا جاهزًا للشحن من صفحة المحلات أولاً."
       : state.appearsInServiceCity && state.serviceCityIds.length
         ? "لا توجد محلات في هذه المدينة"
         : "تعذر تحديد سوق مناسب للعرض تلقائيًا.";

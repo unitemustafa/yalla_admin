@@ -98,7 +98,7 @@ function RepresentativeSelection({ state }: { state: BlockerState }) {
       ) : null}
       <div>
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div><h3 className="text-lg font-bold">اختيار الطيار</h3><p className="text-sm text-muted-foreground">{state.currentOrderIsGeneral ? "طلب عام - اختر أي طيار متاح يدوياً" : "اختر طيارًا من نفس مدينة الخدمة لإرسال الطلب."}</p></div>
+          <div><h3 className="text-lg font-bold">اختيار الطيار</h3><p className="text-sm text-muted-foreground">{state.currentOrderIsGeneral ? "طلب جاهز للشحن - اختر أي طيار متاح يدوياً" : "اختر طيارًا من نفس مدينة الخدمة لإرسال الطلب."}</p></div>
           <Button type="button" variant="outline" disabled={state.representativesLoading || state.phase === "assigning"} onClick={() => void state.refreshRepresentatives()}>{state.representativesLoading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}تحديث الطيارين</Button>
         </div>
         {state.representatives.length === 0 ? (

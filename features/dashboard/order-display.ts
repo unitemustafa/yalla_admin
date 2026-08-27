@@ -203,7 +203,7 @@ export function isServiceCityOrder(order: DashboardOrderLike) {
 }
 
 export function getOrderScopeLabel(order: DashboardOrderLike) {
-  if (isGeneralOrder(order)) return "عام";
+  if (isGeneralOrder(order)) return "جاهز للشحن";
   if (isServiceCityOrder(order)) return "مدينة خدمة";
   return cleanText(order.order_scope) || unknownLabel;
 }

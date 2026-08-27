@@ -92,7 +92,7 @@ export function CreateOrderFields({ state }: { state: CreateOrderState }) {
       {address ? (
         <div className="grid gap-3 rounded-md border bg-muted/10 p-3 text-sm">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={state.isGeneralAddress ? "secondary" : "blue"}>{state.isGeneralAddress ? "عام" : "مدينة خدمة"}</Badge>
+            <Badge tone={state.isGeneralAddress ? "secondary" : "blue"}>{state.isGeneralAddress ? "جاهز للشحن" : "مدينة خدمة"}</Badge>
             <Badge tone={address.delivery_area ? "green" : "secondary"}>{deliveryTypeLabel}</Badge>
           </div>
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">

@@ -41,7 +41,7 @@ export function OfferBasicSection({ form }: { form: CreateOfferFormController })
             <div className="text-sm font-medium">نطاق العرض *</div>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="flex min-h-16 cursor-pointer items-center justify-between gap-3 rounded-md border bg-background px-4 py-3 shadow-sm transition hover:border-primary/40">
-                <span className="text-sm font-semibold">يظهر في العام</span>
+                <span className="text-sm font-semibold">يظهر في جاهز للشحن</span>
                 <Switch
                   checked={state.appearsInGeneral}
                   disabled={state.appearsInServiceCity}

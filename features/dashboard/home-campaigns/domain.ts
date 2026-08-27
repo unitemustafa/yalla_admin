@@ -86,7 +86,7 @@ export function campaignFromApi(record: BackendRecord): CampaignRow {
     ...base,
     id: text(record, "id"),
     effective_status: (text(record, "effective_status") || "inactive") as CampaignRow["effective_status"],
-    service_city_name: city ? text(city, "name") : "عام",
+    service_city_name: city ? text(city, "name") : "جاهز للشحن",
     target_name: target ? text(target, "name") : "—",
     teaser_image: text(record, "teaser_image"), sheet_image: text(record, "sheet_image"),
     video: text(record, "video"), video_poster: text(record, "video_poster"),

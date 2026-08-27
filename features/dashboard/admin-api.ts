@@ -140,7 +140,7 @@ export function shopRowFromApi(record: BackendRecord, index: number): ShopRow {
   const branch = serviceCityNames.length
     ? serviceCityNames.join("، ")
     : scope === "general"
-      ? "عام"
+      ? "جاهز للشحن"
       : text(record, ["branch", "branch_name", "area_name"], "كل الفروع");
 
   return {

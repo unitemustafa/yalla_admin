@@ -273,7 +273,7 @@ export function validateOrderDraft(context: OrderDraftContext) {
         : getMarketScope(market) === "service_city";
       return sameScope
         ? "لا يمكن دمج منتجات من مدن مختلفة في نفس الطلب"
-        : "لا يمكن دمج محلات عامة مع محلات مدينة في نفس الطلب";
+        : "لا يمكن دمج محلات جاهزة للشحن مع محلات مدينة في نفس الطلب";
     }
   }
   if (!selected.products.length && !selected.offers.length) {
@@ -306,8 +306,8 @@ export function validateOrderDraft(context: OrderDraftContext) {
       return sameScope
         ? "لا يمكن دمج منتجات من مدن مختلفة في نفس الطلب"
         : isGeneralAddress(context.selectedAddressRecord)
-          ? "لا يمكن استخدام عرض مدينة داخل طلب عام"
-          : "لا يمكن استخدام عرض عام داخل طلب مدينة";
+          ? "لا يمكن استخدام عرض مدينة داخل طلب جاهز للشحن"
+          : "لا يمكن استخدام عرض جاهز للشحن داخل طلب مدينة";
     }
   }
   return null;

@@ -26,7 +26,7 @@ export function MarketDialog({ market, serviceCities, serviceCitiesLoading, serv
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-foreground/30 p-4 backdrop-blur-[1px]">
       <section role="dialog" aria-modal="true" className="flex h-[min(820px,calc(100dvh-2rem))] w-full max-w-4xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl">
-        <div className="flex shrink-0 items-start justify-between border-b bg-muted/20 px-6 py-4"><div><h2 className="text-xl font-bold">{market ? "تعديل المحل" : "إضافة محل"}</h2><p className="mt-1 text-sm text-muted-foreground">حدد نطاق ظهور المحل، عام أو مرتبط بمدن خدمة.</p></div><button type="button" onClick={onClose} aria-label="إغلاق" className="rounded-full border p-2 hover:bg-accent"><X className="size-4" /></button></div>
+        <div className="flex shrink-0 items-start justify-between border-b bg-muted/20 px-6 py-4"><div><h2 className="text-xl font-bold">{market ? "تعديل المحل" : "إضافة محل"}</h2><p className="mt-1 text-sm text-muted-foreground">حدد نطاق ظهور المحل: جاهز للشحن أو مرتبط بمدن خدمة.</p></div><button type="button" onClick={onClose} aria-label="إغلاق" className="rounded-full border p-2 hover:bg-accent"><X className="size-4" /></button></div>
         <form onSubmit={form.submit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-6 sm:grid-cols-2">
             <MarketMediaFields form={form} />

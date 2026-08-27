@@ -123,7 +123,7 @@ export function ProductBasicSection({
                 {!controller.selectedMarket
                   ? "اختار المحل الأول علشان نحدد العملاء اللي الإشعار هيوصل لهم."
                   : controller.selectedMarket.scope === "general"
-                    ? "الإشعار هيوصل لعملاء السوق العام فقط، ولما يضغطوا عليه هيفتح تفاصيل المنتج."
+                    ? "الإشعار هيوصل لعملاء جاهز للشحن فقط، ولما يضغطوا عليه هيفتح تفاصيل المنتج."
                     : `الإشعار هيوصل لعملاء ${controller.selectedMarket.serviceCities.join("، ") || "مدينة المحل"} فقط، ولما يضغطوا عليه هيفتح تفاصيل المنتج.`}
               </span>
               <span className="mt-1 block text-xs leading-5 text-muted-foreground">

@@ -29,7 +29,7 @@ export function OfferCardsGrid({ list }: { list: OffersListController }) {
         const isInactive = offer.backendStatus === "inactive";
         const isExpired = offerDateLifecycle(offer.startsAt, offer.endsAt) === "expired";
         const placement = [
-          offer.showInGeneral ? "عام" : "",
+          offer.showInGeneral ? "جاهز للشحن" : "",
           offer.serviceCityIds.length ? offer.serviceCityName : "",
         ].filter(Boolean).join(" + ") || "غير محدد";
         const collapsed = !list.expandedIds[offer.id];
@@ -86,7 +86,7 @@ export function OfferCardsGrid({ list }: { list: OffersListController }) {
                     <OfferInfoRow
                       label="النطاق"
                       value={[
-                        offer.showInGeneral ? "عام" : "",
+                        offer.showInGeneral ? "جاهز للشحن" : "",
                         offer.serviceCityIds.length ? "مدن خدمة" : "",
                       ].filter(Boolean).join(" + ") || "-"}
                     />

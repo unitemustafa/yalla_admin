@@ -44,7 +44,7 @@ export function MarketPickerDialog({
             </div>
             <div className="flex rounded-md border bg-muted/20 p-1">
               {([
-                ["general", "عام"],
+                ["general", "جاهز للشحن"],
                 ["service_city", "مدن الخدمة"],
               ] as const).map(([value, label]) => (
                 <button
@@ -82,7 +82,7 @@ export function MarketPickerDialog({
                     </span>
                     <span className="mt-1 block truncate text-xs text-muted-foreground">
                       {market.scope === "general"
-                        ? "عام"
+                        ? "جاهز للشحن"
                         : market.serviceCities.join("، ") || "مدينة خدمة"}
                     </span>
                   </span>
