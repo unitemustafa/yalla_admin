@@ -32,7 +32,7 @@ export function ProductBasicSection({
             value={controller.description}
           />
         </LabelText>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid items-start gap-4 md:grid-cols-3">
           <LabelText label="المحل">
             <button
               className="flex h-10 w-full items-center justify-between gap-3 rounded-md border bg-input px-3 text-sm shadow-sm transition hover:border-primary/50"
@@ -86,9 +86,9 @@ export function ProductBasicSection({
             )}
           </LabelText>
           <LabelText label="الخصم">
-            <div className="relative" dir="ltr">
+            <div className="relative h-10" dir="ltr">
               <Input
-                className="h-10 pe-10 text-left"
+                className="h-10 pe-10 text-left tabular-nums"
                 data-testid="product-discount-input"
                 inputMode="decimal"
                 onChange={(event) =>
@@ -97,7 +97,7 @@ export function ProductBasicSection({
                 placeholder="0.00"
                 value={controller.discount}
               />
-              <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-sm font-black text-muted-foreground">
+              <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-sm font-black leading-none text-muted-foreground">
                 %
               </span>
             </div>

@@ -10,6 +10,7 @@ export function ConfirmDeleteDialog({
   description,
   busy,
   action = "delete",
+  confirmLabel,
   onCancel,
   onConfirm,
 }: {
@@ -17,6 +18,7 @@ export function ConfirmDeleteDialog({
   description: string;
   busy: boolean;
   action?: "delete" | "archive";
+  confirmLabel?: string;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -58,7 +60,7 @@ export function ConfirmDeleteDialog({
           </Button>
           <Button type="button" variant="danger" onClick={onConfirm} disabled={busy}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <ActionIcon className="size-4" />}
-            {busy ? "جار التنفيذ..." : action === "archive" ? "أرشفة" : "حذف نهائي"}
+            {busy ? "جار التنفيذ..." : confirmLabel ?? (action === "archive" ? "أرشفة" : "حذف نهائي")}
           </Button>
         </div>
       </section>

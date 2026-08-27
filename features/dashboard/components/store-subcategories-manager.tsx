@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Edit3, Layers3, LoaderCircle, Plus, Trash2, X } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
+import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
 import { Button, Input, Switch } from "../primitives";
 import {
   deleteStoreSubcategory,
@@ -39,6 +40,7 @@ export function StoreSubcategoriesManager({
 }) {
   const { apiFetch } = useAuth();
   const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [deleteCandidate, setDeleteCandidate] = useState<StoreSubcategory | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -88,10 +90,9 @@ export function StoreSubcategoriesManager({
     }
   }
 
-  async function remove(item: StoreSubcategory) {
-    if (!window.confirm(
-      `هل تريد حذف فئة «${item.name_ar}»؟ إذا كانت مستخدمة فسيتم أرشفتها وتعطيلها بدل الحذف النهائي.`,
-    )) return;
+  async function remove() {
+    if (!deleteCandidate) return;
+    const item = deleteCandidate;
     setBusy(true);
     setError("");
     try {
@@ -108,8 +109,10 @@ export function StoreSubcategoriesManager({
         onChange(items.filter((candidate) => candidate.id !== item.id));
         if (draft.id === item.id) reset();
       }
+      setDeleteCandidate(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر حذف الفئة.");
+      setDeleteCandidate(null);
     } finally {
       setBusy(false);
     }
@@ -158,7 +161,7 @@ export function StoreSubcategoriesManager({
                   </div>
                   <div className="flex shrink-0 gap-1">
                     <Button type="button" size="icon" variant="outline" onClick={() => edit(item)} aria-label="تعديل"><Edit3 className="size-4" /></Button>
-                    <Button type="button" size="icon" variant="outline" disabled={busy} onClick={() => void remove(item)} aria-label="حذف"><Trash2 className="size-4 text-destructive" /></Button>
+                    <Button type="button" size="icon" variant="outline" disabled={busy} onClick={() => setDeleteCandidate(item)} aria-label="حذف"><Trash2 className="size-4 text-destructive" /></Button>
                   </div>
                 </article>
               ))}
@@ -167,6 +170,16 @@ export function StoreSubcategoriesManager({
           </div>
         </div>
       </section>
+      {deleteCandidate ? (
+        <ConfirmDeleteDialog
+          title="حذف قسم المنتج"
+          description={`هل تريد حذف قسم «${deleteCandidate.name_ar}»؟ إذا كان مستخدمًا فسيتم أرشفته وتعطيله بدلًا من حذفه نهائيًا.`}
+          busy={busy}
+          confirmLabel="تأكيد الحذف"
+          onCancel={() => setDeleteCandidate(null)}
+          onConfirm={() => void remove()}
+        />
+      ) : null}
     </div>
   );
 }
