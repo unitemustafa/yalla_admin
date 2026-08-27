@@ -2319,4 +2319,4 @@ PATCH /api/v1/courier/orders/{order_id}/status/ now accepts {"status":"failed_de
 
 ### Push configuration
 
-The backend reads only the encrypted DigitalOcean secret FIREBASE_SERVICE_ACCOUNT_JSON. Missing credentials disable push only. Stale/unregistered FCM tokens are marked inactive. No worker is required for immediate events.
+The backend reads only the encrypted deployment secret FIREBASE_SERVICE_ACCOUNT_JSON. Missing credentials disable push only. Stale/unregistered FCM tokens are marked inactive. No worker is required for immediate events.
