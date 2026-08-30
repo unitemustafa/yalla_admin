@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { LoaderCircle, RefreshCw } from "lucide-react";
+import { LoaderCircle, Plus, RefreshCw } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { StoreSubcategoriesManager } from "../components/store-subcategories-manager";
@@ -17,6 +17,7 @@ export function StoreSubcategoriesPage() {
   const [items, setItems] = useState<StoreSubcategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,16 +46,27 @@ export function StoreSubcategoriesPage() {
         title="أقسام المنتجات"
         description="أقسام نصية لتنظيم المنتجات داخل المحل، مثل الوجبات والمشروبات والحلويات، وهي مستقلة عن فئات المحلات."
         actions={
-          <Button
-            type="button"
-            variant="outline"
-            className="h-9 px-4 text-sm"
-            onClick={() => void load()}
-            disabled={loading}
-          >
-            <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
-            تحديث
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 px-4 text-sm"
+              onClick={() => void load()}
+              disabled={loading}
+            >
+              <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
+              تحديث
+            </Button>
+            <Button
+              type="button"
+              className="h-9 px-4 text-sm"
+              onClick={() => setCreateOpen(true)}
+              disabled={loading || Boolean(loadError)}
+            >
+              <Plus className="size-4" />
+              إضافة قسم
+            </Button>
+          </div>
         }
       />
 
@@ -67,7 +79,12 @@ export function StoreSubcategoriesPage() {
           <PageLoadError onRetry={() => void load()} />
         </div>
       ) : (
-        <StoreSubcategoriesManager items={items} onChange={setItems} />
+        <StoreSubcategoriesManager
+          items={items}
+          onChange={setItems}
+          createOpen={createOpen}
+          onCreateClose={() => setCreateOpen(false)}
+        />
       )}
     </div>
   );

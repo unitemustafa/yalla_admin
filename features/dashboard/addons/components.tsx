@@ -169,7 +169,7 @@ export function AddonEditPanel({
           </span>
         </label>
         <div className="grid gap-3 md:grid-cols-3">
-          <Field label="الاسم بالعربي">
+          <Field label="الاسم">
             <Input
               value={draft.nameAr}
               className="h-9"

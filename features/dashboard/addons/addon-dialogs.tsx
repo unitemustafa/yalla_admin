@@ -190,7 +190,7 @@ export function AddonCreateDialog({
               </div>
             </div>
           </Field>
-          <Field label="الاسم بالعربي">
+          <Field label="الاسم">
             <Input
               value={controller.addonNameAr}
               onChange={(event) => controller.setAddonNameAr(event.target.value)}

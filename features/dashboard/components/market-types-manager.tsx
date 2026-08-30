@@ -18,6 +18,7 @@ import {
   MarketTypesList,
   type MarketTypeGroup,
 } from "./market-types-list";
+import { useLockedPageScroll } from "../market-classifications/use-locked-page-scroll";
 
 type Classification = { id: number; name: string };
 
@@ -25,7 +26,6 @@ type Draft = {
   id?: number;
   classification_id: number;
   name_ar: string;
-  name_en: string;
   sort_order?: number;
   is_active: boolean;
   image: string | null;
@@ -35,19 +35,20 @@ export function MarketTypesManager({
   items,
   classifications,
   onChange,
-  onClose,
+  createOpen,
+  onCreateClose,
 }: {
   items: MarketType[];
   classifications: Classification[];
   onChange: (items: MarketType[]) => void;
-  onClose?: () => void;
+  createOpen: boolean;
+  onCreateClose: () => void;
 }) {
   const { apiFetch } = useAuth();
   const firstClassificationId = classifications[0]?.id ?? 0;
   const [draft, setDraft] = useState<Draft>({
     classification_id: firstClassificationId,
     name_ar: "",
-    name_en: "",
     sort_order: undefined,
     is_active: true,
     image: null,
@@ -94,7 +95,6 @@ export function MarketTypesManager({
     setDraft({
       classification_id: classificationId || firstClassificationId,
       name_ar: "",
-      name_en: "",
       sort_order: undefined,
       is_active: true,
       image: null,
@@ -102,6 +102,11 @@ export function MarketTypesManager({
     setImageFile(null);
     setImagePreview("");
     setFormError("");
+  }
+
+  function closeEditor(classificationId = draft.classification_id) {
+    reset(classificationId);
+    onCreateClose();
   }
 
   function edit(item: MarketType) {
@@ -132,8 +137,8 @@ export function MarketTypesManager({
       setFormError("اختر الفئة الأساسية للمحل.");
       return;
     }
-    if (!draft.name_ar.trim() || !draft.name_en.trim()) {
-      setFormError("الاسم بالعربية والإنجليزية مطلوبان.");
+    if (!draft.name_ar.trim()) {
+      setFormError("الاسم مطلوب.");
       return;
     }
     if (!draft.id && !imageFile) {
@@ -153,7 +158,6 @@ export function MarketTypesManager({
         ...draft,
         sort_order: keepExistingOrder ? draft.sort_order : undefined,
         name_ar: draft.name_ar.trim(),
-        name_en: draft.name_en.trim(),
         image: imageFile,
       });
       onChange(
@@ -161,7 +165,7 @@ export function MarketTypesManager({
           ? items.map((item) => (item.id === saved.id ? saved : item))
           : [...items, saved],
       );
-      reset(saved.classification_id);
+      closeEditor(saved.classification_id);
     } catch (reason) {
       setFormError(
         reason instanceof Error ? reason.message : "تعذر حفظ الفئة الثانوية.",
@@ -245,160 +249,140 @@ export function MarketTypesManager({
     label: item.name,
   }));
 
+  const editorOpen = createOpen || draft.id !== undefined;
+  useLockedPageScroll(editorOpen);
+
   return (
-    <div
-      className={
-        onClose
-          ? "fixed inset-0 z-[60] flex items-center justify-center bg-foreground/30 p-4 backdrop-blur-[1px]"
-          : "mt-6"
-      }
-    >
+    <div className="mt-6">
       <section
         dir="rtl"
-        role={onClose ? "dialog" : undefined}
-        aria-modal={onClose ? true : undefined}
-        className={
-          onClose
-            ? "flex h-[min(820px,calc(100dvh-2rem))] w-full max-w-6xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl"
-            : "flex min-h-[620px] w-full flex-col overflow-hidden rounded-xl border bg-background shadow-sm"
-        }
+        className="w-full overflow-hidden rounded-xl border bg-background shadow-sm"
       >
-        <header className="flex items-start justify-between border-b bg-muted/20 px-6 py-4">
-          <div>
-            <h2 className="text-xl font-bold">الفئات الثانوية للمحلات</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              اختر الفئة الأساسية أولًا، ثم أضف تحتها فئات مثل شاورما وسوشي وبرجر. ستظهر دائريًا للعملاء لتصفية المحلات.
-            </p>
-          </div>
-          {onClose ? (
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-full border p-2 hover:bg-accent"
-              aria-label="إغلاق"
-            >
-              <X className="size-4" />
-            </button>
-          ) : null}
-        </header>
+        <MarketTypesList
+          groups={groups}
+          totalCount={items.length}
+          selectedClassificationId={filterClassificationId}
+          reorderingClassificationId={reorderingClassificationId}
+          busy={busy}
+          error={listError}
+          onFilterChange={changeFilter}
+          onEdit={edit}
+          onRemove={(item) => void remove(item)}
+          onMove={(group, index, offset) => void move(group, index, offset)}
+        />
+      </section>
 
-        <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[390px_minmax(0,1fr)]">
+      {editorOpen ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/30 p-4 backdrop-blur-[1px]">
           <form
+            dir="rtl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="market-type-editor-title"
             onSubmit={submit}
-            className="grid content-start gap-4 border-b p-5 lg:border-b-0 lg:border-e"
+            className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border bg-background shadow-2xl"
           >
-            <h3 className="font-bold">
-              {draft.id ? "تعديل الفئة الثانوية" : "إضافة فئة ثانوية"}
-            </h3>
-            <p className="-mt-2 text-xs leading-5 text-muted-foreground">
-              ترتيب الظهور تلقائي. بعد الحفظ يمكنك تغييره من الأسهم في القائمة.
-            </p>
-            <label className="grid gap-2 text-sm font-semibold">
-              الفئة الأساسية للمحل *
-              <AppSelect
-                value={String(draft.classification_id || "")}
-                onValueChange={(value) =>
-                  setDraft((current) => ({
-                    ...current,
-                    classification_id: Number(value),
-                  }))
-                }
-                options={classificationOptions}
-              />
-            </label>
-            <label className="grid gap-2 text-sm font-semibold">
-              الاسم بالعربية *
-              <Input
-                value={draft.name_ar}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    name_ar: event.target.value,
-                  }))
-                }
-              />
-            </label>
-            <label className="grid gap-2 text-sm font-semibold">
-              الاسم بالإنجليزية *
-              <Input
-                dir="ltr"
-                value={draft.name_en}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    name_en: event.target.value,
-                  }))
-                }
-              />
-            </label>
-            <label className="flex cursor-pointer items-center justify-between rounded-md border px-3 py-3 text-sm font-semibold">
-              الفئة الثانوية نشطة
-              <Switch
-                checked={draft.is_active}
-                onCheckedChange={(checked) =>
-                  setDraft((current) => ({
-                    ...current,
-                    is_active: checked,
-                  }))
-                }
-              />
-            </label>
-            <label className="flex cursor-pointer items-center gap-3 rounded-md border border-dashed p-3 text-sm">
-              {imagePreview ? (
-                <DashboardImage
-                  src={imagePreview}
-                  alt=""
-                  width={64}
-                  height={64}
-                  className="size-16 rounded-full"
-                  imageClassName="object-contain p-1"
+            <header className="flex items-start justify-between gap-4 border-b bg-muted/20 px-6 py-4">
+              <div>
+                <h2 id="market-type-editor-title" className="text-xl font-bold">
+                  {draft.id ? "تعديل الفئة الثانوية" : "إضافة فئة ثانوية"}
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  اختر الفئة الأساسية وأدخل بيانات الفئة الثانوية. يمكنك ترتيبها بعد الحفظ من القائمة.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => closeEditor()}
+                className="rounded-full border p-2 hover:bg-accent"
+                aria-label="إغلاق"
+              >
+                <X className="size-4" />
+              </button>
+            </header>
+
+            <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-6 sm:grid-cols-2">
+              <label className="grid gap-2 text-sm font-semibold sm:col-span-2">
+                الفئة الأساسية للمحل *
+                <AppSelect
+                  value={String(draft.classification_id || "")}
+                  onValueChange={(value) =>
+                    setDraft((current) => ({
+                      ...current,
+                      classification_id: Number(value),
+                    }))
+                  }
+                  options={classificationOptions}
                 />
-              ) : (
-                <ImagePlus className="size-6 text-primary" />
-              )}
-                <span>{imageFile?.name || "اختيار صورة دائرية للفئة الثانوية *"}</span>
-              <input
-                className="sr-only"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={(event) => void handleImageChange(event)}
-              />
-            </label>
-            <p className="-mt-2 text-xs text-muted-foreground">{mediaSpecHint(mediaSpecs.marketType)}</p>
-            {formError ? (
-              <p className="text-sm text-destructive">{formError}</p>
-            ) : null}
-            <div className="flex gap-2">
+              </label>
+              <label className="grid gap-2 text-sm font-semibold sm:col-span-2">
+                الاسم *
+                <Input
+                  autoFocus
+                  value={draft.name_ar}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      name_ar: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="flex cursor-pointer items-center justify-between rounded-md border px-3 py-3 text-sm font-semibold sm:col-span-2">
+                الفئة الثانوية نشطة
+                <Switch
+                  checked={draft.is_active}
+                  onCheckedChange={(checked) =>
+                    setDraft((current) => ({
+                      ...current,
+                      is_active: checked,
+                    }))
+                  }
+                />
+              </label>
+              <label className="flex cursor-pointer items-center gap-3 rounded-md border border-dashed p-3 text-sm sm:col-span-2">
+                {imagePreview ? (
+                  <DashboardImage
+                    src={imagePreview}
+                    alt=""
+                    width={64}
+                    height={64}
+                    className="size-16 rounded-full"
+                    imageClassName="object-contain p-1"
+                  />
+                ) : (
+                  <ImagePlus className="size-6 text-primary" />
+                )}
+                <span>{imageFile?.name || (draft.id ? "تغيير صورة الفئة الثانوية" : "اختيار صورة دائرية للفئة الثانوية *")}</span>
+                <input
+                  className="sr-only"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(event) => void handleImageChange(event)}
+                />
+              </label>
+              <p className="-mt-2 text-xs text-muted-foreground sm:col-span-2">{mediaSpecHint(mediaSpecs.marketType)}</p>
+              {formError ? (
+                <p className="text-sm text-destructive sm:col-span-2">{formError}</p>
+              ) : null}
+            </div>
+
+            <footer className="flex justify-end gap-2 border-t px-6 py-4">
+              <Button type="button" variant="outline" onClick={() => closeEditor()}>
+                إلغاء
+              </Button>
               <Button type="submit" disabled={busy}>
                 {busy ? (
                   <LoaderCircle className="size-4 animate-spin" />
                 ) : (
                   <Plus className="size-4" />
                 )}
-                حفظ الفئة الثانوية
+                {draft.id ? "حفظ التعديلات" : "إضافة الفئة"}
               </Button>
-              {draft.id ? (
-                <Button type="button" variant="outline" onClick={() => reset()}>
-                  إلغاء التعديل
-                </Button>
-              ) : null}
-            </div>
+            </footer>
           </form>
-
-          <MarketTypesList
-            groups={groups}
-            totalCount={items.length}
-            selectedClassificationId={filterClassificationId}
-            reorderingClassificationId={reorderingClassificationId}
-            busy={busy}
-            error={listError}
-            onFilterChange={changeFilter}
-            onEdit={edit}
-            onRemove={(item) => void remove(item)}
-            onMove={(group, index, offset) => void move(group, index, offset)}
-          />
         </div>
-      </section>
+      ) : null}
     </div>
   );
 }

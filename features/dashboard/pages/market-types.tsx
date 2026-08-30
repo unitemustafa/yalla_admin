@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { LoaderCircle, RefreshCw } from "lucide-react";
+import { LoaderCircle, Plus, RefreshCw } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { MarketTypesManager } from "../components/market-types-manager";
@@ -19,6 +19,7 @@ export function MarketTypesPage() {
   const [items, setItems] = useState<MarketType[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,16 +53,27 @@ export function MarketTypesPage() {
         title="الفئات الثانوية للمحلات"
         description="اختر الفئة الأساسية مثل مطاعم، ثم أضف تحتها فئات ثانوية مثل برجر أو شاورما لتصفية المحلات داخل التطبيق."
         actions={
-          <Button
-            type="button"
-            variant="outline"
-            className="h-9 px-4 text-sm"
-            onClick={() => void load()}
-            disabled={loading}
-          >
-            <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
-            تحديث
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 px-4 text-sm"
+              onClick={() => void load()}
+              disabled={loading}
+            >
+              <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
+              تحديث
+            </Button>
+            <Button
+              type="button"
+              className="h-9 px-4 text-sm"
+              onClick={() => setCreateOpen(true)}
+              disabled={loading || Boolean(loadError) || classifications.length === 0}
+            >
+              <Plus className="size-4" />
+              إضافة فئة
+            </Button>
+          </div>
         }
       />
 
@@ -86,6 +98,8 @@ export function MarketTypesPage() {
           items={items}
           classifications={classifications}
           onChange={setItems}
+          createOpen={createOpen}
+          onCreateClose={() => setCreateOpen(false)}
         />
       )}
     </div>

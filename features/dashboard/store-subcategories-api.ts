@@ -70,13 +70,13 @@ export async function saveStoreSubcategory(
   payload: {
     id?: number;
     name_ar: string;
-    name_en: string;
     description_ar: string;
-    description_en: string;
     is_active: boolean;
     image?: File | null;
   },
 ) {
+  const name = payload.name_ar.trim();
+  const description = payload.description_ar.trim();
   const path = payload.id
     ? `catalog/store-subcategories/${payload.id}/`
     : "catalog/store-subcategories/";
@@ -85,20 +85,20 @@ export async function saveStoreSubcategory(
   let headers: HeadersInit | undefined;
   if (payload.image) {
     const form = new FormData();
-    form.set("name_ar", payload.name_ar);
-    form.set("name_en", payload.name_en);
-    form.set("description_ar", payload.description_ar);
-    form.set("description_en", payload.description_en);
+    form.set("name_ar", name);
+    form.set("name_en", name);
+    form.set("description_ar", description);
+    form.set("description_en", description);
     form.set("is_active", String(payload.is_active));
     form.set("image", payload.image);
     body = form;
   } else {
     headers = { "Content-Type": "application/json" };
     body = JSON.stringify({
-      name_ar: payload.name_ar,
-      name_en: payload.name_en,
-      description_ar: payload.description_ar,
-      description_en: payload.description_en,
+      name_ar: name,
+      name_en: name,
+      description_ar: description,
+      description_en: description,
       is_active: payload.is_active,
     });
   }

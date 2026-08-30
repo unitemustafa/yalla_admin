@@ -1,8 +1,40 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { saveMarketSubcategories } from "./store-subcategories-api";
+import {
+  saveMarketSubcategories,
+  saveStoreSubcategory,
+} from "./store-subcategories-api";
 
 describe("market product sections API", () => {
+  it("mirrors the Arabic name and description into compatibility fields", async () => {
+    const apiFetch = vi.fn(async () => new Response(JSON.stringify({
+      id: 7,
+      name_ar: "وجبات",
+      name_en: "وجبات",
+      description_ar: "وجبات يومية",
+      description_en: "وجبات يومية",
+      is_active: true,
+    }), { status: 201, headers: { "Content-Type": "application/json" } }));
+
+    await saveStoreSubcategory(apiFetch, {
+      name_ar: "  وجبات  ",
+      description_ar: "  وجبات يومية  ",
+      is_active: true,
+    });
+
+    expect(apiFetch).toHaveBeenCalledWith("catalog/store-subcategories/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name_ar: "وجبات",
+        name_en: "وجبات",
+        description_ar: "وجبات يومية",
+        description_en: "وجبات يومية",
+        is_active: true,
+      }),
+    });
+  });
+
   it("patches only the ordered product-section ids and normalizes the response", async () => {
     const apiFetch = vi.fn(async () => new Response(JSON.stringify({
       subcategories: [

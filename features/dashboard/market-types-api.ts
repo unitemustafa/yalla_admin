@@ -73,12 +73,12 @@ export async function saveMarketType(
     id?: number;
     classification_id: number;
     name_ar: string;
-    name_en: string;
     sort_order?: number;
     is_active: boolean;
     image?: File | null;
   },
 ) {
+  const name = payload.name_ar.trim();
   const path = payload.id
     ? `home/market-types/${payload.id}/`
     : "home/market-types/";
@@ -89,8 +89,8 @@ export async function saveMarketType(
   if (payload.image) {
     const form = new FormData();
     form.set("classification_id", String(payload.classification_id));
-    form.set("name_ar", payload.name_ar);
-    form.set("name_en", payload.name_en);
+    form.set("name_ar", name);
+    form.set("name_en", name);
     if (payload.sort_order !== undefined) {
       form.set("sort_order", String(payload.sort_order));
     }
@@ -101,8 +101,8 @@ export async function saveMarketType(
     headers = { "Content-Type": "application/json" };
     body = JSON.stringify({
       classification_id: payload.classification_id,
-      name_ar: payload.name_ar,
-      name_en: payload.name_en,
+      name_ar: name,
+      name_en: name,
       ...(payload.sort_order === undefined
         ? {}
         : { sort_order: payload.sort_order }),

@@ -16,7 +16,7 @@ export function OfferBasicSection({ form }: { form: CreateOfferFormController })
     >
       <div className="grid gap-5">
         <div className="grid gap-4 lg:grid-cols-2">
-          <Field label="العنوان بالعربي *">
+          <Field label="العنوان *">
             <Input
               dir="rtl"
               value={state.title}
@@ -25,7 +25,7 @@ export function OfferBasicSection({ form }: { form: CreateOfferFormController })
               placeholder="مثلاً: خصم 20% على البيتزا"
             />
           </Field>
-          <Field label="الوصف بالعربي">
+          <Field label="الوصف">
             <Textarea
               dir="rtl"
               minHeight="min-h-[92px]"
