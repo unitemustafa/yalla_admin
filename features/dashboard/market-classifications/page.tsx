@@ -101,9 +101,9 @@ export function MarketClassificationsPage() {
       {page.deleteClassification ? (
         <DeleteClassificationDialog
           classification={page.deleteClassification}
-          deleting={false}
+          deleting={page.deletingClassification}
           onCancel={() => page.setDeleteClassification(null)}
-          onConfirm={page.confirmDelete}
+          onConfirm={() => void page.confirmDelete()}
         />
       ) : null}
     </div>

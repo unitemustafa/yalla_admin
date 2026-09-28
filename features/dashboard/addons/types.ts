@@ -12,6 +12,7 @@ export type AddonRow = {
 export type AddonCategoryRecord = {
   id: string;
   name: string;
+  additionCount: number | null;
 };
 
 export type AddonDraft = {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Archive, Trash2 } from "lucide-react";
 
 import { Button } from "../primitives";
 import type { MarketClassification } from "./types";
@@ -33,11 +33,12 @@ export function DeleteClassificationDialog({
             id="delete-market-classification-title"
             className="text-xl font-bold leading-7"
           >
-            حذف فئة المحل
+            {classification.deletionMode === "archive" ? "أرشفة فئة المحل" : "حذف فئة المحل نهائيًا"}
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            هل تريد حذف فئة &quot;{classification.name}&quot;؟ إذا كانت مستخدمة
-            في محلات فسيتم أرشفتها وتعطيلها بدل حذفها نهائيًا.
+            {classification.deletionMode === "archive"
+              ? `الفئة «${classification.name}» مرتبطة بمحلات أو فئات ثانوية؛ سيتم تعطيلها مع الاحتفاظ ببياناتها.`
+              : `هل تريد حذف الفئة «${classification.name}» نهائيًا؟ لا يمكن التراجع بعد تنفيذ الحذف.`}
           </p>
         </div>
         <div className="flex justify-end gap-2 px-6 py-4">
@@ -46,12 +47,12 @@ export function DeleteClassificationDialog({
           </Button>
           <Button
             type="button"
-            variant="danger"
+            variant={classification.deletionMode === "archive" ? "outline" : "danger"}
             onClick={onConfirm}
             disabled={deleting}
           >
-            <Trash2 className="size-4" />
-            {deleting ? "جاري الحذف..." : "حذف"}
+            {classification.deletionMode === "archive" ? <Archive className="size-4" /> : <Trash2 className="size-4" />}
+            {deleting ? "جار التنفيذ..." : classification.deletionMode === "archive" ? "أرشفة" : "حذف نهائي"}
           </Button>
         </div>
       </section>

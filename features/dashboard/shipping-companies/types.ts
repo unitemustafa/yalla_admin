@@ -6,7 +6,7 @@ export type ShippingCompany = {
   cityNames: string[];
   status: "active" | "inactive";
   archivedAt: string | null;
-  deletionMode: "delete" | "archive";
+  deletionMode: "delete" | "archive" | null;
 };
 
 export type ShippingCompanyDraft = {

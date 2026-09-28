@@ -389,6 +389,7 @@ export function useAddonsPage() {
   }, [categoryModalOpen, modalOpen]);
 
   return {
+    allAddons: rows,
     addonCategories,
     addonDeleteTarget,
     addonImageName,

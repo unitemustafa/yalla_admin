@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Archive,
   ChevronDown,
   ChevronUp,
   Edit3,
@@ -191,16 +192,16 @@ export function MarketTypesList({
                         >
                           <Edit3 className="size-4" />
                         </Button>
-                        <Button
+                        {(item.market_count === 0 || item.is_active) ? <Button
                           type="button"
                           size="icon"
                           variant="outline"
                           disabled={busy || isReordering}
                           onClick={() => onRemove(item)}
-                          aria-label={`حذف ${item.name_ar}`}
+                          aria-label={item.market_count > 0 ? `أرشفة ${item.name_ar}` : `حذف ${item.name_ar} نهائيًا`}
                         >
-                          <Trash2 className="size-4 text-destructive" />
-                        </Button>
+                          {item.market_count > 0 ? <Archive className="size-4 text-destructive" /> : <Trash2 className="size-4 text-destructive" />}
+                        </Button> : null}
                       </div>
                     </article>
                   ))}

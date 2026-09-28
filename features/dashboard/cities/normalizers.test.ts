@@ -27,4 +27,9 @@ describe("city API normalizers", () => {
     expect(cityFromResponse({ id: 1, name: "" })).toBeNull();
     expect(deliveryAreaFromResponse({ id: 2, name: "الوسط", delivery_price: 3 })).toBeNull();
   });
+
+  it("does not assume an unavailable deletion mode allows deleting", () => {
+    expect(cityFromResponse({ id: 1, name: "مدينة" })?.deletionMode).toBeNull();
+    expect(cityFromResponse({ id: 1, name: "مدينة", deletion_mode: "delete" })?.deletionMode).toBe("delete");
+  });
 });

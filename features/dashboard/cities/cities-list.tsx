@@ -88,7 +88,7 @@ export function CitiesList({
                   <div className="flex h-9 items-center gap-2 rounded-md border bg-background px-3"><Switch checked={city.is_active} disabled={busyCityId === city.id} onCheckedChange={(checked) => onToggle(city, checked)} /><span className="text-xs font-semibold">{city.is_active ? "مفعّلة" : "معطلة"}</span></div>
                   <Button type="button" variant="outline" size="sm" className="h-9 px-2.5" onClick={() => onOpenAreas(city)}><MapPin className="size-4" />مناطق التوصيل</Button>
                   <Button size="icon" variant="outline" title="تعديل" onClick={() => onEdit(city)} aria-label={`تعديل ${city.name}`}><Edit3 className="size-4" /></Button>
-                  <Button size="icon" variant="outline" title={city.deletionMode === "archive" ? "أرشفة" : "حذف نهائي"} disabled={busyCityId === city.id} onClick={() => onDelete(city)} aria-label={city.deletionMode === "archive" ? `أرشفة ${city.name}` : `حذف ${city.name} نهائيًا`} className="text-destructive hover:bg-destructive/10 hover:text-destructive">{city.deletionMode === "archive" ? <Archive className="size-4" /> : <Trash2 className="size-4" />}</Button>
+                  {city.deletionMode ? <Button size="icon" variant="outline" title={city.deletionMode === "archive" ? "أرشفة" : "حذف نهائي"} disabled={busyCityId === city.id} onClick={() => onDelete(city)} aria-label={city.deletionMode === "archive" ? `أرشفة ${city.name}` : `حذف ${city.name} نهائيًا`} className="text-destructive hover:bg-destructive/10 hover:text-destructive">{city.deletionMode === "archive" ? <Archive className="size-4" /> : <Trash2 className="size-4" />}</Button> : null}
                 </>}
               </div>
             </Card>

@@ -64,7 +64,7 @@ export function ZonesTable({
               <Button type="button" variant="outline" size="icon" onClick={() => onRestore(zone)} aria-label={`استعادة ${zone.name}`} title="استعادة" className="text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-600"><ArchiveRestore className="size-4" /></Button>
             ) : <>
               <Button type="button" variant="outline" size="icon" onClick={() => onEdit(zone)} aria-label={`تعديل ${zone.name}`} title="تعديل"><Edit3 className="size-4" /></Button>
-              <Button type="button" variant="outline" size="icon" onClick={() => onDelete(zone)} aria-label={zone.deletionMode === "archive" ? `أرشفة ${zone.name}` : `حذف ${zone.name} نهائيًا`} title={zone.deletionMode === "archive" ? "أرشفة" : "حذف نهائي"} className="text-destructive hover:bg-destructive/10 hover:text-destructive">{zone.deletionMode === "archive" ? <Archive className="size-4" /> : <Trash2 className="size-4" />}</Button>
+              {zone.deletionMode ? <Button type="button" variant="outline" size="icon" onClick={() => onDelete(zone)} aria-label={zone.deletionMode === "archive" ? `أرشفة ${zone.name}` : `حذف ${zone.name} نهائيًا`} title={zone.deletionMode === "archive" ? "أرشفة" : "حذف نهائي"} className="text-destructive hover:bg-destructive/10 hover:text-destructive">{zone.deletionMode === "archive" ? <Archive className="size-4" /> : <Trash2 className="size-4" />}</Button> : null}
             </>}
           </div>
         </Card>

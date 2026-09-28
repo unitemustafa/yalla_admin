@@ -76,7 +76,7 @@ export type OfferCard = {
   accent: string;
   iconBg: string;
   archivedAt: string | null;
-  deletionMode: "delete" | "archive";
+  deletionMode: "delete" | "archive" | null;
 };
 
 export type OfferMarket = {
@@ -256,6 +256,7 @@ export function offerCardFromApi(record: BackendRecord): OfferCard {
     accent: meta.accent,
     iconBg: meta.bg,
     archivedAt: typeof record.archived_at === "string" ? record.archived_at : null,
-    deletionMode: record.deletion_mode === "archive" ? "archive" : "delete",
+    deletionMode: record.deletion_mode === "delete" || record.deletion_mode === "archive"
+      ? record.deletion_mode : null,
   };
 }

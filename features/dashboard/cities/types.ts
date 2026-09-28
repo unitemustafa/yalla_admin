@@ -18,7 +18,7 @@ export type ServiceCity = {
   delivery_price: string;
   is_active: boolean;
   archivedAt: string | null;
-  deletionMode: "delete" | "archive";
+  deletionMode: "delete" | "archive" | null;
   delivery_area_count: number;
   market_count: number;
   offer_count: number;

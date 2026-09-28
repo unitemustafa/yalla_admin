@@ -149,13 +149,13 @@ export function OfferCardsGrid({ list }: { list: OffersListController }) {
                       <MiniIconButton ariaLabel="تعديل العرض" onClick={() => list.edit(offer)}>
                         <Edit className="size-4" />
                       </MiniIconButton>
-                      <MiniIconButton
+                      {offer.deletionMode ? <MiniIconButton
                         tone="red"
                         ariaLabel={offer.deletionMode === "archive" ? "أرشفة العرض" : "حذف العرض نهائيًا"}
                         onClick={() => list.setDeleteTarget(offer)}
                       >
                         {offer.deletionMode === "archive" ? <Archive className="size-4" /> : <Trash2 className="size-4" />}
-                      </MiniIconButton>
+                      </MiniIconButton> : null}
                     </>
                   )}
                 </div>

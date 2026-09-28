@@ -16,6 +16,7 @@ const classifications: MarketClassification[] = [
     image: null,
     classification_type: "popular",
     is_active: true,
+    deletionMode: "archive",
   },
   {
     id: 2,
@@ -24,6 +25,7 @@ const classifications: MarketClassification[] = [
     image: null,
     classification_type: "normal",
     is_active: true,
+    deletionMode: "delete",
   },
 ];
 

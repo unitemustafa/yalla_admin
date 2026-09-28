@@ -99,7 +99,8 @@ export function cityFromResponse(
     delivery_price: numberText(city.delivery_price, "0.00"),
     is_active: city.is_active !== false,
     archivedAt: typeof city.archived_at === "string" ? city.archived_at : null,
-    deletionMode: city.deletion_mode === "archive" ? "archive" : "delete",
+    deletionMode: city.deletion_mode === "delete" || city.deletion_mode === "archive"
+      ? city.deletion_mode : null,
     delivery_area_count: countValue(city.delivery_area_count),
     market_count: countValue(city.market_count),
     offer_count: countValue(city.offer_count),

@@ -11,7 +11,7 @@ export type DeliveryZone = {
   boundaryGeojson: import("../cities/types").PolygonGeoJson | null;
   status: DeliveryZoneStatus;
   archivedAt?: string | null;
-  deletionMode?: "delete" | "archive";
+  deletionMode?: "delete" | "archive" | null;
   createdAt: string | null;
   updatedAt: string | null;
 };

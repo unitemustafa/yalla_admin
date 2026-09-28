@@ -31,7 +31,8 @@ export function companyFromResponse(value: unknown): ShippingCompany | null {
     cityNames: cities.flatMap((city) => city.name?.trim() ? [city.name.trim()] : []),
     status: row.is_active === false ? "inactive" : "active",
     archivedAt: row.archived_at ?? null,
-    deletionMode: row.deletion_mode === "archive" ? "archive" : "delete",
+    deletionMode: row.deletion_mode === "delete" || row.deletion_mode === "archive"
+      ? row.deletion_mode : null,
   };
 }
 

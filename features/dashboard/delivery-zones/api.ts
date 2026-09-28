@@ -53,7 +53,8 @@ function deliveryZoneFromResponse(area: DeliveryAreaResponse): DeliveryZone {
     boundaryGeojson: area.boundary_geojson ?? null,
     status: area.is_active === false ? "inactive" : "active",
     archivedAt: area.archived_at ?? null,
-    deletionMode: area.deletion_mode === "archive" ? "archive" : "delete",
+    deletionMode: area.deletion_mode === "delete" || area.deletion_mode === "archive"
+      ? area.deletion_mode : null,
     createdAt: area.createdAt ?? area.created_at ?? null,
     updatedAt: area.updatedAt ?? area.updated_at ?? null,
   };

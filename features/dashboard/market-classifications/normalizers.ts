@@ -29,6 +29,9 @@ export function normalizeMarketClassification(
     image,
     classification_type: classificationType,
     is_active: record.is_active !== false,
+    deletionMode: record.deletion_mode === "delete" || record.deletion_mode === "archive"
+      ? record.deletion_mode
+      : null,
   };
 }
 

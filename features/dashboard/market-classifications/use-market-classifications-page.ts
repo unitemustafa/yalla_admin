@@ -37,6 +37,7 @@ export function useMarketClassificationsPage() {
   >();
   const [deleteClassification, setDeleteClassification] =
     useState<MarketClassification | null>(null);
+  const [deletingClassification, setDeletingClassification] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -164,9 +165,32 @@ export function useMarketClassificationsPage() {
     }
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!deleteClassification) return;
     const classification = deleteClassification;
+    if (classification.deletionMode === "archive") {
+      setDeletingClassification(true);
+      try {
+        const archived = await updateMarketClassification(apiFetch, classification.id, {
+          name: classification.name,
+          description: classification.description,
+          classification_type: classification.classification_type,
+          is_active: false,
+        });
+        setClassifications((current) => current.map((item) =>
+          item.id === classification.id ? archived : item,
+        ));
+        setDeleteClassification(null);
+        showSnackbar({ message: `تمت أرشفة الفئة ${classification.name} وتعطيلها.`, tone: "success" });
+      } catch (reason) {
+        const message = reason instanceof Error ? reason.message : "تعذر أرشفة فئة المحل.";
+        showSnackbar({ message: translateMarketClassificationError(message), tone: "danger" });
+      } finally {
+        setDeletingClassification(false);
+      }
+      return;
+    }
+    if (classification.deletionMode !== "delete") return;
     const classificationIndex = classifications.findIndex(
       (item) => item.id === classification.id,
     );
@@ -209,7 +233,7 @@ export function useMarketClassificationsPage() {
             nextClassifications.splice(
               Math.max(0, classificationIndex),
               0,
-              { ...classification, is_active: false },
+              { ...classification, is_active: false, deletionMode: "archive" },
             );
             return nextClassifications;
           });
@@ -250,6 +274,7 @@ export function useMarketClassificationsPage() {
     setDialogClassification,
     saveClassification,
     deleteClassification,
+    deletingClassification,
     setDeleteClassification,
     confirmDelete,
     toggleClassificationActive,

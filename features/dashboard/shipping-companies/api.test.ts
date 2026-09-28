@@ -28,6 +28,7 @@ describe("shipping company API mapping", () => {
   it("rejects malformed responses", () => {
     expect(companyFromResponse(null)).toBeNull();
     expect(companyFromResponse({ id: 1, name: " " })).toBeNull();
+    expect(companyFromResponse({ id: 1, name: "شركة" })?.deletionMode).toBeNull();
   });
 
   it("submits multipart data with every selected city and the logo", async () => {

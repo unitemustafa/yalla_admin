@@ -176,13 +176,30 @@ export function MarketTypesManager({
   }
 
   async function remove(item: MarketType) {
-    if (!window.confirm(`هل تريد حذف الفئة الثانوية «${item.name_ar}»؟`)) return;
+    if (!window.confirm(item.market_count > 0
+      ? `الفئة الثانوية «${item.name_ar}» مرتبطة بمحلات؛ هل تريد أرشفتها وتعطيلها؟`
+      : `هل تريد حذف الفئة الثانوية «${item.name_ar}» نهائيًا؟`)) return;
     setBusy(true);
     setListError("");
     try {
-      await deleteMarketType(apiFetch, item.id);
-      onChange(items.filter((candidate) => candidate.id !== item.id));
-      if (draft.id === item.id) reset(item.classification_id);
+      if (item.market_count > 0) {
+        const archived = await saveMarketType(apiFetch, {
+          id: item.id,
+          classification_id: item.classification_id,
+          name_ar: item.name_ar,
+          sort_order: item.sort_order,
+          is_active: false,
+        });
+        onChange(items.map((candidate) => candidate.id === item.id ? archived : candidate));
+        return;
+      }
+      const result = await deleteMarketType(apiFetch, item.id);
+      if (result.action === "archived") {
+        onChange(items.map((candidate) => candidate.id === item.id ? { ...candidate, is_active: false } : candidate));
+      } else {
+        onChange(items.filter((candidate) => candidate.id !== item.id));
+        if (draft.id === item.id) reset(item.classification_id);
+      }
     } catch (reason) {
       setListError(
         reason instanceof Error ? reason.message : "تعذر حذف الفئة الثانوية.",

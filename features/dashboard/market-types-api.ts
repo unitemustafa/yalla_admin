@@ -1,4 +1,4 @@
-import type { ApiFetch } from "./admin-api";
+import { deletionResult, type ApiFetch } from "./admin-api";
 import { apiListData } from "./shared/api-data";
 
 export type MarketType = {
@@ -120,10 +120,10 @@ export async function saveMarketType(
 }
 
 export async function deleteMarketType(apiFetch: ApiFetch, id: number) {
-  await parse(
+  return deletionResult(await parse(
     await apiFetch(`home/market-types/${id}/`, { method: "DELETE" }),
     "تعذر حذف الفئة الثانوية للمحل.",
-  );
+  ));
 }
 
 export async function reorderMarketTypes(apiFetch: ApiFetch, ids: number[]) {

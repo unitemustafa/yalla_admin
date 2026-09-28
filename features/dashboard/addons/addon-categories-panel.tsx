@@ -95,13 +95,13 @@ export function AddonCategoriesPanel({
                     >
                       <Edit className="size-4" />
                     </AddonRowIconButton>
-                    <AddonRowIconButton
+                    {category.additionCount === 0 && !controller.allAddons.some((addon) => addon.category === category.name) ? <AddonRowIconButton
                       tone="danger"
                       label={`حذف تصنيف ${category.name}`}
                       onClick={() => controller.setCategoryDeleteTarget(category)}
                     >
                       <Trash2 className="size-4" />
-                    </AddonRowIconButton>
+                    </AddonRowIconButton> : null}
                   </div>
                 ) : null}
               </div>

@@ -49,5 +49,11 @@ export function addonRowFromApi(record: BackendRecord, index: number): AddonRow 
 export function addonCategoryFromApi(value: BackendRecord): AddonCategoryRecord | null {
   const id = String(value.id ?? "").trim();
   const name = String(value.name ?? "").trim();
-  return id && name ? { id, name } : null;
+  const additionCount = Number(value.addition_count);
+  return id && name ? {
+    id,
+    name,
+    additionCount: value.addition_count == null || !Number.isFinite(additionCount)
+      ? null : additionCount,
+  } : null;
 }
