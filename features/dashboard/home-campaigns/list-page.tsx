@@ -52,7 +52,7 @@ export function HomeCampaignsPage() {
   };
 
   return <div className="px-6 py-8">
-    <PageTitle title="حملات الهوم" description="إدارة الشريط المثبت والنافذة التي تظهر في Home فقط، بشكل مستقل عن العروض الحالية." size="compact" actions={<><Button variant="outline" onClick={() => void reload()} disabled={loading}><RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />تحديث</Button><Link href="/offers/home-campaigns/create" className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"><Plus className="size-4" />إنشاء حملة هوم</Link></>} />
+    <PageTitle title="حملات الهوم" description="إدارة الإعلانات التي تظهر في منتصف شاشة التطبيق." size="compact" actions={<><Button variant="outline" onClick={() => void reload()} disabled={loading}><RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />تحديث</Button><Link href="/offers/home-campaigns/create" className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"><Plus className="size-4" />إنشاء حملة هوم</Link></>} />
     <div className="mt-6 grid gap-4">
       {loading ? <Card className="p-8 text-center text-sm text-muted-foreground">جار تحميل الحملات...</Card> : null}
       {!loading && rows.length === 0 ? <Card className="p-10 text-center"><CalendarClock className="mx-auto mb-3 size-10 text-muted-foreground" /><h2 className="font-bold">لا توجد حملات هوم بعد</h2><p className="mt-1 text-sm text-muted-foreground">أنشئ أول حملة لتظهر فوق شريط التنقل في Home.</p></Card> : null}

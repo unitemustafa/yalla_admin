@@ -51,4 +51,29 @@ describe("home campaign domain", () => {
     };
     expect(validateCampaign(form, {})).toContain("فيديو MP4");
   });
+
+  it("accepts multiple images and rejects removing the last active image", () => {
+    const form = {
+      ...initialCampaignForm(),
+      internal_name: "Campaign",
+      media_type: "image",
+      is_active: true,
+    };
+    const image = { name: "campaign.png" } as File;
+    expect(validateCampaign(form, { images: [image] })).toBe("");
+    const existing = {
+      ...form,
+      id: "1",
+      effective_status: "active" as const,
+      service_city_name: "",
+      target_name: "",
+      teaser_image: "",
+      sheet_image: "",
+      video: "",
+      video_poster: "",
+      additional_images: [{ id: 5, url: "https://example.com/image.png" }],
+      updated_at: "",
+    };
+    expect(validateCampaign(form, {}, existing, [5])).not.toBe("");
+  });
 });

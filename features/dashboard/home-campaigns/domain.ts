@@ -26,6 +26,7 @@ export type CampaignRow = CampaignForm & {
   id: string; effective_status: keyof typeof campaignLabels.status;
   service_city_name: string; target_name: string;
   teaser_image: string; sheet_image: string; video: string; video_poster: string;
+  additional_images: Array<{ id: number; url: string }>;
   updated_at: string;
 };
 
@@ -90,6 +91,10 @@ export function campaignFromApi(record: BackendRecord): CampaignRow {
     target_name: target ? text(target, "name") : "—",
     teaser_image: text(record, "teaser_image"), sheet_image: text(record, "sheet_image"),
     video: text(record, "video"), video_poster: text(record, "video_poster"),
+    additional_images: Array.isArray(record.additional_images)
+      ? record.additional_images.filter((image): image is { id: number; url: string } =>
+          typeof image === "object" && image !== null && typeof image.id === "number" && typeof image.url === "string")
+      : [],
     updated_at: text(record, "updated_at"),
   };
 }
@@ -114,7 +119,7 @@ export function campaignPayload(form: CampaignForm) {
   };
 }
 
-export function validateCampaign(form: CampaignForm, files: CampaignFiles, existing?: CampaignRow) {
+export function validateCampaign(form: CampaignForm, files: CampaignFiles, existing?: CampaignRow, removedImageIds: number[] = []) {
   if (!form.internal_name.trim() || !form.teaser_text.trim() || !form.title.trim()) return "أدخل اسم الحملة ونص الشريط والعنوان.";
   if (!form.start_time || !form.end_time || new Date(form.end_time) <= new Date(form.start_time)) return "وقت النهاية يجب أن يكون بعد البداية.";
   if (!form.show_in_general && !form.service_city_id) return "اختر مدينة الخدمة.";
@@ -124,12 +129,12 @@ export function validateCampaign(form: CampaignForm, files: CampaignFiles, exist
   if (target && !form[target]) return "اختر هدف الزر.";
   if (form.action_type === "external_url" && !/^https:\/\/.+/i.test(form.external_url)) return "أدخل رابط HTTPS صحيحًا.";
   if (form.action_type === "copy_text" && !form.copy_text.trim()) return "أدخل النص أو الكود المطلوب نسخه.";
-  if (form.is_active && form.media_type === "image" && !files.sheet_image && !existing?.sheet_image) return "ارفع صورة النافذة قبل التفعيل.";
+  if (form.is_active && form.media_type === "image" && !files.sheet_image && !files.images?.length && !existing?.sheet_image && !existing?.additional_images.some((image) => !removedImageIds.includes(image.id))) return "ارفع صورة النافذة قبل التفعيل.";
   if (form.is_active && form.media_type === "video" && (!files.video && !existing?.video || !files.video_poster && !existing?.video_poster)) return "ارفع فيديو MP4 والـPoster قبل التفعيل.";
   return "";
 }
 
-export type CampaignFiles = { teaser_image?: File; sheet_image?: File; video?: File; video_poster?: File };
+export type CampaignFiles = { teaser_image?: File; sheet_image?: File; images?: File[]; video?: File; video_poster?: File };
 
 export const presets = [
   ["أول طلب", { teaser_text: "خصم على أول طلب", title: "أول طلب أحلى مع يلا", description: "استمتع بخصم خاص على طلبك الأول.", template: "hero", action_type: "offer", cta_label: "اطلب دلوقتي" }],
