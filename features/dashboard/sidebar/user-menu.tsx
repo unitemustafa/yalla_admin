@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   Bell,
   ChevronsUpDown,
+  Images,
   LogOut,
   Settings,
   User,
@@ -83,6 +84,9 @@ export function SidebarUserMenu({
 
           <MenuLink href="/account" onNavigate={onNavigate} icon={User}>
             {t("profile.account")}
+          </MenuLink>
+          <MenuLink href="/app-media" onNavigate={onNavigate} icon={Images}>
+            {t("profile.appMedia")}
           </MenuLink>
           <MenuLink href="/settings" onNavigate={onNavigate} icon={Settings}>
             {t("profile.settings")}

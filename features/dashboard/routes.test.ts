@@ -19,6 +19,7 @@ describe("dashboard routes", () => {
     ["/delivery/couriers/9", "couriers"],
     ["/delivery/shipping-companies", "shipping-companies"],
     ["/archives/shipping-companies", "archived-shipping-companies"],
+    ["/app-media", "app-media"],
   ] as const)("maps %s to %s", (pathname, page) => {
     expect(pageFromPathname(pathname)).toBe(page);
   });

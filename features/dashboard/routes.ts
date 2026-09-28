@@ -182,6 +182,11 @@ export const dashboardRoutes = {
     matches: ["/account"],
     breadcrumbs: [dashboardCrumb, { label: "Account" }],
   },
+  "app-media": {
+    href: "/app-media",
+    matches: ["/app-media"],
+    breadcrumbs: [dashboardCrumb, { label: ar["page.appMedia"] }],
+  },
   settings: {
     href: "/settings",
     matches: ["/settings"],

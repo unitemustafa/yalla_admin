@@ -31,6 +31,7 @@ export type PageKey =
   | "archived-shipping-companies"
   | "memberships"
   | "account"
+  | "app-media"
   | "settings"
   | "notifications";
 

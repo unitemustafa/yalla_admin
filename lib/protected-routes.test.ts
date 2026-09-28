@@ -10,6 +10,7 @@ describe("protected dashboard routes", () => {
     "/cities",
     "/partners",
     "/settings",
+    "/app-media",
   ])("protects %s", (pathname) => {
     expect(isProtectedPath(pathname)).toBe(true);
   });

@@ -48,6 +48,7 @@ const pageKeys: Record<PageKey, TranslationKey> = {
   "archived-shipping-companies": "page.archivedShippingCompanies",
   memberships: "page.memberships",
   account: "page.account",
+  "app-media": "page.appMedia",
   settings: "page.settings",
   notifications: "page.notifications",
 };

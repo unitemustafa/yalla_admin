@@ -1,5 +1,6 @@
 const protectedRoutePrefixes = [
   "/account",
+  "/app-media",
   "/archives",
   "/categories",
   "/cities",
