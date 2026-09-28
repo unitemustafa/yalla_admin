@@ -6,6 +6,7 @@ import { AccountSecurityCard } from "./security-card";
 import { AccountSummaryCard } from "./account-summary-card";
 import { useAccountProfile } from "./use-account-profile";
 import { usePasswordReset } from "./use-password-reset";
+import { AppMediaCard } from "./app-media-card";
 
 export function AccountPage() {
   const profile = useAccountProfile();
@@ -22,6 +23,7 @@ export function AccountPage() {
         <div className="grid gap-4">
           <AccountProfileForm profile={profile} />
           <AccountSecurityCard passwordReset={passwordReset} />
+          <AppMediaCard />
         </div>
       </div>
     </div>
