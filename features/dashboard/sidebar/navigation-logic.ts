@@ -54,7 +54,6 @@ export function sidebarItemLabel(
   if (firstChildPage === "offers") return t("nav.offers");
   if (firstChildPage === "delivery-zone") return t("nav.delivery");
   if (firstChildPage === "couriers") return t("nav.couriers");
-  if (firstChildPage === "archived-items") return t("nav.archives");
 
   return item.soon ? t("nav.chat") : item.label;
 }

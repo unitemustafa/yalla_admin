@@ -51,14 +51,11 @@ export function OffersListResults({ list }: { list: OffersListController }) {
             <Tag className="size-8" />
           </div>
           <h2 className="mt-4 text-xl font-semibold leading-7">
-            {list.showArchived ? "لا توجد عروض مؤرشفة" : "لا توجد عروض حتى الآن"}
+            لا توجد عروض حتى الآن
           </h2>
           <p className="mt-2 max-w-[430px] text-sm leading-6 text-muted-foreground">
-            {list.showArchived
-              ? "العروض التي تتم أرشفتها ستظهر هنا ويمكن استعادتها."
-              : "سيظهر هنا أول عرض تنشئه للعملاء في تطبيق يلا ماركت."}
+            سيظهر هنا أول عرض تنشئه للعملاء في تطبيق يلا ماركت.
           </p>
-          {!list.showArchived ? (
             <div className="mt-4 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row">
               <Link
                 href="/offers/create"
@@ -68,7 +65,6 @@ export function OffersListResults({ list }: { list: OffersListController }) {
                 إنشاء أول عرض
               </Link>
             </div>
-          ) : null}
         </div>
       </Card>
     );

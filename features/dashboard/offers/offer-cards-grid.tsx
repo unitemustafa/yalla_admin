@@ -1,8 +1,6 @@
 "use client";
 
 import {
-  Archive,
-  ArchiveRestore,
   ChevronDown,
   Edit,
   Megaphone,
@@ -115,16 +113,6 @@ export function OfferCardsGrid({ list }: { list: OffersListController }) {
               <div className={cn("flex items-center justify-between border-t pt-4", collapsed ? "mt-4" : "mt-auto")}>
                 <span className="text-xs text-muted-foreground">إجراءات العرض</span>
                 <div className="flex items-center gap-1">
-                  {list.showArchived ? (
-                    <MiniIconButton
-                      tone="green"
-                      ariaLabel={`استعادة العرض ${offer.title}`}
-                      onClick={() => void list.restore(offer)}
-                    >
-                      <ArchiveRestore className="size-4" />
-                    </MiniIconButton>
-                  ) : (
-                    <>
                       <MiniIconButton
                         tone="green"
                         ariaLabel={
@@ -149,15 +137,13 @@ export function OfferCardsGrid({ list }: { list: OffersListController }) {
                       <MiniIconButton ariaLabel="تعديل العرض" onClick={() => list.edit(offer)}>
                         <Edit className="size-4" />
                       </MiniIconButton>
-                      {offer.deletionMode ? <MiniIconButton
+                      {offer.deletionMode === "delete" ? <MiniIconButton
                         tone="red"
-                        ariaLabel={offer.deletionMode === "archive" ? "أرشفة العرض" : "حذف العرض نهائيًا"}
+                        ariaLabel="حذف العرض نهائيًا"
                         onClick={() => list.setDeleteTarget(offer)}
                       >
-                        {offer.deletionMode === "archive" ? <Archive className="size-4" /> : <Trash2 className="size-4" />}
+                        <Trash2 className="size-4" />
                       </MiniIconButton> : null}
-                    </>
-                  )}
                 </div>
               </div>
             </div>

@@ -17,8 +17,7 @@ export type ServiceCity = {
   boundary_bbox: number[] | null;
   delivery_price: string;
   is_active: boolean;
-  archivedAt: string | null;
-  deletionMode: "delete" | "archive" | null;
+  deletionMode: "delete" | null;
   delivery_area_count: number;
   market_count: number;
   offer_count: number;

@@ -16,22 +16,14 @@ import { OffersFilters } from "./offers-filters";
 import { OffersListResults } from "./offers-list-results";
 import { useOffersList } from "./use-offers-list";
 
-export function OffersPage({
-  initialArchived = false,
-}: {
-  initialArchived?: boolean;
-} = {}) {
-  const list = useOffersList(initialArchived);
+export function OffersPage() {
+  const list = useOffersList();
 
   return (
     <div className="px-6 py-8">
       <PageTitle
-        title={list.showArchived ? "العروض المؤرشفة" : "العروض"}
-        description={
-          list.showArchived
-            ? "استعراض العروض المؤرشفة واستعادتها عند الحاجة"
-            : "إدارة العروض والخصومات لكل الفروع"
-        }
+        title="العروض"
+        description="إدارة العروض والخصومات لكل الفروع"
         size="compact"
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -45,7 +37,6 @@ export function OffersPage({
               <RefreshCw className={cn("size-4", list.loading && "animate-spin")} />
               تحديث
             </Button>
-            {!list.showArchived ? (
               <Link
                 href="/offers/create"
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90"
@@ -53,7 +44,6 @@ export function OffersPage({
                 <CheckCircle2 className="size-4" />
                 إنشاء عرض
               </Link>
-            ) : null}
           </div>
         }
       />

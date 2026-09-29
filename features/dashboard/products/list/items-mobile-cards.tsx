@@ -15,7 +15,6 @@ export function ItemsMobileCards({
   onToggleActive,
   onView,
   onDelete,
-  onRestore,
 }: {
   rows: ItemRow[];
   selectedRows: Set<string>;
@@ -23,7 +22,6 @@ export function ItemsMobileCards({
   onToggleActive: (row: ItemRow, active: boolean) => void;
   onView: (row: ItemRow) => void;
   onDelete: (rowId: string) => void;
-  onRestore: (row: ItemRow) => void;
 }) {
   return (
     <div className="mt-4 grid min-w-0 gap-3 lg:hidden">
@@ -33,7 +31,6 @@ export function ItemsMobileCards({
           className="min-w-0 overflow-hidden rounded-md border bg-card p-3 text-card-foreground shadow-sm"
         >
           <div className="flex items-start gap-3">
-            {!row.archived ? (
               <button
                 type="button"
                 role="checkbox"
@@ -46,7 +43,6 @@ export function ItemsMobileCards({
               >
                 {selectedRows.has(row.index) ? <Check className="size-3" /> : null}
               </button>
-            ) : null}
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -59,7 +55,6 @@ export function ItemsMobileCards({
                   row={row}
                   onView={() => onView(row)}
                   onDelete={() => onDelete(row.id)}
-                  onRestore={() => onRestore(row)}
                 />
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
@@ -84,12 +79,12 @@ export function ItemsMobileCards({
                   </div>
                 </div>
               </div>
-              {!row.archived ? <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3">
+              <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3">
                 <ActiveToggleButton
                   active={row.active}
                   onToggle={(active) => onToggleActive(row, active)}
                 />
-              </div> : null}
+              </div>
             </div>
           </div>
         </article>

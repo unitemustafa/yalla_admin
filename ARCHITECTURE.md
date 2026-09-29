@@ -46,7 +46,6 @@ app route wrapper
 - العروض: `/offers`, `/offers/create`
 - التشغيل: `/cities`, `/delivery-zone`, `/delivery/couriers`, `/delivery/couriers/new`, `/delivery/couriers/[courierId]`
 - الإدارة: `/customers`, `/partners`, `/account`, `/settings`, `/notifications`
-- المؤرشفات: `/archives/products`, `/archives/shops`, `/archives/offers`, `/archives/cities`, `/archives/delivery-zones`
 
 المسارات `/items/add` و`/items/categories` و`/categories/store-subcategories` محذوفة عمدًا ولا تملك redirects.
 

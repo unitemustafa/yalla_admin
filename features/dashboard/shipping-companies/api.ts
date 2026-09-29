@@ -11,8 +11,7 @@ type CompanyResponse = {
   service_city_ids?: Array<number | string>;
   service_cities?: Array<{ id?: number | string; name?: string | null }>;
   is_active?: boolean;
-  archived_at?: string | null;
-  deletion_mode?: "delete" | "archive";
+  deletion_mode?: "delete" | "blocked";
 };
 
 export function companyFromResponse(value: unknown): ShippingCompany | null {
@@ -30,9 +29,7 @@ export function companyFromResponse(value: unknown): ShippingCompany | null {
     cityIds,
     cityNames: cities.flatMap((city) => city.name?.trim() ? [city.name.trim()] : []),
     status: row.is_active === false ? "inactive" : "active",
-    archivedAt: row.archived_at ?? null,
-    deletionMode: row.deletion_mode === "delete" || row.deletion_mode === "archive"
-      ? row.deletion_mode : null,
+    deletionMode: row.deletion_mode === "delete" ? "delete" : null,
   };
 }
 
@@ -42,9 +39,9 @@ async function checkedData(response: Response, fallback: string) {
   return data;
 }
 
-export async function loadShippingCompanies(apiFetch: ApiFetch, archived = false) {
+export async function loadShippingCompanies(apiFetch: ApiFetch) {
   const data = await checkedData(
-    await apiFetch(`locations/shipping-companies/${archived ? "?archived=true" : ""}`),
+    await apiFetch("locations/shipping-companies/"),
     "تعذر تحميل شركات الشحن.",
   );
   if (!Array.isArray(data)) throw new Error("استجابة شركات الشحن غير مكتملة.");
@@ -87,32 +84,4 @@ export async function deleteShippingCompany(apiFetch: ApiFetch, companyId: strin
   );
   if (response.status === 204) return deletionResult(null);
   return deletionResult(await checkedData(response, "تعذر حذف شركة الشحن."));
-}
-
-export async function restoreShippingCompany(apiFetch: ApiFetch, companyId: string) {
-  const data = await checkedData(
-    await apiFetch(`locations/shipping-companies/${encodeURIComponent(companyId)}/`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ restore: true }),
-    }),
-    "تعذر استعادة شركة الشحن.",
-  );
-  const company = companyFromResponse(data);
-  if (!company) throw new Error("تمت الاستعادة لكن استجابة الخادم غير مكتملة.");
-  return company;
-}
-
-export async function archiveShippingCompany(apiFetch: ApiFetch, companyId: string) {
-  const data = await checkedData(
-    await apiFetch(`locations/shipping-companies/${encodeURIComponent(companyId)}/`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ archive: true }),
-    }),
-    "تعذر أرشفة شركة الشحن.",
-  );
-  const company = companyFromResponse(data);
-  if (!company) throw new Error("تمت الأرشفة لكن استجابة الخادم غير مكتملة.");
-  return company;
 }

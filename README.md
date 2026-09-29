@@ -117,7 +117,6 @@ The Django API remains the source of truth. Route files under `app/` should stay
 - Customers and partners: `/customers`, `/partners`
 - Delivery operations: `/cities`, `/delivery-zone`, `/delivery/couriers`
 - Administration: `/account`, `/settings`, `/notifications`
-- Archives: `/archives/products`, `/archives/shops`, `/archives/offers`, `/archives/cities`, `/archives/delivery-zones`
 
 ## Additional Documentation
 

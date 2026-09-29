@@ -58,8 +58,7 @@ export type NormalizedProduct = {
   images: NormalizedProductImage[];
   discount: string | number;
   isAvailable: boolean;
-  archivedAt: string | null;
-  deletionMode: "delete" | "archive";
+  deletionMode: "delete" | null;
   additions: number[];
   attributes: NormalizedProductAttribute[];
   variants: NormalizedProductVariant[];
@@ -142,6 +141,5 @@ export type ItemRow = {
   regionNames?: string[];
   featured: string;
   active: boolean;
-  archived?: boolean;
-  deletionMode?: "delete" | "archive";
+  deletionMode?: "delete" | null;
 };

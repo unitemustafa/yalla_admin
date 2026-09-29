@@ -20,18 +20,11 @@ export type ApiFetch = (path: string, init?: RequestInit) => Promise<Response>;
 export type BackendRecord = Record<string, unknown>;
 
 export type DeletionResult = {
-  action: "deleted" | "archived";
-  detail?: string;
+  action: "deleted";
 };
 
 export function deletionResult(value: unknown): DeletionResult {
-  const record = asRecord(value);
-  if (record?.action === "archived") {
-    return {
-      action: "archived",
-      detail: typeof record.detail === "string" ? record.detail : undefined,
-    };
-  }
+  void value;
   return { action: "deleted" };
 }
 

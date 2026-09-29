@@ -11,9 +11,9 @@ async function responseJson(response: Response) {
   return (await response.json().catch(() => null)) as unknown;
 }
 
-export async function loadMarketsPageData(apiFetch: ApiFetch, archived: boolean) {
+export async function loadMarketsPageData(apiFetch: ApiFetch) {
   const [marketsResponse, classificationsResponse, marketTypes] = await Promise.all([
-    apiFetch(`home/markets/${archived ? "?archived=true" : ""}`),
+    apiFetch("home/markets/"),
     apiFetch("home/market-classifications/"),
     loadMarketTypes(apiFetch),
   ]);
@@ -78,16 +78,6 @@ export async function deleteMarket(apiFetch: ApiFetch, marketId: number) {
   const data = await responseJson(response);
   if (!response.ok) throw new Error(marketErrorMessage(data, "تعذر حذف المحل."));
   return deletionResult(data);
-}
-
-export async function restoreMarket(apiFetch: ApiFetch, marketId: number) {
-  const response = await apiFetch(`home/markets/${marketId}/`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ restore: true }),
-  });
-  const data = await responseJson(response);
-  if (!response.ok) throw new Error(marketErrorMessage(data, "تعذر استعادة المحل."));
 }
 
 export async function setMarketActive(apiFetch: ApiFetch, market: Market, active: boolean) {

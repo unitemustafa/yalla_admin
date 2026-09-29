@@ -8,11 +8,11 @@ import type { ServiceCity } from "../cities/types";
 import type { MarketType } from "../market-types-api";
 import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
-import { deleteMarket, loadMarketsPageData, restoreMarket, setMarketActive } from "./api";
+import { deleteMarket, loadMarketsPageData, setMarketActive } from "./api";
 import { filterMarkets } from "./domain";
 import type { Classification, Market } from "./types";
 
-export function useMarketsPage(initialArchived: boolean) {
+export function useMarketsPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const queueUndoableDelete = useUndoableDelete();
@@ -49,7 +49,7 @@ export function useMarketsPage(initialArchived: boolean) {
     setLoading(true);
     setError("");
     try {
-      const data = await loadMarketsPageData(apiFetch, initialArchived);
+      const data = await loadMarketsPageData(apiFetch);
       setMarkets(data.markets);
       setClassifications(data.classifications);
       setMarketTypes(data.marketTypes);
@@ -58,7 +58,7 @@ export function useMarketsPage(initialArchived: boolean) {
     } finally {
       setLoading(false);
     }
-  }, [apiFetch, initialArchived]);
+  }, [apiFetch]);
 
   useEffect(() => { void Promise.resolve().then(load); }, [load]);
   useEffect(() => { void Promise.resolve().then(loadServiceCityOptions); }, [loadServiceCityOptions]);
@@ -80,29 +80,14 @@ export function useMarketsPage(initialArchived: boolean) {
         return next;
       }),
       onCommit: () => deleteMarket(apiFetch, market.id),
-      onCommitSuccess: (value) => {
-        const result = value && typeof value === "object" && "action" in value
-          ? value as { action: "deleted" | "archived"; detail?: string }
-          : { action: "deleted" as const };
+      onCommitSuccess: () => {
         showSnackbar({
-          message: result.action === "archived" ? result.detail ?? `تمت أرشفة المحل ${market.name}.` : `تم حذف المحل ${market.name} نهائيًا.`,
-          tone: result.action === "archived" ? "success" : "danger",
+          message: `تم حذف المحل ${market.name} نهائيًا.`,
+          tone: "danger",
         });
       },
       onCommitError: (reason) => showSnackbar({ message: reason instanceof Error ? reason.message : "تعذر حذف المحل.", tone: "danger" }),
     });
-  }
-
-  async function restoreArchivedMarket(market: Market) {
-    const previousMarkets = markets;
-    setMarkets((current) => current.filter((item) => item.id !== market.id));
-    try {
-      await restoreMarket(apiFetch, market.id);
-      showSnackbar({ message: `تمت استعادة المحل ${market.name}.` });
-    } catch (reason) {
-      setMarkets(previousMarkets);
-      showSnackbar({ message: reason instanceof Error ? reason.message : "تعذر استعادة المحل.", tone: "danger" });
-    }
   }
 
   async function toggleMarketActive(market: Market, nextActive: boolean) {
@@ -149,7 +134,6 @@ export function useMarketsPage(initialArchived: boolean) {
     load,
     loadServiceCityOptions,
     remove,
-    restoreArchivedMarket,
     toggleMarketActive,
     savedMarket,
   };

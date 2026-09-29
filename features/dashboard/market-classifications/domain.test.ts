@@ -16,7 +16,7 @@ const classifications: MarketClassification[] = [
     image: null,
     classification_type: "popular",
     is_active: true,
-    deletionMode: "archive",
+    deletionMode: null,
   },
   {
     id: 2,

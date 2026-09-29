@@ -29,7 +29,7 @@ function asBackendRecord(value: unknown) {
   return asRecord(value) ?? {};
 }
 
-export function useOffersList(initialArchived = false) {
+export function useOffersList() {
   const router = useRouter();
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
@@ -69,7 +69,7 @@ export function useOffersList(initialArchived = false) {
     setError(null);
     try {
       const response = await apiFetch(
-        `${adminApiPaths.offers}${initialArchived ? "?archived=true" : ""}`,
+        adminApiPaths.offers,
       );
       const data = await readApiData(response);
       if (!response.ok) throw new Error(apiErrorMessage(data, "تعذر تحميل العروض من الباك."));
@@ -83,7 +83,7 @@ export function useOffersList(initialArchived = false) {
     } finally {
       setLoading(false);
     }
-  }, [apiFetch, initialArchived, showSnackbar]);
+  }, [apiFetch, showSnackbar]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => void reload(), 0);
@@ -177,14 +177,11 @@ export function useOffersList(initialArchived = false) {
         `${adminApiPaths.offers}${encodeURIComponent(offer.id)}/`,
         { method: "DELETE" },
       )),
-      onCommitSuccess: (value) => {
-        const result = deletionResult(value);
+      onCommitSuccess: () => {
         pendingDeletionIds.current.delete(offer.id);
         showSnackbar({
-          message: result.action === "archived"
-            ? result.detail ?? `تمت أرشفة العرض ${offer.title}.`
-            : `تم حذف العرض ${offer.title} نهائيًا.`,
-          tone: result.action === "archived" ? "success" : "danger",
+          message: `تم حذف العرض ${offer.title} نهائيًا.`,
+          tone: "danger",
         });
       },
       onCommitError: (caught) => showSnackbar({
@@ -194,25 +191,6 @@ export function useOffersList(initialArchived = false) {
         tone: "danger",
       }),
     });
-  }
-
-  async function restore(offer: OfferCard) {
-    const previous = offers;
-    setOffers((current) => current.filter((item) => item.id !== offer.id));
-    try {
-      await sendAdminJson(
-        apiFetch,
-        `${adminApiPaths.offers}${encodeURIComponent(offer.id)}/`,
-        { method: "PATCH", body: JSON.stringify({ restore: true }) },
-      );
-      showSnackbar({ message: `تمت استعادة العرض ${offer.title}.`, tone: "success" });
-    } catch (caught) {
-      setOffers(previous);
-      showSnackbar({
-        message: caught instanceof Error ? caught.message : "تعذر استعادة العرض.",
-        tone: "danger",
-      });
-    }
   }
 
   return {
@@ -227,7 +205,6 @@ export function useOffersList(initialArchived = false) {
     typeFilter,
     cityFilter,
     expandedIds,
-    showArchived: initialArchived,
     cityOptions,
     stats,
     setDeleteTarget,
@@ -240,7 +217,6 @@ export function useOffersList(initialArchived = false) {
     edit,
     toggleExpanded,
     remove,
-    restore,
   };
 }
 

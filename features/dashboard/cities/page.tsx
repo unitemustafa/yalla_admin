@@ -9,8 +9,8 @@ import { CityDialog } from "./city-dialog";
 import { DeliveryAreasDialog } from "./delivery-areas-dialog";
 import { useCitiesPage } from "./use-cities-page";
 
-export function CitiesPage({ initialArchived = false }: { initialArchived?: boolean } = {}) {
-  const page = useCitiesPage(initialArchived);
+export function CitiesPage() {
+  const page = useCitiesPage();
   const metrics = [
     ["المدن النشطة", String(page.metrics.activeCount), MapPinned, "text-primary"],
     ["مناطق التوصيل", String(page.metrics.deliveryAreaTotal), MapPin, "text-sky-500"],
@@ -21,11 +21,11 @@ export function CitiesPage({ initialArchived = false }: { initialArchived?: bool
   return (
     <div dir="rtl" className="px-6 py-6">
       <PageTitle
-        title={initialArchived ? "المدن المؤرشفة" : "المدن"}
-        description={initialArchived ? "استعراض المدن المؤرشفة واستعادتها عند الحاجة." : "إدارة المدن التي تحدد ظهور المحلات والمنتجات والعروض داخل تطبيق العميل."}
+        title="المدن"
+        description="إدارة المدن التي تحدد ظهور المحلات والمنتجات والعروض داخل تطبيق العميل."
         actions={<div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="outline" onClick={() => void page.reload()} disabled={page.loading} className="h-9 px-4 text-sm"><RefreshCw className="size-4" />تحديث</Button>
-          {!initialArchived ? <Button onClick={() => page.setEditingCity(null)} className="h-9 px-4 text-sm"><Plus className="size-4" />إضافة مدينة</Button> : null}
+          <Button onClick={() => page.setEditingCity(null)} className="h-9 px-4 text-sm"><Plus className="size-4" />إضافة مدينة</Button>
         </div>}
       />
 
@@ -36,7 +36,6 @@ export function CitiesPage({ initialArchived = false }: { initialArchived?: bool
       </div>
 
       <CitiesList
-        archived={initialArchived}
         cities={page.cities}
         filteredCities={page.filteredCities}
         pagedCities={page.pagedCities}
@@ -53,13 +52,12 @@ export function CitiesPage({ initialArchived = false }: { initialArchived?: bool
         onCreate={() => page.setEditingCity(null)}
         onEdit={page.setEditingCity}
         onDelete={page.setDeleteCity}
-        onRestore={(city) => void page.restoreArchivedCity(city)}
         onToggle={(city, checked) => void page.toggleCity(city, checked)}
         onOpenAreas={page.openDeliveryAreas}
       />
 
       {page.editingCity !== undefined ? <CityDialog city={page.editingCity ?? undefined} onClose={() => page.setEditingCity(undefined)} onSaved={page.saveCityToList} /> : null}
-      {page.deleteCity ? <ConfirmDeleteDialog title={page.deleteCity.deletionMode === "archive" ? "أرشفة المدينة" : "حذف المدينة نهائيًا"} description={page.deleteCity.deletionMode === "archive" ? `المدينة ${page.deleteCity.name} مرتبطة ببيانات مستخدمة؛ سيتم إخفاؤها وأرشفتها وتعطيلها مع إمكانية استعادتها.` : `هل تريد حذف المدينة ${page.deleteCity.name} نهائيًا؟ لا يمكن التراجع بعد تنفيذ الحذف.`} busy={page.busyCityId === page.deleteCity.id} action={page.deleteCity.deletionMode === "archive" ? "archive" : "delete"} onCancel={() => page.setDeleteCity(null)} onConfirm={page.confirmDeleteCity} /> : null}
+      {page.deleteCity ? <ConfirmDeleteDialog title="حذف المدينة نهائيًا" description={`هل تريد حذف المدينة ${page.deleteCity.name} نهائيًا؟ لا يمكن التراجع بعد تنفيذ الحذف.`} busy={page.busyCityId === page.deleteCity.id} onCancel={() => page.setDeleteCity(null)} onConfirm={page.confirmDeleteCity} /> : null}
       {page.selectedCityForAreas ? <DeliveryAreasDialog city={page.selectedCityForAreas} areas={page.deliveryAreas} loading={page.areasLoading} loadError={page.areasError} onClose={page.closeDeliveryAreas} onReload={page.reloadSelectedAreas} /> : null}
     </div>
   );

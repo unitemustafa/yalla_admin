@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, DataTable } from "../../primitives";
+import { DataTable } from "../../primitives";
 import type { ItemRow } from "../types";
 import { itemShopLabel, itemVisibilityLabel } from "./domain";
 import {
@@ -14,24 +14,20 @@ import {
 type ItemsTableProps = {
   loading: boolean;
   onDelete: (rowId: string) => void;
-  onRestore: (row: ItemRow) => void;
   onToggleActive: (row: ItemRow, active: boolean) => void;
   onView: (row: ItemRow) => void;
   pageStartIndex: number;
   rows: ItemRow[];
-  showArchived: boolean;
   visibleCount: number;
 };
 
 export function ItemsTable({
   loading,
   onDelete,
-  onRestore,
   onToggleActive,
   onView,
   pageStartIndex,
   rows,
-  showArchived,
   visibleCount,
 }: ItemsTableProps) {
   return (
@@ -47,7 +43,7 @@ export function ItemsTable({
           "المحل",
           "الظهور",
           "السعر",
-          showArchived ? "الحالة" : "نشط",
+          "نشط",
           "",
         ]}
         rows={(loading ? [] : rows).map((row, rowPosition) => [
@@ -75,21 +71,16 @@ export function ItemsTable({
             <PriceCell price={row.price} />
           </div>,
           <div key={`active-wrap-${row.index}`} className="flex items-center gap-3">
-            {showArchived ? (
-              <Badge tone="blue">مؤرشف</Badge>
-            ) : (
               <ActiveToggleButton
                 active={row.active}
                 onToggle={(active) => onToggleActive(row, active)}
               />
-            )}
           </div>,
           <div key={`actions-${row.index}`} className="flex items-center justify-end">
             <RowActions
               row={row}
               onView={() => onView(row)}
               onDelete={() => onDelete(row.id)}
-              onRestore={() => onRestore(row)}
             />
           </div>,
         ])}

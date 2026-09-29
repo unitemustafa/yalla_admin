@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Archive, Edit3, Plus, Search, Tags, Trash2 } from "lucide-react";
+import { Edit3, Plus, Search, Tags, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { DashboardImage } from "../dashboard-image";
@@ -197,18 +197,13 @@ export function ClassificationsList({
                 >
                   <Edit3 className="size-4" />
                 </ClassificationActionButton>
-                {classification.deletionMode === "delete" ||
-                (classification.deletionMode === "archive" && classification.is_active) ? (
+                {classification.deletionMode === "delete" ? (
                   <ClassificationActionButton
                     tone="danger"
-                    label={classification.deletionMode === "archive"
-                      ? `أرشفة ${classification.name}`
-                      : `حذف ${classification.name} نهائيًا`}
+                    label={`حذف ${classification.name} نهائيًا`}
                     onClick={() => onDelete(classification)}
                   >
-                    {classification.deletionMode === "archive"
-                      ? <Archive className="size-4" />
-                      : <Trash2 className="size-4" />}
+                    <Trash2 className="size-4" />
                   </ClassificationActionButton>
                 ) : null}
               </div>,

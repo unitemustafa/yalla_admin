@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { archiveShippingCompany, companyFromResponse, saveShippingCompany } from "./api";
+import { companyFromResponse, saveShippingCompany } from "./api";
 
 describe("shipping company API mapping", () => {
   it("maps multiple cities, logo, state, and deletion mode", () => {
@@ -11,8 +11,7 @@ describe("shipping company API mapping", () => {
       service_city_ids: [2, "3"],
       service_cities: [{ id: 2, name: "القاهرة" }, { id: 3, name: "الجيزة" }],
       is_active: false,
-      archived_at: null,
-      deletion_mode: "archive",
+      deletion_mode: "blocked",
     })).toEqual({
       id: "7",
       name: "Fast Ship",
@@ -20,8 +19,7 @@ describe("shipping company API mapping", () => {
       cityIds: ["2", "3"],
       cityNames: ["القاهرة", "الجيزة"],
       status: "inactive",
-      archivedAt: null,
-      deletionMode: "archive",
+      deletionMode: null,
     });
   });
 
@@ -40,7 +38,6 @@ describe("shipping company API mapping", () => {
       service_city_ids: [2, 3],
       service_cities: [{ id: 2, name: "القاهرة" }, { id: 3, name: "الجيزة" }],
       is_active: true,
-      archived_at: null,
       deletion_mode: "delete",
     }), { status: 201, headers: { "Content-Type": "application/json" } }));
     const logo = new File(["logo"], "logo.png", { type: "image/png" });
@@ -63,25 +60,4 @@ describe("shipping company API mapping", () => {
     expect(form.get("logo")).toBe(logo);
   });
 
-  it("uses the explicit archive action without deleting the company", async () => {
-    const apiFetch = vi.fn<
-      (path: string, init?: RequestInit) => Promise<Response>
-    >(async () => new Response(JSON.stringify({
-      id: 7,
-      name: "Fast Ship",
-      service_city_ids: [2],
-      service_cities: [{ id: 2, name: "القاهرة" }],
-      is_active: false,
-      archived_at: "2026-08-25T10:00:00Z",
-      deletion_mode: "delete",
-    }), { status: 200, headers: { "Content-Type": "application/json" } }));
-
-    const result = await archiveShippingCompany(apiFetch, "7");
-
-    expect(result.archivedAt).toBe("2026-08-25T10:00:00Z");
-    expect(apiFetch).toHaveBeenCalledWith(
-      "locations/shipping-companies/7/",
-      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ archive: true }) }),
-    );
-  });
 });

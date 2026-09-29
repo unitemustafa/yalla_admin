@@ -10,8 +10,8 @@ import { MarketsTable } from "./markets-table";
 import { MissingClassificationsDialog } from "./missing-classifications-dialog";
 import { useMarketsPage } from "./use-markets-page";
 
-export function ShopsPage({ initialArchived = false }: { initialArchived?: boolean } = {}) {
-  const page = useMarketsPage(initialArchived);
+export function ShopsPage() {
+  const page = useMarketsPage();
   const missingCreatePrerequisite = page.dialogMarket === null
     ? missingMarketCreatePrerequisite(page.classifications, page.marketTypes)
     : null;
@@ -23,16 +23,16 @@ export function ShopsPage({ initialArchived = false }: { initialArchived?: boole
 
   return (
     <div className="px-6 py-6">
-      <PageTitle title={initialArchived ? "المحلات المؤرشفة" : "المحلات"} description={initialArchived ? "استعراض المحلات المؤرشفة واستعادتها عند الحاجة." : "إدارة المحلات وربط ظهور منتجاتها بالمدن."} actions={<div className="flex flex-wrap items-center gap-2"><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => void page.load()} disabled={page.loading}><RefreshCw className={`size-4 ${page.loading ? "animate-spin" : ""}`} />تحديث</Button>{!initialArchived ? <Button className="h-9 px-4 text-sm" onClick={() => page.setDialogMarket(null)} disabled={page.loading || Boolean(page.error)}><Plus className="size-4" />إضافة محل</Button> : null}</div>} />
+      <PageTitle title="المحلات" description="إدارة المحلات وربط ظهور منتجاتها بالمدن." actions={<div className="flex flex-wrap items-center gap-2"><Button type="button" variant="outline" className="h-9 px-4 text-sm" onClick={() => void page.load()} disabled={page.loading}><RefreshCw className={`size-4 ${page.loading ? "animate-spin" : ""}`} />تحديث</Button><Button className="h-9 px-4 text-sm" onClick={() => page.setDialogMarket(null)} disabled={page.loading || Boolean(page.error)}><Plus className="size-4" />إضافة محل</Button></div>} />
       <div className="mt-6 grid gap-3 md:grid-cols-3">{metrics.map(([label, value, Icon]) => <Card key={label} className="h-20"><div className="flex h-full items-center gap-3 px-5"><span className="rounded-full bg-primary/10 p-3 text-primary"><Icon className="size-5" /></span><div><p className="text-xs text-muted-foreground">{label}</p><p className="text-xl font-bold">{value}</p></div></div></Card>)}</div>
 
       {!page.loading && !page.error && page.markets.length === 0 ? (
         <Card className="mt-6 flex min-h-105 items-center justify-center bg-card shadow">
           <div className="mx-auto flex w-full max-w-130 flex-col items-center px-6 py-12 text-center">
             <div className="flex size-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary"><Store className="size-8" /></div>
-            <h2 className="mt-6 text-xl font-semibold leading-7">{initialArchived ? "لا توجد محلات مؤرشفة" : "لا توجد محلات حتى الآن"}</h2>
-            <p className="mt-2 max-w-[430px] text-sm leading-6 text-muted-foreground">{initialArchived ? "المحلات التي تتم أرشفتها ستظهر هنا ويمكن استعادتها." : "سيظهر هنا أول محل تنشئه وتربطه بمدن الظهور."}</p>
-            {!initialArchived ? <div className="mt-6 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row"><Button type="button" className="h-10 px-4" onClick={() => page.setDialogMarket(null)}><Plus className="size-4" />إنشاء أول محل</Button></div> : null}
+            <h2 className="mt-6 text-xl font-semibold leading-7">لا توجد محلات حتى الآن</h2>
+            <p className="mt-2 max-w-[430px] text-sm leading-6 text-muted-foreground">سيظهر هنا أول محل تنشئه وتربطه بمدن الظهور.</p>
+            <div className="mt-6 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row"><Button type="button" className="h-10 px-4" onClick={() => page.setDialogMarket(null)}><Plus className="size-4" />إنشاء أول محل</Button></div>
           </div>
         </Card>
       ) : (
@@ -67,11 +67,11 @@ export function ShopsPage({ initialArchived = false }: { initialArchived?: boole
               />
             </div>
           </div>
-          <MarketsTable markets={page.filteredMarkets} serviceCities={page.serviceCities} archived={initialArchived} loading={page.loading} error={page.error} onReload={() => void page.load()} onEdit={page.setDialogMarket} onDelete={page.setDeleteCandidate} onRestore={(market) => void page.restoreArchivedMarket(market)} onToggle={(market, active) => void page.toggleMarketActive(market, active)} />
+          <MarketsTable markets={page.filteredMarkets} serviceCities={page.serviceCities} loading={page.loading} error={page.error} onReload={() => void page.load()} onEdit={page.setDialogMarket} onDelete={page.setDeleteCandidate} onToggle={(market, active) => void page.toggleMarketActive(market, active)} />
         </Card>
       )}
 
-      {page.deleteCandidate ? <ConfirmDeleteDialog title={page.deleteCandidate.deletion_mode === "delete" ? "حذف المحل نهائيًا" : "أرشفة المحل"} description={page.deleteCandidate.deletion_mode === "delete" ? `هل تريد حذف المحل ${page.deleteCandidate.name} نهائيًا؟ لا يمكن التراجع بعد تنفيذ الحذف.` : `المحل ${page.deleteCandidate.name} مرتبط بسجلات سابقة؛ سيتم إخفاؤه وأرشفته وتعطيله مع إمكانية استعادته.`} busy={false} action={page.deleteCandidate.deletion_mode === "delete" ? "delete" : "archive"} onCancel={() => page.setDeleteCandidate(null)} onConfirm={() => { if (page.deleteCandidate) page.remove(page.deleteCandidate); }} /> : null}
+      {page.deleteCandidate ? <ConfirmDeleteDialog title="حذف المحل نهائيًا" description={`هل تريد حذف المحل ${page.deleteCandidate.name} نهائيًا؟ لا يمكن التراجع بعد تنفيذ الحذف.`} busy={false} onCancel={() => page.setDeleteCandidate(null)} onConfirm={() => { if (page.deleteCandidate) page.remove(page.deleteCandidate); }} /> : null}
       {page.dialogMarket !== undefined ? missingCreatePrerequisite ? <MissingClassificationsDialog kind={missingCreatePrerequisite} onClose={() => page.setDialogMarket(undefined)} /> : <MarketDialog market={page.dialogMarket ?? undefined} serviceCities={page.serviceCities} serviceCitiesLoading={page.serviceCitiesLoading} serviceCitiesError={page.serviceCitiesError} classifications={page.classifications} marketTypes={page.marketTypes} onReloadServiceCities={() => void page.loadServiceCityOptions()} onClose={() => page.setDialogMarket(undefined)} onSaved={page.savedMarket} /> : null}
     </div>
   );

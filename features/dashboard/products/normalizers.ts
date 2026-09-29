@@ -224,13 +224,7 @@ export function normalizeProduct(raw: unknown): NormalizedProduct {
         : typeof record.isAvailable === "boolean"
           ? record.isAvailable
           : Boolean(record.is_available),
-    archivedAt:
-      typeof record.archived_at === "string"
-        ? record.archived_at
-        : typeof record.archivedAt === "string"
-          ? record.archivedAt
-          : null,
-    deletionMode: "archive",
+    deletionMode: record.deletion_mode === "delete" ? "delete" : null,
     additions: Array.isArray(record.additions)
       ? record.additions
           .map(normalizeAdditionId)
@@ -391,7 +385,6 @@ export function productRowFromApi(value: unknown, index: number): ItemRow {
         ? "نعم"
         : "لا",
     active: product.isAvailable,
-    archived: product.archivedAt !== null,
     deletionMode: product.deletionMode,
     visibilityMode: marketScope === "service_city" ? "regions" : "general",
   };

@@ -20,14 +20,11 @@ export async function loadServiceCities(
   apiFetch: (path: string, init?: RequestInit) => Promise<Response>,
   {
     activeOnly = false,
-    archived = false,
     preferArabicName = false,
     errorFallback = "تعذر تحميل المدن من الخادم.",
   } = {},
 ) {
-  const response = await apiFetch(
-    `locations/service-cities/${archived ? "?archived=true" : ""}`,
-  );
+  const response = await apiFetch("locations/service-cities/");
   const data = await responseJson(response);
   if (!response.ok || !Array.isArray(data)) {
     throw new Error(firstCityApiError(data) ?? errorFallback);
@@ -99,26 +96,6 @@ export async function deleteServiceCity(
     }
   }
   throw new Error(firstCityApiError(data) ?? "تعذر حذف المدينة.");
-}
-
-export async function restoreServiceCity(
-  apiFetch: (path: string, init?: RequestInit) => Promise<Response>,
-  cityId: number,
-) {
-  const response = await apiFetch(`locations/service-cities/${cityId}/`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ restore: true }),
-  });
-  const data = await responseJson(response);
-  if (!response.ok) {
-    throw new Error(firstCityApiError(data) ?? "تعذر استعادة المدينة.");
-  }
-  const city = cityFromResponse(data);
-  if (!city) {
-    throw new Error("تمت الاستعادة لكن استجابة المدينة غير مكتملة.");
-  }
-  return city;
 }
 
 export async function lookupServiceCityCoverage(

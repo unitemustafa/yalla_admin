@@ -16,8 +16,7 @@ type DeliveryAreaResponse = {
   eta_max_minutes?: number | null;
   boundary_geojson?: PolygonGeoJson | null;
   is_active?: boolean | null;
-  archived_at?: string | null;
-  deletion_mode?: "delete" | "archive" | null;
+  deletion_mode?: "delete" | "blocked" | null;
   createdAt?: string | null;
   updatedAt?: string | null;
   created_at?: string | null;
@@ -52,9 +51,7 @@ function deliveryZoneFromResponse(area: DeliveryAreaResponse): DeliveryZone {
       typeof area.eta_max_minutes === "number" ? area.eta_max_minutes : null,
     boundaryGeojson: area.boundary_geojson ?? null,
     status: area.is_active === false ? "inactive" : "active",
-    archivedAt: area.archived_at ?? null,
-    deletionMode: area.deletion_mode === "delete" || area.deletion_mode === "archive"
-      ? area.deletion_mode : null,
+    deletionMode: area.deletion_mode === "delete" ? "delete" : null,
     createdAt: area.createdAt ?? area.created_at ?? null,
     updatedAt: area.updatedAt ?? area.updated_at ?? null,
   };
@@ -83,11 +80,9 @@ async function checkedData(response: Response, fallback: string) {
 export async function loadDeliveryZones(
   apiFetch: ApiFetch,
   serviceCityId?: string,
-  archived = false,
 ) {
   const params = new URLSearchParams();
   if (serviceCityId) params.set("service_city_id", serviceCityId);
-  if (archived) params.set("archived", "true");
   const query = params.size ? `?${params.toString()}` : "";
   const data = await checkedData(
     await apiFetch(`locations/delivery-areas/${query}`),
@@ -128,22 +123,4 @@ export async function deleteDeliveryZone(apiFetch: ApiFetch, zoneId: string) {
   if (response.status === 204) return deletionResult(null);
   const data = await checkedData(response, "تعذر حذف منطقة التوصيل.");
   return deletionResult(data);
-}
-
-export async function restoreDeliveryZone(apiFetch: ApiFetch, zoneId: string) {
-  const data = await checkedData(
-    await apiFetch(
-      `locations/delivery-areas/${encodeURIComponent(zoneId)}/`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ restore: true }),
-      },
-    ),
-    "تعذر استعادة منطقة التوصيل.",
-  );
-  if (!isDeliveryAreaResponse(data)) {
-    throw new Error("تمت الاستعادة لكن استجابة الباك غير مكتملة.");
-  }
-  return deliveryZoneFromResponse(data);
 }

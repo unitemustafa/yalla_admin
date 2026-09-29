@@ -7,7 +7,6 @@ import { useSnackbar } from "../snackbar";
 import {
   deleteServiceCity,
   loadDeliveryAreas,
-  restoreServiceCity,
   saveServiceCity,
 } from "./api";
 import {
@@ -19,10 +18,10 @@ import {
 import type { DeliveryArea, ServiceCity } from "./types";
 import { useServiceCities } from "./use-service-cities";
 
-export function useCitiesPage(initialArchived: boolean) {
+export function useCitiesPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
-  const { cities, setCities, loading, error, reload } = useServiceCities({ archived: initialArchived });
+  const { cities, setCities, loading, error, reload } = useServiceCities();
   const [query, setQuery] = useState("");
   const [editingCity, setEditingCity] = useState<ServiceCity | null | undefined>();
   const [deleteCity, setDeleteCity] = useState<ServiceCity | null>(null);
@@ -98,13 +97,9 @@ export function useCitiesPage(initialArchived: boolean) {
     const cityIndex = cities.findIndex((item) => item.id === city.id);
     setBusyCityId(city.id);
     try {
-      const result = await deleteServiceCity(apiFetch, city.id);
+      await deleteServiceCity(apiFetch, city.id);
       setCities((current) => current.filter((item) => item.id !== city.id));
       setDeleteCity(null);
-      if (result.action === "archived") {
-        showSnackbar({ message: result.detail ?? `تمت أرشفة ${city.name} وتعطيلها.`, tone: "success" });
-        return;
-      }
       showSnackbar({
         message: `تم حذف ${city.name}.`,
         tone: "danger",
@@ -113,20 +108,6 @@ export function useCitiesPage(initialArchived: boolean) {
       });
     } catch (reason) {
       showSnackbar({ message: reason instanceof Error ? reason.message : "تعذر حذف المدينة.", tone: "danger" });
-    } finally {
-      setBusyCityId(null);
-    }
-  }
-
-  async function restoreArchivedCity(city: ServiceCity) {
-    if (busyCityId === city.id) return;
-    setBusyCityId(city.id);
-    try {
-      await restoreServiceCity(apiFetch, city.id);
-      setCities((current) => current.filter((item) => item.id !== city.id));
-      showSnackbar({ message: `تمت استعادة ${city.name} إلى قائمة المدن الحالية.`, tone: "success" });
-    } catch (reason) {
-      showSnackbar({ message: reason instanceof Error ? reason.message : "تعذر استعادة المدينة.", tone: "danger" });
     } finally {
       setBusyCityId(null);
     }
@@ -185,7 +166,6 @@ export function useCitiesPage(initialArchived: boolean) {
     loadAreasForCity,
     toggleCity,
     removeCity,
-    restoreArchivedCity,
     openDeliveryAreas,
     closeDeliveryAreas,
     saveCityToList,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Archive, Edit3, Layers3, LoaderCircle, Plus, Trash2, X } from "lucide-react";
+import { Edit3, Layers3, LoaderCircle, Plus, Trash2, X } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { ConfirmDeleteDialog } from "../confirm-delete-dialog";
@@ -105,30 +105,10 @@ export function StoreSubcategoriesManager({
     setBusy(true);
     setError("");
     try {
-      if (item.product_count || item.market_count) {
-        const archived = await saveStoreSubcategory(apiFetch, {
-          id: item.id,
-          name_ar: item.name_ar,
-          description_ar: item.description_ar,
-          is_active: false,
-        });
-        onChange(items.map((candidate) => candidate.id === item.id ? archived : candidate));
-        setDeleteCandidate(null);
-        return;
-      }
-      const result = await deleteStoreSubcategory(apiFetch, item.id);
-      if (result.action === "archived") {
-        onChange(
-          items.map((candidate) =>
-            candidate.id === item.id
-              ? { ...candidate, is_active: false }
-              : candidate,
-          ),
-        );
-      } else {
-        onChange(items.filter((candidate) => candidate.id !== item.id));
-        if (draft.id === item.id) reset();
-      }
+      if (item.product_count || item.market_count) return;
+      await deleteStoreSubcategory(apiFetch, item.id);
+      onChange(items.filter((candidate) => candidate.id !== item.id));
+      if (draft.id === item.id) reset();
       setDeleteCandidate(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر حذف الفئة.");
@@ -180,9 +160,9 @@ export function StoreSubcategoriesManager({
                 </div>
                 <div className="flex shrink-0 gap-1">
                   <Button type="button" size="icon" variant="outline" onClick={() => edit(item)} aria-label="تعديل"><Edit3 className="size-4" /></Button>
-                  {(item.product_count === 0 && item.market_count === 0) || item.is_active ? (
-                    <Button type="button" size="icon" variant="outline" disabled={busy} onClick={() => setDeleteCandidate(item)} aria-label={item.product_count || item.market_count ? `أرشفة ${item.name_ar}` : `حذف ${item.name_ar} نهائيًا`}>
-                      {item.product_count || item.market_count ? <Archive className="size-4 text-destructive" /> : <Trash2 className="size-4 text-destructive" />}
+                  {item.product_count === 0 && item.market_count === 0 ? (
+                    <Button type="button" size="icon" variant="outline" disabled={busy} onClick={() => setDeleteCandidate(item)} aria-label={`حذف ${item.name_ar} نهائيًا`}>
+                      <Trash2 className="size-4 text-destructive" />
                     </Button>
                   ) : null}
                 </div>
@@ -226,11 +206,10 @@ export function StoreSubcategoriesManager({
 
       {deleteCandidate ? (
         <ConfirmDeleteDialog
-          title={deleteCandidate.product_count || deleteCandidate.market_count ? "أرشفة قسم المنتج" : "حذف قسم المنتج نهائيًا"}
-          description={deleteCandidate.product_count || deleteCandidate.market_count ? `القسم «${deleteCandidate.name_ar}» مرتبط بمنتجات أو محلات؛ سيتم تعطيله مع الاحتفاظ ببياناته.` : `هل تريد حذف القسم «${deleteCandidate.name_ar}» نهائيًا؟`}
+          title="حذف قسم المنتج نهائيًا"
+          description={`هل تريد حذف القسم «${deleteCandidate.name_ar}» نهائيًا؟`}
           busy={busy}
-          confirmLabel={deleteCandidate.product_count || deleteCandidate.market_count ? "تأكيد الأرشفة" : "تأكيد الحذف"}
-          action={deleteCandidate.product_count || deleteCandidate.market_count ? "archive" : "delete"}
+          confirmLabel="تأكيد الحذف"
           onCancel={() => setDeleteCandidate(null)}
           onConfirm={() => void remove()}
         />

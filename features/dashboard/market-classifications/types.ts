@@ -7,7 +7,7 @@ export type MarketClassification = {
   image: string | null;
   classification_type: MarketClassificationType;
   is_active: boolean;
-  deletionMode: "delete" | "archive" | null;
+  deletionMode: "delete" | null;
 };
 
 export type MarketClassificationPayload = {

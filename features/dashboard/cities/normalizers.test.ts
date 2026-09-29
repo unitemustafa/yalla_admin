@@ -3,23 +3,21 @@ import { describe, expect, it } from "vitest";
 import { cityFromResponse, deliveryAreaFromResponse } from "./normalizers";
 
 describe("city API normalizers", () => {
-  it("normalizes service-city aliases and archive metadata", () => {
+  it("normalizes service-city aliases and deletion mode", () => {
     expect(
       cityFromResponse({
         id: "4",
         name_ar: "مصراتة",
         center_latitude: 32.37,
         delivery_price: 5,
-        archived_at: "2026-01-01",
-        deletion_mode: "archive",
+        deletion_mode: "blocked",
       }, true),
     ).toMatchObject({
       id: 4,
       name: "مصراتة",
       center_latitude: "32.37",
       delivery_price: "5",
-      archivedAt: "2026-01-01",
-      deletionMode: "archive",
+      deletionMode: null,
     });
   });
 

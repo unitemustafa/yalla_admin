@@ -241,13 +241,11 @@ export function OfferDeleteModal({
       >
         <div className="border-b px-5 py-4">
           <h2 id="delete-offer-title" className="text-base font-bold">
-            {offer.deletionMode === "archive" ? "أرشفة العرض" : "حذف العرض نهائيًا"}
+            حذف العرض نهائيًا
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">{offer.title}</p>
           <p className="mt-2 text-xs text-muted-foreground">
-            {offer.deletionMode === "archive"
-              ? "العرض مرتبط بسجلات سابقة، لذلك سيتم إخفاؤه وأرشفته وتعطيله مع إمكانية استعادته."
-              : "سيتم حذف العرض نهائيًا ولا يمكن التراجع بعد تنفيذ الحذف."}
+            سيتم حذف العرض نهائيًا ولا يمكن التراجع بعد تنفيذ الحذف.
           </p>
         </div>
         <div className="flex justify-end gap-2 p-5">
@@ -255,7 +253,7 @@ export function OfferDeleteModal({
             إلغاء
           </Button>
           <Button type="button" variant="danger" disabled={deleting} onClick={onConfirm}>
-            {deleting ? "جار التنفيذ..." : offer.deletionMode === "archive" ? "أرشفة" : "حذف نهائي"}
+            {deleting ? "جار التنفيذ..." : "حذف نهائي"}
           </Button>
         </div>
       </div>

@@ -2,29 +2,9 @@ import { expect, test } from "@playwright/test";
 
 import { navGroups, pageFromPathname } from "../features/dashboard/routes";
 
-test("archives use one dedicated navigation section and distinct routes", () => {
-  const archiveItem = navGroups
-    .flatMap((group) => group.items)
-    .find((item) =>
-      item.children?.some((child) => child.page === "archived-items"),
-    );
-
-  expect(archiveItem?.children?.map((child) => [child.href, child.page])).toEqual(
-    [
-      ["/archives/products", "archived-items"],
-      ["/archives/shops", "archived-shops"],
-      ["/archives/offers", "archived-offers"],
-      ["/archives/cities", "archived-cities"],
-      ["/archives/delivery-zones", "archived-delivery-zones"],
-    ],
-  );
-  expect(pageFromPathname("/archives/products")).toBe("archived-items");
-  expect(pageFromPathname("/archives/shops")).toBe("archived-shops");
-  expect(pageFromPathname("/archives/offers")).toBe("archived-offers");
-  expect(pageFromPathname("/archives/cities")).toBe("archived-cities");
-  expect(pageFromPathname("/archives/delivery-zones")).toBe(
-    "archived-delivery-zones",
-  );
+test("archive routes are absent from navigation", () => {
+  expect(navGroups.flatMap((group) => group.items).some((item) => item.href?.startsWith("/archives/"))).toBe(false);
+  expect(pageFromPathname("/archives/products")).toBe("overview");
 });
 
 test("categories use a dedicated navigation section below products", () => {
@@ -72,16 +52,6 @@ test("protected dashboard routes redirect to login with a safe return path", asy
   );
   await expect(page.locator('input[name="email"]')).toBeVisible();
   await expect(page.locator('input[name="password"]')).toBeVisible();
-});
-
-test("archive routes are protected and preserve their return path", async ({
-  page,
-}) => {
-  await page.goto("/archives/products");
-
-  await expect(page).toHaveURL(
-    /\/login\?next=%2Farchives%2Fproducts$/,
-  );
 });
 
 test("category routes are protected and preserve their return path", async ({

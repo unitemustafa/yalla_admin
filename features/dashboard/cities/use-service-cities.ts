@@ -6,7 +6,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { loadServiceCities } from "./api";
 import type { ServiceCity } from "./types";
 
-export function useServiceCities({ activeOnly = false, archived = false } = {}) {
+export function useServiceCities({ activeOnly = false } = {}) {
   const { apiFetch } = useAuth();
   const [cities, setCities] = useState<ServiceCity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -16,13 +16,13 @@ export function useServiceCities({ activeOnly = false, archived = false } = {}) 
     setLoading(true);
     setError(null);
     try {
-      setCities(await loadServiceCities(apiFetch, { activeOnly, archived }));
+      setCities(await loadServiceCities(apiFetch, { activeOnly }));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر تحميل المدن.");
     } finally {
       setLoading(false);
     }
-  }, [activeOnly, apiFetch, archived]);
+  }, [activeOnly, apiFetch]);
 
   useEffect(() => {
     void Promise.resolve().then(reload);

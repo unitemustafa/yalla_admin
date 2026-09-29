@@ -6,7 +6,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { useSnackbar } from "../snackbar";
 import { useUndoableDelete } from "../use-undoable-delete";
 import { useServiceCities } from "../cities/use-service-cities";
-import { deleteDeliveryZone, loadDeliveryZones, restoreDeliveryZone, saveDeliveryZone } from "./api";
+import { deleteDeliveryZone, loadDeliveryZones, saveDeliveryZone } from "./api";
 import {
   allCitiesFilterValue,
   deliveryListPageSize,
@@ -15,7 +15,7 @@ import {
 } from "./domain";
 import type { DeliveryZone } from "./types";
 
-export function useDeliveryZonesPage(initialArchived: boolean) {
+export function useDeliveryZonesPage() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const queueUndoableDelete = useUndoableDelete();
@@ -42,14 +42,14 @@ export function useDeliveryZonesPage(initialArchived: boolean) {
     setLoadError(null);
     try {
       const serviceCityId = selectedCityId === allCitiesFilterValue ? undefined : selectedCityId;
-      setZones(await loadDeliveryZones(apiFetch, serviceCityId, initialArchived));
+      setZones(await loadDeliveryZones(apiFetch, serviceCityId));
     } catch (error) {
       setZones([]);
       setLoadError(error instanceof Error ? error.message : "تعذر تحميل مناطق التوصيل.");
     } finally {
       setLoading(false);
     }
-  }, [apiFetch, initialArchived, selectedCityId]);
+  }, [apiFetch, selectedCityId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadZones(), 0);
@@ -127,26 +127,11 @@ export function useDeliveryZonesPage(initialArchived: boolean) {
         showSnackbar({ message: `تمت استعادة منطقة ${zone.name}.`, tone: "success" });
       },
       onCommit: () => deleteDeliveryZone(apiFetch, zone.id),
-      onCommitSuccess: (value) => {
-        const result = value && typeof value === "object" && "action" in value
-          ? value as { action: "deleted" | "archived"; detail?: string }
-          : { action: "deleted" as const };
-        showSnackbar({ message: result.action === "archived" ? result.detail ?? `تمت أرشفة منطقة ${zone.name}.` : `تم حذف منطقة ${zone.name} نهائيًا.`, tone: result.action === "archived" ? "success" : "danger" });
+      onCommitSuccess: () => {
+        showSnackbar({ message: `تم حذف منطقة ${zone.name} نهائيًا.`, tone: "danger" });
       },
       onCommitError: (error) => showSnackbar({ message: error instanceof Error ? error.message : "تعذر حذف منطقة التوصيل.", tone: "danger" }),
     });
-  }
-
-  async function restoreArchivedZone(zone: DeliveryZone) {
-    const previousZones = zones;
-    setZones((current) => current.filter((item) => item.id !== zone.id));
-    try {
-      await restoreDeliveryZone(apiFetch, zone.id);
-      showSnackbar({ message: `تمت استعادة منطقة ${zone.name}.`, tone: "success" });
-    } catch (error) {
-      setZones(previousZones);
-      showSnackbar({ message: error instanceof Error ? error.message : "تعذر استعادة منطقة التوصيل.", tone: "danger" });
-    }
   }
 
   return {
@@ -183,6 +168,5 @@ export function useDeliveryZonesPage(initialArchived: boolean) {
     saveZone,
     changeStatus,
     confirmDeleteZone,
-    restoreArchivedZone,
   };
 }

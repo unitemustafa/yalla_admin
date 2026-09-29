@@ -37,7 +37,7 @@ export function useMarketClassificationsPage() {
   >();
   const [deleteClassification, setDeleteClassification] =
     useState<MarketClassification | null>(null);
-  const [deletingClassification, setDeletingClassification] = useState(false);
+  const deletingClassification = false;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -168,28 +168,6 @@ export function useMarketClassificationsPage() {
   async function confirmDelete() {
     if (!deleteClassification) return;
     const classification = deleteClassification;
-    if (classification.deletionMode === "archive") {
-      setDeletingClassification(true);
-      try {
-        const archived = await updateMarketClassification(apiFetch, classification.id, {
-          name: classification.name,
-          description: classification.description,
-          classification_type: classification.classification_type,
-          is_active: false,
-        });
-        setClassifications((current) => current.map((item) =>
-          item.id === classification.id ? archived : item,
-        ));
-        setDeleteClassification(null);
-        showSnackbar({ message: `تمت أرشفة الفئة ${classification.name} وتعطيلها.`, tone: "success" });
-      } catch (reason) {
-        const message = reason instanceof Error ? reason.message : "تعذر أرشفة فئة المحل.";
-        showSnackbar({ message: translateMarketClassificationError(message), tone: "danger" });
-      } finally {
-        setDeletingClassification(false);
-      }
-      return;
-    }
     if (classification.deletionMode !== "delete") return;
     const classificationIndex = classifications.findIndex(
       (item) => item.id === classification.id,
@@ -218,34 +196,6 @@ export function useMarketClassificationsPage() {
         });
       },
       onCommit: () => deleteMarketClassification(apiFetch, classification.id),
-      onCommitSuccess: (value) => {
-        if (
-          value &&
-          typeof value === "object" &&
-          "action" in value &&
-          value.action === "archived"
-        ) {
-          setClassifications((current) => {
-            if (current.some((item) => item.id === classification.id)) {
-              return current;
-            }
-            const nextClassifications = [...current];
-            nextClassifications.splice(
-              Math.max(0, classificationIndex),
-              0,
-              { ...classification, is_active: false, deletionMode: "archive" },
-            );
-            return nextClassifications;
-          });
-          showSnackbar({
-            message:
-              "detail" in value && typeof value.detail === "string"
-                ? value.detail
-                : `تمت أرشفة الفئة ${classification.name}.`,
-            tone: "success",
-          });
-        }
-      },
       onCommitError: (reason) => {
         const message =
           reason instanceof Error ? reason.message : "تعذر حذف فئة المحل.";

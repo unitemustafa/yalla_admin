@@ -1,5 +1,4 @@
 import {
-  Archive,
   BadgeCheck,
   Handshake,
   LayoutDashboard,
@@ -143,36 +142,6 @@ export const dashboardRoutes = {
     prefixMatches: ["/partners/"],
     breadcrumbs: [dashboardCrumb, { label: "الشركاء" }],
   },
-  "archived-items": {
-    href: "/archives/products",
-    matches: ["/archives/products"],
-    breadcrumbs: [dashboardCrumb, { label: "المؤرشفات" }, { label: "المنتجات المؤرشفة" }],
-  },
-  "archived-shops": {
-    href: "/archives/shops",
-    matches: ["/archives/shops"],
-    breadcrumbs: [dashboardCrumb, { label: "المؤرشفات" }, { label: "المحلات المؤرشفة" }],
-  },
-  "archived-offers": {
-    href: "/archives/offers",
-    matches: ["/archives/offers"],
-    breadcrumbs: [dashboardCrumb, { label: "المؤرشفات" }, { label: "العروض المؤرشفة" }],
-  },
-  "archived-cities": {
-    href: "/archives/cities",
-    matches: ["/archives/cities"],
-    breadcrumbs: [dashboardCrumb, { label: "المؤرشفات" }, { label: "المدن المؤرشفة" }],
-  },
-  "archived-delivery-zones": {
-    href: "/archives/delivery-zones",
-    matches: ["/archives/delivery-zones"],
-    breadcrumbs: [dashboardCrumb, { label: "المؤرشفات" }, { label: "مناطق التوصيل المؤرشفة" }],
-  },
-  "archived-shipping-companies": {
-    href: "/archives/shipping-companies",
-    matches: ["/archives/shipping-companies"],
-    breadcrumbs: [dashboardCrumb, { label: "المؤرشفات" }, { label: "شركات الشحن المؤرشفة" }],
-  },
   memberships: {
     matches: [],
     breadcrumbs: [dashboardCrumb, { label: "العضويات" }],
@@ -274,18 +243,6 @@ export const navGroups: NavGroup[] = [
       },
       { icon: Users, ...navChild("customers", "العملاء") },
       { icon: Handshake, ...navChild("partners", "الشركاء") },
-      {
-        label: "المؤرشفات",
-        icon: Archive,
-        children: [
-          navChild("archived-items", "المنتجات المؤرشفة"),
-          navChild("archived-shops", "المحلات المؤرشفة"),
-          navChild("archived-offers", "العروض المؤرشفة"),
-          navChild("archived-cities", "المدن المؤرشفة"),
-          navChild("archived-delivery-zones", "مناطق التوصيل المؤرشفة"),
-          navChild("archived-shipping-companies", "شركات الشحن المؤرشفة"),
-        ],
-      },
       { label: "العضويات", icon: BadgeCheck, page: "memberships", soon: true },
       { label: "الشات", icon: MessageCircle, soon: true },
     ],

@@ -28,7 +28,7 @@ describe("market classification normalizers", () => {
   });
 
   it("shows destructive actions only for an explicit backend mode", () => {
-    expect(normalizeMarketClassification({ id: 1, name: "الحيوانات", deletion_mode: "archive" })?.deletionMode).toBe("archive");
+    expect(normalizeMarketClassification({ id: 1, name: "الحيوانات", deletion_mode: "blocked" })?.deletionMode).toBeNull();
     expect(normalizeMarketClassification({ id: 2, name: "جديدة", deletion_mode: "delete" })?.deletionMode).toBe("delete");
     expect(normalizeMarketClassification({ id: 3, name: "غير معروفة" })?.deletionMode).toBeNull();
   });

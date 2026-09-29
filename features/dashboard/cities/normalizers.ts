@@ -16,8 +16,7 @@ type ServiceCityResponse = {
   boundary_bbox?: number[] | null;
   delivery_price?: string | number | null;
   is_active?: boolean | null;
-  archived_at?: string | null;
-  deletion_mode?: "delete" | "archive" | null;
+  deletion_mode?: "delete" | "blocked" | null;
   delivery_area_count?: number | null;
   market_count?: number | null;
   offer_count?: number | null;
@@ -98,9 +97,7 @@ export function cityFromResponse(
     boundary_bbox: Array.isArray(city.boundary_bbox) ? city.boundary_bbox : null,
     delivery_price: numberText(city.delivery_price, "0.00"),
     is_active: city.is_active !== false,
-    archivedAt: typeof city.archived_at === "string" ? city.archived_at : null,
-    deletionMode: city.deletion_mode === "delete" || city.deletion_mode === "archive"
-      ? city.deletion_mode : null,
+    deletionMode: city.deletion_mode === "delete" ? "delete" : null,
     delivery_area_count: countValue(city.delivery_area_count),
     market_count: countValue(city.market_count),
     offer_count: countValue(city.offer_count),

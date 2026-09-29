@@ -16,7 +16,6 @@ import {
   deleteProduct,
   getProduct,
   listProducts,
-  restoreProduct,
   toggleProductAvailability,
 } from "../api";
 import { normalizeItemRow, productRowFromApi } from "../normalizers";
@@ -29,7 +28,7 @@ import {
   type ItemAdvancedFilters,
 } from "./types";
 
-export function useProductsList(showArchived: boolean) {
+export function useProductsList() {
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const [rows, setRows] = useState<ItemRow[]>([]);
@@ -65,7 +64,7 @@ export function useProductsList(showArchived: boolean) {
       setError("");
       try {
         const [products, addonResult, loadedMarkets] = await Promise.all([
-          listProducts(apiFetch, showArchived),
+          listProducts(apiFetch),
           fetchAddonRows(apiFetch),
           fetchAdminRows(apiFetch, adminApiPaths.markets, shopRowFromApi),
         ]);
@@ -100,7 +99,7 @@ export function useProductsList(showArchived: boolean) {
     return () => {
       active = false;
     };
-  }, [apiFetch, reloadKey, showArchived]);
+  }, [apiFetch, reloadKey]);
 
   function toggleSelectedRow(rowIndex: string) {
     setSelectedRows((currentRows) => {
@@ -172,33 +171,15 @@ export function useProductsList(showArchived: boolean) {
     setDeleteId(null);
     setError("");
     try {
-      const result = await deleteProduct(apiFetch, deleteRow.id);
+      await deleteProduct(apiFetch, deleteRow.id);
       showSnackbar({
-        message:
-          result.action === "archived"
-            ? result.detail ?? `تمت أرشفة ${deleteRow.name} وتعطيله.`
-            : `تم حذف ${deleteRow.name} نهائيًا.`,
-        tone: result.action === "archived" ? "success" : "danger",
+        message: `تم حذف ${deleteRow.name} نهائيًا.`,
+        tone: "danger",
       });
     } catch (deleteError) {
       setRows(previousRows);
       showSnackbar({
         message: deleteError instanceof Error ? deleteError.message : "تعذر حذف المنتج من الباك.",
-        tone: "danger",
-      });
-    }
-  }
-
-  async function restoreArchivedProduct(row: ItemRow) {
-    const previousRows = rows;
-    setRows((currentRows) => currentRows.filter((item) => item.id !== row.id));
-    try {
-      await restoreProduct(apiFetch, row.id);
-      showSnackbar({ message: `تمت استعادة ${row.name} إلى قائمة المنتجات.` });
-    } catch (restoreError) {
-      setRows(previousRows);
-      showSnackbar({
-        message: restoreError instanceof Error ? restoreError.message : "تعذر استعادة المنتج.",
         tone: "danger",
       });
     }
@@ -242,7 +223,6 @@ export function useProductsList(showArchived: boolean) {
     pagedRows,
     previousPage: () => setCurrentPage((page) => Math.max(1, Math.min(page, totalPages) - 1)),
     reload: () => setReloadKey((current) => current + 1),
-    restoreArchivedProduct,
     rows,
     selectedRows,
     setDeleteId,

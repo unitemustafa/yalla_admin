@@ -117,8 +117,8 @@ function productRequestInit(
   };
 }
 
-export async function listProducts(apiFetch: ApiFetch, archived = false) {
-  const response = await apiFetch(`${productsPath}${archived ? "?archived=true" : ""}`);
+export async function listProducts(apiFetch: ApiFetch) {
+  const response = await apiFetch(productsPath);
   const data = await parseProductResponse(response, "تعذر تحميل المنتجات");
   return apiListData(data).map(normalizeProduct);
 }
@@ -269,19 +269,6 @@ export async function deleteProduct(apiFetch: ApiFetch, productId: string | numb
   );
   const data = await parseProductResponse(response, "تعذر حذف المنتج");
   return deletionResult(data);
-}
-
-export async function restoreProduct(apiFetch: ApiFetch, productId: string | number) {
-  const response = await apiFetch(
-    `${productsPath}${encodeURIComponent(String(productId))}/`,
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ restore: true }),
-    },
-  );
-  const data = await parseProductResponse(response, "تعذر استعادة المنتج");
-  return assertReadableProduct(normalizeProduct(data), "تعذر قراءة بيانات المنتج");
 }
 
 export async function toggleProductAvailability(

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { AlertCircle, Archive, Loader2, Trash2 } from "lucide-react";
+import { AlertCircle, Loader2, Trash2 } from "lucide-react";
 
 import { Button } from "./primitives";
 
@@ -9,7 +9,6 @@ export function ConfirmDeleteDialog({
   title,
   description,
   busy,
-  action = "delete",
   confirmLabel,
   onCancel,
   onConfirm,
@@ -17,12 +16,10 @@ export function ConfirmDeleteDialog({
   title: string;
   description: string;
   busy: boolean;
-  action?: "delete" | "archive";
   confirmLabel?: string;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  const ActionIcon = action === "archive" ? Archive : Trash2;
   useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;
     const previousHtmlOverflow = document.documentElement.style.overflow;
@@ -59,8 +56,8 @@ export function ConfirmDeleteDialog({
             إلغاء
           </Button>
           <Button type="button" variant="danger" onClick={onConfirm} disabled={busy}>
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <ActionIcon className="size-4" />}
-            {busy ? "جار التنفيذ..." : confirmLabel ?? (action === "archive" ? "أرشفة" : "حذف نهائي")}
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+            {busy ? "جار التنفيذ..." : confirmLabel ?? "حذف نهائي"}
           </Button>
         </div>
       </section>

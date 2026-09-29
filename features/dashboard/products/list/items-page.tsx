@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Archive, Package, Plus, RotateCcw } from "lucide-react";
+import { Package, Plus, RotateCcw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button, Card, PageTitle, Pagination } from "../../primitives";
@@ -12,22 +12,14 @@ import { ItemsTable } from "./items-table";
 import { ProductDetailDialog } from "./product-detail-dialog";
 import { useProductsList } from "./use-products-list";
 
-export function ItemsPage({
-  initialArchived = false,
-}: {
-  initialArchived?: boolean;
-} = {}) {
-  const list = useProductsList(initialArchived);
+export function ItemsPage() {
+  const list = useProductsList();
 
   return (
     <div className="min-h-screen bg-muted/20 px-4 py-6 sm:px-6 lg:px-8">
       <PageTitle
-        title={initialArchived ? "المنتجات المؤرشفة" : "المنتجات"}
-        description={
-          initialArchived
-            ? "استعراض المنتجات المؤرشفة واستعادتها عند الحاجة"
-            : "إدارة منتجات المنيو في كل الفروع"
-        }
+        title="المنتجات"
+        description="إدارة منتجات المنيو في كل الفروع"
         size="compact"
         className="rounded-lg border bg-card p-4 shadow-sm"
         actions={
@@ -42,15 +34,13 @@ export function ItemsPage({
               <RotateCcw className={cn("size-4", list.loading && "animate-spin")} />
               تحديث
             </Button>
-            {!initialArchived ? (
-              <Link
+            <Link
                 href="/items/create"
                 className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition hover:bg-primary/90 sm:w-33"
               >
                 <Plus className="size-4" />
                 منتج جديد
               </Link>
-            ) : null}
           </div>
         }
       />
@@ -62,21 +52,14 @@ export function ItemsPage({
           <Card className="flex min-h-70 items-center justify-center bg-card shadow">
             <div className="mx-auto flex w-full max-w-130 flex-col items-center px-6 py-8 text-center">
               <div className="flex size-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
-                {initialArchived ? (
-                  <Archive className="size-8" />
-                ) : (
-                  <Package className="size-8" />
-                )}
+                <Package className="size-8" />
               </div>
               <h2 className="mt-4 text-xl font-semibold leading-7">
-                {initialArchived ? "لا توجد منتجات مؤرشفة" : "لا توجد منتجات حتى الآن"}
+                لا توجد منتجات حتى الآن
               </h2>
               <p className="mt-2 max-w-[430px] text-sm leading-6 text-muted-foreground">
-                {initialArchived
-                  ? "المنتجات التي تتم أرشفتها ستظهر هنا ويمكن استعادتها."
-                  : "سيظهر هنا أول منتج تضيفه للعملاء في تطبيق يلا ماركت."}
+                سيظهر هنا أول منتج تضيفه للعملاء في تطبيق يلا ماركت.
               </p>
-              {!initialArchived ? (
                 <div className="mt-4 flex w-full justify-center sm:w-auto">
                   <Link
                     href="/items/create"
@@ -86,7 +69,6 @@ export function ItemsPage({
                     إضافة أول منتج
                   </Link>
                 </div>
-              ) : null}
             </div>
           </Card>
         ) : (
@@ -116,7 +98,6 @@ export function ItemsPage({
                 onToggleActive={list.toggleActive}
                 onView={list.openProductDetail}
                 onDelete={list.setDeleteId}
-                onRestore={(row) => void list.restoreArchivedProduct(row)}
               />
             ) : (
               <div className="mt-4 flex h-16 items-center justify-center rounded-md border text-sm text-muted-foreground lg:hidden">
@@ -126,12 +107,10 @@ export function ItemsPage({
             <ItemsTable
               loading={list.loading}
               onDelete={list.setDeleteId}
-              onRestore={(row) => void list.restoreArchivedProduct(row)}
               onToggleActive={list.toggleActive}
               onView={list.openProductDetail}
               pageStartIndex={list.pageStartIndex}
               rows={list.pagedRows}
-              showArchived={initialArchived}
               visibleCount={list.visibleRows.length}
             />
             <Pagination
@@ -159,7 +138,6 @@ export function ItemsPage({
       {list.deleteRow ? (
         <DeleteDialog
           itemName={list.deleteRow.name}
-          deletionMode={list.deleteRow.deletionMode === "archive" ? "archive" : "delete"}
           onClose={() => list.setDeleteId(null)}
           onConfirm={() => void list.confirmDelete()}
         />

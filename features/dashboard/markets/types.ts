@@ -31,8 +31,7 @@ export type Market = {
   service_cities?: MarketServiceCity[];
   subcategories?: StoreSubcategory[];
   market_types?: MarketType[];
-  archived_at?: string | null;
-  deletion_mode?: "delete" | "archive";
+  deletion_mode?: "delete" | "blocked";
 };
 
 export type MarketDraft = {
