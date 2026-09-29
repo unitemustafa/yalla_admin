@@ -51,7 +51,10 @@ export function localizedAuthError(value: unknown, fallback: string) {
   if (!message) return fallback;
 
   const normalized = message.toLowerCase();
-  if (normalized.includes("invalid email or password")) {
+  if (
+    normalized.includes("invalid email or password") ||
+    normalized.includes("تسجيل الدخول هذا مخصص لحسابات المدير فقط")
+  ) {
     return "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
   }
   if (normalized.includes("not been verified")) {
