@@ -14,7 +14,7 @@ import {
 } from "../order-display";
 import { firstApiError } from "../users/api-users";
 import { isRecord, recordValue } from "../orders/api";
-import type { ApiRecord, RepresentativeListResult } from "./types";
+import type { ApiRecord } from "./types";
 
 export function textValue(value: unknown) {
   if (typeof value === "string" && value.trim()) return value.trim();
@@ -45,16 +45,6 @@ export function numberAt(record: ApiRecord, paths: string[][], fallback = 0) {
     if (value !== null) return value;
   }
   return fallback;
-}
-
-function boolValue(value: unknown) {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase();
-    if (["true", "1", "yes", "available", "active"].includes(normalized)) return true;
-    if (["false", "0", "no", "unavailable", "inactive"].includes(normalized)) return false;
-  }
-  return null;
 }
 
 export function apiRecordList(value: unknown): ApiRecord[] {
@@ -139,66 +129,11 @@ export function deliveryDetails(order: ApiRecord) {
   return { type: getDashboardOrderTypeLabel(typedOrder), city: serviceCityName(order), area: deliveryAreaName(order) || "-", price: deliveryLaterLabel, destination: getDeliveryDestination(typedOrder), tone: "blue" as const };
 }
 
-export function representativeListFromApprove(value: unknown): RepresentativeListResult {
-  if (!isRecord(value) || !Array.isArray(value.available_representatives)) {
-    return { present: false, representatives: [] };
-  }
-  return { present: true, representatives: value.available_representatives.filter(isRecord) };
-}
-
-export function representativeListFromResponse(value: unknown) {
-  if (isRecord(value) && Array.isArray(value.representatives)) {
-    return value.representatives.filter(isRecord);
-  }
-  return apiRecordList(value);
-}
-
-export function representativeId(representative: ApiRecord) {
-  return textAt(representative, [["representative_id"], ["id"], ["user_id"], ["user", "id"]], "");
-}
-
-export function representativeName(representative: ApiRecord) {
-  const direct = textAt(representative, [["name"], ["full_name"], ["fullName"], ["user", "name"]], "");
-  if (direct) return direct;
-  const split = [
-    textAt(representative, [["first_name"], ["user", "first_name"]], ""),
-    textAt(representative, [["last_name"], ["user", "last_name"]], ""),
-  ].filter(Boolean).join(" ");
-  return split || `طيار #${representativeId(representative) || "-"}`;
-}
-
-export function representativePhone(representative: ApiRecord) {
-  return textAt(representative, [["phone"], ["user", "phone"]]);
-}
-
-export function representativeCity(representative: ApiRecord) {
-  return textAt(representative, [["service_city", "name"], ["service_city"], ["service_city_name"], ["delivery_area_name"], ["city", "name"]]);
-}
-
-export function representativeLoad(representative: ApiRecord) {
-  const active = textAt(representative, [["active_order_count"], ["current_order_count"], ["active_orders"], ["current_orders_count"]], "");
-  const capacity = textAt(representative, [["max_active_orders"], ["capacity"]], "");
-  return active && capacity ? `${active} / ${capacity}` : active || capacity || "-";
-}
-
-export function representativeAvailability(representative: ApiRecord) {
-  const availability = boolValue(recordValue(representative, ["is_available"]) ?? recordValue(representative, ["available"]) ?? recordValue(representative, ["availability"]));
-  if (availability === true) return { label: "متاح", tone: "green" as const };
-  if (availability === false) return { label: "غير متاح", tone: "red" as const };
-  return { label: textAt(representative, [["availability"], ["status"]], "غير محدد"), tone: "secondary" as const };
-}
-
 export function localizedApiError(value: unknown, fallback: string) {
-  if (isRecord(value) && "representative_id" in value) {
-    const message = firstApiError(value.representative_id);
-    if (message) return message;
-  }
   const message = firstApiError(value);
   if (!message) return fallback;
   const normalized = message.toLowerCase();
   if (normalized.includes("already") && normalized.includes("review")) return "تمت مراجعة الطلب بالفعل. حدّث التنبيه.";
-  if (normalized.includes("approved before assignment") || normalized.includes("must be approved")) return "يجب قبول الطلب قبل إسناده للطيار.";
-  if (normalized.includes("same service city") || normalized.includes("service city")) return "الطيار ليس في نفس مدينة خدمة الطلب.";
   if (normalized.includes("unauthorized") || normalized.includes("authentication")) return "انتهت الجلسة أو لا تملك صلاحية تنفيذ هذا الإجراء.";
   return message;
 }

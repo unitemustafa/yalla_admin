@@ -230,7 +230,6 @@ export const navGroups: NavGroup[] = [
         icon: Truck,
         children: [
           navChild("delivery-zone", "مناطق التوصيل"),
-          navChild("shipping-companies", "شركات الشحن"),
         ],
       },
       {
@@ -238,7 +237,7 @@ export const navGroups: NavGroup[] = [
         icon: Users,
         children: [
           navChild("couriers", ar["nav.allCouriers"]),
-          navChild("create-courier", ar["nav.createCourier"]),
+          navChild("shipping-companies", "شركات الشحن"),
         ],
       },
       { icon: Users, ...navChild("customers", "العملاء") },

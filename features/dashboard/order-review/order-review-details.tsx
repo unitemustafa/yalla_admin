@@ -9,6 +9,8 @@ import {
   getMarketSections,
   isGeneralOrder,
   isMultiMarket,
+  numberValue,
+  orderOfferTitle,
 } from "../order-display";
 import { Badge, CurrencyText } from "../primitives";
 import { recordValue } from "../orders/api";
@@ -72,7 +74,48 @@ export function OrderReviewDetails({ order }: { order: ApiRecord }) {
           <div className="grid gap-2">
             {sections.map((section, index) => {
               const name = textValue(section.market?.name_ar) || textValue(section.market?.name) || (section.market_id ? `محل #${section.market_id}` : `محل ${index + 1}`);
-              return <div key={`${section.id ?? section.market_id ?? index}`} className="rounded-md border bg-muted/20 px-3 py-2 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-bold">{name}</span></div><div className="mt-1 text-xs text-muted-foreground">المنتجات: {(section.items?.length ?? 0).toLocaleString("en-US")} - العروض: {(section.offers?.length ?? 0).toLocaleString("en-US")}</div></div>;
+              const items = section.items ?? [];
+              const offers = section.offers ?? [];
+              return (
+                <div key={`${section.id ?? section.market_id ?? index}`} className="rounded-md border bg-muted/20 p-3 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold">{name}</span>
+                    {section.market?.branch ? <Badge tone="secondary">{section.market.branch}</Badge> : null}
+                  </div>
+                  {items.length > 0 ? (
+                    <div className="mt-3 grid gap-2">
+                      {items.map((item, itemIndex) => {
+                        const productName = textValue(item.product_name) || textValue(item.variant?.product?.name) || textValue(item.product?.name) || "منتج غير مسمى";
+                        const quantity = numberValue(item.quantity);
+                        const unitPrice = numberValue(item.unit_price);
+                        const lineTotal = numberValue(item.subtotal) ?? (quantity !== null && unitPrice !== null ? quantity * unitPrice : null);
+                        return (
+                          <div key={`${item.id ?? item.variant_id ?? itemIndex}`} className="flex flex-wrap items-start justify-between gap-2 rounded-md border bg-background px-3 py-2">
+                            <div><div className="font-semibold">{productName}</div>{item.variant_name ? <div className="text-xs text-muted-foreground">{item.variant_name}</div> : null}</div>
+                            <div className="text-xs text-muted-foreground">الكمية: {item.quantity ?? "-"} · سعر الوحدة: {moneyLabel(item.unit_price)} · الإجمالي: <span className="font-semibold text-foreground">{moneyLabel(lineTotal)}</span></div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  {offers.length > 0 ? (
+                    <div className="mt-3 grid gap-2">
+                      {offers.map((offer, offerIndex) => (
+                        <div key={`${offer.id ?? offer.offer_id ?? offerIndex}`} className="flex flex-wrap justify-between gap-2 rounded-md border bg-background px-3 py-2">
+                          <span className="font-semibold">عرض: {orderOfferTitle(offer)}</span>
+                          <span className="text-muted-foreground">الخصم: {moneyLabel(offer.discount_amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {items.length === 0 && offers.length === 0 ? <p className="mt-2 text-xs text-muted-foreground">لا توجد منتجات أو عروض لهذا المحل.</p> : null}
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t pt-2 text-xs text-muted-foreground">
+                    <span>قيمة المنتجات: {moneyLabel(section.subtotal_price)}</span>
+                    <span>الخصم: {moneyLabel(section.discount)}</span>
+                    <span className="font-semibold text-foreground">إجمالي المحل: {moneyLabel(section.total_price)}</span>
+                  </div>
+                </div>
+              );
             })}
           </div>
         </div>

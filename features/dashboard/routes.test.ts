@@ -66,18 +66,17 @@ describe("dashboard routes", () => {
     expect(shops?.children?.map((child) => child.page)).toEqual(["shops"]);
   });
 
-  it("keeps couriers in their own pilots group", () => {
+  it("shows shipping companies under pilots and keeps courier creation on the couriers page", () => {
     const managementItems = navGroups[1].items;
     const delivery = managementItems.find((item) => item.label === "التوصيل");
     const pilots = managementItems.find((item) => item.label === "الطيارين");
 
     expect(delivery?.children?.map((child) => child.page)).toEqual([
       "delivery-zone",
-      "shipping-companies",
     ]);
     expect(pilots?.children?.map((child) => [child.page, child.label])).toEqual([
       ["couriers", "كل الطيارين"],
-      ["create-courier", "إضافة طيار"],
+      ["shipping-companies", "شركات الشحن"],
     ]);
   });
 
