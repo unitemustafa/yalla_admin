@@ -114,6 +114,7 @@ export function createMarketDraft(
     marketTypes.some((item) => item.is_active && item.classification_id === classification.id),
   ) ?? classifications[0];
   return {
+    coverFocus: market?.cover_focus ?? { x: 0.5, y: 0.5 },
     name: market?.name ?? "",
     description: market?.description ?? "",
     isPopular: market?.is_popular ?? false,
@@ -180,6 +181,7 @@ export function marketPayload(draft: MarketDraft, editing: boolean): MarketPaylo
     delivery_area_ids: [],
     service_city_ids: draft.showInServiceCities ? uniqueNumbers(draft.selectedServiceCityIds) : [],
     market_type_ids: draft.selectedMarketTypeIds,
+    cover_focus: draft.coverFocus ?? { x: 0.5, y: 0.5 },
     send_notification: !editing && draft.sendStoreNotification,
   };
 }

@@ -21,6 +21,7 @@ export type Market = {
   description?: string;
   image?: string | null;
   cover_image?: string | null;
+  cover_focus?: { x: number; y: number };
   delivery_time_min_minutes?: number | null;
   delivery_time_max_minutes?: number | null;
   scope?: MarketScope;
@@ -46,6 +47,7 @@ export type MarketDraft = {
   deliveryTimeMin: string;
   deliveryTimeMax: string;
   selectedMarketTypeIds: number[];
+  coverFocus?: { x: number; y: number };
 };
 
 export type MarketPayload = {
@@ -60,4 +62,5 @@ export type MarketPayload = {
   service_city_ids: number[];
   market_type_ids: number[];
   send_notification: boolean;
+  cover_focus?: { x: number; y: number };
 };

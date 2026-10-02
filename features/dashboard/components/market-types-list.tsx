@@ -159,7 +159,7 @@ export function MarketTypesList({
                         width={64}
                         height={64}
                         className="size-16 shrink-0 rounded-full bg-muted"
-                        imageClassName="object-cover"
+                        imageClassName="object-contain"
                       />
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-bold">{item.name_ar}</p>

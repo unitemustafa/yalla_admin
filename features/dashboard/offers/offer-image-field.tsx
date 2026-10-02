@@ -2,6 +2,7 @@ import { ImagePlus, X } from "lucide-react";
 
 import { mediaSpecHint, mediaSpecs } from "@/lib/media-specs";
 import { DashboardImage } from "../dashboard-image";
+import { FocalPreview } from "../focal-preview";
 import type { CreateOfferFormController } from "./use-create-offer-form";
 
 export function OfferImageField({ form }: { form: CreateOfferFormController }) {
@@ -45,7 +46,7 @@ export function OfferImageField({ form }: { form: CreateOfferFormController }) {
         <div>
           <div className="text-sm font-semibold">صورة العرض</div>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            {mediaSpecHint(mediaSpecs.offerBanner)} — ضع النص والشعار داخل منطقة الأمان.
+            {mediaSpecHint(mediaSpecs.offerBanner)}
           </p>
           {state.imageError ? <p className="mt-2 text-xs font-semibold text-destructive">{state.imageError}</p> : null}
         </div>
@@ -63,6 +64,7 @@ export function OfferImageField({ form }: { form: CreateOfferFormController }) {
           ) : null}
         </div>
       </div>
+      {state.imagePreview ? <div className="lg:col-span-2"><FocalPreview source={state.imagePreview} kind="offer" focus={{ x: 0.5, y: 0.5 }} onChange={() => {}} /></div> : null}
     </div>
   );
 }

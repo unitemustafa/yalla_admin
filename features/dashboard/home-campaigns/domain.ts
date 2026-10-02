@@ -130,7 +130,7 @@ export function validateCampaign(form: CampaignForm, files: CampaignFiles, exist
   if (form.action_type === "external_url" && !/^https:\/\/.+/i.test(form.external_url)) return "أدخل رابط HTTPS صحيحًا.";
   if (form.action_type === "copy_text" && !form.copy_text.trim()) return "أدخل النص أو الكود المطلوب نسخه.";
   if (form.is_active && form.media_type === "image" && !files.sheet_image && !files.images?.length && !existing?.sheet_image && !existing?.additional_images.some((image) => !removedImageIds.includes(image.id))) return "ارفع صورة النافذة قبل التفعيل.";
-  if (form.is_active && form.media_type === "video" && (!files.video && !existing?.video || !files.video_poster && !existing?.video_poster)) return "ارفع فيديو MP4 والـPoster قبل التفعيل.";
+  if (form.is_active && form.media_type === "video" && (!files.video && !existing?.video)) return "ارفع فيديو MP4 قبل التفعيل؛ صورة المعاينة تتجهز تلقائيًا.";
   return "";
 }
 

@@ -1,5 +1,4 @@
 import { API_BASE_URL } from "@/lib/api-config";
-import { optimizeImageRequestInit } from "@/lib/image-upload";
 import type { AuthSession, AuthUser } from "@/lib/auth";
 
 import { localizedAuthError } from "./auth-errors";
@@ -97,7 +96,7 @@ export async function fetchCurrentAdminUser(accessToken: string) {
 }
 
 export async function prepareAuthenticatedRequest(init: RequestInit) {
-  return optimizeImageRequestInit(init);
+  return init;
 }
 
 export async function requestWithAccessToken(

@@ -4,7 +4,7 @@ import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/features/auth/auth-provider";
-import { compressImageUpload, validateImageUpload } from "@/lib/image-upload";
+import { validateImageUpload } from "@/lib/image-upload";
 import { mediaSpecs } from "@/lib/media-specs";
 import { useSnackbar } from "../../snackbar";
 import {
@@ -130,10 +130,10 @@ export function useProductImages(productId: string | undefined) {
           validationMessage ||= dimensionError;
           continue;
         }
-        const file = await compressImageUpload(selectedFile);
+        const file = selectedFile;
         if (file.size > maxProductImageSize) {
           validationMessage ||=
-            "تعذر ضغط الصورة إلى الحد المسموح (5 ميجابايت). اختر صورة أصغر.";
+            "الصورة الأصلية أكبر من الحد المسموح (5 ميجابايت). اختر صورة أصغر.";
           continue;
         }
         const key = `${file.name}:${file.size}:${file.type}:${file.lastModified}`;

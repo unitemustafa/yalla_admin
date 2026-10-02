@@ -42,7 +42,7 @@ describe("home campaign domain", () => {
     expect(campaignPayload(form)).not.toHaveProperty("audience");
   });
 
-  it("requires the video and poster before activating", () => {
+  it("requires a video before activating and allows an automatic poster", () => {
     const form = {
       ...initialCampaignForm(),
       internal_name: "إطلاق جديد",
@@ -50,6 +50,7 @@ describe("home campaign domain", () => {
       is_active: true,
     };
     expect(validateCampaign(form, {})).toContain("فيديو MP4");
+    expect(validateCampaign(form, { video: { name: "intro.mp4" } as File })).toBe("");
   });
 
   it("accepts multiple images and rejects removing the last active image", () => {

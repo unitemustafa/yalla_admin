@@ -35,6 +35,7 @@ export async function loadMarketsPageData(apiFetch: ApiFetch) {
 function marketFormData(payload: MarketPayload, imageFile: File | null, coverFile: File | null) {
   const formData = new FormData();
   formData.set("classification_id", String(payload.classification_id));
+  formData.set("cover_focus", JSON.stringify(payload.cover_focus ?? { x: 0.5, y: 0.5 }));
   formData.set("name", payload.name);
   formData.set("description", payload.description);
   if (payload.delivery_time_min_minutes !== null) {

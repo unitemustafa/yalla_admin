@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ImagePlus, Save, Truck, X } from "lucide-react";
 
-import { compressImageUpload, validateImageUpload } from "@/lib/image-upload";
+import { validateImageUpload } from "@/lib/image-upload";
 import { mediaSpecHint, mediaSpecs } from "@/lib/media-specs";
 import type { ServiceCity } from "../cities/types";
 import { Button, Field, Input, Switch } from "../primitives";
@@ -60,9 +60,9 @@ export function ShippingCompanyFormDialog({ company, cities, onClose, onSave }: 
       setError(dimensionError);
       return;
     }
-    const compressed = await compressImageUpload(selected);
+    const compressed = selected;
     if (compressed.size > 5 * 1024 * 1024) {
-      setError("تعذر ضغط اللوجو إلى الحد المسموح (5MB). اختر صورة أصغر.");
+      setError("الصورة الأصلية أكبر من الحد المسموح (5MB). اختر صورة أصغر.");
       return;
     }
     setLogoFile(compressed);

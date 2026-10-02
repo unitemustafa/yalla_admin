@@ -3,6 +3,7 @@
 import { ImagePlus } from "lucide-react";
 
 import { mediaSpecHint, mediaSpecs } from "@/lib/media-specs";
+import { FocalPreview } from "../focal-preview";
 import { DashboardImage } from "../dashboard-image";
 import type { useMarketForm } from "./use-market-form";
 
@@ -27,6 +28,7 @@ export function MarketMediaFields({ form }: { form: MarketForm }) {
         <div><div className="text-sm font-semibold">صورة الغلاف *</div><p className="mt-1 text-xs text-muted-foreground">{mediaSpecHint(mediaSpecs.storeCover)}</p></div>
         <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground"><span className="min-w-0 truncate">{form.coverName || "لم يتم اختيار غلاف"}</span>{form.coverPreview ? <button type="button" onClick={form.removeSelectedCover} className="font-semibold text-destructive">إلغاء التغيير</button> : null}</div>
       </div>
+      {form.coverPreview ? <div className="lg:col-span-2"><FocalPreview source={form.coverPreview} focus={form.draft.coverFocus ?? { x: 0.5, y: 0.5 }} kind="store" onChange={(focus) => form.update("coverFocus", focus)} /></div> : null}
     </div>
   );
 }

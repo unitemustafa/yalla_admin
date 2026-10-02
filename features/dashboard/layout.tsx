@@ -18,6 +18,7 @@ import { AdminOrderReviewBlocker } from "./admin-order-review-blocker";
 import { DashboardNotificationsProvider } from "./notifications-context";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/auth-provider";
+import { MediaSpecsProvider } from "./media-specs-provider";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -83,7 +84,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             onToggleCollapsed={toggleCollapsed}
           />
           <main className="min-h-[calc(100vh-64px)] bg-background">
-            {children}
+            <MediaSpecsProvider>{children}</MediaSpecsProvider>
           </main>
         </div>
       </div>
