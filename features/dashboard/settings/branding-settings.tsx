@@ -5,6 +5,7 @@ import { ImagePlus, Store } from "lucide-react";
 
 import { useDashboardI18n } from "@/features/dashboard/i18n";
 import { Button, Input } from "@/features/dashboard/primitives";
+import { mediaSpecHint, mediaSpecs } from "@/lib/media-specs";
 import { SettingBlock } from "./setting-block";
 import type { SettingsPageController } from "./use-settings-page";
 
@@ -79,6 +80,7 @@ export function BrandingSettings({
             </Button>
           ) : null}
         </div>
+        <p className="text-[10px] leading-4 text-muted-foreground">{mediaSpecHint(mediaSpecs.dashboardLogo)}</p>
       </div>
     </SettingBlock>
   );

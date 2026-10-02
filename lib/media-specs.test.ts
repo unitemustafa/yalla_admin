@@ -12,19 +12,26 @@ describe("media specifications", () => {
     expect(validateImageDimensions(900, 1600, mediaSpecs.product)).toBeNull();
   });
 
-  it("rejects an undersized offer banner", () => {
-    expect(validateImageDimensions(800, 300, mediaSpecs.offerBanner)).toContain("1200×450");
+  it("accepts small images of any ratio for every slot", () => {
+    for (const spec of Object.values(mediaSpecs)) {
+      for (const [width, height] of [[1, 1], [32, 96], [96, 32], [400, 400], [1600, 1600]]) {
+        expect(validateImageDimensions(width, height, spec)).toBeNull();
+      }
+      expect(spec.minimumWidth).toBe(1);
+      expect(spec.minimumHeight).toBe(1);
+      expect(spec.ratioRequired).toBe(false);
+    }
   });
 
-  it("publishes the offer safe area in its hint", () => {
-    expect(mediaSpecHint(mediaSpecs.offerBanner)).toContain("1200×450");
-    expect(mediaSpecHint(mediaSpecs.offerBanner)).toContain("قد تغطيها عناصر الواجهة");
-    expect(mediaSpecHint(mediaSpecs.offerBanner)).toContain("8:3");
+  it("shows only a short recommended-size hint for every slot", () => {
+    for (const spec of Object.values(mediaSpecs)) {
+      expect(mediaSpecHint(spec)).toBe(`المقاس المقترح: ${spec.width}×${spec.height}px`);
+    }
   });
 
-  it("keeps the aspect ratio required for fixed offer and campaign slots", () => {
-    expect(validateImageDimensions(1600, 900, mediaSpecs.offerBanner)).not.toBeNull();
-    expect(validateImageDimensions(1600, 1600, mediaSpecs.campaignMedia)).not.toBeNull();
+  it("accepts alternative ratios for fixed offer and campaign slots", () => {
+    expect(validateImageDimensions(1600, 900, mediaSpecs.offerBanner)).toBeNull();
+    expect(validateImageDimensions(1600, 1600, mediaSpecs.campaignMedia)).toBeNull();
     expect(validateImageDimensions(2400, 900, mediaSpecs.offerBanner)).toBeNull();
   });
 
@@ -34,16 +41,23 @@ describe("media specifications", () => {
     expect(validateImageDimensions(1200, 1200, mediaSpecs.deliveryLogin)).toBeNull();
   });
 
-  it("rejects unreadable dimensions and low resolution even for contain slots", () => {
-    for (const width of [0, -1, NaN, Infinity]) {
-      expect(validateImageDimensions(width, 1600, mediaSpecs.product)).not.toBeNull();
+  it("rejects unreadable dimensions", () => {
+    for (const dimension of [0, -1, NaN, Infinity]) {
+      expect(validateImageDimensions(dimension, 1600, mediaSpecs.product)).not.toBeNull();
+      expect(validateImageDimensions(1600, dimension, mediaSpecs.product)).not.toBeNull();
     }
     expect(validateImageDimensions(1600, 0, mediaSpecs.product)).not.toBeNull();
-    expect(validateImageDimensions(400, 400, mediaSpecs.product)).not.toBeNull();
+    expect(validateImageDimensions(400, 400, mediaSpecs.product)).toBeNull();
   });
 
-  it("explains recommended dimensions and full-image display", () => {
-    expect(mediaSpecHint(mediaSpecs.product)).toContain("تُقبل نسب أخرى");
-    expect(mediaSpecHint(mediaSpecs.product)).toContain("دون قص");
+  it("does not enforce restrictions from an older media contract", () => {
+    const legacySpec = { ...mediaSpecs.offerBanner, minimumWidth: 1200, minimumHeight: 450, ratioRequired: true };
+    expect(validateImageDimensions(96, 32, legacySpec)).toBeNull();
+    expect(validateImageDimensions(32, 96, legacySpec)).toBeNull();
+  });
+
+  it("preserves complete responsive store covers without a crop requirement", () => {
+    expect(mediaSpecs.storeCover.fit).toBe("contain");
+    expect(validateImageDimensions(1600, 900, mediaSpecs.storeCover)).toBeNull();
   });
 });

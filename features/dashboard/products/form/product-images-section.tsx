@@ -55,8 +55,8 @@ export function ProductImagesSection({
           <span className="text-sm font-semibold">
             {images.productImages.length ? "إضافة صور أخرى" : "اختر صور المنتج"}
           </span>
-          <span className="text-xs text-muted-foreground">
-            {mediaSpecHint(mediaSpecs.product)} — JPG أو PNG أو WebP حتى 5MB بعد الضغط
+          <span className="text-[10px] leading-4 text-muted-foreground">
+            {mediaSpecHint(mediaSpecs.product)}
           </span>
         </label>
         {controller.isEditing &&

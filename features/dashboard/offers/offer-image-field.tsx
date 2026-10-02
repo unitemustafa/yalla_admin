@@ -45,7 +45,7 @@ export function OfferImageField({ form }: { form: CreateOfferFormController }) {
       <div className="flex min-w-0 flex-col gap-3">
         <div>
           <div className="text-sm font-semibold">صورة العرض</div>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
             {mediaSpecHint(mediaSpecs.offerBanner)}
           </p>
           {state.imageError ? <p className="mt-2 text-xs font-semibold text-destructive">{state.imageError}</p> : null}

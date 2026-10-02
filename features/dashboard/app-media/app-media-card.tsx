@@ -132,7 +132,7 @@ export function AppMediaCard() {
                 ? <video controls className="size-full object-cover" style={{ objectPosition }} src={url} />
                 : <SafeImage alt={slot.label} className={`size-full ${slot.spec.fit === "contain" ? "object-contain" : "object-cover"}`} style={{ objectPosition }} src={url} width={384} height={previewHeight} />}
             </div> : <p className="mb-3 text-xs text-muted-foreground">الصورة الافتراضية في التطبيق مستخدمة حاليًا.</p>}
-            <p className="mb-3 text-xs leading-5 text-muted-foreground">{mediaSpecHint(slot.spec)} — المعاينة تقريبية؛ مساحة العرض وعناصر الواجهة تختلف حسب الجهاز.</p>
+            <p className="mb-3 text-[10px] leading-4 text-muted-foreground">{mediaSpecHint(slot.spec)}</p>
             <div className="flex flex-wrap items-center gap-2">
               <label className="cursor-pointer rounded-md border px-3 py-2 text-sm">
                 {busy === slot.key ? "جاري الحفظ..." : "اختيار ملف"}

@@ -3,11 +3,13 @@
 import { ImagePlus } from "lucide-react";
 
 import { mediaSpecHint, mediaSpecs } from "@/lib/media-specs";
-import { FocalPreview } from "../focal-preview";
 import { DashboardImage } from "../dashboard-image";
 import type { useMarketForm } from "./use-market-form";
 
-type MarketForm = ReturnType<typeof useMarketForm>;
+type MarketForm = Pick<ReturnType<typeof useMarketForm>,
+  "imagePreview" | "imageName" | "coverPreview" | "coverName" |
+  "handleImageChange" | "handleCoverChange" | "removeSelectedImage" | "removeSelectedCover"
+>;
 
 export function MarketMediaFields({ form }: { form: MarketForm }) {
   return (
@@ -17,18 +19,17 @@ export function MarketMediaFields({ form }: { form: MarketForm }) {
           <input accept="image/jpeg,image/png,image/webp" className="sr-only" type="file" onChange={(event) => void form.handleImageChange(event)} />
           {form.imagePreview ? <DashboardImage src={form.imagePreview} placeholderType="store" alt="معاينة شعار المحل" width={320} height={320} sizes="208px" className="absolute inset-0 size-full" imageClassName="object-contain p-2" /> : <span className="flex flex-col items-center gap-2 px-5 text-sm text-muted-foreground"><ImagePlus className="size-6 text-primary" /><span className="font-semibold text-foreground">اختيار شعار المحل</span></span>}
         </label>
-        <div><div className="text-sm font-semibold">شعار المحل *</div><p className="mt-1 text-xs text-muted-foreground">{mediaSpecHint(mediaSpecs.storeLogo)}</p></div>
+        <div><div className="text-sm font-semibold">شعار المحل *</div><p className="mt-1 text-[10px] leading-4 text-muted-foreground">{mediaSpecHint(mediaSpecs.storeLogo)}</p></div>
         <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground"><span className="min-w-0 truncate">{form.imageName || "لم يتم اختيار شعار"}</span>{form.imagePreview ? <button type="button" onClick={form.removeSelectedImage} className="font-semibold text-destructive">إلغاء التغيير</button> : null}</div>
       </div>
       <div className="grid gap-3">
         <label className="group relative flex aspect-video w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-dashed border-border bg-background text-center transition hover:border-primary/50 hover:bg-accent/40">
           <input accept="image/jpeg,image/png,image/webp" className="sr-only" type="file" onChange={(event) => void form.handleCoverChange(event)} />
-          {form.coverPreview ? <DashboardImage src={form.coverPreview} placeholderType="store" alt="معاينة غلاف المحل" width={640} height={360} sizes="420px" className="absolute inset-0 size-full" imageClassName="object-cover" /> : <span className="flex flex-col items-center gap-2 px-5 text-sm text-muted-foreground"><ImagePlus className="size-6 text-primary" /><span className="font-semibold text-foreground">اختيار صورة الغلاف</span></span>}
+          {form.coverPreview ? <DashboardImage src={form.coverPreview} placeholderType="store" alt="معاينة غلاف المحل" width={640} height={360} sizes="420px" className="absolute inset-0 size-full" imageClassName="object-contain" /> : <span className="flex flex-col items-center gap-2 px-5 text-sm text-muted-foreground"><ImagePlus className="size-6 text-primary" /><span className="font-semibold text-foreground">اختيار صورة الغلاف</span></span>}
         </label>
-        <div><div className="text-sm font-semibold">صورة الغلاف *</div><p className="mt-1 text-xs text-muted-foreground">{mediaSpecHint(mediaSpecs.storeCover)}</p></div>
+        <div><div className="text-sm font-semibold">صورة الغلاف *</div><p className="mt-1 text-[10px] leading-4 text-muted-foreground">{mediaSpecHint(mediaSpecs.storeCover)}</p></div>
         <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground"><span className="min-w-0 truncate">{form.coverName || "لم يتم اختيار غلاف"}</span>{form.coverPreview ? <button type="button" onClick={form.removeSelectedCover} className="font-semibold text-destructive">إلغاء التغيير</button> : null}</div>
       </div>
-      {form.coverPreview ? <div className="lg:col-span-2"><FocalPreview source={form.coverPreview} focus={form.draft.coverFocus ?? { x: 0.5, y: 0.5 }} kind="store" onChange={(focus) => form.update("coverFocus", focus)} /></div> : null}
     </div>
   );
 }

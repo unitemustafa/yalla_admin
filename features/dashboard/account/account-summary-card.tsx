@@ -5,6 +5,7 @@ import { Camera, Mail, ShieldCheck } from "lucide-react";
 
 import { DashboardImage } from "@/features/dashboard/dashboard-image";
 import { Button, Card } from "@/features/dashboard/primitives";
+import { mediaSpecHint, mediaSpecs } from "@/lib/media-specs";
 import type { AccountProfileController } from "./use-account-profile";
 
 export function AccountSummaryCard({
@@ -51,6 +52,7 @@ export function AccountSummaryCard({
           onChange={changeAvatar}
           type="file"
         />
+        <p className="mt-2 text-[10px] leading-4 text-muted-foreground">{mediaSpecHint(mediaSpecs.avatar)}</p>
         {profile.canRemoveAvatar ? (
           <Button
             className="mt-3 text-destructive hover:text-destructive"

@@ -362,7 +362,7 @@ export function MarketTypesManager({
                   onChange={(event) => void handleImageChange(event)}
                 />
               </label>
-              <p className="-mt-2 text-xs text-muted-foreground sm:col-span-2">{mediaSpecHint(mediaSpecs.marketType)}</p>
+              <p className="-mt-2 text-[10px] leading-4 text-muted-foreground sm:col-span-2">{mediaSpecHint(mediaSpecs.marketType)}</p>
               {formError ? (
                 <p className="text-sm text-destructive sm:col-span-2">{formError}</p>
               ) : null}

@@ -20,65 +20,71 @@ const defaultMediaSpecs = {
     label: "صورة المنتج",
     width: 1600,
     height: 1600,
-    minimumWidth: 800,
-    minimumHeight: 800,
+    minimumWidth: 1,
+    minimumHeight: 1,
     fit: "contain",
+    ratioRequired: false,
   },
   addon: {
     key: "addon",
     label: "صورة الإضافة",
     width: 1200,
     height: 1200,
-    minimumWidth: 600,
-    minimumHeight: 600,
+    minimumWidth: 1,
+    minimumHeight: 1,
     fit: "contain",
+    ratioRequired: false,
   },
   storeLogo: {
     key: "store-logo",
     label: "شعار المحل",
     width: 1024,
     height: 1024,
-    minimumWidth: 512,
-    minimumHeight: 512,
+    minimumWidth: 1,
+    minimumHeight: 1,
     fit: "contain",
+    ratioRequired: false,
   },
   storeCover: {
     key: "store-cover",
     label: "غلاف المحل",
     width: 1600,
     height: 900,
-    minimumWidth: 1200,
-    minimumHeight: 675,
-    fit: "cover",
+    minimumWidth: 1,
+    minimumHeight: 1,
+    fit: "contain",
     ratioRequired: false,
-    displayNote: "الغلاف يملأ مساحة متغيرة ويُقص من الوسط حسب الشاشة، وتغطي بطاقة المحل الجزء السفلي؛ استخدمه كخلفية وضع التفاصيل المهمة أعلى الوسط.",
+    displayNote: "يظهر الغلاف كاملًا دون قص على مختلف مقاسات الشاشات، وبطاقة المحل أسفله؛ قد تظهر فراغات عند استخدام نسبة غير 16:9.",
   },
   classification: {
     key: "classification",
     label: "صورة تصنيف المحل",
     width: 1200,
     height: 1200,
-    minimumWidth: 600,
-    minimumHeight: 600,
+    minimumWidth: 1,
+    minimumHeight: 1,
     fit: "contain",
+    ratioRequired: false,
   },
   marketType: {
     key: "market-type",
     label: "صورة الفئة الثانوية",
     width: 1000,
     height: 1000,
-    minimumWidth: 512,
-    minimumHeight: 512,
+    minimumWidth: 1,
+    minimumHeight: 1,
     fit: "contain",
+    ratioRequired: false,
   },
   offerBanner: {
     key: "offer-banner",
     label: "بانر العرض",
     width: 1600,
     height: 600,
-    minimumWidth: 1200,
-    minimumHeight: 450,
+    minimumWidth: 1,
+    minimumHeight: 1,
     fit: "cover",
+    ratioRequired: false,
     safeWidth: 1200,
     safeHeight: 450,
   },
@@ -87,18 +93,20 @@ const defaultMediaSpecs = {
     label: "صورة شريط الحملة",
     width: 800,
     height: 800,
-    minimumWidth: 400,
-    minimumHeight: 400,
+    minimumWidth: 1,
+    minimumHeight: 1,
     fit: "cover",
+    ratioRequired: false,
   },
   campaignMedia: {
     key: "campaign-media",
     label: "صورة أو Poster الحملة",
     width: 1600,
     height: 900,
-    minimumWidth: 1200,
-    minimumHeight: 675,
+    minimumWidth: 1,
+    minimumHeight: 1,
     fit: "cover",
+    ratioRequired: false,
     safeWidth: 1200,
     safeHeight: 675,
   },
@@ -107,36 +115,40 @@ const defaultMediaSpecs = {
     label: "الصورة الشخصية",
     width: 800,
     height: 800,
-    minimumWidth: 400,
-    minimumHeight: 400,
+    minimumWidth: 1,
+    minimumHeight: 1,
     fit: "cover",
+    ratioRequired: false,
   },
   shippingLogo: {
     key: "shipping-logo",
     label: "شعار شركة الشحن",
     width: 800,
     height: 800,
-    minimumWidth: 400,
-    minimumHeight: 400,
+    minimumWidth: 1,
+    minimumHeight: 1,
     fit: "contain",
+    ratioRequired: false,
   },
   dashboardLogo: {
     key: "dashboard-logo",
     label: "شعار النظام",
     width: 1024,
     height: 1024,
-    minimumWidth: 512,
-    minimumHeight: 512,
+    minimumWidth: 1,
+    minimumHeight: 1,
     fit: "contain",
+    ratioRequired: false,
   },
   onboarding: {
     key: "onboarding",
     label: "صورة البداية",
     width: 1200,
     height: 1200,
-    minimumWidth: 400,
-    minimumHeight: 400,
+    minimumWidth: 1,
+    minimumHeight: 1,
     fit: "contain",
+    ratioRequired: false,
     displayNote: "الصورة تظهر كاملة داخل مساحة متغيرة؛ قد تظهر فراغات حولها.",
   },
   marketLogin: {
@@ -144,8 +156,8 @@ const defaultMediaSpecs = {
     label: "صورة لوجن المتجر",
     width: 1600,
     height: 1000,
-    minimumWidth: 640,
-    minimumHeight: 400,
+    minimumWidth: 1,
+    minimumHeight: 1,
     fit: "cover",
     ratioRequired: false,
     displayNote: "ارتفاع العرض 240px وعرضه يتغير حسب الشاشة؛ قد تُقص الصورة مع محاذاة أعلى الوسط، وتغطي واجهة الدخول جزءًا منها. تجنب النصوص داخل الخلفية.",
@@ -155,8 +167,8 @@ const defaultMediaSpecs = {
     label: "صورة لوجن الدليفيري",
     width: 1600,
     height: 1000,
-    minimumWidth: 640,
-    minimumHeight: 400,
+    minimumWidth: 1,
+    minimumHeight: 1,
     fit: "cover",
     ratioRequired: false,
     displayNote: "ارتفاع العرض 250px وعرضه يتغير حسب الشاشة؛ قد تُقص الصورة مع محاذاة أعلى الوسط، وتغطي واجهة الدخول جزءًا منها. تجنب النصوص داخل الخلفية.",
@@ -180,32 +192,8 @@ export function applyMediaContract(value: unknown) {
   Object.assign(videoSpec, contract.video);
 }
 
-const ASPECT_RATIO_TOLERANCE = 0.04;
-
-function aspectRatioLabel(spec: MediaSpec) {
-  let divisor = spec.width;
-  let remainder = spec.height;
-  while (remainder) {
-    [divisor, remainder] = [remainder, divisor % remainder];
-  }
-  return `${spec.width / divisor}:${spec.height / divisor}`;
-}
-
 export function mediaSpecHint(spec: MediaSpec) {
-  const safeArea = spec.safeWidth && spec.safeHeight
-    ? ` — منطقة محتوى مقترحة في الوسط ${spec.safeWidth}×${spec.safeHeight}px (قد تغطيها عناصر الواجهة)`
-    : "";
-  const ratio = isRatioRequired(spec)
-    ? "نسبة مطلوبة"
-    : "نسبة مقترحة، تُقبل نسب أخرى";
-  const display = spec.displayNote ?? (spec.fit === "contain"
-    ? "تظهر الصورة كاملة دون قص؛ قد تظهر فراغات حولها."
-    : "تملأ المساحة مع قص الأطراف عند اختلاف النسبة؛ ضع العنصر المهم في الوسط.");
-  return `المقاس المقترح ${spec.width}×${spec.height}px — الحد الأدنى ${spec.minimumWidth}×${spec.minimumHeight}px — ${ratio} ${aspectRatioLabel(spec)}${safeArea} — ${display}`;
-}
-
-function isRatioRequired(spec: MediaSpec) {
-  return spec.ratioRequired ?? spec.fit === "cover";
+  return `المقاس المقترح: ${spec.width}×${spec.height}px`;
 }
 
 export function validateImageDimensions(
@@ -216,16 +204,5 @@ export function validateImageDimensions(
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
     return `${spec.label}: أبعاد الصورة غير صالحة.`;
   }
-  if (width < spec.minimumWidth || height < spec.minimumHeight) {
-    return `${spec.label}: الحد الأدنى ${spec.minimumWidth}×${spec.minimumHeight}px، والمقاس المرفوع ${width}×${height}px.`;
-  }
-
-  const targetRatio = spec.width / spec.height;
-  const actualRatio = width / height;
-  const ratioDifference = Math.abs(actualRatio - targetRatio) / targetRatio;
-  if (isRatioRequired(spec) && ratioDifference > ASPECT_RATIO_TOLERANCE) {
-    return `${spec.label}: استخدم نسبة ${aspectRatioLabel(spec)}. المقاس المقترح ${spec.width}×${spec.height}px.`;
-  }
-
   return null;
 }

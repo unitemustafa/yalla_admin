@@ -169,8 +169,8 @@ export function AddonCreateDialog({
                 )}
               </label>
               <div className="flex min-w-0 flex-col gap-3">
-                <p className="text-xs leading-5 text-muted-foreground">
-                  {mediaSpecHint(mediaSpecs.addon)} — ستظهر كاملة بدون قص.
+                <p className="text-[10px] leading-4 text-muted-foreground">
+                  {mediaSpecHint(mediaSpecs.addon)}
                 </p>
                 <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground">
                   <span className="min-w-0 truncate">

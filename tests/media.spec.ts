@@ -24,6 +24,49 @@ async function session(page: Page) {
   await page.route("https://media.example.test/**", (route) => route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800"><rect width="1280" height="800" fill="#ff8a00"/></svg>' }));
 }
 
+test("store cover stays complete without crop controls at phone and desktop widths", async ({ page }) => {
+  await session(page);
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    let data: unknown = [];
+    if (path.endsWith("/auth/me/")) data = user;
+    else if (path.endsWith("/media-specs/")) data = contract;
+    else if (path.endsWith("/market-classifications/")) data = [{ id: 1, name: "صيدليات" }];
+    else if (path.endsWith("/market-types/")) data = [{ id: 1, classification_id: 1, name_ar: "صيدلية", is_active: true }];
+    await route.fulfill({ json: data });
+  });
+  await page.goto("/items/shops");
+  await page.getByRole("button", { name: "إضافة محل", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  const image = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1600; canvas.height = 900;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#00a5c9"; ctx.fillRect(0, 0, 1600, 900);
+    ctx.fillStyle = "#ff0000"; ctx.fillRect(0, 0, 100, 900);
+    ctx.fillStyle = "#ffff00"; ctx.fillRect(1500, 0, 100, 900);
+    return canvas.toDataURL("image/png").split(",")[1];
+  });
+  await dialog.locator('input[type="file"]').nth(1).setInputFiles({
+    name: "cover.png", mimeType: "image/png", buffer: Buffer.from(image, "base64"),
+  });
+  const preview = dialog.getByAltText("معاينة غلاف المحل");
+  await expect(preview).toBeVisible();
+  await expect(dialog.locator('input[type="range"]')).toHaveCount(0);
+  await expect(dialog.getByText("موضع القص:", { exact: false })).toHaveCount(0);
+  for (const width of [320, 390, 430, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(preview).toHaveCSS("object-fit", "contain");
+    const dimensions = await preview.evaluate((element) => {
+      const image = element as HTMLImageElement;
+      return { width: image.naturalWidth, height: image.naturalHeight, bounds: image.getBoundingClientRect().toJSON() };
+    });
+    expect(dimensions.width / dimensions.height).toBeCloseTo(16 / 9);
+    expect(dimensions.bounds.width / dimensions.bounds.height).toBeCloseTo(16 / 9, 1);
+    await preview.screenshot({ path: `test-results/store-cover-${width}.png` });
+  }
+});
+
 test("video replacement keeps published media until preparation is ready and publication succeeds", async ({ page }) => {
   await session(page);
   let polls = 0;
@@ -92,6 +135,45 @@ test("image preview shows all four crop widths before uploading the original", a
   await expect(publish).toHaveCount(0);
   expect(patches[0]).toContain('filename="original.png"');
   expect(patches[0]).toContain("market_login_focus");
+});
+
+test("small images with any ratio can be previewed and published with only a tiny size hint", async ({ page }) => {
+  await session(page);
+  const patches: string[] = [];
+  const legacyContract = { ...contract, images: Object.fromEntries(Object.entries(contract.images).map(([key, spec]) => [key, {
+    ...spec, minimumWidth: 1200, minimumHeight: 675, ratioRequired: true,
+  }])) };
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("/app-media/") && route.request().method() === "PATCH") patches.push(route.request().postData() ?? "");
+    const data = path.endsWith("/auth/me/") ? user : path.endsWith("/media-specs/") ? legacyContract
+      : path.endsWith("/app-media/") ? published : path.endsWith("/media-jobs/stats/") ? { counts: {}, stalled: 0 } : [];
+    await route.fulfill({ json: data });
+  });
+  await page.goto("/app-media");
+  const hint = page.getByText("المقاس المقترح: 1600×1000px", { exact: true }).first();
+  await expect(hint).toHaveCSS("font-size", "10px");
+  await expect(page.getByText("الحد الأدنى", { exact: false })).toHaveCount(0);
+  await expect(page.getByText("نسبة مطلوبة", { exact: false })).toHaveCount(0);
+  for (const [width, height] of [[1, 1], [32, 96], [96, 32]]) {
+    const image = await page.evaluate(({ width, height }) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#00a5c9"; ctx.fillRect(0, 0, width, height);
+      return canvas.toDataURL("image/png").split(",")[1];
+    }, { width, height });
+    const name = `small-${width}x${height}.png`;
+    await page.locator('input[type="file"][accept*="video/mp4"]').setInputFiles({ name, mimeType: "image/png", buffer: Buffer.from(image, "base64") });
+    const publish = page.getByRole("button", { name: "نشر الصورة بعد المعاينة" });
+    await expect(publish).toBeVisible();
+    await expect(page.locator('p[role="alert"]')).toHaveCount(0);
+    if (width === 32) await page.screenshot({ path: "test-results/small-image-upload.png", fullPage: true });
+    await publish.click();
+    await expect(publish).toHaveCount(0);
+    expect(patches.at(-1)).toContain(`filename="${name}"`);
+  }
+  expect(patches).toHaveLength(3);
 });
 
 test("switching campaign media type cancels the obsolete video and saves without attaching it", async ({ page }) => {

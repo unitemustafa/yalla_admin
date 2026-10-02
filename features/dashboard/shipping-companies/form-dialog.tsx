@@ -104,7 +104,7 @@ export function ShippingCompanyFormDialog({ company, cities, onClose, onSave }: 
                 {previewUrl ? <img src={previewUrl} alt="معاينة لوجو شركة الشحن" className="size-full object-contain p-2" /> : <Truck className="size-10 text-muted-foreground" />}
               </div>
               <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm font-semibold hover:bg-accent"><ImagePlus className="size-4" />اختيار لوجو<input className="hidden" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void selectLogo(event)} /></label>
-              <p className="text-xs text-muted-foreground">{mediaSpecHint(mediaSpecs.shippingLogo)}</p>
+              <p className="text-[10px] leading-4 text-muted-foreground">{mediaSpecHint(mediaSpecs.shippingLogo)}</p>
               {(company?.logoUrl || logoFile) && !removeLogo ? <button type="button" className="block text-xs font-semibold text-destructive" onClick={() => { setLogoFile(null); setRemoveLogo(true); }}>إزالة اللوجو</button> : null}
             </div>
             <div className="space-y-4">

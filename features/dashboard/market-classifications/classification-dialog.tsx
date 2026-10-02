@@ -217,7 +217,7 @@ export function ClassificationDialog({
                   </span>
                 )}
               </label>
-              <p className="text-xs text-muted-foreground">{mediaSpecHint(mediaSpecs.classification)}</p>
+              <p className="text-[10px] leading-4 text-muted-foreground">{mediaSpecHint(mediaSpecs.classification)}</p>
               <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground">
                 <span className="min-w-0 truncate">
                   {form.imageFile ? form.imageFile.name : "لم يتم اختيار صورة"}

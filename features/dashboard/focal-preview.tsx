@@ -3,8 +3,8 @@
 import { SafeImage } from "@/components/safe-image";
 
 export type FocalPoint = { x: number; y: number };
-export function FocalPreview({ source, focus, onChange, kind }: { source: string; focus: FocalPoint; onChange: (focus: FocalPoint) => void; kind: "store" | "market-login" | "delivery-login" | "offer" }) {
-  const height = kind === "store" ? 214 : kind === "delivery-login" ? 250 : kind === "offer" ? 120 : 240;
+export function FocalPreview({ source, focus, onChange, kind }: { source: string; focus: FocalPoint; onChange: (focus: FocalPoint) => void; kind: "market-login" | "delivery-login" | "offer" }) {
+  const height = kind === "delivery-login" ? 250 : kind === "offer" ? 120 : 240;
   return <div className="space-y-3">
     <p className="text-xs">موضع القص: المناطق المظللة تمثل عناصر الواجهة. المعاينة عند كثافة بكسلات منطقية.</p>
     {kind !== "offer" ? <div className="flex gap-4 text-xs">
@@ -17,7 +17,7 @@ export function FocalPreview({ source, focus, onChange, kind }: { source: string
         <p className="text-xs">{width}px</p>
         <div className="relative overflow-hidden rounded border bg-muted" style={{ aspectRatio: `${width} / ${kind === "offer" ? width * 3 / 8 : height}` }}>
           <SafeImage src={source} alt="معاينة موضع القص" width={width} height={height} className="absolute inset-0 size-full object-cover" style={{ objectPosition: `${focus.x * 100}% ${focus.y * 100}%` }} />
-          {kind === "store" ? <><div className="absolute inset-x-[5%] bottom-0 h-[30%] rounded-t-lg bg-black/50 text-center text-xs text-white">بطاقة المحل</div><div className="absolute top-[6%] right-[5%] rounded bg-black/50 px-2 text-white">رجوع</div></> : kind === "offer" ? <div className="absolute bottom-[8%] right-[5%] rounded bg-black/50 px-2 text-xs text-white">زر العرض</div> : <><div className="absolute top-[18%] left-[35%] h-[32%] w-[30%] rounded bg-black/45 text-center text-xs text-white">الشعار</div><div className="absolute inset-x-0 bottom-0 h-[18%] rounded-t-2xl bg-black/50 text-center text-xs text-white">واجهة الدخول</div></>}
+          {kind === "offer" ? <div className="absolute bottom-[8%] right-[5%] rounded bg-black/50 px-2 text-xs text-white">زر العرض</div> : <><div className="absolute top-[18%] left-[35%] h-[32%] w-[30%] rounded bg-black/45 text-center text-xs text-white">الشعار</div><div className="absolute inset-x-0 bottom-0 h-[18%] rounded-t-2xl bg-black/50 text-center text-xs text-white">واجهة الدخول</div></>}
         </div>
       </div>)}
     </div>
