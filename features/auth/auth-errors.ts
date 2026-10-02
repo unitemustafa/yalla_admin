@@ -1,4 +1,4 @@
-import { isAbortError, isNetworkError } from "@/lib/auth";
+import { isAbortError, isNetworkError, SessionChangedError } from "@/lib/auth";
 
 export class RateLimitError extends Error {
   readonly retryAfterSeconds: number;
@@ -11,6 +11,13 @@ export class RateLimitError extends Error {
     );
     this.name = "RateLimitError";
     this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+export class AuthServerError extends Error {
+  constructor() {
+    super("تعذر الاتصال بخدمة تسجيل الدخول. حاول مرة أخرى.");
+    this.name = "AuthServerError";
   }
 }
 
@@ -69,6 +76,8 @@ export function localizedAuthError(value: unknown, fallback: string) {
 export function shouldKeepLocalSession(error: unknown) {
   return (
     error instanceof RateLimitError ||
+    error instanceof SessionChangedError ||
+    error instanceof AuthServerError ||
     isNetworkError(error) ||
     isAbortError(error)
   );

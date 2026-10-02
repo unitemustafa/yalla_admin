@@ -7,7 +7,7 @@ test("archive routes are absent from navigation", () => {
   expect(pageFromPathname("/archives/products")).toBe("overview");
 });
 
-test("categories use a dedicated navigation section below products", () => {
+test("categories, stores, and products use separate navigation sections in order", () => {
   const menuItems = navGroups[0].items;
   const productsIndex = menuItems.findIndex((item) =>
     item.children?.some((child) => child.page === "items"),
@@ -15,10 +15,15 @@ test("categories use a dedicated navigation section below products", () => {
   const categoriesIndex = menuItems.findIndex((item) =>
     item.children?.some((child) => child.page === "categories"),
   );
+  const storesIndex = menuItems.findIndex((item) =>
+    item.children?.some((child) => child.page === "shops"),
+  );
   const productsItem = menuItems[productsIndex];
   const categoriesItem = menuItems[categoriesIndex];
 
-  expect(categoriesIndex).toBe(productsIndex + 1);
+  expect(categoriesIndex).toBe(1);
+  expect(storesIndex).toBe(categoriesIndex + 1);
+  expect(productsIndex).toBe(storesIndex + 1);
   expect(
     productsItem?.children?.some((child) => child.page === "categories"),
   ).toBe(false);

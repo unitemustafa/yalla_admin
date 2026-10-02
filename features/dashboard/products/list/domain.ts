@@ -11,7 +11,7 @@ const itemSortCollator = new Intl.Collator("ar", {
   sensitivity: "base",
 });
 
-export function compareItemText(firstValue: string, secondValue: string) {
+function compareItemText(firstValue: string, secondValue: string) {
   return itemSortCollator.compare(firstValue.trim(), secondValue.trim());
 }
 
@@ -48,7 +48,7 @@ export function splitItemPrice(price: string) {
   return { amount, currency };
 }
 
-export function matchesItemSearch(row: ItemRow, searchValue: string) {
+function matchesItemSearch(row: ItemRow, searchValue: string) {
   const search = searchValue.trim().toLowerCase();
   return (
     !search ||

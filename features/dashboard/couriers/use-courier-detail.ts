@@ -1,51 +1,65 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/features/auth/auth-provider";
-import {
-  getDeliveryDestination,
-  getDeliveryTypeLabel,
-  getOrderMarketsSummary,
-  getOrderScopeLabel,
-} from "../order-display";
+import { isAbortError } from "@/lib/auth";
 import type { BackendDashboardUser } from "../users/api-users";
 import { loadCourierDetailData, refreshCourier } from "./api";
-import {
-  courierCustomerName,
-  courierOrderNumber,
-  courierStatusPollMs,
-} from "./domain";
-import { isActiveAssignedOrder } from "./order-rules";
-import type { CourierOrder } from "./types";
+import { courierStatusPollMs } from "./domain";
+import type { CourierOrder, CourierOrderSummary } from "./types";
 
 export function useCourierDetail(courierId: string) {
   const { apiFetch } = useAuth();
   const [courier, setCourier] = useState<BackendDashboardUser | null>(null);
   const [orders, setOrders] = useState<CourierOrder[]>([]);
   const [query, setQuery] = useState("");
+  const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [count, setCount] = useState(0);
+  const [activeOrders, setActiveOrders] = useState<CourierOrder[]>([]);
+  const [deliveredOrders, setDeliveredOrders] = useState<CourierOrder[]>([]);
+  const [summary, setSummary] = useState<CourierOrderSummary>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const statusRefreshInFlightRef = useRef(false);
+  const loadControllerRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
+    loadControllerRef.current?.abort();
+    const controller = new AbortController();
+    loadControllerRef.current = controller;
     setLoading(true);
     setError(null);
     try {
-      const data = await loadCourierDetailData(apiFetch, courierId);
+      const data = await loadCourierDetailData(apiFetch, courierId, currentPage, search, controller.signal);
+      if (controller.signal.aborted) return;
       setCourier(data.courier);
       setOrders(data.orders);
+      setCount(data.count);
+      setActiveOrders(data.activeOrders);
+      setDeliveredOrders(data.latestDelivered);
+      setSummary(data.summary);
     } catch (reason) {
+      if (isAbortError(reason)) return;
       setError(reason instanceof Error ? reason.message : "تعذر تحميل تفاصيل الطيار.");
     } finally {
-      setLoading(false);
+      if (loadControllerRef.current === controller) {
+        loadControllerRef.current = null;
+        setLoading(false);
+      }
     }
-  }, [apiFetch, courierId]);
+  }, [apiFetch, courierId, currentPage, search]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(timer);
+    return () => { window.clearTimeout(timer); loadControllerRef.current?.abort(); };
   }, [load]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(query.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
   const refreshStatus = useCallback(async () => {
     if (statusRefreshInFlightRef.current) return;
@@ -75,33 +89,23 @@ export function useCourierDetail(courierId: string) {
     };
   }, [refreshStatus]);
 
-  const activeOrders = useMemo(() => orders.filter(isActiveAssignedOrder), [orders]);
-  const deliveredOrders = useMemo(() => orders.filter((order) => order.status === "delivered"), [orders]);
-  const deliveredTotal = useMemo(() => deliveredOrders.reduce((sum, order) => sum + Number(order.total_price ?? 0), 0), [deliveredOrders]);
-  const visibleOrders = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase("ar-EG");
-    if (!normalized) return orders;
-    return orders.filter((order) => [
-      order.id,
-      courierOrderNumber(order),
-      courierCustomerName(order),
-      order.customer?.phone,
-      getOrderScopeLabel(order),
-      getOrderMarketsSummary(order),
-      getDeliveryDestination(order),
-      getDeliveryTypeLabel(order),
-    ].join(" ").toLocaleLowerCase("ar-EG").includes(normalized));
-  }, [orders, query]);
 
   return {
     courier,
     orders,
     activeOrders,
     deliveredOrders,
-    deliveredTotal,
-    visibleOrders,
+    deliveredTotal: Number(summary?.delivered_total ?? 0),
+    totalCount: summary?.total ?? count,
+    deliveredCount: summary?.delivered ?? deliveredOrders.length,
+    activeCount: summary?.active ?? activeOrders.length,
+    visibleOrders: orders,
+    filteredCount: count,
+    currentPage,
+    totalPages: Math.max(1, Math.ceil(count / 25)),
+    setCurrentPage,
     query,
-    setQuery,
+    setQuery: (value: string) => { setQuery(value); setCurrentPage(1); },
     loading,
     error,
     load,

@@ -9,10 +9,25 @@ export const AUTH_STORAGE_KEYS = {
   temporarySessionActive: "yalla_temporary_session_active",
   sessionExpiresAt: "yalla_admin_session_expires_at",
   sessionExpiredNotice: "yalla_session_expired_notice",
+  sessionIdentity: "yalla_admin_session_identity",
 } as const;
 
 export const NETWORK_ERROR_MESSAGE =
   "تحقق من اتصال الإنترنت ثم حاول مرة أخرى.";
+
+export class NetworkError extends Error {
+  constructor(cause: unknown) {
+    super(NETWORK_ERROR_MESSAGE, { cause });
+    this.name = "NetworkError";
+  }
+}
+
+export class SessionChangedError extends Error {
+  constructor() {
+    super("تغيّرت الجلسة. أعد المحاولة من الحساب الحالي.");
+    this.name = "SessionChangedError";
+  }
+}
 
 export function isAbortError(error: unknown) {
   return (
@@ -25,7 +40,7 @@ export function isAbortError(error: unknown) {
 export function isNetworkError(error: unknown) {
   return (
     !isAbortError(error) &&
-    (error instanceof TypeError ||
+    (error instanceof NetworkError || error instanceof TypeError ||
     (error instanceof Error &&
       /failed to fetch|networkerror|load failed|err_connection_refused/i.test(error.message)))
   );

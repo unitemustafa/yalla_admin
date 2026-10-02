@@ -7,8 +7,9 @@ import {
   type BackendDashboardUser,
 } from "../users/api-users";
 import { courierOrderTimestamp } from "./domain";
-import { assignedRepresentativeId } from "./order-rules";
-import type { AdminOrder, CourierOrder } from "./types";
+import { assignedRepresentativeId, isActiveAssignedOrder } from "./order-rules";
+import type { CourierOrder } from "./types";
+import { activeCourierOrders, courierOrdersPage } from "./orders-data";
 
 function errorMessage(value: unknown, fallback: string) {
   return firstApiError(value) ?? fallback;
@@ -30,20 +31,17 @@ function courierPayloadFormData(payload: Record<string, unknown>, avatarFile: Fi
 }
 
 export async function loadCouriersPageData(apiFetch: ApiFetch) {
-  const [couriersResponse, ordersResponse, cities] = await Promise.all([
+  const [couriersResponse, activeOrders, cities] = await Promise.all([
     apiFetch("auth/representatives/"),
-    apiFetch("orders/"),
+    activeCourierOrders(apiFetch),
     loadServiceCities(apiFetch, { errorFallback: "Could not load service cities." }),
   ]);
-  const [couriersData, ordersData] = await Promise.all([
-    apiResponseData(couriersResponse),
-    apiResponseData(ordersResponse),
-  ]);
+  const couriersData = await apiResponseData(couriersResponse);
   if (!couriersResponse.ok) throw new Error(errorMessage(couriersData, "Could not load couriers."));
-  if (!ordersResponse.ok) throw new Error(errorMessage(ordersData, "Could not load orders."));
   return {
     couriers: Array.isArray(couriersData) ? couriersData.filter(isBackendDashboardUser) : [],
-    orders: Array.isArray(ordersData) ? ordersData as AdminOrder[] : [],
+    orders: activeOrders.orders,
+    summaries: activeOrders.summaries,
     cities,
   };
 }
@@ -132,26 +130,29 @@ export async function setCourierAvailability(apiFetch: ApiFetch, courierId: numb
   return data;
 }
 
-export async function loadCourierDetailData(apiFetch: ApiFetch, courierId: string) {
-  const [courierResponse, ordersResponse] = await Promise.all([
-    apiFetch(`auth/users/${encodeURIComponent(courierId)}/`),
-    apiFetch("orders/"),
+export async function loadCourierDetailData(apiFetch: ApiFetch, courierId: string, page = 1, search = "", signal?: AbortSignal) {
+  const historyParams = new URLSearchParams({ representative_id: courierId, page: String(page), page_size: "25", include_courier_summary: "1" });
+  if (search) historyParams.set("search", search);
+  const deliveredParams = new URLSearchParams({ representative_id: courierId, status: "delivered", page: "1", page_size: "1", ordering: "-delivered_at" });
+  const [courierResponse, history, active, delivered] = await Promise.all([
+    apiFetch(`auth/users/${encodeURIComponent(courierId)}/`, { signal }),
+    courierOrdersPage(apiFetch, historyParams, signal),
+    activeCourierOrders(apiFetch, courierId, signal),
+    courierOrdersPage(apiFetch, deliveredParams, signal),
   ]);
-  const [courierData, ordersData] = await Promise.all([
-    apiResponseData(courierResponse),
-    apiResponseData(ordersResponse),
-  ]);
+  const courierData = await apiResponseData(courierResponse);
   if (!courierResponse.ok) throw new Error(errorMessage(courierData, "تعذر تحميل بيانات الطيار."));
-  if (!ordersResponse.ok) throw new Error(errorMessage(ordersData, "تعذر تحميل طلبات الطيار."));
   if (!isBackendDashboardUser(courierData) || courierData.role !== "representative") {
     throw new Error("حساب الطيار غير موجود.");
   }
-  const orders = Array.isArray(ordersData)
-    ? (ordersData as CourierOrder[])
-        .filter((order) => assignedRepresentativeId(order) === String(courierData.id))
-        .sort((first, second) => courierOrderTimestamp(second) - courierOrderTimestamp(first))
-    : [];
-  return { courier: courierData, orders };
+  const orders = (history.orders as CourierOrder[])
+    .filter((order) => assignedRepresentativeId(order) === String(courierData.id))
+    .sort((first, second) => courierOrderTimestamp(second) - courierOrderTimestamp(first));
+  return { courier: courierData, orders, count: history.count,
+    activeOrders: (active.orders as CourierOrder[]).filter((order) => isActiveAssignedOrder(order) && assignedRepresentativeId(order) === String(courierData.id)),
+    latestDelivered: delivered.orders as CourierOrder[],
+    summary: history.summaries.find((item) => String(item.assigned_representative_id) === courierId),
+  };
 }
 
 export async function refreshCourier(apiFetch: ApiFetch, courierId: string) {

@@ -12,6 +12,7 @@ import {
 
 import {
   type AuthUser,
+  AUTH_STORAGE_KEYS,
   isAccessTokenUsable,
   jwtExpiresAt,
 } from "@/lib/auth";
@@ -27,6 +28,7 @@ import { shouldKeepLocalSession } from "./auth-errors";
 import { authenticatedFetch } from "./authenticated-fetch";
 import {
   clearSessionCookies,
+  assertSessionIdentity,
   clearSessionLifetime,
   hasTemporaryTabSession,
   persistSession,
@@ -36,6 +38,7 @@ import {
   readRemember,
   readSavedUser,
   readSessionExpiresAt,
+  readSessionIdentity,
 } from "./session-storage";
 import { refreshTokens } from "./token-refresh";
 
@@ -87,8 +90,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    const identity = readSessionIdentity();
     sessionExpiryTimer.current = setTimeout(
-      () => clearSession(true),
+      () => { if (readSessionIdentity() === identity) clearSession(true); },
       expiresAt - Date.now(),
     );
   }, [clearSession]);
@@ -103,11 +107,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const delay = Math.max(0, expiresAt - Date.now() - REFRESH_BUFFER_MS);
+      const identity = readSessionIdentity();
       refreshTimer.current = setTimeout(() => {
+        if (readSessionIdentity() !== identity) return;
         void refreshTokens()
-          .then((tokens) => schedule(tokens.accessToken))
+          .then((tokens) => { if (readSessionIdentity() === identity) schedule(tokens.accessToken); })
           .catch((error) => {
-            if (!shouldKeepLocalSession(error)) clearSession(true);
+            if (readSessionIdentity() === identity && !shouldKeepLocalSession(error)) clearSession(true);
           });
       }, delay);
     },
@@ -118,6 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let active = true;
 
     void Promise.resolve().then(async () => {
+      const identity = readSessionIdentity();
       const accessToken = readAccessToken();
       const refreshToken = readRefreshToken();
       const remember = readRemember();
@@ -145,14 +152,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             ? accessToken
             : (await refreshTokens()).accessToken;
         if (!active) return;
+        assertSessionIdentity(identity);
 
         const nextUser = await fetchCurrentAdminUser(usableAccessToken);
         if (!active) return;
+        assertSessionIdentity(identity);
         persistUser(nextUser);
         setUser(nextUser);
         setStatus("authenticated");
         scheduleRefresh(usableAccessToken);
       } catch (error) {
+        if (readSessionIdentity() !== identity) return;
         if (active && !shouldKeepLocalSession(error)) clearSession(true);
         if (active && shouldKeepLocalSession(error)) {
           const savedUser = readSavedUser();
@@ -169,6 +179,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [clearSession, scheduleRefresh, scheduleSessionExpiry]);
 
+  useEffect(() => {
+    const synchronize = (event: StorageEvent) => {
+      if (event.key === AUTH_STORAGE_KEYS.sessionIdentity || event.key === AUTH_STORAGE_KEYS.sessionExpiresAt) {
+        window.location.reload();
+      }
+    };
+    window.addEventListener("storage", synchronize);
+    return () => window.removeEventListener("storage", synchronize);
+  }, []);
+
   const login = useCallback(
     async (input: LoginInput) => {
       const session = await loginAdmin(input);
@@ -182,6 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    const identity = readSessionIdentity();
     const accessToken = readAccessToken();
     const refreshToken = readRefreshToken();
 
@@ -190,7 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Local logout must succeed even when Django is unavailable.
     } finally {
-      clearSession();
+      if (readSessionIdentity() === identity) clearSession();
     }
   }, [clearSession]);
 
@@ -206,10 +227,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const reloadUser = useCallback(async () => {
+    const identity = readSessionIdentity();
     const nextUser = await currentUserFromResponse(
       await apiFetch("auth/me/"),
       false,
     );
+    assertSessionIdentity(identity);
     persistUser(nextUser);
     setUser(nextUser);
     return nextUser;

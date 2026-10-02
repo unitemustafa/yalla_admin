@@ -167,6 +167,7 @@ export type BackendOrderEvent = {
 
 export type BackendOrderItem = {
   id: number;
+  additions?: Array<{ id: number; name: string; price: string | number }>;
   section_id?: number | string | null;
   variant_id?: number | string | null;
   quantity: number;

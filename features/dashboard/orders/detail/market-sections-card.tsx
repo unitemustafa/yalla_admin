@@ -74,7 +74,7 @@ export function MarketSectionsCard({ order }: { order: BackendOrder }) {
                       ) : items.map((item, index) => (
                         <tr key={`${item.id ?? item.variant_id ?? index}`} className="border-b last:border-0">
                           <td className="px-4 py-4 text-muted-foreground">{index + 1}</td>
-                          <td className="px-4 py-4 font-medium">{orderItemDisplayName(item)}</td>
+                          <td className="px-4 py-4 font-medium">{orderItemDisplayName(item)}{item.additions?.length ? <div className="mt-1 text-xs font-normal text-muted-foreground">الإضافات: {item.additions.map((addition) => `${addition.name} (${money(addition.price)})`).join("، ")}</div> : null}</td>
                           <td className="px-4 py-4 text-muted-foreground">{orderItemVariantLabel(item)}</td>
                           <td className="px-4 py-4"><CurrencyText>{money(item.unit_price)}</CurrencyText></td>
                           <td className="px-4 py-4">{cleanText(item.quantity) || "-"}</td>

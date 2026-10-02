@@ -137,6 +137,7 @@ export function Pagination({
           size="icon"
           className="size-7"
           disabled={previousDisabled}
+          aria-label="الصفحة السابقة"
           onClick={onPrevious}
         >
           <ChevronRight className="size-4" />
@@ -147,6 +148,7 @@ export function Pagination({
           size="icon"
           className="size-7"
           disabled={nextDisabled}
+          aria-label="الصفحة التالية"
           onClick={onNext}
         >
           <ChevronLeft className="size-4" />

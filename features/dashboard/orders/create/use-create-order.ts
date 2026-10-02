@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { isAbortError } from "@/lib/auth";
+import { assertSessionIdentity, readSessionIdentity } from "@/features/auth/session-storage";
+import { orderRequestKey, completeOrderRequest } from "./order-idempotency";
 import { apiListData } from "../../shared/api-data";
 import { useSnackbar } from "../../snackbar";
 import {
@@ -43,7 +45,7 @@ type PickerTarget = { sectionId: string; lineId: string };
 type AvailabilityFilter = "all" | "available" | "unavailable";
 
 export function useCreateOrder() {
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
   const router = useRouter();
   const { showSnackbar } = useSnackbar();
   const [users, setUsers] = useState<BackendDashboardUser[]>([]);
@@ -75,6 +77,7 @@ export function useCreateOrder() {
     summary: Record<string, unknown>;
   } | null>(null);
   const initialDataControllerRef = useRef<AbortController | null>(null);
+  const submittingRef = useRef(false);
 
   const loadInitialData = useCallback(async () => {
     initialDataControllerRef.current?.abort();
@@ -184,9 +187,10 @@ export function useCreateOrder() {
     : 0;
   const previewPayload = buildOrderPayload(draftContext);
   const previewKey = JSON.stringify(previewPayload);
+  const hasPreviewPayload = previewPayload !== null;
 
   useEffect(() => {
-    if (!previewPayload) {
+    if (!hasPreviewPayload) {
       return;
     }
     const controller = new AbortController();
@@ -212,7 +216,7 @@ export function useCreateOrder() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [apiFetch, previewKey]);
+  }, [apiFetch, hasPreviewPayload, previewKey]);
 
   const activePreviewSummary =
     previewPayload && previewResult?.key === previewKey
@@ -405,22 +409,27 @@ export function useCreateOrder() {
 
   async function submitOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (saving) return;
+    if (submittingRef.current) return;
     const draftError = validateOrderDraft(draftContext);
     if (draftError) return showSnackbar({ message: draftError, tone: "danger" });
     const payload = buildOrderPayload(draftContext);
     if (!payload) return showSnackbar({ message: "أكمل بيانات الطلب قبل الحفظ.", tone: "danger" });
+    submittingRef.current = true;
+    const identity = readSessionIdentity();
     setSaving(true);
     try {
+      const request = await orderRequestKey(user?.id ?? "", payload);
+      assertSessionIdentity(identity);
       const response = await apiFetch("orders/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": request.key },
         body: JSON.stringify(payload),
       });
       const data = await apiResponseData(response);
       if (!response.ok) throw new Error(orderApiError(data, "تعذر إنشاء الطلب."));
       const createdOrder = apiOrderData(Array.isArray(data) ? data[0] : data) ?? apiOrderData(data);
       if (!createdOrder?.id) throw new Error("تم إنشاء الطلب لكن استجابة الباك غير مكتملة.");
+      completeOrderRequest(request);
       let orderForToast = createdOrder;
       let detailLoaded = false;
       try {
@@ -440,6 +449,7 @@ export function useCreateOrder() {
     } catch (reason) {
       showSnackbar({ message: reason instanceof Error ? reason.message : "تعذر إنشاء الطلب.", tone: "danger" });
     } finally {
+      submittingRef.current = false;
       setSaving(false);
     }
   }

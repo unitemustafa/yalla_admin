@@ -6,6 +6,7 @@ import {
   type AuthSession,
   type AuthTokens,
   type AuthUser,
+  SessionChangedError,
 } from "@/lib/auth";
 
 import {
@@ -66,8 +67,23 @@ export function readSessionExpiresAt() {
   return sessionExpiresAt();
 }
 
+export function readSessionIdentity() {
+  try {
+    // Existing sessions from older builds remain valid until their original expiry.
+    return localStorage.getItem(AUTH_STORAGE_KEYS.sessionIdentity) ??
+      localStorage.getItem(AUTH_STORAGE_KEYS.sessionExpiresAt);
+  } catch {
+    return readRefreshToken() ?? null;
+  }
+}
+
+export function assertSessionIdentity(identity: string | null) {
+  if (!identity || readSessionIdentity() !== identity) throw new SessionChangedError();
+}
+
 function persistSessionLifetime(remember: boolean) {
   try {
+    localStorage.setItem(AUTH_STORAGE_KEYS.sessionIdentity, crypto.randomUUID());
     localStorage.removeItem(AUTH_STORAGE_KEYS.sessionExpiredNotice);
     localStorage.setItem(
       AUTH_STORAGE_KEYS.sessionExpiresAt,
@@ -92,6 +108,7 @@ function persistSessionLifetime(remember: boolean) {
 
 export function clearSessionLifetime(announceExpired: boolean) {
   try {
+    localStorage.removeItem(AUTH_STORAGE_KEYS.sessionIdentity);
     sessionStorage.removeItem(AUTH_STORAGE_KEYS.temporarySessionActive);
     localStorage.removeItem(AUTH_STORAGE_KEYS.sessionExpiresAt);
     if (announceExpired) {

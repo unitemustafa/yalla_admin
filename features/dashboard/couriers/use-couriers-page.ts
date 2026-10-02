@@ -23,7 +23,7 @@ import {
   isAssignmentEligible,
   isReassignmentEligible,
 } from "./domain";
-import type { AdminOrder } from "./types";
+import type { AdminOrder, CourierOrderSummary } from "./types";
 
 export function useCouriersPage() {
   const { apiFetch } = useAuth();
@@ -33,6 +33,7 @@ export function useCouriersPage() {
   const [couriers, setCouriers] = useState<BackendDashboardUser[]>([]);
   const [cities, setCities] = useState<ServiceCity[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [summaries, setSummaries] = useState<CourierOrderSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [assigning, setAssigning] = useState<BackendDashboardUser | null>(null);
@@ -51,6 +52,7 @@ export function useCouriersPage() {
       const data = await loadCouriersPageData(apiFetch);
       setCouriers(data.couriers);
       setOrders(data.orders);
+      setSummaries(data.summaries);
       setCities(data.cities);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر تحميل بيانات الطيارين.");
@@ -157,6 +159,7 @@ export function useCouriersPage() {
     couriers,
     cities,
     orders,
+    summaries,
     loading,
     error,
     load,

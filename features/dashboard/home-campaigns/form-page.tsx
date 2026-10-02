@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { CheckCircle2, ChevronRight, Sparkles, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -38,6 +39,7 @@ function checkFile(file: File | undefined, kind: "image" | "video") {
 }
 
 export function HomeCampaignFormPage() {
+  const router = useRouter();
   const { apiFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const { cities } = useServiceCities({ activeOnly: true });
@@ -148,7 +150,7 @@ export function HomeCampaignFormPage() {
       }
       if (hasMediaChanges) await sendAdminJson(apiFetch, `${adminApiPaths.homeCampaigns}${encodeURIComponent(id)}/`, { method: "PATCH", body: JSON.stringify({ is_active: desiredActive, media_type: form.media_type }) });
       showSnackbar({ message: editingId ? "تم حفظ تعديلات حملة الهوم." : "تم إنشاء حملة الهوم.", tone: "success" });
-      window.location.assign("/offers/home-campaigns");
+      router.push("/offers/home-campaigns");
     } catch (reason) {
       showSnackbar({ message: reason instanceof Error ? reason.message : "تعذر حفظ الحملة.", tone: "danger", durationMs: 6000 });
     } finally { setSaving(false); }

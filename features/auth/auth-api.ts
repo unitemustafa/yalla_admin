@@ -1,13 +1,12 @@
 import { API_BASE_URL } from "@/lib/api-config";
 import type { AuthSession, AuthUser } from "@/lib/auth";
 
-import { localizedAuthError } from "./auth-errors";
+import { AuthServerError, localizedAuthError } from "./auth-errors";
 import {
   fetchWithNetworkError,
   responseData,
   throwIfRateLimited,
 } from "./auth-http";
-import { clearSessionCookies } from "./session-storage";
 
 export type LoginInput = {
   email: string;
@@ -44,7 +43,6 @@ export async function loginAdmin(input: LoginInput) {
     throw new Error("استجابة تسجيل الدخول غير مكتملة.");
   }
   if (data.user.role !== "admin") {
-    clearSessionCookies();
     throw new Error("هذا الحساب لا يملك صلاحية دخول لوحة الإدارة.");
   }
 
@@ -73,14 +71,19 @@ export async function currentUserFromResponse(
 ) {
   const data = await responseData(response);
   await throwIfRateLimited(response, data);
+  if (response.status >= 500) throw new AuthServerError();
 
-  if (!response.ok || !data || typeof data !== "object") {
+  if (!response.ok) {
     throw new Error(
       localizedAuthError(data, "تعذر تحديث بيانات الحساب من الخادم."),
     );
   }
 
+  if (!data || typeof data !== "object" || Array.isArray(data)) throw new AuthServerError();
+
   const nextUser = data as AuthUser;
+  if (typeof nextUser.role !== "string" ||
+    (typeof nextUser.id !== "string" && typeof nextUser.id !== "number")) throw new AuthServerError();
   if (requireAdmin && nextUser.role !== "admin") {
     throw new Error("هذا الحساب لا يملك صلاحية دخول لوحة الإدارة.");
   }

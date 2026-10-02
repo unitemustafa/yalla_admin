@@ -1,5 +1,13 @@
 import type { DashboardOrderLike } from "../order-display";
 
+export type CourierOrderSummary = {
+  assigned_representative_id: number | string;
+  active: number;
+  delivered: number;
+  total: number;
+  delivered_total: string | number;
+};
+
 export type AdminOrder = DashboardOrderLike & {
   id: number;
   status: string;

@@ -1,4 +1,4 @@
-import { NETWORK_ERROR_MESSAGE, isNetworkError } from "@/lib/auth";
+import { NetworkError, isNetworkError } from "@/lib/auth";
 
 import { RateLimitError, retryAfterSeconds } from "./auth-errors";
 
@@ -36,7 +36,7 @@ export async function fetchWithNetworkError(
   try {
     return await fetch(input, init);
   } catch (error) {
-    if (isNetworkError(error)) throw new Error(NETWORK_ERROR_MESSAGE);
+    if (isNetworkError(error)) throw new NetworkError(error);
     throw error;
   }
 }

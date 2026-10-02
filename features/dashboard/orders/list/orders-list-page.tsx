@@ -50,7 +50,6 @@ export function OrdersListPage() {
               const status = value as "all" | BackendOrderStatus;
               state.setStatus(status);
               state.setCurrentPage(1);
-              void state.loadOrders(status);
             }}
             options={[{ value: "all", label: "كل الحالات" }, ...statusOptions.map((value) => ({ value, label: statusLabels[value] }))]}
             ariaLabel="فلترة حالة الطلب"

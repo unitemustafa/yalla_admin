@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 import type { Classification } from "./types";
 import { classificationTypeLabel } from "./domain";
 import { AppSelect, Button, Input } from "../primitives";
@@ -12,6 +13,7 @@ export function MarketCategoryFields({ form, classifications }: {
   form: MarketForm;
   classifications: Classification[];
 }) {
+  const router = useRouter();
   return <>
     <label className="grid gap-2 text-sm font-semibold">اسم المحل *<Input value={form.draft.name} onChange={(event) => form.update("name", event.target.value)} /></label>
     <label className="grid gap-2 text-sm font-semibold">الفئة الأساسية للمحل *<AppSelect value={form.draft.classificationId} onValueChange={form.changeClassification} options={classifications.map((item) => ({ value: String(item.id), label: `${item.name} - ظهور ${classificationTypeLabel(item.classification_type)}` }))} /></label>
@@ -22,7 +24,7 @@ export function MarketCategoryFields({ form, classifications }: {
           const selected = form.draft.selectedMarketTypeIds.includes(item.id);
           return <button key={item.id} type="button" onClick={() => form.toggleMarketType(item.id)} className={cn("rounded-full border px-3 py-2 text-xs font-bold transition", selected ? "border-primary bg-primary/10 text-primary" : "hover:bg-accent", !item.is_active && "border-dashed text-muted-foreground")}>{item.name_ar}{!item.is_active ? " (معطل)" : ""}</button>;
         })}</div>
-      ) : <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed p-3"><p className="text-xs text-destructive">لا توجد فئات ثانوية مضافة لهذه الفئة الأساسية، ولا يمكن حفظ المحل قبل إضافتها.</p><Button type="button" size="sm" variant="outline" onClick={() => { window.location.href = "/categories/market-types"; }}>إضافة فئة ثانوية</Button></div>}
+      ) : <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed p-3"><p className="text-xs text-destructive">لا توجد فئات ثانوية مضافة لهذه الفئة الأساسية، ولا يمكن حفظ المحل قبل إضافتها.</p><Button type="button" size="sm" variant="outline" onClick={() => router.push("/categories/market-types")}>إضافة فئة ثانوية</Button></div>}
       {form.availableMarketTypes.length && !form.draft.selectedMarketTypeIds.length ? <p className="text-xs text-destructive">يجب اختيار فئة ثانوية واحدة على الأقل.</p> : null}
     </div>
     <label className="grid gap-2 text-sm font-semibold">وقت التوصيل من (دقيقة) *<Input type="number" min={1} inputMode="numeric" value={form.draft.deliveryTimeMin} onChange={(event) => form.update("deliveryTimeMin", event.target.value)} /></label>

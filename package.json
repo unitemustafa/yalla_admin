@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=20.9.0",
     "npm": ">=10.0.0"
   },
   "scripts": {
@@ -26,7 +26,7 @@
     "clsx": "^2.1.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.16.0",
-    "next": "16.2.12",
+    "next": "16.3.8",
     "radix-ui": "^1.4.3",
     "react": "19.2.4",
     "react-cookie": "^8.1.2",
@@ -45,7 +45,7 @@
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^9.39.4",
-    "eslint-config-next": "16.2.12",
+    "eslint-config-next": "16.3.8",
     "knip": "^6.32.2",
     "tailwindcss": "^4",
     "typescript": "^5",
@@ -53,6 +53,6 @@
   },
   "overrides": {
     "postcss": "8.5.23",
-    "sharp": "0.35.3"
+    "sharp": "0.35.5"
   }
 }

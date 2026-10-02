@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Save, X } from "lucide-react";
 
@@ -131,12 +132,13 @@ export function ZoneFormDialog({ zone, cities, onClose, onSave }: {
 }
 
 export function MissingServiceCitiesDialog({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
   useLockedPageScroll();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/30 px-4 py-6 backdrop-blur-[1px]">
       <section dir="rtl" role="dialog" aria-modal="true" aria-labelledby="missing-service-cities-title" className="w-full max-w-lg overflow-hidden rounded-xl border bg-background shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b bg-muted/20 px-6 py-5"><div><h2 id="missing-service-cities-title" className="text-xl font-bold leading-7">أنشئ مدينة أولًا</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">أنشئ مدينة خدمة مفعّلة أولًا لتحديد المدينة التي تتبع لها منطقة التوصيل الجديدة.</p></div><button type="button" onClick={onClose} className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border bg-background shadow-sm transition hover:bg-accent" aria-label="إغلاق"><X className="size-4" /></button></div>
-        <div className="flex justify-end gap-2 px-6 py-4"><Button type="button" variant="outline" onClick={onClose}>إلغاء</Button><Button type="button" onClick={() => { window.location.href = "/cities"; }}><Plus className="size-4" />إضافة مدينة</Button></div>
+        <div className="flex justify-end gap-2 px-6 py-4"><Button type="button" variant="outline" onClick={onClose}>إلغاء</Button><Button type="button" onClick={() => router.push("/cities")}><Plus className="size-4" />إضافة مدينة</Button></div>
       </section>
     </div>
   );

@@ -6,7 +6,7 @@ import {
   requestWithAccessToken,
 } from "./auth-api";
 import { throwIfRateLimited } from "./auth-http";
-import { readAccessToken } from "./session-storage";
+import { assertSessionIdentity, readAccessToken, readSessionIdentity } from "./session-storage";
 import { refreshTokens } from "./token-refresh";
 
 type AuthenticatedFetchOptions = {
@@ -22,7 +22,9 @@ export async function authenticatedFetch({
   scheduleRefresh,
   clearSession,
 }: AuthenticatedFetchOptions) {
+  const identity = readSessionIdentity();
   const optimizedInit = await prepareAuthenticatedRequest(init);
+  assertSessionIdentity(identity);
   const storedAccessToken = readAccessToken();
   let accessToken: string;
 
@@ -34,24 +36,30 @@ export async function authenticatedFetch({
   } else {
     try {
       accessToken = (await refreshTokens()).accessToken;
+      assertSessionIdentity(identity);
       scheduleRefresh(accessToken);
     } catch (error) {
+      assertSessionIdentity(identity);
       if (!shouldKeepLocalSession(error)) clearSession(true);
       throw error;
     }
   }
 
   let response = await requestWithAccessToken(path, optimizedInit, accessToken);
+  assertSessionIdentity(identity);
   await throwIfRateLimited(response);
   if (response.status !== 401) return response;
 
   try {
     accessToken = (await refreshTokens()).accessToken;
+    assertSessionIdentity(identity);
     scheduleRefresh(accessToken);
     response = await requestWithAccessToken(path, optimizedInit, accessToken);
+    assertSessionIdentity(identity);
     await throwIfRateLimited(response);
     return response;
   } catch (error) {
+    assertSessionIdentity(identity);
     if (!shouldKeepLocalSession(error)) clearSession(true);
     throw error;
   }

@@ -36,6 +36,7 @@ type OrderAddressLike = {
 };
 
 type OrderItemLike = {
+  additions?: Array<{ id: number; name: string; price: string | number }>;
   id?: string | number | null;
   section_id?: string | number | null;
   variant_id?: string | number | null;

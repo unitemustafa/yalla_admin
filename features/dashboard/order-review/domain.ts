@@ -30,7 +30,7 @@ export function textAt(record: ApiRecord, paths: string[][], fallback = "-") {
   return fallback;
 }
 
-export function numericValue(value: unknown) {
+function numericValue(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
     const parsed = Number(value.replace(/,/g, "").trim());

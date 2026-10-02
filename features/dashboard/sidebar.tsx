@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { cn } from "@/lib/utils";
@@ -33,6 +34,7 @@ export function Sidebar({
   onCloseMobile: () => void;
   onToggleCollapsed: () => void;
 }) {
+  const router = useRouter();
   const { logout: endSession, user } = useAuth();
   const { isGroupOpen, toggleGroup } = useSidebarNavigation(activePage);
   const { direction, language, pageTitle, t } = useDashboardI18n();
@@ -101,7 +103,7 @@ export function Sidebar({
     onCloseMobile();
 
     await endSession();
-    window.location.href = "/login";
+    router.replace("/login");
   }
 
   function floatingTop(element: HTMLElement) {

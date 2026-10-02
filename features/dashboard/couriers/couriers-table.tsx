@@ -8,11 +8,12 @@ import { Badge, Button, Card, Pagination, Switch } from "../primitives";
 import { displayLocalPhone } from "../users/account-fields";
 import { fullNameFromBackendUser, type BackendDashboardUser } from "../users/api-users";
 import { courierOrderStats } from "./domain";
-import type { AdminOrder } from "./types";
+import type { AdminOrder, CourierOrderSummary } from "./types";
 
-export function CouriersTable({ couriers, orders, startIndex, currentPage, totalPages, totalCount, assignableCount, busy, onPageChange, onAssign, onPassword, onAvailabilityChange }: {
+export function CouriersTable({ couriers, orders, summaries, startIndex, currentPage, totalPages, totalCount, assignableCount, busy, onPageChange, onAssign, onPassword, onAvailabilityChange }: {
   couriers: BackendDashboardUser[];
   orders: AdminOrder[];
+  summaries: CourierOrderSummary[];
   startIndex: number;
   currentPage: number;
   totalPages: number;
@@ -31,7 +32,7 @@ export function CouriersTable({ couriers, orders, startIndex, currentPage, total
     <div className="mt-8 grid gap-3">
       {couriers.map((courier, index) => {
         const profile = courier.courier_profile;
-        const stats = courierOrderStats(orders, courier.id);
+        const stats = summaries.find((row) => String(row.assigned_representative_id) === String(courier.id)) ?? courierOrderStats(orders, courier.id);
         const maxActiveOrders = profile?.max_active_orders ?? 0;
         const hasSignedIn = courier.last_login != null;
         const isAvailable = courier.is_active !== false && profile?.is_available !== false;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { AlertCircle, LoaderCircle, MapPin, Plus, RefreshCw, X } from "lucide-react";
 
 import { Badge, Button } from "../primitives";
@@ -15,6 +16,7 @@ export function DeliveryAreasDialog({ city, areas, loading, loadError, onClose, 
   onClose: () => void;
   onReload: () => void;
 }) {
+  const router = useRouter();
   useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;
     const previousHtmlOverflow = document.documentElement.style.overflow;
@@ -48,7 +50,7 @@ export function DeliveryAreasDialog({ city, areas, loading, loadError, onClose, 
                 <thead><tr className="border-b bg-muted/35 text-xs text-muted-foreground"><th className="px-4 py-3 text-start">اسم المنطقة</th><th className="px-4 py-3 text-start">سعر التوصيل</th><th className="px-4 py-3 text-start">الحالة</th></tr></thead>
                 <tbody>
                   {areas.length === 0 ? (
-                    <tr><td colSpan={3} className="p-0"><div className="flex min-h-48 flex-col items-center justify-center gap-2 bg-muted/10 px-4 text-center"><MapPin className="size-8 text-muted-foreground" /><p className="font-semibold">لا توجد مناطق توصيل لهذه المدينة</p><p className="text-sm text-muted-foreground">أضف منطقة توصيل ثابتة السعر.</p><Button type="button" className="mt-1" onClick={() => { window.location.href = "/delivery-zone"; }}><Plus className="size-4" />أضف أول منطقة توصيل</Button></div></td></tr>
+                    <tr><td colSpan={3} className="p-0"><div className="flex min-h-48 flex-col items-center justify-center gap-2 bg-muted/10 px-4 text-center"><MapPin className="size-8 text-muted-foreground" /><p className="font-semibold">لا توجد مناطق توصيل لهذه المدينة</p><p className="text-sm text-muted-foreground">أضف منطقة توصيل ثابتة السعر.</p><Button type="button" className="mt-1" onClick={() => router.push("/delivery-zone")}><Plus className="size-4" />أضف أول منطقة توصيل</Button></div></td></tr>
                   ) : areas.map((area) => (
                     <tr key={area.id} className="border-b last:border-0"><td className="px-4 py-4 font-semibold">{area.name}</td><td className="px-4 py-4">{formatCityMoney(area.delivery_price)}</td><td className="px-4 py-4"><Badge tone={area.is_active ? "green" : "red"}>{area.is_active ? "مفعلة" : "معطلة"}</Badge></td></tr>
                   ))}
