@@ -80,9 +80,34 @@ describe("dashboard routes", () => {
     ]);
   });
 
-  it("uses a neutral dynamic order breadcrumb", () => {
-    expect(breadcrumbsFromPathname("/orders/view/123").at(-1)?.label).toBe(
+  it.each(["6", "123", "9007199254740993"])(
+    "uses the actual order route id %s without rounding",
+    (id) => {
+      expect(breadcrumbsFromPathname(`/orders/view/${id}`).at(-1)?.label).toBe(
+        `تفاصيل الطلب #${id}`,
+      );
+      expect(breadcrumbsFromPathname(`/orders/view/${id}`).at(-2)).toEqual({
+        label: "الطلبات",
+        href: "/orders",
+      });
+    },
+  );
+
+  it("keeps the route id for a trailing slash without changing shared breadcrumbs", () => {
+    expect(breadcrumbsFromPathname("/orders/view/6/").at(-1)?.label).toBe(
+      "تفاصيل الطلب #6",
+    );
+    expect(dashboardRoutes["order-detail"].breadcrumbs.at(-1)?.label).toBe(
       "تفاصيل الطلب",
     );
   });
+
+  it.each(["ORD-1", "0", "-6", "6/details", ""])(
+    "uses a neutral breadcrumb for an invalid order route id %s",
+    (id) => {
+      expect(breadcrumbsFromPathname(`/orders/view/${id}`).at(-1)?.label).toBe(
+        "تفاصيل الطلب",
+      );
+    },
+  );
 });

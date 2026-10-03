@@ -35,6 +35,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const {
     activePage,
+    breadcrumbs: pathnameBreadcrumbs,
     collapsed,
     mobileNavOpen,
     closeMobileNav,
@@ -43,7 +44,10 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   } = useDashboardFrame();
   const { breadcrumbsForPage, direction, t } = useDashboardI18n();
   const { setCustomization } = useDashboardCustomization();
-  const breadcrumbs = breadcrumbsForPage(activePage);
+  const breadcrumbs =
+    activePage === "order-detail"
+      ? pathnameBreadcrumbs
+      : breadcrumbsForPage(activePage);
 
   return (
     <DashboardAutoTranslate>

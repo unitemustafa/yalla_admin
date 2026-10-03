@@ -81,7 +81,7 @@ export const en = {
   "page.addons": "Add-ons",
   "page.orders": "Orders",
   "page.createOrder": "Create order",
-  "page.orderDetail": "ORD-20260518-QYT6Y0",
+  "page.orderDetail": "Order details",
   "page.offers": "Offers",
   "page.createOffer": "Create offer",
   "page.homeCampaigns": "Home campaigns",

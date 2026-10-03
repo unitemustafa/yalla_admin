@@ -267,5 +267,12 @@ export function pageFromPathname(pathname: string): PageKey {
 }
 
 export function breadcrumbsFromPathname(pathname: string): BreadcrumbItem[] {
-  return [...dashboardRoutes[pageFromPathname(pathname)].breadcrumbs];
+  const breadcrumbs: BreadcrumbItem[] = [
+    ...dashboardRoutes[pageFromPathname(pathname)].breadcrumbs,
+  ];
+  const orderId = /^\/orders\/view\/([1-9]\d*)\/?$/.exec(pathname)?.[1];
+  if (orderId) {
+    breadcrumbs[breadcrumbs.length - 1] = { label: `تفاصيل الطلب #${orderId}` };
+  }
+  return breadcrumbs;
 }

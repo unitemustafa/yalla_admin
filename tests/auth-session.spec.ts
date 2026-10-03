@@ -97,3 +97,19 @@ test("admin orders fetch the selected history page and keep server totals", asyn
   expect(requestedPages).toContain("2");
   await expect(page.getByRole("button", { name: "الصفحة التالية", exact: true })).toBeDisabled();
 });
+
+test("order details breadcrumb identifies the actual route instead of a sample order", async ({ context, page }) => {
+  await savedSession(context);
+  await context.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const data = path === "/api/v1/orders/6/"
+      ? { id: 6, order_number: "YM-20261002-000006", status: "confirmed", items: [], market_sections: [] }
+      : fixtureData(path);
+    await route.fulfill({ json: data });
+  });
+  await page.goto("/orders/view/6");
+  const breadcrumbs = page.getByRole("navigation", { name: "مسار الصفحة", exact: true });
+  await expect(breadcrumbs.getByText("تفاصيل الطلب #6", { exact: true })).toBeVisible();
+  await expect(breadcrumbs.getByRole("link", { name: "الطلبات", exact: true })).toHaveAttribute("href", "/orders");
+  await expect(breadcrumbs).not.toContainText("ORD-20260518-QYT6Y0");
+});

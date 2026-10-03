@@ -88,7 +88,7 @@ export const ar = {
   "page.addons": "الإضافات",
   "page.orders": "الطلبات",
   "page.createOrder": "إنشاء طلب",
-  "page.orderDetail": "ORD-20260518-QYT6Y0",
+  "page.orderDetail": "تفاصيل الطلب",
   "page.offers": "العروض",
   "page.createOffer": "إنشاء عرض",
   "page.homeCampaigns": "حملات الهوم",
