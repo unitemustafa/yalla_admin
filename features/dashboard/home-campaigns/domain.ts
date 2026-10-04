@@ -9,7 +9,7 @@ export const campaignLabels = {
 
 export type CampaignForm = {
   internal_name: string; is_active: boolean;
-  start_time: string; end_time: string; show_in_general: boolean; service_city_id: string;
+  start_time: string; end_time: string; show_in_general: boolean; show_in_service_city: boolean; service_city_id: string;
   teaser_text: string; title: string; description: string;
   template: string; sheet_size: string; content_alignment: string;
   use_theme_colors: boolean;
@@ -43,7 +43,7 @@ export function initialCampaignForm(): CampaignForm {
   return {
     internal_name: "", is_active: false,
     start_time: localDate(start), end_time: localDate(end),
-    show_in_general: true, service_city_id: "",
+    show_in_general: true, show_in_service_city: false, service_city_id: "",
     teaser_text: "اكتشف العرض الآن", title: "عرض مخصوص ليك", description: "",
     template: "hero", sheet_size: "large", content_alignment: "center",
     use_theme_colors: true,
@@ -83,6 +83,7 @@ export function campaignFromApi(record: BackendRecord): CampaignRow {
   }
   base.start_time = dateForInput(text(record, "start_time"));
   base.end_time = dateForInput(text(record, "end_time"));
+  base.show_in_service_city = !base.show_in_general;
   return {
     ...base,
     id: text(record, "id"),
@@ -107,8 +108,10 @@ export function selectOptions(records: BackendRecord[], nameKeys = ["name", "tit
 }
 
 export function campaignPayload(form: CampaignForm) {
+  const payload = { ...form };
+  delete (payload as Partial<CampaignForm>).show_in_service_city;
   return {
-    ...form,
+    ...payload,
     start_time: new Date(form.start_time).toISOString(),
     end_time: new Date(form.end_time).toISOString(),
     service_city_id: form.show_in_general ? null : Number(form.service_city_id),
@@ -122,6 +125,8 @@ export function campaignPayload(form: CampaignForm) {
 export function validateCampaign(form: CampaignForm, files: CampaignFiles, existing?: CampaignRow, removedImageIds: number[] = []) {
   if (!form.internal_name.trim() || !form.teaser_text.trim() || !form.title.trim()) return "أدخل اسم الحملة ونص الشريط والعنوان.";
   if (!form.start_time || !form.end_time || new Date(form.end_time) <= new Date(form.start_time)) return "وقت النهاية يجب أن يكون بعد البداية.";
+  if (!form.show_in_general && !form.show_in_service_city) return "اختر الظهور في جاهز للشحن أو مدينة واحدة.";
+  if (form.show_in_general && form.show_in_service_city) return "اختر جاهز للشحن أو مدينة واحدة فقط.";
   if (!form.show_in_general && !form.service_city_id) return "اختر مدينة الخدمة.";
   if (form.action_type !== "none" && !form.cta_label.trim()) return "نص الزر مطلوب مع الإجراء.";
   const targetField: Record<string, keyof CampaignForm> = { offer: "target_offer_id", product: "target_product_id", market: "target_market_id", product_category: "target_product_category_id" };

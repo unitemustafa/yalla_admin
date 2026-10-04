@@ -3,6 +3,27 @@ import { describe, expect, it } from "vitest";
 import { campaignFromApi, campaignPayload, initialCampaignForm, validateCampaign } from "./domain";
 
 describe("home campaign domain", () => {
+  it("restores city visibility when editing a local campaign", () => {
+    const campaign = campaignFromApi({ show_in_general: false, service_city_id: 2, service_city: { id: 2, name: "القاهرة" } });
+    expect(campaign).toMatchObject({ show_in_general: false, show_in_service_city: true, service_city_id: "2" });
+  });
+
+  it("requires exactly one visibility scope and a city for local campaigns", () => {
+    const form = { ...initialCampaignForm(), internal_name: "Campaign", show_in_general: false };
+    expect(validateCampaign(form, {})).toBe("اختر الظهور في جاهز للشحن أو مدينة واحدة.");
+    expect(validateCampaign({ ...form, show_in_service_city: true }, {})).toBe("اختر مدينة الخدمة.");
+    expect(validateCampaign({ ...form, show_in_service_city: true, service_city_id: "2" }, {})).toBe("");
+    expect(validateCampaign({ ...form, show_in_general: true, show_in_service_city: true }, {})).toBe("اختر جاهز للشحن أو مدينة واحدة فقط.");
+  });
+
+  it("sends the chosen scope without the client-only city switch", () => {
+    const form = { ...initialCampaignForm(), show_in_general: false, show_in_service_city: true, service_city_id: "2" };
+    const payload = campaignPayload(form);
+    expect(payload).toMatchObject({ show_in_general: false, service_city_id: 2 });
+    expect(payload).not.toHaveProperty("show_in_service_city");
+    expect(campaignPayload({ ...form, show_in_general: true, show_in_service_city: false })).toMatchObject({ show_in_general: true, service_city_id: null });
+  });
+
   it("normalizes the effective status, city, and target", () => {
     const campaign = campaignFromApi({
       id: 15,

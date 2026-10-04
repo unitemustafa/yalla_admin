@@ -26,6 +26,8 @@ describe("sidebar navigation logic", () => {
 
   it("finds the route-owned expandable group", () => {
     expect(activeGroupLabelForPage(navGroups, "create-item")).toBe("المنتجات");
+    expect(activeGroupLabelForPage(navGroups, "create-offer")).toBe("العروض");
+    expect(activeGroupLabelForPage(navGroups, "create-home-campaign")).toBe("العروض");
     expect(activeGroupLabelForPage(navGroups, "overview")).toBeNull();
   });
 

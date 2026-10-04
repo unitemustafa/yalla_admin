@@ -24,6 +24,50 @@ async function session(page: Page) {
   await page.route("https://media.example.test/**", (route) => route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800"><rect width="1280" height="800" fill="#ff8a00"/></svg>' }));
 }
 
+test("campaign scope matches offers and its preview has a uniform dark background", async ({ page }) => {
+  await session(page);
+  const saved: Record<string, unknown>[] = [];
+  await page.route("**/api/v1/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    let data: unknown = [];
+    if (path.endsWith("/auth/me/")) data = user;
+    else if (path.endsWith("/media-specs/")) data = contract;
+    else if (path.endsWith("/service-cities/")) data = [{ id: 2, name: "القاهرة", is_active: true }, { id: 3, name: "الإسماعيلية", is_active: true }];
+    else if (path.endsWith("/home-campaigns/") && request.method() === "POST") { saved.push(request.postDataJSON()); data = { id: 44 }; }
+    await route.fulfill({ json: data });
+  });
+  await page.goto("/offers/home-campaigns/create");
+  await expect(page.getByRole("heading", { name: "إنشاء حملة إعلانية", exact: true })).toBeVisible();
+  const preview = page.getByRole("region", { name: "معاينة الحملة الإعلانية" });
+  await expect(preview).toHaveCSS("background-color", "rgb(63, 63, 63)");
+  for (const text of ["9:41", "الرئيسية", "الأقسام", "الطلبات", "حسابي"]) await expect(preview.getByText(text, { exact: true })).toHaveCount(0);
+  const general = page.getByRole("switch", { name: "يظهر في جاهز للشحن", exact: true });
+  const local = page.getByRole("switch", { name: "يظهر في المدن", exact: true });
+  await expect(general).toBeChecked();
+  await expect(local).toBeDisabled();
+  await general.click();
+  await page.getByLabel("اسم الحملة").fill("Scope regression");
+  await page.getByRole("button", { name: "حفظ الحملة", exact: true }).click();
+  await expect(page.getByText("اختر الظهور في جاهز للشحن أو مدينة واحدة.", { exact: true })).toBeVisible();
+  expect(saved).toHaveLength(0);
+  await local.click();
+  await expect(general).toBeDisabled();
+  await page.getByRole("button", { name: "القاهرة", exact: true }).click();
+  await expect(page.getByRole("button", { name: "الإسماعيلية", exact: true })).toBeDisabled();
+  await local.click();
+  await local.click();
+  await expect(page.getByRole("button", { name: "القاهرة", exact: true })).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("button", { name: "الإسماعيلية", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "الإسماعيلية", exact: true }).click();
+  await preview.screenshot({ path: "test-results/campaign-preview.png" });
+  await page.getByRole("button", { name: "حفظ الحملة", exact: true }).click();
+  await expect(page).toHaveURL(/\/offers\/home-campaigns$/);
+  expect(saved).toHaveLength(1);
+  expect(saved[0]).toMatchObject({ show_in_general: false, service_city_id: 3 });
+  expect(saved[0]).not.toHaveProperty("show_in_service_city");
+});
+
 test("store cover stays complete without crop controls at phone and desktop widths", async ({ page }) => {
   await session(page);
   await page.route("**/api/v1/**", async (route) => {

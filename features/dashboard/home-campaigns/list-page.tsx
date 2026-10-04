@@ -23,7 +23,7 @@ export function HomeCampaignsPage() {
     try {
       const response = await apiFetch(adminApiPaths.homeCampaigns);
       const data = await readApiData(response);
-      if (!response.ok) throw new Error(apiErrorMessage(data, "تعذر تحميل حملات الهوم."));
+      if (!response.ok) throw new Error(apiErrorMessage(data, "تعذر تحميل الحملات الإعلانية."));
       setRows(apiList(data).map(campaignFromApi));
     } catch (reason) {
       showSnackbar({ message: reason instanceof Error ? reason.message : "تعذر تحميل الحملات.", tone: "danger" });
@@ -47,15 +47,15 @@ export function HomeCampaignsPage() {
       const data = response.status === 204 ? null : await readApiData(response);
       if (!response.ok) throw new Error(apiErrorMessage(data, "تعذر حذف الحملة."));
       setRows((current) => current.filter((row) => row.id !== campaign.id));
-      showSnackbar({ message: "تم حذف حملة الهوم." });
+      showSnackbar({ message: "تم حذف الحملة الإعلانية." });
     } catch (reason) { showSnackbar({ message: reason instanceof Error ? reason.message : "تعذر حذف الحملة.", tone: "danger" }); }
   };
 
   return <div className="px-6 py-8">
-    <PageTitle title="حملات الهوم" description="إدارة الإعلانات التي تظهر في منتصف شاشة التطبيق." size="compact" actions={<><Button variant="outline" onClick={() => void reload()} disabled={loading}><RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />تحديث</Button><Link href="/offers/home-campaigns/create" className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"><Plus className="size-4" />إنشاء حملة هوم</Link></>} />
+    <PageTitle title="حملة إعلانية" description="إدارة الإعلانات التي تظهر في منتصف شاشة التطبيق." size="compact" actions={<><Button variant="outline" onClick={() => void reload()} disabled={loading}><RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />تحديث</Button><Link href="/offers/home-campaigns/create" className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"><Plus className="size-4" />إنشاء حملة إعلانية</Link></>} />
     <div className="mt-6 grid gap-4">
       {loading ? <Card className="p-8 text-center text-sm text-muted-foreground">جار تحميل الحملات...</Card> : null}
-      {!loading && rows.length === 0 ? <Card className="p-10 text-center"><CalendarClock className="mx-auto mb-3 size-10 text-muted-foreground" /><h2 className="font-bold">لا توجد حملات هوم بعد</h2><p className="mt-1 text-sm text-muted-foreground">أنشئ أول حملة لتظهر فوق شريط التنقل في Home.</p></Card> : null}
+      {!loading && rows.length === 0 ? <Card className="p-10 text-center"><CalendarClock className="mx-auto mb-3 size-10 text-muted-foreground" /><h2 className="font-bold">لا توجد حملات إعلانية بعد</h2><p className="mt-1 text-sm text-muted-foreground">أنشئ أول حملة إعلانية لتظهر في منتصف شاشة التطبيق.</p></Card> : null}
       {rows.map((campaign) => <Card key={campaign.id} className="p-5">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div className="min-w-0 flex-1">

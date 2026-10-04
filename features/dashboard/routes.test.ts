@@ -102,6 +102,17 @@ describe("dashboard routes", () => {
     );
   });
 
+  it("keeps offer and advertising campaign creation inside their list pages", () => {
+    const offers = navGroups[0].items.find((item) => item.label === "العروض");
+    expect(offers?.children?.map((child) => [child.page, child.label])).toEqual([
+      ["offers", "كل العروض"],
+      ["home-campaigns", "حملة إعلانية"],
+    ]);
+    expect(offers?.activePages).toEqual(["create-offer", "create-home-campaign"]);
+    expect(pageFromPathname("/offers/create")).toBe("create-offer");
+    expect(pageFromPathname("/offers/home-campaigns/create")).toBe("create-home-campaign");
+  });
+
   it.each(["ORD-1", "0", "-6", "6/details", ""])(
     "uses a neutral breadcrumb for an invalid order route id %s",
     (id) => {
