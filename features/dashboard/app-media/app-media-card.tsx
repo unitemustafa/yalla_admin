@@ -114,7 +114,7 @@ export function AppMediaCard() {
     <Card className="p-5">
       <h3 className="text-lg font-bold">صور وفيديوهات بداية التطبيقات</h3>
       <MediaProcessingStatus />
-      <p className="mt-1 text-sm text-muted-foreground">تظهر التغييرات عند فتح شاشة الـ Onboarding أو اللوجن من جديد.</p>
+      <p className="mt-1 text-sm text-muted-foreground">تظهر التغييرات عند فتح شاشة تسجيل الدخول من جديد.</p>
       <div className="mt-5 grid gap-4">
         {mediaSlots.map((slot) => {
           const url = imageDraft?.key === slot.key ? imageDraft.url : media?.[`${slot.key}_url`];

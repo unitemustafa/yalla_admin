@@ -11,12 +11,12 @@ describe("launch media validation", () => {
 
   it("accepts videos only for market login", () => {
     expect(validateLaunchMediaFile("delivery_login", { type: "video/mp4", size: 100 })).not.toBeNull();
-    expect(validateLaunchMediaFile("onboarding_one", { type: "image/gif", size: 100 })).not.toBeNull();
+    expect(validateLaunchMediaFile("delivery_login", { type: "image/gif", size: 100 })).not.toBeNull();
   });
 
   it("displays field and general API validation errors", () => {
     expect(launchMediaError({ market_login_video: ["Invalid MP4."] }, "market_login_video")).toBe("Invalid MP4.");
-    expect(launchMediaError({ non_field_errors: ["Invalid image."] }, "onboarding_one")).toBe("Invalid image.");
+    expect(launchMediaError({ non_field_errors: ["Invalid image."] }, "delivery_login")).toBe("Invalid image.");
     expect(launchMediaError(null, "market_login")).toBe("تعذر حفظ الملف.");
   });
 });
