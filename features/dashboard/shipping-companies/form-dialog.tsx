@@ -110,12 +110,6 @@ export function ShippingCompanyFormDialog({ company, onClose, onSave }: {
               <div className="flex items-center justify-between rounded-lg border px-4 py-3"><div><div className="font-semibold">حالة الشركة</div><div className="text-xs text-muted-foreground">الشركات المعطلة لا تظهر للعميل.</div></div><Switch checked={active} onCheckedChange={setActive} /></div>
             </div>
           </div>
-          <div className="grid gap-3 rounded-lg border bg-muted/20 p-4 sm:grid-cols-2">
-            <div>مدينة التشغيل: <strong>كل المدن</strong></div>
-            <div>نوع المركبة: <strong>شركة شحن</strong></div>
-            <div>الحد الأقصى للطلبات: <strong>غير محدود</strong></div>
-            <div>رقم اللوحة: <strong>شركة شحن</strong></div>
-          </div>
           {error ? <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">{error}</p> : null}
           <div className="flex justify-end gap-2 border-t pt-4"><Button type="button" variant="outline" onClick={onClose}>إلغاء</Button><Button type="submit" disabled={saving}>{saving ? "جاري الحفظ..." : <><Save className="size-4" />حفظ الشركة</>}</Button></div>
         </form>
