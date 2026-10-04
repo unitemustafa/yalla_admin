@@ -7,6 +7,8 @@ type ApiFetch = (path: string, init?: RequestInit) => Promise<Response>;
 type CompanyResponse = {
   id?: number | string;
   name?: string;
+  email?: string | null;
+  courier_account_id?: number | string | null;
   logo_url?: string | null;
   service_city_ids?: Array<number | string>;
   service_cities?: Array<{ id?: number | string; name?: string | null }>;
@@ -25,6 +27,8 @@ export function companyFromResponse(value: unknown): ShippingCompany | null {
   return {
     id: String(row.id),
     name: row.name.trim(),
+    email: row.email ?? null,
+    courierAccountId: row.courier_account_id == null ? null : String(row.courier_account_id),
     logoUrl: row.logo_url?.trim() || null,
     cityIds,
     cityNames: cities.flatMap((city) => city.name?.trim() ? [city.name.trim()] : []),
@@ -51,6 +55,8 @@ export async function loadShippingCompanies(apiFetch: ApiFetch) {
 function companyFormData(draft: ShippingCompanyDraft) {
   const form = new FormData();
   form.append("name", draft.name.trim());
+  if (draft.email?.trim()) form.append("email", draft.email.trim().toLowerCase());
+  if (draft.password) form.append("password", draft.password);
   form.append("is_active", String(draft.status === "active"));
   draft.cityIds.forEach((id) => form.append("service_city_ids", id));
   if (draft.logoFile) form.append("logo", draft.logoFile);

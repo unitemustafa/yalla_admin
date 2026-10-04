@@ -1,6 +1,8 @@
 export type ShippingCompany = {
   id: string;
   name: string;
+  email?: string | null;
+  courierAccountId?: string | null;
   logoUrl: string | null;
   cityIds: string[];
   cityNames: string[];
@@ -10,6 +12,8 @@ export type ShippingCompany = {
 
 export type ShippingCompanyDraft = {
   name: string;
+  email?: string;
+  password?: string;
   cityIds: string[];
   status: "active" | "inactive";
   logoFile: File | null;

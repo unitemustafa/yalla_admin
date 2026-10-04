@@ -47,6 +47,7 @@ export type BackendDashboardUser = {
     service_city_name?: string | null;
     max_active_orders?: number | null;
     is_available?: boolean | null;
+    is_shipping_company?: boolean;
   } | null;
 };
 

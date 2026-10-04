@@ -6,22 +6,20 @@ import { ImagePlus, Save, Truck, X } from "lucide-react";
 
 import { validateImageUpload } from "@/lib/image-upload";
 import { mediaSpecHint, mediaSpecs } from "@/lib/media-specs";
+import { isValidEmail, passwordRules } from "../users/account-fields";
 import type { ServiceCity } from "../cities/types";
 import { Button, Field, Input, Switch } from "../primitives";
 import type { ShippingCompany, ShippingCompanyDraft } from "./types";
 
-export function ShippingCompanyFormDialog({ company, cities, onClose, onSave }: {
+export function ShippingCompanyFormDialog({ company, onClose, onSave }: {
   company?: ShippingCompany;
   cities: ServiceCity[];
   onClose: () => void;
   onSave: (draft: ShippingCompanyDraft) => Promise<boolean>;
 }) {
   const [name, setName] = useState(company?.name ?? "");
-  const [cityIds, setCityIds] = useState<string[]>(
-    company?.cityIds.filter((id) =>
-      cities.some((city) => String(city.id) === id && city.is_active !== false),
-    ) ?? [],
-  );
+  const [email, setEmail] = useState(company?.email ?? "");
+  const [password, setPassword] = useState("");
   const [active, setActive] = useState(company?.status !== "inactive");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [removeLogo, setRemoveLogo] = useState(false);
@@ -39,13 +37,6 @@ export function ShippingCompanyFormDialog({ company, cities, onClose, onSave }: 
   useEffect(() => () => {
     if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
-
-  function toggleCity(id: string) {
-    setCityIds((current) => current.includes(id)
-      ? current.filter((value) => value !== id)
-      : [...current, id]);
-    setError(null);
-  }
 
   async function selectLogo(event: React.ChangeEvent<HTMLInputElement>) {
     const selected = event.target.files?.[0] ?? null;
@@ -73,7 +64,10 @@ export function ShippingCompanyFormDialog({ company, cities, onClose, onSave }: 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!name.trim()) return setError("اسم شركة الشحن مطلوب.");
-    if (!cityIds.length) return setError("اختر مدينة واحدة على الأقل.");
+    if (!isValidEmail(email.trim())) return setError("اكتب بريدًا إلكترونيًا صحيحًا لتسجيل الدخول.");
+    if ((!company?.courierAccountId || password) && passwordRules(password).some((rule) => !rule.done)) {
+      return setError("كلمة المرور 8 أحرف على الأقل وبها حرف كبير ورقم ورمز خاص.");
+    }
     if (logoFile && logoFile.size > 5 * 1024 * 1024) {
       return setError("حجم اللوجو يجب ألا يتجاوز 5MB.");
     }
@@ -81,7 +75,9 @@ export function ShippingCompanyFormDialog({ company, cities, onClose, onSave }: 
     setError(null);
     const saved = await onSave({
       name,
-      cityIds,
+      email,
+      password,
+      cityIds: [],
       status: active ? "active" : "inactive",
       logoFile,
       removeLogo,
@@ -94,7 +90,7 @@ export function ShippingCompanyFormDialog({ company, cities, onClose, onSave }: 
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/30 px-4 py-6 backdrop-blur-[1px]">
       <section dir="rtl" role="dialog" aria-modal="true" className="w-full max-w-2xl overflow-hidden rounded-xl border bg-background shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b bg-muted/20 px-6 py-5">
-          <div><h2 className="text-xl font-bold">{company ? "تعديل شركة الشحن" : "إضافة شركة شحن"}</h2><p className="mt-1 text-sm text-muted-foreground">حدد بيانات الشركة والمدن التي تخدمها.</p></div>
+          <div><h2 className="text-xl font-bold">{company ? "تعديل شركة الشحن" : "إضافة شركة شحن"}</h2><p className="mt-1 text-sm text-muted-foreground">حدد بيانات الشركة وحساب تسجيل الدخول في تطبيق المندوب.</p></div>
           <button type="button" onClick={onClose} className="inline-flex size-8 items-center justify-center rounded-full border"><X className="size-4" /></button>
         </div>
         <form onSubmit={submit} className="space-y-5 p-6">
@@ -109,18 +105,16 @@ export function ShippingCompanyFormDialog({ company, cities, onClose, onSave }: 
             </div>
             <div className="space-y-4">
               <Field label="اسم شركة الشحن *"><Input autoFocus value={name} onChange={(event) => { setName(event.target.value); setError(null); }} placeholder="مثال: أرامكس" /></Field>
+              <Field label="البريد الإلكتروني *"><Input required type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} dir="ltr" /></Field>
+              <Field label={company?.courierAccountId ? "كلمة المرور الجديدة" : "كلمة المرور *"}><Input required={!company?.courierAccountId} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} dir="ltr" /><p className="mt-1 text-xs text-muted-foreground">{company?.courierAccountId ? "اختياري — اتركه فارغًا للاحتفاظ بكلمة المرور الحالية." : "8 أحرف على الأقل، وحرف كبير ورقم ورمز خاص."}</p></Field>
               <div className="flex items-center justify-between rounded-lg border px-4 py-3"><div><div className="font-semibold">حالة الشركة</div><div className="text-xs text-muted-foreground">الشركات المعطلة لا تظهر للعميل.</div></div><Switch checked={active} onCheckedChange={setActive} /></div>
             </div>
           </div>
-          <div>
-            <div className="mb-2 font-semibold">مدن الخدمة *</div>
-            <div className="grid max-h-56 gap-2 overflow-y-auto rounded-lg border p-3 sm:grid-cols-2">
-              {cities.filter((city) => city.is_active !== false).map((city) => {
-                const id = String(city.id);
-                return <label key={id} className="flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2 hover:bg-muted/40"><input type="checkbox" checked={cityIds.includes(id)} onChange={() => toggleCity(id)} className="size-4 accent-primary" /><span className="font-medium">{city.name}</span></label>;
-              })}
-              {!cities.some((city) => city.is_active !== false) ? <p className="text-sm text-muted-foreground">لا توجد مدن مفعلة. أضف مدينة أولًا.</p> : null}
-            </div>
+          <div className="grid gap-3 rounded-lg border bg-muted/20 p-4 sm:grid-cols-2">
+            <div>مدينة التشغيل: <strong>كل المدن</strong></div>
+            <div>نوع المركبة: <strong>شركة شحن</strong></div>
+            <div>الحد الأقصى للطلبات: <strong>غير محدود</strong></div>
+            <div>رقم اللوحة: <strong>شركة شحن</strong></div>
           </div>
           {error ? <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">{error}</p> : null}
           <div className="flex justify-end gap-2 border-t pt-4"><Button type="button" variant="outline" onClick={onClose}>إلغاء</Button><Button type="submit" disabled={saving}>{saving ? "جاري الحفظ..." : <><Save className="size-4" />حفظ الشركة</>}</Button></div>

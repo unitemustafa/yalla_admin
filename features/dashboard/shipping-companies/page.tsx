@@ -47,7 +47,7 @@ export function ShippingCompaniesPage() {
 
   const filtered = useMemo(() => companies.filter((company) => {
     const matchesSearch = !search.trim() || `${company.name} ${company.cityNames.join(" ")}`.toLowerCase().includes(search.trim().toLowerCase());
-    const matchesCity = cityId === "all" || company.cityIds.includes(cityId);
+    const matchesCity = cityId === "all" || Boolean(company.courierAccountId) || company.cityIds.includes(cityId);
     const matchesStatus = statusFilter === "all" || company.status === statusFilter;
     return matchesSearch && matchesCity && matchesStatus;
   }), [cityId, companies, search, statusFilter]);
@@ -71,7 +71,7 @@ export function ShippingCompaniesPage() {
 
   async function changeStatus(company: ShippingCompany, active: boolean) {
     setBusyId(company.id);
-    const draft: ShippingCompanyDraft = { name: company.name, cityIds: company.cityIds, status: active ? "active" : "inactive", logoFile: null, removeLogo: false };
+    const draft: ShippingCompanyDraft = { name: company.name, cityIds: [], status: active ? "active" : "inactive", logoFile: null, removeLogo: false };
     await save(draft, company);
     setBusyId(null);
   }
@@ -110,5 +110,5 @@ export function ShippingCompaniesPage() {
 function Metric({ label, value }: { label: string; value: number }) { return <Card className="px-5 py-4"><div className="text-xs text-muted-foreground">{label}</div><div className="mt-1 text-2xl font-black">{value}</div></Card>; }
 
 function CompanyRow({ company, busy, onEdit, onDelete, onStatus }: { company: ShippingCompany; busy: boolean; onEdit: () => void; onDelete: () => void; onStatus: (active: boolean) => void }) {
-  return <Card className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center"><div className="flex min-w-0 flex-1 items-center gap-3"><div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-muted/25">{company.logoUrl ? <img src={company.logoUrl} alt={company.name} className="size-full object-contain p-1" /> : <Truck className="size-6 text-primary" />}</div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="font-bold">{company.name}</h3><Badge tone={company.status === "active" ? "green" : "secondary"}>{company.status === "active" ? "مفعلة" : "معطلة"}</Badge></div><p className="mt-1 truncate text-sm text-muted-foreground">{company.cityNames.join("، ") || "بلا مدن"}</p></div></div><div className="flex items-center justify-end gap-2"><Switch checked={company.status === "active"} onCheckedChange={onStatus} disabled={busy} /><Button size="icon" variant="outline" onClick={onEdit} aria-label="تعديل"><Pencil className="size-4" /></Button>{company.deletionMode === "delete" ? <Button size="icon" variant="outline" onClick={onDelete} aria-label="حذف نهائيًا"><Trash2 className="size-4 text-destructive" /></Button> : null}</div></Card>;
+  return <Card className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center"><div className="flex min-w-0 flex-1 items-center gap-3"><div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-muted/25">{company.logoUrl ? <img src={company.logoUrl} alt={company.name} className="size-full object-contain p-1" /> : <Truck className="size-6 text-primary" />}</div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="font-bold">{company.name}</h3><Badge tone={company.status === "active" ? "green" : "secondary"}>{company.status === "active" ? "مفعلة" : "معطلة"}</Badge></div><p className="mt-1 truncate text-sm text-muted-foreground">{company.courierAccountId ? "كل المدن" : company.cityNames.join("، ") || "بلا مدن"}</p></div></div><div className="flex items-center justify-end gap-2"><Switch checked={company.status === "active"} onCheckedChange={onStatus} disabled={busy} /><Button size="icon" variant="outline" onClick={onEdit} aria-label="تعديل"><Pencil className="size-4" /></Button>{company.deletionMode === "delete" ? <Button size="icon" variant="outline" onClick={onDelete} aria-label="حذف نهائيًا"><Trash2 className="size-4 text-destructive" /></Button> : null}</div></Card>;
 }

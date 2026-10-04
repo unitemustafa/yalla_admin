@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   courierPayload,
   emptyCourierDraft,
+  draftFromCourier,
+  filterCouriers,
   isAssignmentEligible,
   isReassignmentEligible,
   normalizeCourierDraftField,
@@ -53,6 +55,26 @@ describe("courier domain", () => {
         is_available: true,
       },
     });
+  });
+
+  it("leaves capacity optional and sends null for unlimited orders", () => {
+    const unlimited = { ...validDraft, maxActiveOrders: "" };
+    expect(validateCourierDraft(unlimited, false)).toEqual({});
+    expect(courierPayload(unlimited, null)).toMatchObject({ courier_profile: { max_active_orders: null } });
+    expect(draftFromCourier({ id: 1, courier_profile: { max_active_orders: null } }, []).maxActiveOrders).toBe("");
+    for (const value of ["0", "-1", "1.5", "Infinity", "32768"]) {
+      expect(validateCourierDraft({ ...validDraft, maxActiveOrders: value }, false)).toHaveProperty("maxActiveOrders");
+    }
+  });
+
+  it("includes shipping company accounts in every city filter", () => {
+    const couriers = [
+      { id: 1, courier_profile: { service_city: 7 } },
+      { id: 2, courier_profile: { service_city: 8 } },
+      { id: 3, courier_profile: { service_city: null, is_shipping_company: true } },
+    ];
+    expect(filterCouriers(couriers, "7", "").map((courier) => courier.id)).toEqual([1, 3]);
+    expect(filterCouriers(couriers, "8", "").map((courier) => courier.id)).toEqual([2, 3]);
   });
 
   it("keeps assignment and reassignment eligibility rules explicit", () => {

@@ -15,6 +15,8 @@ describe("shipping company API mapping", () => {
     })).toEqual({
       id: "7",
       name: "Fast Ship",
+      email: null,
+      courierAccountId: null,
       logoUrl: "https://example.com/logo.webp",
       cityIds: ["2", "3"],
       cityNames: ["القاهرة", "الجيزة"],
@@ -44,6 +46,8 @@ describe("shipping company API mapping", () => {
 
     await saveShippingCompany(apiFetch, {
       name: " Fast Ship ",
+      email: " Company@Example.com ",
+      password: "CompanyPass1!",
       cityIds: ["2", "3"],
       status: "active",
       logoFile: logo,
@@ -56,6 +60,8 @@ describe("shipping company API mapping", () => {
     expect(init?.body).toBeInstanceOf(FormData);
     const form = init?.body as FormData;
     expect(form.get("name")).toBe("Fast Ship");
+    expect(form.get("email")).toBe("company@example.com");
+    expect(form.get("password")).toBe("CompanyPass1!");
     expect(form.getAll("service_city_ids")).toEqual(["2", "3"]);
     expect(form.get("logo")).toBe(logo);
   });

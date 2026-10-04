@@ -216,7 +216,8 @@ export function useOrderDetail(orderId: string) {
 
   async function updateDeliveryPrice(action: "save" | "request_approval") {
     if (!order || savingDeliveryPrice) return;
-    const parsedPrice = Number(deliveryPriceDraft);
+    const approvingSentPrice = action === "save" && order.external_shipping_status === "awaiting_customer_approval";
+    const parsedPrice = Number(approvingSentPrice ? order.delivery_price : deliveryPriceDraft);
     if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
       return showSnackbar({ message: "سعر التوصيل يجب أن يكون رقمًا غير سالب.", tone: "danger" });
     }
@@ -231,7 +232,7 @@ export function useOrderDetail(orderId: string) {
       if (!response.ok) throw new Error(orderApiError(data, "تعذر حفظ سعر التوصيل."));
       await loadOrder();
       notifyDashboardOrdersChanged(order.id);
-      showSnackbar({ message: action === "request_approval" ? "تم إرسال سعر التوصيل للعميل للموافقة." : "تم حفظ سعر التوصيل واعتماده وتحديث الإجمالي.", tone: "success" });
+      showSnackbar({ message: action === "request_approval" ? "تم إرسال سعر التوصيل للعميل للموافقة." : approvingSentPrice ? "تم اعتماد سعر التوصيل من الإدارة." : "تم حفظ سعر التوصيل واعتماده وتحديث الإجمالي.", tone: "success" });
     } catch (reason) {
       showSnackbar({ message: reason instanceof Error ? reason.message : "تعذر حفظ سعر التوصيل.", tone: "danger" });
     } finally {

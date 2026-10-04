@@ -45,7 +45,7 @@ export const emptyCourierDraft: CourierDraft = {
   vehicleType: "",
   plateNumber: "",
   serviceCity: "",
-  maxActiveOrders: "1",
+  maxActiveOrders: "",
   isAvailable: "true",
 };
 
@@ -62,7 +62,7 @@ export function draftFromCourier(user: BackendDashboardUser | null, cities: Serv
     vehicleType: user.courier_profile?.vehicle_type ?? "",
     plateNumber: user.courier_profile?.plate_number ?? "",
     serviceCity: String(user.courier_profile?.service_city ?? cities[0]?.id ?? ""),
-    maxActiveOrders: String(user.courier_profile?.max_active_orders ?? 1),
+    maxActiveOrders: String(user.courier_profile?.max_active_orders ?? ""),
     isAvailable: user.courier_profile?.is_available === false ? "false" : "true",
   };
 }
@@ -94,7 +94,7 @@ export function validateCourierDraft(draft: CourierDraft, isEditing: boolean) {
   if (!draft.vehicleType.trim()) errors.vehicleType = "اكتب نوع المركبة.";
   if (!draft.plateNumber.trim()) errors.plateNumber = "اكتب رقم اللوحة.";
   if (!draft.serviceCity) errors.serviceCity = "اختر مدينة التشغيل.";
-  if (!Number.isFinite(Number(draft.maxActiveOrders)) || Number(draft.maxActiveOrders) < 1) {
+  if (draft.maxActiveOrders.trim() && (!Number.isInteger(Number(draft.maxActiveOrders)) || Number(draft.maxActiveOrders) < 1 || Number(draft.maxActiveOrders) > 32767)) {
     errors.maxActiveOrders = "اكتب رقمًا صحيحًا أكبر من صفر.";
   }
   return errors;
@@ -116,7 +116,7 @@ export function courierPayload(draft: CourierDraft, courier: BackendDashboardUse
       vehicle_type: draft.vehicleType.trim(),
       plate_number: draft.plateNumber.trim(),
       service_city: Number(draft.serviceCity),
-      max_active_orders: Number(draft.maxActiveOrders),
+      max_active_orders: draft.maxActiveOrders.trim() ? Number(draft.maxActiveOrders) : null,
       is_available: draft.isAvailable === "true",
     },
   };
@@ -213,7 +213,7 @@ export function filterCouriers(
 ) {
   const areaRows = areaFilter === "all"
     ? couriers
-    : couriers.filter((courier) => String(courier.courier_profile?.service_city ?? "") === areaFilter);
+    : couriers.filter((courier) => courier.courier_profile?.is_shipping_company || String(courier.courier_profile?.service_city ?? "") === areaFilter);
   const focused = normalizeCourierSearch(focusedCourier);
   if (!focused) return areaRows;
   return areaRows.filter((courier) =>
