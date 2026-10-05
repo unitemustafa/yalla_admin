@@ -137,10 +137,42 @@ test("video replacement keeps published media until preparation is ready and pub
   await page.goto("/app-media");
   const input = page.locator('input[type="file"][accept*="video/mp4"]');
   await expect(input).toHaveCount(1);
-  // Only the HTTP lifecycle is mocked here; backend tests decode real MP4 files.
-  await input.setInputFiles({ name: "intro.mp4", mimeType: "video/mp4", buffer: Buffer.from("browser-upload-fixture") });
+  const video = await page.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 320; canvas.height = 180;
+    canvas.getContext("2d")!.fillRect(0, 0, 320, 180);
+    const stream = canvas.captureStream(30);
+    const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("video/mp4") ? "video/mp4" : "video/webm" });
+    const chunks: Blob[] = [];
+    const stopped = new Promise<void>((resolve) => { recorder.onstop = () => resolve(); });
+    recorder.ondataavailable = (event) => chunks.push(event.data);
+    recorder.start();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    recorder.stop();
+    await stopped;
+    stream.getTracks().forEach((track) => track.stop());
+    return await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(",")[1]);
+      reader.readAsDataURL(new Blob(chunks, { type: recorder.mimeType }));
+    });
+  });
+  // Browser preview uses playable media; the preparation HTTP lifecycle is mocked.
+  await input.setInputFiles({ name: "intro.mp4", mimeType: "video/mp4", buffer: Buffer.from(video, "base64") });
+  const preview = page.getByRole("dialog", { name: "معاينة وضبط شاشة تسجيل الدخول" });
+  await expect(preview).toBeVisible();
+  await expect(preview.locator("video")).toHaveAttribute("src", /^blob:/);
+  await expect.poll(() => preview.locator("video").evaluate((element) => (element as HTMLVideoElement).videoWidth)).toBe(320);
+  await preview.getByRole("button", { name: "أسفل الوسط", exact: true }).click();
+  await preview.getByRole("button", { name: "اعتماد وحفظ المظهر", exact: true }).click();
+  await expect(preview).toHaveCount(0);
+  await page.getByRole("button", { name: "🎯 معاينة وضبط المظهر", exact: true }).first().click();
+  await expect(preview.getByRole("slider", { name: "نقطة التركيز الرأسية" })).toHaveValue("1");
+  await expect.poll(() => preview.locator("video").evaluate((element) => (element as HTMLVideoElement).videoWidth)).toBe(320);
+  await preview.getByRole("button", { name: "أعلى اليسار", exact: true }).click();
+  await preview.getByRole("button", { name: "إلغاء", exact: true }).click();
   const publish = page.getByRole("button", { name: "نشر الفيديو الجاهز" });
-  await expect(publish).toBeDisabled();
+  await expect(publish).toBeVisible();
   expect(patches).toHaveLength(0);
   await expect(page.locator(`video[src="${published.market_login_url}"]`)).toHaveCount(1);
   await expect(publish).toBeEnabled();
@@ -150,9 +182,10 @@ test("video replacement keeps published media until preparation is ready and pub
   expect(patches[0]).toContain("video_job_id");
   expect(patches[0]).toContain("99999999-1111-4111-8111-111111111111");
   expect(patches[0]).not.toContain("browser-upload-fixture");
+  expect(patches[0]).toContain('{"x":0.5,"y":1}');
 });
 
-test("image preview uploads the original without crop mockups or controls", async ({ page }) => {
+test("image selection opens the login preview and uploads the original with its chosen focus", async ({ page }) => {
   await session(page);
   const patches: string[] = [];
   await page.route("**/api/v1/**", async (route) => {
@@ -170,18 +203,29 @@ test("image preview uploads the original without crop mockups or controls", asyn
     return canvas.toDataURL("image/png").split(",")[1];
   });
   await page.locator('input[type="file"][accept*="video/mp4"]').setInputFiles({ name: "original.png", mimeType: "image/png", buffer: Buffer.from(image, "base64") });
-  const publish = page.getByRole("button", { name: "نشر الصورة بعد المعاينة" });
-  await expect(publish).toBeVisible();
-  for (const width of [320, 390, 430, 768]) await expect(page.getByText(`${width}px`, { exact: true })).toHaveCount(0);
-  await expect(page.locator('input[type="range"]')).toHaveCount(0);
-  await expect(page.getByText("موضع القص:", { exact: false })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "حفظ موضع القص", exact: true })).toHaveCount(0);
+  const preview = page.getByRole("dialog", { name: "معاينة وضبط شاشة تسجيل الدخول" });
+  await expect(preview).toBeVisible();
+  const banner = preview.getByTitle("انقر أو اسحب لتحديد نقطة التركيز");
+  await expect(banner).toHaveCSS("height", "240px");
+  for (const width of [360, 390, 430]) {
+    await preview.getByRole("button", { name: `${width}px`, exact: true }).click();
+    await expect(banner).toHaveCSS("width", `${width}px`);
+  }
+  await preview.getByRole("button", { name: "ليل 🌙", exact: true }).click();
+  const box = (await banner.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.5, box.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.3);
+  await page.mouse.up();
+  await expect(preview.getByRole("slider", { name: "نقطة التركيز الأفقية" })).toHaveValue("0.25");
+  await expect(preview.getByRole("slider", { name: "نقطة التركيز الرأسية" })).toHaveValue("0.3");
   expect(patches).toHaveLength(0);
-  await page.screenshot({ path: "test-results/media-image-preview.png", fullPage: true });
-  await publish.click();
-  await expect(publish).toHaveCount(0);
+  await preview.screenshot({ path: "test-results/media-image-preview.png" });
+  await preview.getByRole("button", { name: "اعتماد وحفظ المظهر", exact: true }).click();
+  await expect(preview).toHaveCount(0);
   expect(patches[0]).toContain('filename="original.png"');
   expect(patches[0]).toContain("market_login_focus");
+  expect(patches[0]).toContain('{"x":0.25,"y":0.3}');
 });
 
 test("small images with any ratio can be previewed and published with only a tiny size hint", async ({ page }) => {
@@ -212,15 +256,95 @@ test("small images with any ratio can be previewed and published with only a tin
     }, { width, height });
     const name = `small-${width}x${height}.png`;
     await page.locator('input[type="file"][accept*="video/mp4"]').setInputFiles({ name, mimeType: "image/png", buffer: Buffer.from(image, "base64") });
-    const publish = page.getByRole("button", { name: "نشر الصورة بعد المعاينة" });
+    const preview = page.getByRole("dialog", { name: "معاينة وضبط شاشة تسجيل الدخول" });
+    const publish = preview.getByRole("button", { name: "اعتماد وحفظ المظهر", exact: true });
     await expect(publish).toBeVisible();
     await expect(page.locator('p[role="alert"]')).toHaveCount(0);
     if (width === 32) await page.screenshot({ path: "test-results/small-image-upload.png", fullPage: true });
     await publish.click();
-    await expect(publish).toHaveCount(0);
+    await expect(preview).toHaveCount(0);
     expect(patches.at(-1)).toContain(`filename="${name}"`);
   }
   expect(patches).toHaveLength(3);
+});
+
+test("published focus saves independently, retries failures, and discards cancelled changes", async ({ page }) => {
+  await session(page);
+  const media = { ...published, delivery_login_url: "https://media.example.test/delivery.svg", delivery_login_focus: { x: 0.8, y: 0.2 } };
+  const patches: Record<string, unknown>[] = [];
+  let fail = true;
+  await page.route("**/api/v1/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path.endsWith("/app-media/") && request.method() === "PATCH") {
+      const patch = request.postDataJSON();
+      patches.push(patch);
+      if (fail) { fail = false; await route.fulfill({ status: 400, json: { detail: "تعذر حفظ التركيز" } }); return; }
+      Object.assign(media, patch);
+    }
+    const data = path.endsWith("/auth/me/") ? user : path.endsWith("/media-specs/") ? contract
+      : path.endsWith("/app-media/") ? media : path.endsWith("/media-jobs/stats/") ? { counts: {}, stalled: 0 } : [];
+    await route.fulfill({ json: data });
+  });
+  await page.goto("/app-media");
+  const buttons = page.getByRole("button", { name: "🎯 معاينة وضبط المظهر", exact: true });
+  await buttons.first().click();
+  const preview = page.getByRole("dialog", { name: "معاينة وضبط شاشة تسجيل الدخول" });
+  await preview.getByRole("button", { name: "أسفل الوسط", exact: true }).click();
+  await preview.getByRole("button", { name: "اعتماد وحفظ المظهر", exact: true }).click();
+  await expect(preview.getByRole("alert")).toContainText("تعذر حفظ التركيز");
+  await expect(preview.getByRole("slider", { name: "نقطة التركيز الرأسية" })).toHaveValue("1");
+  await preview.getByRole("button", { name: "اعتماد وحفظ المظهر", exact: true }).click();
+  await expect(preview).toHaveCount(0);
+  expect(patches).toEqual([{ market_login_focus: { x: 0.5, y: 1 } }, { market_login_focus: { x: 0.5, y: 1 } }]);
+  await buttons.first().click();
+  await preview.getByRole("button", { name: "أعلى اليسار", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(preview).toHaveCount(0);
+  await buttons.first().click();
+  await expect(preview.getByRole("slider", { name: "نقطة التركيز الأفقية" })).toHaveValue("0.5");
+  await expect(preview.getByRole("slider", { name: "نقطة التركيز الرأسية" })).toHaveValue("1");
+  await preview.getByRole("button", { name: "إلغاء", exact: true }).click();
+  await page.setViewportSize({ width: 360, height: 900 });
+  await buttons.nth(1).click();
+  await expect(preview.getByTitle("انقر أو اسحب لتحديد نقطة التركيز")).toHaveCSS("height", "250px");
+  await preview.getByRole("button", { name: "430px", exact: true }).click();
+  await expect(preview.getByTitle("انقر أو اسحب لتحديد نقطة التركيز")).toHaveCSS("width", "430px");
+  await expect(preview.getByRole("slider", { name: "نقطة التركيز الأفقية" })).toHaveValue("0.8");
+  await preview.getByRole("button", { name: "أعلى اليسار", exact: true }).click();
+  await preview.getByRole("button", { name: "اعتماد وحفظ المظهر", exact: true }).scrollIntoViewIfNeeded();
+  const saveBox = (await preview.getByRole("button", { name: "اعتماد وحفظ المظهر", exact: true }).boundingBox())!;
+  expect(saveBox.x).toBeGreaterThanOrEqual(0);
+  expect(saveBox.x + saveBox.width).toBeLessThanOrEqual(360);
+  await preview.screenshot({ path: "test-results/login-preview-mobile.png" });
+  await preview.getByRole("button", { name: "اعتماد وحفظ المظهر", exact: true }).click();
+  await expect(preview).toHaveCount(0);
+  expect(patches.at(-1)).toEqual({ delivery_login_focus: { x: 0, y: 0 } });
+  expect(media.market_login_focus).toEqual({ x: 0.5, y: 1 });
+});
+
+test("cancelling a selected image does not publish it or change existing focus", async ({ page }) => {
+  await session(page);
+  let patches = 0;
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() === "PATCH") patches++;
+    const data = path.endsWith("/auth/me/") ? user : path.endsWith("/media-specs/") ? contract
+      : path.endsWith("/app-media/") ? published : path.endsWith("/media-jobs/stats/") ? { counts: {}, stalled: 0 } : [];
+    await route.fulfill({ json: data });
+  });
+  await page.goto("/app-media");
+  const image = await page.evaluate(() => document.createElement("canvas").toDataURL("image/png").split(",")[1]);
+  await page.locator('input[type="file"][accept*="video/mp4"]').setInputFiles({ name: "cancel.png", mimeType: "image/png", buffer: Buffer.from(image, "base64") });
+  const preview = page.getByRole("dialog");
+  await preview.getByRole("button", { name: "أسفل الوسط", exact: true }).click();
+  await preview.getByRole("button", { name: "إلغاء", exact: true }).click();
+  await expect(preview).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "نشر الصورة بعد المعاينة" })).toHaveCount(0);
+  await expect(page.locator(`video[src="${published.market_login_url}"]`)).toHaveCount(1);
+  await page.getByRole("button", { name: "🎯 معاينة وضبط المظهر", exact: true }).first().click();
+  await expect(preview.getByRole("slider", { name: "نقطة التركيز الرأسية" })).toHaveValue("0");
+  expect(patches).toBe(0);
 });
 
 test("switching campaign media type cancels the obsolete video and saves without attaching it", async ({ page }) => {

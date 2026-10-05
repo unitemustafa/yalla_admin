@@ -10,28 +10,70 @@ import type { FocalPoint } from "../focal-preview";
 import { VideoPreparation, type MediaJob } from "../video-preparation";
 import { MediaProcessingStatus } from "../media-processing-status";
 import { launchMediaError, mediaSlots, validateLaunchMediaFile, type MediaKey } from "./domain";
+import { LoginPreviewDialog } from "./login-preview-dialog";
 
 type Media = Record<`${MediaKey}_url`, string | null> & { market_login_poster_url: string | null; market_login_focus: FocalPoint; delivery_login_focus: FocalPoint };
+type MediaDraft = { key: MediaKey; file: File; url: string; focus: FocalPoint };
+type Preview = { key: MediaKey; url: string; isVideo: boolean; focus: FocalPoint; draft: boolean; discardDraftOnClose: boolean };
 
 export function AppMediaCard() {
   const { apiFetch } = useAuth();
   const [media, setMedia] = useState<Media | null>(null);
   const [busy, setBusy] = useState<MediaKey | null>(null);
   const [error, setError] = useState("");
-  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [draft, setDraft] = useState<MediaDraft | null>(null);
+  const [preview, setPreview] = useState<Preview | null>(null);
   const [videoJob, setVideoJob] = useState<MediaJob | null>(null);
   const [poster, setPoster] = useState<File | null>(null);
-  const [imageDraft, setImageDraft] = useState<{ key: MediaKey; file: File; url: string } | null>(null);
-  useEffect(() => () => { if (imageDraft) URL.revokeObjectURL(imageDraft.url); }, [imageDraft]);
+  const imageDraft = draft?.file.type !== "video/mp4" ? draft : null;
+  const videoFile = draft?.file.type === "video/mp4" ? draft.file : null;
+  const draftUrl = draft?.url;
+  useEffect(() => () => { if (draftUrl) URL.revokeObjectURL(draftUrl); }, [draftUrl]);
 
   async function previewFile(key: MediaKey, file: File | null) {
     if (!file) return;
     const slot = mediaSlots.find((item) => item.key === key)!;
     const issue = validateLaunchMediaFile(key, file) || (file.type !== "video/mp4" ? await validateImageUpload(file, slot.spec) : null);
     if (issue) { setError(issue); return; }
-    setError(""); setVideoJob(null); setPoster(null); setImageDraft(null);
-    if (file.type === "video/mp4") setVideoFile(file);
-    else { setVideoFile(null); setImageDraft({ key, file, url: URL.createObjectURL(file) }); }
+    const focus = media?.[`${key}_focus`] ?? { x: 0.5, y: 0 };
+    const url = URL.createObjectURL(file);
+    setError(""); setVideoJob(null); setPoster(null);
+    setDraft({ key, file, url, focus });
+    setPreview({ key, url, isVideo: file.type === "video/mp4", focus, draft: true, discardDraftOnClose: true });
+  }
+
+  function openPreview(key: MediaKey) {
+    const pending = draft?.key === key ? draft : null;
+    const url = pending?.url ?? media?.[`${key}_url`];
+    if (!url) return;
+    setError("");
+    setPreview({ key, url, isVideo: pending ? pending.file.type === "video/mp4" : /\.mp4(?:\?|$)/i.test(url), focus: pending?.focus ?? media?.[`${key}_focus`] ?? { x: 0.5, y: 0 }, draft: Boolean(pending), discardDraftOnClose: false });
+  }
+
+  function closePreview() {
+    if (busy !== null) return;
+    if (preview?.discardDraftOnClose) { setDraft(null); setVideoJob(null); setPoster(null); }
+    setPreview(null); setError("");
+  }
+
+  async function savePreview(focus: FocalPoint) {
+    if (!preview || busy !== null) return;
+    if (preview.draft && draft) {
+      if (videoFile) {
+        setDraft({ ...draft, focus });
+        setPreview(null);
+      } else if (await change(draft.key, draft.file, false, focus)) setPreview(null);
+      return;
+    }
+    setBusy(preview.key); setError("");
+    try {
+      const field = `${preview.key}_focus`;
+      const response = await apiFetch("dashboard/app-media/", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [field]: focus }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(launchMediaError(data, field));
+      setMedia(data as Media); setPreview(null);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "تعذر حفظ موضع الميديا."); }
+    finally { setBusy(null); }
   }
 
   useEffect(() => {
@@ -46,7 +88,7 @@ export function AppMediaCard() {
     return () => { active = false; };
   }, [apiFetch]);
 
-  async function change(key: MediaKey, file: File | null, remove = false) {
+  async function change(key: MediaKey, file: File | null, remove = false, focus = media?.[`${key}_focus`] ?? { x: 0.5, y: 0 }) {
     if (!remove && !file) return;
     const slot = mediaSlots.find((item) => item.key === key)!;
     const fileError = file ? validateLaunchMediaFile(key, file) : null;
@@ -54,8 +96,7 @@ export function AppMediaCard() {
       setError(fileError);
       return;
     }
-    if (file?.type === "video/mp4") { setVideoJob(null); setVideoFile(file); return; }
-    setVideoFile(null); setVideoJob(null);
+    if (file?.type === "video/mp4") return;
     setBusy(key);
     setError("");
     try {
@@ -69,14 +110,15 @@ export function AppMediaCard() {
       const form = new FormData();
       const field = key === "market_login" && file?.type === "video/mp4" ? "market_login_video" : key;
       if (file) form.set(field, file);
-      if (key === "market_login" || key === "delivery_login") form.set(`${key}_focus`, JSON.stringify(media?.[`${key}_focus`] ?? { x: 0.5, y: 0 }));
+      if (file) form.set(`${key}_focus`, JSON.stringify(focus));
       const response = await apiFetch("dashboard/app-media/", remove
         ? { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [key]: null }) }
         : { method: "PATCH", body: form });
       const data = await response.json();
       if (!response.ok) throw new Error(launchMediaError(data, field));
       setMedia(data as Media);
-      setImageDraft(null);
+      if (draft?.key === key) { setDraft(null); setVideoJob(null); setPoster(null); }
+      return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "تعذر حفظ الملف.");
     } finally {
@@ -85,16 +127,16 @@ export function AppMediaCard() {
   }
 
   async function publishVideo() {
-    if (!videoJob || videoJob.state !== "ready") return;
+    if (!videoJob || videoJob.state !== "ready" || !videoFile || !draft || busy !== null) return;
     setBusy("market_login"); setError("");
     try {
       const body = new FormData(); body.set("video_job_id", videoJob.id);
-      body.set("market_login_focus", JSON.stringify(media?.market_login_focus ?? { x: 0.5, y: 0 }));
+      body.set("market_login_focus", JSON.stringify(draft.focus));
       if (poster) body.set("market_login_poster", poster);
       const response = await apiFetch("dashboard/app-media/", { method: "PATCH", body });
       const data = await response.json();
       if (!response.ok) throw new Error(launchMediaError(data, "video_job_id"));
-      setMedia(data as Media); setVideoFile(null); setVideoJob(null);
+      setMedia(data as Media); setDraft(null); setVideoJob(null); setPoster(null);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "تعذر نشر الفيديو."); }
     finally { setBusy(null); }
   }
@@ -108,11 +150,11 @@ export function AppMediaCard() {
         {mediaSlots.map((slot) => {
           const url = imageDraft?.key === slot.key ? imageDraft.url : media?.[`${slot.key}_url`];
           const isVideo = slot.key === "market_login" && !!url && /\.mp4(?:\?|$)/i.test(url);
-          const focus = slot.key === "market_login" || slot.key === "delivery_login" ? media?.[`${slot.key}_focus`] ?? { x: 0.5, y: 0 } : { x: 0.5, y: 0.5 };
+          const focus = imageDraft?.key === slot.key ? imageDraft.focus : media?.[`${slot.key}_focus`] ?? { x: 0.5, y: 0 };
           const objectPosition = `${focus.x * 100}% ${focus.y * 100}%`;
           const previewHeight = slot.key === "market_login" ? 240 : slot.key === "delivery_login" ? 250 : 384;
           return <div key={slot.key} className="rounded-lg border p-3">
-            {slot.key === "market_login" && videoFile ? <><VideoPreparation file={videoFile} slot="market_login" onReady={setVideoJob} onCancel={() => setVideoFile(null)} /><label className="block text-sm">صورة معاينة بديلة (اختياري)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void validateImageUpload(file, slot.spec).then((issue) => { if (issue) setError(issue); else setPoster(file); }); }} /></label><Button disabled={busy !== null || videoJob?.state !== "ready"} onClick={() => void publishVideo()}>نشر الفيديو الجاهز</Button></> : null}
+            {slot.key === "market_login" && videoFile ? <><VideoPreparation file={videoFile} slot="market_login" onReady={setVideoJob} onCancel={() => { setDraft(null); setVideoJob(null); setPoster(null); }} /><label className="block text-sm">صورة معاينة بديلة (اختياري)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void validateImageUpload(file, slot.spec).then((issue) => { if (issue) setError(issue); else setPoster(file); }); }} /></label><Button disabled={busy !== null || videoJob?.state !== "ready"} onClick={() => void publishVideo()}>نشر الفيديو الجاهز</Button></> : null}
             <p className="mb-2 text-sm font-semibold">{slot.label}</p>
             {url ? <div className="mb-3 w-full max-w-96 overflow-hidden rounded bg-muted" style={{ aspectRatio: `384 / ${previewHeight}` }}>
               {isVideo
@@ -129,7 +171,8 @@ export function AppMediaCard() {
                   void previewFile(slot.key, file);
                 }} />
               </label>
-              {imageDraft?.key === slot.key ? <><Button disabled={busy !== null} onClick={() => void change(slot.key, imageDraft.file)}>نشر الصورة بعد المعاينة</Button><Button variant="outline" disabled={busy !== null} onClick={() => setImageDraft(null)}>إلغاء التغيير</Button></> : null}
+              {url || draft?.key === slot.key ? <Button type="button" variant="outline" disabled={busy !== null} onClick={() => openPreview(slot.key)}>🎯 معاينة وضبط المظهر</Button> : null}
+              {imageDraft?.key === slot.key ? <><Button disabled={busy !== null} onClick={() => void change(slot.key, imageDraft.file, false, imageDraft.focus)}>نشر الصورة بعد المعاينة</Button><Button variant="outline" disabled={busy !== null} onClick={() => setDraft(null)}>إلغاء التغيير</Button></> : null}
               {url ? <Button type="button" variant="outline" disabled={busy !== null} onClick={() => void change(slot.key, null, true)}>استخدام الافتراضي</Button> : null}
               <span className="text-xs text-muted-foreground">{slot.key === "market_login" ? "MP4 حتى 30 MB أو صورة حتى 5 MB" : "JPG / PNG / WEBP حتى 5 MB"}</span>
             </div>
@@ -137,6 +180,7 @@ export function AppMediaCard() {
         })}
       </div>
       {error ? <p role="alert" className="mt-3 text-sm text-destructive">{error}</p> : null}
+      {preview ? <LoginPreviewDialog isOpen onClose={closePreview} onSave={savePreview} mediaKey={preview.key} mediaUrl={preview.url} isVideo={preview.isVideo} initialFocus={preview.focus} isSaving={busy !== null} error={error} /> : null}
     </Card>
   );
 }

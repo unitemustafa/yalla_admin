@@ -142,7 +142,8 @@ export function useCouriersPage() {
   }
 
   async function handleAvailabilityChange(courier: BackendDashboardUser, checked: boolean) {
-    if (!courier.courier_profile?.service_city || busy !== null) return;
+    const profile = courier.courier_profile;
+    if ((!profile?.service_city && !profile?.is_shipping_company) || busy !== null) return;
     setBusy(`availability-${courier.id}`);
     try {
       const saved = await setCourierAvailability(apiFetch, courier.id, checked);

@@ -71,6 +71,7 @@ const contentSecurityPolicy = `
   script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""};
   style-src 'self' 'unsafe-inline';
   img-src 'self' blob: data: https:${isDevelopment ? " http:" : ""};
+  media-src 'self' blob: https:${isDevelopment ? " http:" : ""};
   font-src 'self' data:;
   connect-src ${connectSources};
   worker-src 'self' blob:;
