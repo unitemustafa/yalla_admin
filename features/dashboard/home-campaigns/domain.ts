@@ -32,6 +32,10 @@ export type CampaignRow = CampaignForm & {
 
 export type Option = { value: string; label: string };
 
+export const campaignLayout = {
+  template: "hero", sheet_size: "medium", content_alignment: "center",
+} as const;
+
 function localDate(value: Date) {
   const offset = value.getTimezoneOffset() * 60_000;
   return new Date(value.getTime() - offset).toISOString().slice(0, 16);
@@ -45,7 +49,7 @@ export function initialCampaignForm(): CampaignForm {
     start_time: localDate(start), end_time: localDate(end),
     show_in_general: true, show_in_service_city: false, service_city_id: "",
     teaser_text: "اكتشف العرض الآن", title: "عرض مخصوص ليك", description: "",
-    template: "hero", sheet_size: "large", content_alignment: "center",
+    ...campaignLayout,
     use_theme_colors: true,
     teaser_background_color: "#FF5A00", teaser_text_color: "#FFFFFF",
     sheet_background_color: "#FFFFFF", sheet_text_color: "#202124",
@@ -86,6 +90,7 @@ export function campaignFromApi(record: BackendRecord): CampaignRow {
   base.show_in_service_city = !base.show_in_general;
   return {
     ...base,
+    ...campaignLayout,
     id: text(record, "id"),
     effective_status: (text(record, "effective_status") || "inactive") as CampaignRow["effective_status"],
     service_city_name: city ? text(city, "name") : "جاهز للشحن",
@@ -112,6 +117,7 @@ export function campaignPayload(form: CampaignForm) {
   delete (payload as Partial<CampaignForm>).show_in_service_city;
   return {
     ...payload,
+    ...campaignLayout,
     start_time: new Date(form.start_time).toISOString(),
     end_time: new Date(form.end_time).toISOString(),
     service_city_id: form.show_in_general ? null : Number(form.service_city_id),
@@ -143,10 +149,10 @@ export type CampaignFiles = { teaser_image?: File; sheet_image?: File; images?: 
 
 export const presets = [
   ["أول طلب", { teaser_text: "خصم على أول طلب", title: "أول طلب أحلى مع يلا", description: "استمتع بخصم خاص على طلبك الأول.", template: "hero", action_type: "offer", cta_label: "اطلب دلوقتي" }],
-  ["توصيل مجاني", { teaser_text: "التوصيل علينا", title: "توصيل مجاني لفترة محدودة", description: "اختار اللي محتاجه وسيب التوصيل علينا.", template: "split", action_type: "offer", cta_label: "شوف العرض" }],
+  ["توصيل مجاني", { teaser_text: "التوصيل علينا", title: "توصيل مجاني لفترة محدودة", description: "اختار اللي محتاجه وسيب التوصيل علينا.", template: "hero", action_type: "offer", cta_label: "شوف العرض" }],
   ["عرض محدود", { teaser_text: "الحق العرض", title: "وقت قليل وسعر أقوى", description: "العرض متاح لفترة محدودة.", template: "hero", action_type: "offer", cta_label: "استفيد الآن" }],
-  ["افتتاح محل", { teaser_text: "محل جديد وصل", title: "اكتشف أحدث محل عندنا", description: "منتجات جديدة وتجربة تستاهل.", template: "split", action_type: "market", cta_label: "افتح المحل" }],
-  ["فيديو إطلاق", { teaser_text: "شوف الجديد", title: "جاهز للمفاجأة؟", description: "شاهد الفيديو واعرف كل التفاصيل.", template: "media_focus", media_type: "video", action_type: "none", cta_label: "" }],
+  ["افتتاح محل", { teaser_text: "محل جديد وصل", title: "اكتشف أحدث محل عندنا", description: "منتجات جديدة وتجربة تستاهل.", template: "hero", action_type: "market", cta_label: "افتح المحل" }],
+  ["فيديو إطلاق", { teaser_text: "شوف الجديد", title: "جاهز للمفاجأة؟", description: "شاهد الفيديو واعرف كل التفاصيل.", template: "hero", media_type: "video", action_type: "none", cta_label: "" }],
   ["كود نسخ", { teaser_text: "عندنا كود ليك", title: "انسخ الكود واستخدمه", description: "اضغط الزر لنسخ الكود فورًا.", template: "hero", action_type: "copy_text", cta_label: "انسخ الكود" }],
   ["رسالة فقط", { teaser_text: "رسالة مهمة", title: "كل اللي محتاج تعرفه", description: "يمكن استخدام الحملة كرسالة بدون أي زر.", template: "hero", action_type: "none", cta_label: "" }],
 ] as const;

@@ -152,7 +152,7 @@ test("video replacement keeps published media until preparation is ready and pub
   expect(patches[0]).not.toContain("browser-upload-fixture");
 });
 
-test("image preview shows all four crop widths before uploading the original", async ({ page }) => {
+test("image preview uploads the original without crop mockups or controls", async ({ page }) => {
   await session(page);
   const patches: string[] = [];
   await page.route("**/api/v1/**", async (route) => {
@@ -172,9 +172,12 @@ test("image preview shows all four crop widths before uploading the original", a
   await page.locator('input[type="file"][accept*="video/mp4"]').setInputFiles({ name: "original.png", mimeType: "image/png", buffer: Buffer.from(image, "base64") });
   const publish = page.getByRole("button", { name: "نشر الصورة بعد المعاينة" });
   await expect(publish).toBeVisible();
-  for (const width of [320, 390, 430, 768]) await expect(page.getByText(`${width}px`, { exact: true })).toBeVisible();
+  for (const width of [320, 390, 430, 768]) await expect(page.getByText(`${width}px`, { exact: true })).toHaveCount(0);
+  await expect(page.locator('input[type="range"]')).toHaveCount(0);
+  await expect(page.getByText("موضع القص:", { exact: false })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "حفظ موضع القص", exact: true })).toHaveCount(0);
   expect(patches).toHaveLength(0);
-  await page.screenshot({ path: "test-results/media-crop-preview.png", fullPage: true });
+  await page.screenshot({ path: "test-results/media-image-preview.png", fullPage: true });
   await publish.click();
   await expect(publish).toHaveCount(0);
   expect(patches[0]).toContain('filename="original.png"');

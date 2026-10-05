@@ -1,8 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import { campaignFromApi, campaignPayload, initialCampaignForm, validateCampaign } from "./domain";
+import { campaignFromApi, campaignLayout, campaignPayload, initialCampaignForm, presets, validateCampaign } from "./domain";
 
 describe("home campaign domain", () => {
+  it("uses the medium centered Hero layout for new campaigns and every preset", () => {
+    expect(initialCampaignForm()).toMatchObject(campaignLayout);
+    for (const [, patch] of presets) {
+      expect({ ...initialCampaignForm(), ...patch }).toMatchObject(campaignLayout);
+    }
+  });
+
+  it("normalizes legacy layouts when editing and saving", () => {
+    const legacy = { template: "split", sheet_size: "near_full", content_alignment: "start" };
+    expect(campaignFromApi({ ...legacy, title: "Existing campaign" })).toMatchObject({ ...campaignLayout, title: "Existing campaign" });
+    expect(campaignPayload({ ...initialCampaignForm(), ...legacy })).toMatchObject(campaignLayout);
+  });
+
   it("restores city visibility when editing a local campaign", () => {
     const campaign = campaignFromApi({ show_in_general: false, service_city_id: 2, service_city: { id: 2, name: "القاهرة" } });
     expect(campaign).toMatchObject({ show_in_general: false, show_in_service_city: true, service_city_id: "2" });

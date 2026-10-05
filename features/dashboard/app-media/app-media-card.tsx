@@ -6,7 +6,7 @@ import { Button, Card } from "@/features/dashboard/primitives";
 import { SafeImage } from "@/components/safe-image";
 import { validateImageUpload } from "@/lib/image-upload";
 import { mediaSpecHint } from "@/lib/media-specs";
-import { FocalPreview, type FocalPoint } from "../focal-preview";
+import type { FocalPoint } from "../focal-preview";
 import { VideoPreparation, type MediaJob } from "../video-preparation";
 import { MediaProcessingStatus } from "../media-processing-status";
 import { launchMediaError, mediaSlots, validateLaunchMediaFile, type MediaKey } from "./domain";
@@ -99,17 +99,6 @@ export function AppMediaCard() {
     finally { setBusy(null); }
   }
 
-  async function saveFocus(key: "market_login" | "delivery_login", focus: FocalPoint) {
-    setBusy(key);
-    try {
-      const response = await apiFetch("dashboard/app-media/", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [`${key}_focus`]: focus }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(launchMediaError(data, `${key}_focus`));
-      setMedia(data as Media);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "تعذر حفظ موضع القص."); }
-    finally { setBusy(null); }
-  }
-
   return (
     <Card className="p-5">
       <h3 className="text-lg font-bold">صور وفيديوهات بداية التطبيقات</h3>
@@ -124,8 +113,6 @@ export function AppMediaCard() {
           const previewHeight = slot.key === "market_login" ? 240 : slot.key === "delivery_login" ? 250 : 384;
           return <div key={slot.key} className="rounded-lg border p-3">
             {slot.key === "market_login" && videoFile ? <><VideoPreparation file={videoFile} slot="market_login" onReady={setVideoJob} onCancel={() => setVideoFile(null)} /><label className="block text-sm">صورة معاينة بديلة (اختياري)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void validateImageUpload(file, slot.spec).then((issue) => { if (issue) setError(issue); else setPoster(file); }); }} /></label><Button disabled={busy !== null || videoJob?.state !== "ready"} onClick={() => void publishVideo()}>نشر الفيديو الجاهز</Button></> : null}
-            {(slot.key === "market_login" || slot.key === "delivery_login") && url ? <FocalPreview source={isVideo ? media?.market_login_poster_url ?? "" : url} focus={media?.[`${slot.key}_focus`] ?? { x: 0.5, y: 0 }} kind={slot.key === "market_login" ? "market-login" : "delivery-login"} onChange={(focus) => setMedia((current) => current ? { ...current, [`${slot.key}_focus`]: focus } : current)} /> : null}
-            {(slot.key === "market_login" || slot.key === "delivery_login") && url ? <Button disabled={busy !== null} onClick={() => void saveFocus(slot.key as "market_login" | "delivery_login", (slot.key === "market_login" ? media?.market_login_focus : media?.delivery_login_focus) ?? { x: 0.5, y: 0 })}>حفظ موضع القص</Button> : null}
             <p className="mb-2 text-sm font-semibold">{slot.label}</p>
             {url ? <div className="mb-3 w-full max-w-96 overflow-hidden rounded bg-muted" style={{ aspectRatio: `384 / ${previewHeight}` }}>
               {isVideo
