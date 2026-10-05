@@ -26,6 +26,7 @@ export function initialOfferFormState(): OfferFormState {
     imageName: "",
     imageFile: null,
     imageError: "",
+    imageFocus: { x: 0.5, y: 0.5 },
     selectedType: "خصم",
     discountProductId: "",
     discountVariantId: "",
@@ -93,12 +94,13 @@ export function useOfferFormState() {
     const validationError = await validateImageUpload(file, mediaSpecs.offerBanner);
     if (validationError) {
       patchState({ imageError: validationError });
-      return;
+      return false;
     }
     revokeImageObjectUrl();
     const preview = URL.createObjectURL(file);
     imageObjectUrlRef.current = preview;
-    patchState({ imagePreview: preview, imageName: file.name, imageFile: file, imageError: "" });
+    patchState({ imagePreview: preview, imageName: file.name, imageFile: file, imageError: "", imageFocus: { x: 0.5, y: 0.5 } });
+    return true;
   }, [patchState, revokeImageObjectUrl]);
   const removeImage = useCallback(() => {
     revokeImageObjectUrl();
@@ -108,6 +110,7 @@ export function useOfferFormState() {
       imageError: "",
       imagePreview: current.editingOffer?.image ?? "",
       imageName: current.editingOffer?.image ? "صورة العرض الحالية" : "",
+      imageFocus: current.editingOffer?.imageFocus ?? { x: 0.5, y: 0.5 },
     }));
   }, [revokeImageObjectUrl]);
 

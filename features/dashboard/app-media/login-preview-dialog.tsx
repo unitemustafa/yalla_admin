@@ -456,16 +456,6 @@ function LoginPreviewContent({
                 </div>
               </div>
 
-              {/* Tips & Guidance Box */}
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs space-y-1.5 text-amber-900 dark:text-amber-200">
-                <div className="font-bold flex items-center gap-1.5">
-                  <span>📌</span>
-                  <span>تنبيه المنطقة الآمنة (Safe Area):</span>
-                </div>
-                <p className="leading-relaxed opacity-90">
-                  كارت واجهة الدخول يغطي آخر 22px من البانر، والشعار العائم يغطي وسطه السفلي. احرص على جعل العناصر المهمة أو الوجوه في الثلث العلوي أو الأوسط لضمان عدم حجبها.
-                </p>
-              </div>
             </div>
 
             {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}

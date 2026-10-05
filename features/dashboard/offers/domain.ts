@@ -3,6 +3,14 @@ import { Megaphone, Package, Percent, Truck, Zap } from "lucide-react";
 
 import type { BackendRecord } from "../admin-api";
 import { asRecord } from "../shared/api-data";
+import type { FocalPoint } from "../focal-preview";
+
+export function offerImageFocus(value: unknown): FocalPoint {
+  const record = asRecord(value);
+  if (!record || typeof record.x !== "number" || typeof record.y !== "number" ||
+      !Number.isFinite(record.x) || !Number.isFinite(record.y)) return { x: 0.5, y: 0.5 };
+  return { x: Math.max(0, Math.min(1, record.x)), y: Math.max(0, Math.min(1, record.y)) };
+}
 
 export type OfferType = "package" | "flash" | "discount" | "announcement" | "delivery";
 type OfferStatus = "active" | "inactive" | "expired";
@@ -72,6 +80,7 @@ export type OfferCard = {
   startsAt: string;
   endsAt: string;
   image?: string;
+  imageFocus?: FocalPoint;
   icon: ComponentType<{ className?: string }>;
   accent: string;
   iconBg: string;
@@ -251,6 +260,7 @@ export function offerCardFromApi(record: BackendRecord): OfferCard {
     startsAt,
     endsAt,
     image: typeof record.image === "string" ? record.image : undefined,
+    imageFocus: offerImageFocus(record.image_focus),
     icon: meta.icon,
     accent: meta.accent,
     iconBg: meta.bg,

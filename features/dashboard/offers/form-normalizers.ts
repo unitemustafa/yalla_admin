@@ -43,6 +43,7 @@ export function offerFormPatchFromApi(record: BackendRecord): Partial<OfferFormS
     imageFile: null,
     imagePreview: card.image ?? "",
     imageName: card.image ? "صورة العرض الحالية" : "",
+    imageFocus: card.imageFocus ?? { x: 0.5, y: 0.5 },
     startDate: formatDateInputValue(start),
     startTime: formatTimeInputValue(start),
     endDate: formatDateInputValue(end),

@@ -27,8 +27,8 @@ export function CampaignPreview({ form, files, existing, removedImageIds = [] }:
   );
   const copyPreview = (
     <div className="text-center">
-      <h3 className="text-2xl leading-[1.3] font-black">{form.title || "عنوان الحملة"}</h3>
-      {form.description.trim() ? <p className="mt-2.5 text-[15px] leading-[1.65] font-semibold opacity-75">{form.description}</p> : null}
+      <h3 className="break-words text-[18px] leading-[1.3] font-extrabold">{form.title || "عنوان الحملة"}</h3>
+      {form.description.trim() ? <p className="mt-1.5 break-words text-[14px] leading-[1.5] font-semibold opacity-75">{form.description}</p> : null}
     </div>
   );
   return (
@@ -36,10 +36,10 @@ export function CampaignPreview({ form, files, existing, removedImageIds = [] }:
       <div className="mb-3 text-sm font-bold">معاينة الإعلان في منتصف الشاشة</div>
       <div role="region" aria-label="معاينة الحملة الإعلانية" className="mx-auto flex h-[620px] max-w-[330px] overflow-hidden rounded-[32px] border-8 border-slate-900 bg-[#3F3F3F] shadow-xl">
           <div className="flex min-w-0 flex-1 items-center justify-center px-5 py-6">
-            <div className={`flex max-h-[350px] w-full flex-col overflow-hidden rounded-3xl shadow-xl ${form.use_theme_colors ? "bg-background text-foreground" : ""}`} style={form.use_theme_colors ? undefined : { backgroundColor: form.sheet_background_color, color: form.sheet_text_color }}>
-              <div className="flex shrink-0 justify-end px-3 pt-2.5 pb-1"><span className="flex size-12 items-center justify-center"><X className="size-6" /></span></div>
-              <div className="min-h-0 overflow-y-auto"><div className="grid gap-[18px] px-[18px] pt-0.5 pb-[18px]">{mediaPreview}{copyPreview}</div></div>
-              {hasButton ? <div className="shrink-0 px-[18px] pt-2 pb-3.5"><button type="button" className="min-h-[52px] w-full rounded-[14px] px-4 py-3 text-center text-base font-black" style={{ backgroundColor: form.button_background_color, color: form.button_text_color }}>{form.cta_label || "نص الزر"}</button></div> : null}
+            <div className={`relative flex max-h-[350px] w-full flex-col overflow-hidden rounded-3xl shadow-xl ${form.use_theme_colors ? "bg-background text-foreground" : ""}`} style={form.use_theme_colors ? undefined : { backgroundColor: form.sheet_background_color, color: form.sheet_text_color }}>
+              <span aria-label="إغلاق" className={`absolute z-10 flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground ${mediaPreview ? "top-[22px] end-[26px]" : "top-2.5 end-3"}`}><X className="size-5" /></span>
+              <div className="min-h-0 overflow-y-auto"><div className={`grid gap-3 px-[18px] pb-3 ${mediaPreview ? "pt-3.5" : "pt-16"}`}>{mediaPreview}{copyPreview}</div></div>
+              {hasButton ? <div className="shrink-0 px-[18px] pt-1 pb-3.5"><button type="button" className="min-h-[48px] w-full rounded-[14px] px-4 py-2.5 text-center text-base font-black" style={{ backgroundColor: form.button_background_color, color: form.button_text_color }}>{form.cta_label || "نص الزر"}</button></div> : null}
             </div>
           </div>
       </div>

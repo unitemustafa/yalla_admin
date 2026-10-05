@@ -28,10 +28,12 @@ async function uploadOfferImage(
   apiFetch: ApiFetch,
   offerId: string,
   imageFile: File | null,
+  imageFocus: OfferFormState["imageFocus"],
 ) {
   if (!imageFile) return null;
   const formData = new FormData();
   formData.append("image", imageFile);
+  formData.append("image_focus", JSON.stringify(imageFocus));
   const response = await apiFetch(
     `${adminApiPaths.offers}${encodeURIComponent(offerId)}/image/`,
     { method: "POST", body: formData },
@@ -92,13 +94,13 @@ export function useSaveOffer({
       const response = await apiFetch(path, {
         method: editMode ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(result.payload),
+        body: JSON.stringify({ ...result.payload, image_focus: state.imageFile ? undefined : result.payload.image_focus }),
       });
       const data = await readApiData(response);
       if (!response.ok) throw new Error(apiErrorMessage(data, "تعذر حفظ العرض."));
       const offerId = offerCardFromApi(asBackendRecord(data)).id;
       const [imageResult, notificationResult] = await Promise.allSettled([
-        uploadOfferImage(apiFetch, offerId, state.imageFile),
+        uploadOfferImage(apiFetch, offerId, state.imageFile, state.imageFocus),
         sendOfferPush(apiFetch, offerId, state.sendPushNotification),
       ]);
       const imageFailed = imageResult.status === "rejected";

@@ -1,19 +1,26 @@
+"use client";
+
+import { useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 
 import { mediaSpecHint, mediaSpecs } from "@/lib/media-specs";
 import { DashboardImage } from "../dashboard-image";
-import { FocalPreview } from "../focal-preview";
+import { Button } from "../primitives";
+import { OfferPreviewDialog } from "./offer-preview-dialog";
 import type { CreateOfferFormController } from "./use-create-offer-form";
 
 export function OfferImageField({ form }: { form: CreateOfferFormController }) {
   const { state } = form;
+  const [previewOpen, setPreviewOpen] = useState(false);
   return (
     <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/15 p-3 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-center">
       <label className="group relative flex aspect-[8/3] min-h-[98px] cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-background text-center transition hover:border-primary/50 hover:bg-accent/40">
         <input
           accept="image/jpeg,image/png,image/webp"
           className="sr-only"
-          onChange={(event) => void form.handleImageChange(event)}
+          onChange={async (event) => {
+            if (await form.handleImageChange(event)) setPreviewOpen(true);
+          }}
           type="file"
         />
         {state.imagePreview ? (
@@ -27,6 +34,7 @@ export function OfferImageField({ form }: { form: CreateOfferFormController }) {
               sizes="260px"
               className="absolute inset-0 size-full"
               imageClassName="object-cover"
+              style={{ objectPosition: `${state.imageFocus.x * 100}% ${state.imageFocus.y * 100}%` }}
             />
             <span className="absolute inset-0 z-20 bg-black/0 transition group-hover:bg-black/35" />
             <span className="relative z-30 rounded-md bg-background/95 px-3 py-2 text-sm font-semibold opacity-0 shadow-sm transition group-hover:opacity-100">
@@ -64,7 +72,14 @@ export function OfferImageField({ form }: { form: CreateOfferFormController }) {
           ) : null}
         </div>
       </div>
-      {state.imagePreview ? <div className="lg:col-span-2"><FocalPreview source={state.imagePreview} kind="offer" focus={{ x: 0.5, y: 0.5 }} onChange={() => {}} /></div> : null}
+      {state.imagePreview ? <div className="lg:col-span-2">
+        <Button type="button" variant="outline" onClick={() => setPreviewOpen(true)}>
+          🎯 معاينة البانر وضبط العرض
+        </Button>
+        <OfferPreviewDialog isOpen={previewOpen} onClose={() => setPreviewOpen(false)}
+          imageUrl={state.imagePreview} state={state} initialFocus={state.imageFocus}
+          onApply={(imageFocus) => form.patchState({ imageFocus })} />
+      </div> : null}
     </div>
   );
 }

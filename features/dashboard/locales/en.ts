@@ -57,7 +57,7 @@ export const en = {
   "nav.allOrders": "All orders",
   "nav.createOrder": "Create order",
   "nav.offers": "Offers",
-  "nav.allOffers": "All offers",
+  "nav.allOffers": "Advertising banner",
   "nav.createOffer": "Create offer",
   "nav.homeCampaigns": "Advertising campaign",
   "nav.createHomeCampaign": "Create advertising campaign",

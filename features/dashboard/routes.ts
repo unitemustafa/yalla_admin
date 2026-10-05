@@ -214,7 +214,7 @@ export const navGroups: NavGroup[] = [
         icon: Tag,
         activePages: ["create-offer", "create-home-campaign"],
         children: [
-          navChild("offers", "كل العروض"),
+          navChild("offers", "بانر إعلاني"),
           navChild("home-campaigns", "حملة إعلانية"),
         ],
       },

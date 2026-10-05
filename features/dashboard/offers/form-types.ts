@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 
 import type { ItemRow } from "../products/types";
+import type { FocalPoint } from "../focal-preview";
 import type { ArabicOfferType, OfferCard, OfferMarket, OfferType } from "./domain";
 
 export type BundleLine = {
@@ -28,6 +29,7 @@ export type OfferFormState = {
   imageName: string;
   imageFile: File | null;
   imageError: string;
+  imageFocus: FocalPoint;
   selectedType: ArabicOfferType;
   discountProductId: string;
   discountVariantId: string;
@@ -68,6 +70,7 @@ type OfferPayloadItem = {
 };
 
 export type OfferPayload = {
+  image_focus: FocalPoint;
   market_id?: number;
   show_in_general: boolean;
   service_city_ids: number[];

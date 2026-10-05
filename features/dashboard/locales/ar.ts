@@ -64,7 +64,7 @@ export const ar = {
   "nav.allOrders": "كل الطلبات",
   "nav.createOrder": "إنشاء طلب",
   "nav.offers": "العروض",
-  "nav.allOffers": "كل العروض",
+  "nav.allOffers": "بانر إعلاني",
   "nav.createOffer": "إنشاء عرض",
   "nav.homeCampaigns": "حملة إعلانية",
   "nav.createHomeCampaign": "إنشاء حملة إعلانية",

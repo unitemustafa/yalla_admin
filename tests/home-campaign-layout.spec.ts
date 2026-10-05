@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { mediaSpecs } from "../lib/media-specs";
+import { presets } from "../features/dashboard/home-campaigns/domain";
 
 test("legacy campaign edits use the fixed centered Hero layout without layout selectors", async ({ page }) => {
   const user = { id: "1", first_name: "Campaign", last_name: "Test", email: "campaign@example.test", phone: "", role: "admin" };
@@ -55,12 +56,37 @@ test("legacy campaign edits use the fixed centered Hero layout without layout se
     expect(titleBox).not.toBeNull();
     expect(titleBox!.y).toBeGreaterThanOrEqual(mediaBox!.y + mediaBox!.height);
     expect(mediaBox!.width / mediaBox!.height).toBeCloseTo(16 / 9, 1);
+    const closeBox = await preview.getByLabel("إغلاق").boundingBox();
+    expect(closeBox!.x).toBeGreaterThanOrEqual(mediaBox!.x);
+    expect(closeBox!.y).toBeGreaterThanOrEqual(mediaBox!.y);
+    expect(closeBox!.x + closeBox!.width).toBeLessThanOrEqual(mediaBox!.x + mediaBox!.width);
+    expect(closeBox!.y + closeBox!.height).toBeLessThanOrEqual(mediaBox!.y + mediaBox!.height);
     const actionBox = await preview.getByRole("button", { name: "انسخ الكود", exact: true }).boundingBox();
     const previewBox = await preview.boundingBox();
     expect(actionBox!.y + actionBox!.height).toBeLessThanOrEqual(previewBox!.y + previewBox!.height);
   }
   await page.setViewportSize({ width: 1280, height: 1000 });
   await preview.screenshot({ path: "test-results/campaign-fixed-layout.png" });
+  for (const [, preset] of presets) {
+    await page.getByLabel("عنوان الإعلان", { exact: true }).fill(preset.title);
+    await page.getByRole("textbox", { name: "الوصف", exact: true }).fill(preset.description);
+    await expect(preview.getByRole("heading", { name: preset.title, exact: true })).toHaveCSS("font-size", "18px");
+    await expect(preview.getByText(preset.description, { exact: true })).toHaveCSS("font-size", "14px");
+  }
+  const longTitle = "اكتشف أحدث المنتجات والعروض المتاحة لفترة محدودة واستمتع بتجربة تسوق جديدة مع توصيل سريع لحد باب البيت";
+  await page.getByLabel("عنوان الإعلان", { exact: true }).fill(longTitle);
+  const wrappedTitle = preview.getByRole("heading", { name: longTitle, exact: true });
+  await expect(wrappedTitle).toHaveCSS("font-size", "18px");
+  const titleLayout = await wrappedTitle.evaluate((element) => ({
+    height: element.getBoundingClientRect().height,
+    lineHeight: parseFloat(getComputedStyle(element).lineHeight),
+    contentWidth: element.scrollWidth,
+    width: element.clientWidth,
+  }));
+  expect(titleLayout.height).toBeGreaterThanOrEqual(titleLayout.lineHeight * 3);
+  expect(titleLayout.contentWidth).toBeLessThanOrEqual(titleLayout.width);
+  await page.getByLabel("عنوان الإعلان", { exact: true }).fill(campaign.title);
+  await page.getByRole("textbox", { name: "الوصف", exact: true }).fill(campaign.description);
   await page.getByRole("button", { name: "حفظ الحملة", exact: true }).click();
   await expect(page).toHaveURL(/\/offers\/home-campaigns$/);
   expect(saved).toHaveLength(1);

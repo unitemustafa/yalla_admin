@@ -226,6 +226,7 @@ export function buildOfferPayload(
   }
 
   const payload: OfferPayload = {
+    image_focus: state.imageFocus,
     ...(state.selectedType === "إعلان" ? {} : { market_id: Number(marketIds[0] ?? "") }),
     show_in_general: state.appearsInGeneral,
     service_city_ids: state.appearsInServiceCity ? state.serviceCityIds.map(Number) : [],
