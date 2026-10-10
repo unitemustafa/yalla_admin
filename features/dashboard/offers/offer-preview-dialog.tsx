@@ -112,7 +112,7 @@ function OfferPreviewContent({
               معاينة وضبط بانر العرض الترويجي
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              المقاس القياسي: 1600×600px (نسبة 8:3) — معاينة تطابق شاشات تطبيق يلا ماركت
+              المقاس القياسي: {spec.width}×{spec.height}px — معاينة تطابق شاشات تطبيق يلا ماركت
             </p>
           </div>
           <button
@@ -201,8 +201,9 @@ function OfferPreviewContent({
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
-                className="relative w-full aspect-[8/3] rounded-lg overflow-hidden shadow-md cursor-crosshair group touch-none"
+                className="relative w-full rounded-lg overflow-hidden shadow-md cursor-crosshair group touch-none"
                 style={{
+                  aspectRatio: `${spec.width} / ${spec.height}`,
                   borderColor:
                     previewTheme === "dark"
                       ? "rgba(255, 255, 255, 0.08)"
@@ -291,7 +292,7 @@ function OfferPreviewContent({
                 <div className="space-y-0.5">
                   <span className="text-xs font-bold">إظهار المنطقة الآمنة (Safe Zone)</span>
                   <p className="text-[10px] text-muted-foreground">
-                    مساحة إرشادية 1200×450px؛ راجع تداخل النص مع عناصر التطبيق
+                    مساحة إرشادية {spec.safeWidth ?? spec.width}×{spec.safeHeight ?? spec.height}px؛ راجع تداخل النص مع عناصر التطبيق
                   </p>
                 </div>
                 <button

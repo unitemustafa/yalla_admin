@@ -58,7 +58,7 @@ test("published offer preview preserves cancelled focus and saves applied focus"
     expect(phone!.width).toBe(width + 10);
     const banner = await dialog.getByTestId("offer-banner").boundingBox();
     const safe = await dialog.getByTestId("offer-safe-zone").boundingBox();
-    expect(banner!.width / banner!.height).toBeCloseTo(8 / 3, 2);
+    expect(banner!.width / banner!.height).toBeCloseTo(16 / 7, 2);
     expect(safe!.width / banner!.width).toBeCloseTo(0.75, 2);
     expect(safe!.height / banner!.height).toBeCloseTo(0.75, 2);
   }

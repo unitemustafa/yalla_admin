@@ -11,10 +11,11 @@ import type { CreateOfferFormController } from "./use-create-offer-form";
 
 export function OfferImageField({ form }: { form: CreateOfferFormController }) {
   const { state } = form;
+  const spec = mediaSpecs.offerBanner;
   const [previewOpen, setPreviewOpen] = useState(false);
   return (
     <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/15 p-3 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-center">
-      <label className="group relative flex aspect-[8/3] min-h-[98px] cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-background text-center transition hover:border-primary/50 hover:bg-accent/40">
+      <label style={{ aspectRatio: `${spec.width} / ${spec.height}` }} className="group relative flex min-h-[98px] cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-background text-center transition hover:border-primary/50 hover:bg-accent/40">
         <input
           accept="image/jpeg,image/png,image/webp"
           className="sr-only"
@@ -30,7 +31,7 @@ export function OfferImageField({ form }: { form: CreateOfferFormController }) {
               placeholderType="offer"
               alt="معاينة صورة العرض"
               width={640}
-              height={240}
+              height={280}
               sizes="260px"
               className="absolute inset-0 size-full"
               imageClassName="object-cover"
