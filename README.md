@@ -117,8 +117,3 @@ The Django API remains the source of truth. Route files under `app/` should stay
 - Customers and partners: `/customers`, `/partners`
 - Delivery operations: `/cities`, `/delivery-zone`, `/delivery/couriers`
 - Administration: `/account`, `/settings`, `/notifications`
-
-## Additional Documentation
-
-- [`ARCHITECTURE.md`](./ARCHITECTURE.md) explains the domain structure, data flow, and canonical routes.
-- [`API_REPORT.md`](./API_REPORT.md) documents known Django API contract mismatches that remain outside the admin dashboard refactor scope.
