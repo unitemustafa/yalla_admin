@@ -297,8 +297,8 @@ export function getDeliveryAreaName(order: DashboardOrderLike) {
 function getAddressDetails(order: DashboardOrderLike) {
   const address = order.delivery_address;
   const formatted = cleanText(address?.formatted_address);
-  if (formatted) return formatted;
-  return [
+  return [...new Set([
+    formatted,
     cleanText(address?.street) ||
       cleanText(address?.details) ||
       cleanText(address?.line1),
@@ -308,7 +308,8 @@ function getAddressDetails(order: DashboardOrderLike) {
       ? `شقة ${cleanText(address?.apartment_number)}`
       : "",
     cleanText(address?.company_name),
-  ].filter(Boolean).join(" - ") || cleanText(address?.name);
+    cleanText(address?.additional_instructions),
+  ].filter(Boolean))].join(" - ") || cleanText(address?.name);
 }
 
 function unknownList(value: unknown) {

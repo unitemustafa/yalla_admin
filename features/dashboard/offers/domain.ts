@@ -5,7 +5,7 @@ import type { BackendRecord } from "../admin-api";
 import { asRecord } from "../shared/api-data";
 import type { FocalPoint } from "../focal-preview";
 
-export function offerImageFocus(value: unknown): FocalPoint {
+function offerImageFocus(value: unknown): FocalPoint {
   const record = asRecord(value);
   if (!record || typeof record.x !== "number" || typeof record.y !== "number" ||
       !Number.isFinite(record.x) || !Number.isFinite(record.y)) return { x: 0.5, y: 0.5 };
